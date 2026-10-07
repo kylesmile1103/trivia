@@ -1,0 +1,20 @@
+{
+  "name": "@trivia/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Node.js binding for the Trivia OXC engine",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts", "*.node"],
+  "napi": {
+    "binaryName": "trivia-engine"
+  },
+  "scripts": {
+    "build": "napi build --platform --release --esm",
+    "build:debug": "napi build --platform --esm"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.10.8"
+  }
+}

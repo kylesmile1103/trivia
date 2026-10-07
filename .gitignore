@@ -1,0 +1,13 @@
+# Read-only shallow clones of reference repos (tango, oxc, oxbox, openapi-ts)
+references/
+
+node_modules/
+dist/
+target/
+*.node
+.DS_Store
+test-results/
+playwright-report/
+# napi-rs generated loader/types (rebuilt by `pnpm build:engine`)
+crates/trivia_napi/index.js
+crates/trivia_napi/index.d.ts

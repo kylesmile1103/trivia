@@ -1,0 +1,21 @@
+[package]
+name = "trivia_napi"
+version = "0.1.0"
+description = "Node.js (napi-rs) binding for trivia_oxc_engine"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = ["napi6"] }
+napi-derive = "3"
+serde.workspace = true
+serde_json.workspace = true
+trivia_oxc_engine = { path = "../trivia_oxc_engine" }
+
+[build-dependencies]
+napi-build = "2"
