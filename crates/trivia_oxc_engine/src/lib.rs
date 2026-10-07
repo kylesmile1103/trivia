@@ -5,6 +5,7 @@
 //! original text, so whitespace and comments outside the edit are untouched (see `CLAUDE.md`,
 //! rule 1). Every result is re-parsed before it may be written.
 
+pub mod data_binder;
 pub mod error;
 pub mod import_manager;
 pub mod inspect;
@@ -19,6 +20,7 @@ use oxc_ast::ast::Program;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 
+pub use data_binder::{QueryBinding, bind_query};
 pub use error::{EngineError, ErrorPayload, Result};
 pub use import_manager::ImportSpec;
 pub use inspect::{AttrDetails, AttrKind, NodeDetails};
