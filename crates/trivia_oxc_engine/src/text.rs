@@ -352,6 +352,229 @@ pub fn jsx_text_value(raw: &str) -> Option<String> {
     (!decoded.is_empty()).then(|| decoded.join(" "))
 }
 
+/// Whether a (non-empty) JSX text child renders anything, by the rule [`jsx_text_value`]
+/// follows: whitespace that spans lines is layout and renders nothing; any other text,
+/// including whitespace on a single line (`<span> </span>` renders a space), is content.
+pub fn jsx_text_renders(raw: &str) -> bool {
+    use oxc_syntax::identifier::is_white_space_single_line;
+    use oxc_syntax::line_terminator::is_line_terminator;
+
+    let mut spans_lines = false;
+    for c in raw.chars() {
+        if is_line_terminator(c) {
+            spans_lines = true;
+        } else if !is_white_space_single_line(c) {
+            return true;
+        }
+    }
+    !spans_lines && !raw.is_empty()
+}
+
+/// Nesting depth of JSX/TSX source text such as a snippet: elements and fragments, `{…}`
+/// containers, `(…)`, `[…]`, `{…}` and template substitutions, from one pass over the bytes,
+/// so a deep input can be refused before the (recursive) parser sees it.
+///
+/// It follows enough of the lexical grammar not to count what is only text: JSX text,
+/// attribute strings, string, template and regex literals, and comments. It is an estimate
+/// for well-formed code: a regex right after `)` or `}` is read as a division, and TypeScript
+/// type arguments on a tag may read as a tag. Every level it counts starts at a `<`, `(`, `[`
+/// or `{`, so the result never exceeds the number of those bytes; a caller that needs a
+/// bound that no spelling can get around limits that number as well.
+pub fn nesting_depth(src: &str) -> usize {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Mode {
+        /// Expression code; also the outermost level.
+        Code,
+        /// Inside `<name …` up to its `>` or `/>`.
+        Tag,
+        /// Between an element's opening and closing tags.
+        Children,
+        /// Inside a template literal's text (not counted: only its `${` is a level).
+        Template,
+    }
+    /// Words after which an expression (so a regex or a JSX tag) may start.
+    const BEFORE_EXPRESSION: [&[u8]; 15] = [
+        b"return", b"typeof", b"instanceof", b"in", b"of", b"new", b"delete", b"void", b"throw", b"case", b"do",
+        b"else", b"yield", b"await", b"extends",
+    ];
+    let b = src.as_bytes();
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$' || c >= 0x80;
+    let opens_tag = |i: usize| b.get(i + 1).is_some_and(|&c| c == b'>' || (ident(c) && !c.is_ascii_digit()));
+    let mut stack = vec![Mode::Code];
+    let (mut depth, mut max) = (0usize, 0usize);
+    // In code: whether the last token ends an operand, so `/` divides and `<` compares.
+    let mut operand = false;
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        let mode = stack.last().copied().unwrap_or(Mode::Code);
+        let mut push = None;
+        let mut pop = false;
+        match mode {
+            Mode::Code => match c {
+                b'"' | b'\'' => {
+                    i = skip_quoted(b, i, true);
+                    operand = true;
+                    continue;
+                }
+                b'/' if matches!(b.get(i + 1), Some(b'/' | b'*')) => {
+                    i = skip_comment(b, i);
+                    continue;
+                }
+                b'/' if !operand => {
+                    i = skip_regex(b, i);
+                    operand = true;
+                    continue;
+                }
+                b'`' => {
+                    stack.push(Mode::Template);
+                    operand = false;
+                }
+                b'(' | b'[' | b'{' => {
+                    push = Some(Mode::Code);
+                    operand = false;
+                }
+                b')' | b']' | b'}' => {
+                    pop = true;
+                    operand = true;
+                }
+                b'<' if !operand && opens_tag(i) => {
+                    if b[i + 1] == b'>' {
+                        i += 1;
+                        push = Some(Mode::Children);
+                    } else {
+                        push = Some(Mode::Tag);
+                    }
+                }
+                c if ident(c) => {
+                    let start = i;
+                    while i < b.len() && ident(b[i]) {
+                        i += 1;
+                    }
+                    operand = !BEFORE_EXPRESSION.contains(&&b[start..i]);
+                    continue;
+                }
+                c if c.is_ascii_whitespace() => {}
+                _ => operand = false,
+            },
+            Mode::Tag => match c {
+                b'"' | b'\'' => {
+                    i = skip_quoted(b, i, false);
+                    continue;
+                }
+                b'/' if matches!(b.get(i + 1), Some(b'/' | b'*')) => {
+                    i = skip_comment(b, i);
+                    continue;
+                }
+                b'/' if b.get(i + 1) == Some(&b'>') => {
+                    i += 1;
+                    pop = true;
+                    operand = true;
+                }
+                b'>' => {
+                    if let Some(top) = stack.last_mut() {
+                        *top = Mode::Children;
+                    }
+                }
+                b'{' => {
+                    push = Some(Mode::Code);
+                    operand = false;
+                }
+                // An element as an attribute value (`icon=<X />`).
+                b'<' if opens_tag(i) => push = Some(if b[i + 1] == b'>' { Mode::Children } else { Mode::Tag }),
+                _ => {}
+            },
+            Mode::Children => match c {
+                b'<' if b.get(i + 1) == Some(&b'/') => {
+                    // The closing tag: skip to its `>`.
+                    i = b[i..].iter().position(|&c| c == b'>').map_or(b.len(), |p| i + p);
+                    pop = true;
+                    operand = true;
+                }
+                b'<' if opens_tag(i) => {
+                    if b[i + 1] == b'>' {
+                        i += 1;
+                        push = Some(Mode::Children);
+                    } else {
+                        push = Some(Mode::Tag);
+                    }
+                }
+                b'{' => {
+                    push = Some(Mode::Code);
+                    operand = false;
+                }
+                _ => {}
+            },
+            Mode::Template => match c {
+                b'`' => {
+                    stack.pop();
+                    operand = true;
+                }
+                b'\\' => i += 1,
+                b'$' if b.get(i + 1) == Some(&b'{') => {
+                    i += 1;
+                    push = Some(Mode::Code);
+                    operand = false;
+                }
+                _ => {}
+            },
+        }
+        if let Some(mode) = push {
+            stack.push(mode);
+            depth += 1;
+            max = max.max(depth);
+        } else if pop && stack.len() > 1 {
+            stack.pop();
+            depth = depth.saturating_sub(1);
+        }
+        i += 1;
+    }
+    max
+}
+
+/// Offset just past the string literal starting at `b[i]` (a quote). JS strings have
+/// backslash escapes and end at a line break; JSX attribute strings have neither.
+fn skip_quoted(b: &[u8], i: usize, escapes: bool) -> usize {
+    let quote = b[i];
+    let mut j = i + 1;
+    while j < b.len() {
+        match b[j] {
+            b'\\' if escapes => j += 1,
+            b'\n' if escapes => return j,
+            c if c == quote => return j + 1,
+            _ => {}
+        }
+        j += 1;
+    }
+    b.len()
+}
+
+/// Offset just past the `//` or `/* */` comment starting at `b[i]`.
+fn skip_comment(b: &[u8], i: usize) -> usize {
+    if b[i + 1] == b'/' {
+        return b[i..].iter().position(|&c| c == b'\n').map_or(b.len(), |p| i + p);
+    }
+    b[i + 2..].windows(2).position(|w| w == b"*/").map_or(b.len(), |p| i + 2 + p + 2)
+}
+
+/// Offset just past the regex literal starting at `b[i]` (its flags are read as a word).
+fn skip_regex(b: &[u8], i: usize) -> usize {
+    let mut class = false;
+    let mut j = i + 1;
+    while j < b.len() {
+        match b[j] {
+            b'\\' => j += 1,
+            b'[' => class = true,
+            b']' => class = false,
+            b'/' if !class => return j + 1,
+            b'\n' => return j,
+            _ => {}
+        }
+        j += 1;
+    }
+    b.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +586,37 @@ mod tests {
         assert_eq!(jsx_text_value("  a\n\n  b  ").as_deref(), Some("  a b  "));
         assert_eq!(jsx_text_value("\r\n   \r\n  ").as_deref(), None);
         assert_eq!(jsx_text_value("Tom&nbsp;&amp;&nbsp;Jerry").as_deref(), Some("Tom\u{a0}&\u{a0}Jerry"));
+    }
+
+    #[test]
+    fn jsx_text_renders_agrees_with_jsx_text_value() {
+        let samples = [" ", "  ", "\u{a0}", "\t", "x", " x ", "\n", "  \n  ", "\r\n", "\n  x\n", "&nbsp;", "\u{a0}\n", "\u{2028}"];
+        for raw in samples {
+            assert_eq!(jsx_text_renders(raw), jsx_text_value(raw).is_some(), "{raw:?}");
+        }
+        assert!(jsx_text_renders(" ") && !jsx_text_renders("\n    "));
+    }
+
+    #[test]
+    fn nesting_depth_counts_levels_not_width() {
+        let deep = |n: usize| format!("{}{}", "<a>".repeat(n), "</a>".repeat(n));
+        assert_eq!(nesting_depth(&deep(1)), 1);
+        assert_eq!(nesting_depth(&deep(300)), 300);
+        assert_eq!(nesting_depth("<a><b /><c /><d>x</d></a>"), 2);
+        assert_eq!(nesting_depth("<><a /></>"), 2);
+        assert_eq!(nesting_depth("<a b={<c />} />"), 3);
+        assert_eq!(nesting_depth("<a>{f((x) => [x])}</a>"), 4);
+        assert_eq!(nesting_depth("<a>{`x ${`y ${z}`}`}</a>"), 4);
+        // What is only text does not count.
+        assert_eq!(nesting_depth("<p>((( [[[ ))) </p>"), 1);
+        assert_eq!(nesting_depth("<p title=\"<(({{\" t='/>'>x</p>"), 1);
+        assert_eq!(nesting_depth("<p>{\"((\" + '}}' + `[[` /* (( */}</p>"), 2);
+        assert_eq!(nesting_depth("<p>{a < b ? <i /> : x / 2}</p>"), 3);
+        assert_eq!(nesting_depth("<p>{/[(</p>]/.test(s) && <i />}</p>"), 3);
+        // Never more than the `<`, `(`, `[` and `{` bytes it saw.
+        for s in ["<a b=\"c\">", "(((", "`${`${", "<<<<", "{/*", "<a>{x}</a>"] {
+            assert!(nesting_depth(s) <= s.bytes().filter(|b| b"<([{".contains(b)).count(), "{s}");
+        }
     }
 
     #[test]

@@ -11,7 +11,7 @@ use trivia_oxc_engine::{ImportSpec, Op, Placement};
 const DASH: &str = "src/pages/Dashboard.tsx";
 
 fn insert(src: &str, file: &str, target: &str, placement: Placement, snippet: &str, imports: Vec<ImportSpec>) -> String {
-    apply(src, file, &Op::Insert { target: target.into(), placement, snippet: snippet.into(), imports }).code
+    apply(src, file, &Op::Insert { target: target.into(), expected_name: None, placement, snippet: snippet.into(), imports }).code
 }
 
 /// Insert `snippet` (no imports needed) relative to the first `<tag>` of `src`.
@@ -30,6 +30,7 @@ fn crlf_files_get_crlf_everywhere() {
     let crlf = to_crlf(&lf);
     let op = |src: &str| Op::Insert {
         target: locator_of(src, DASH, "CardContent"),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<Button variant=\"destructive\">\n  Delete\n</Button>".into(),
         imports: vec![spec("Button", "@/components/ui/button")],
@@ -45,6 +46,7 @@ fn crlf_files_get_crlf_everywhere() {
         source: locator_of(src, DASH, "Badge"),
         expected_name: None,
         target: locator_of(src, DASH, "CardFooter"),
+        expected_target_name: None,
         placement: Placement::FirstChild,
     };
     let dash = read_fixture("Dashboard.tsx");
@@ -53,6 +55,7 @@ fn crlf_files_get_crlf_everywhere() {
         source: locator_of(src, DASH, "CardHeader"),
         expected_name: Some("CardHeader".into()),
         target: locator_of(src, DASH, "CardFooter"),
+        expected_target_name: None,
         placement: Placement::LastChild,
     };
     let from_lf = apply(&dash, DASH, &mv(&dash)).code;
@@ -97,6 +100,7 @@ fn multibyte_text_before_and_inside_edits_is_untouched() {
         source: locator_of(&src, "src/x.tsx", "span"),
         expected_name: Some("span".into()),
         target: locator_of(&src, "src/x.tsx", "p"),
+        expected_target_name: None,
         placement: Placement::Before,
     });
     assert_text_eq(&moved.code, &src.replace("      <p>前 😀 text</p>\n      <span>後</span>\n", "      <span>後</span>\n      <p>前 😀 text</p>\n"), "move");
@@ -277,6 +281,7 @@ fn literal_content_is_never_reindented() {
             source,
             expected_name: Some(tag.into()),
             target: locator_of(&src, file, "Badge"),
+            expected_target_name: None,
             placement: Placement::LastChild,
         });
         assert!(out.code.contains(literal), "{tag}: literal changed:\n{}", out.code);
@@ -286,4 +291,45 @@ fn literal_content_is_never_reindented() {
     let dash = read_fixture("Dashboard.tsx");
     let out = insert(&dash, DASH, &locator_of(&dash, DASH, "CardFooter"), Placement::LastChild, "<pre>\n  {`a\n  b`}\n</pre>", vec![]);
     assert!(out.contains("          <pre>\n            {`a\n  b`}\n          </pre>\n"), "{out}");
+}
+
+/// Whitespace alone on one line is a rendered text child (`<span> </span>` renders a space;
+/// only whitespace that spans lines is layout). Inserting or moving multi-line text into such
+/// an element must keep it, and removing or moving that node out again must give the
+/// original back.
+#[test]
+fn a_rendered_whitespace_child_survives_multi_line_inserts_and_moves() {
+    let op = |v: serde_json::Value| -> Op { serde_json::from_value(v).unwrap() };
+    let file = "src/x.tsx";
+    for space in [" ", "\u{a0}", "  "] {
+        let src = component(&format!(
+            "<div>\n      <span>{space}</span>\n      <section>\n        <b>x</b>\n      </section>\n    </div>"
+        ));
+        let span = locator_of(&src, file, "span");
+        for placement in ["firstChild", "lastChild"] {
+            let what = format!("{space:?} {placement}");
+            let kept = |code: &str, tag: &str| {
+                code.contains(&format!("<span>{space}<{tag}>")) || code.contains(&format!("</{tag}>{space}</span>"))
+            };
+            let out = apply(&src, file, &op(serde_json::json!({
+                "op": "insert", "target": span, "placement": placement, "snippet": "<div>\n  <b>y</b>\n</div>"
+            })));
+            assert!(kept(&out.code, "div"), "{what}: the text child was lost:\n{}", out.code);
+            let back = apply(&out.code, file, &op(serde_json::json!({
+                "op": "remove", "target": out.locator.unwrap(), "expectedName": "div"
+            })));
+            assert_text_eq(&back.code, &src, &format!("{what}, removed again"));
+
+            // A multi-line node moved in, then back out.
+            let section = locator_of(&src, file, "section");
+            let moved = apply(&src, file, &op(serde_json::json!({
+                "op": "move", "source": section, "expectedName": "section", "target": span, "placement": placement
+            })));
+            assert!(kept(&moved.code, "section"), "{what}: the text child was lost in the move:\n{}", moved.code);
+            let back = apply(&moved.code, file, &op(serde_json::json!({
+                "op": "move", "source": moved.locator.unwrap(), "expectedName": "section", "target": span, "placement": "after"
+            })));
+            assert_text_eq(&back.code, &src, &format!("{what}, moved back"));
+        }
+    }
 }

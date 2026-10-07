@@ -95,6 +95,7 @@ fn insert_then_remove_restores_every_byte() {
                     let what = format!("{}: insert {:?} {} at {target}", fx.label, placement, snippet.text);
                     let op = Op::Insert {
                         target: target.clone(),
+                        expected_name: Some(node.display_name().into()),
                         placement,
                         snippet: snippet.text.into(),
                         imports: snippet.imports.clone(),
@@ -145,6 +146,7 @@ fn insert_child_at_every_index_then_remove_restores_every_byte() {
                 let what = format!("{}: insertChild {parent} @{index}", fx.label);
                 let op = Op::InsertChild {
                     parent: parent.clone(),
+                    expected_name: Some(node.display_name().into()),
                     index,
                     snippet: "<Zeta />".into(),
                     imports: vec![spec("Zeta", "@/components/ui/zeta")],
@@ -187,16 +189,25 @@ fn multi_line_snippet_insert_then_remove_restores_every_byte() {
     let mut tally = Tally::default();
     for fx in fixture_variants() {
         let t = table(&fx.src, &fx.file);
+        // A file that declares `Card` itself (the shadcn card.tsx) cannot also import it.
+        let declares_card = ["Card", "CardContent"].iter().any(|name| root_binding(&fx.src, &fx.file, name) == Some(false));
         for (i, node) in t.nodes.iter().enumerate() {
             for placement in PLACEMENTS {
                 let target = loc(&t, i, &fx.file);
                 let what = format!("{}: insert {placement:?} multi-line at {target}", fx.label);
-                let op = Op::Insert { target, placement, snippet: SNIPPET.into(), imports: imports() };
+                let expected_name = Some(node.display_name().into());
+                let op = Op::Insert { target, expected_name, placement, snippet: SNIPPET.into(), imports: imports() };
                 let out = match apply_op(&fx.src, &fx.file, &op) {
                     Ok(out) => out,
-                    Err(e) => {
-                        assert!(is_sibling(placement) && (node.parent.is_none() || !node.direct), "{what}: {e}");
+                    Err(e) if is_sibling(placement) && (node.parent.is_none() || !node.direct) => {
+                        assert_eq!(e.code(), "unsupported", "{what}: {e}");
                         tally.skip("refused: sibling of a root or of a node inside {…}");
+                        continue;
+                    }
+                    Err(e) => {
+                        assert!(declares_card && e.to_string().contains("is already declared in this file"), "{what}: {e}");
+                        assert_eq!(e.code(), "unsupported", "{what}: {e}");
+                        tally.skip("refused: the file declares the component it would import");
                         continue;
                     }
                 };
@@ -218,6 +229,22 @@ fn multi_line_snippet_insert_then_remove_restores_every_byte() {
         }
     }
     tally.finish("multi-line insert → remove", 500);
+}
+
+/// The name a move's scope refusal is about (`cannot move <b>: `label` there is …`).
+fn scope_refusal(e: &trivia_oxc_engine::EngineError) -> Option<String> {
+    let message = e.to_string();
+    let scoped = message.contains("where it would go") || message.contains("not the one it uses here");
+    let name = message.split_once(">: `")?.1.split('`').next()?;
+    (e.code() == "unsupported" && scoped).then(|| name.to_string())
+}
+
+/// `text` contains `word` as a whole identifier.
+fn uses_word(text: &str, word: &str) -> bool {
+    let ident = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
+    text.match_indices(word).any(|(i, _)| {
+        !text[..i].chars().next_back().is_some_and(ident) && !text[i + word.len()..].chars().next().is_some_and(ident)
+    })
 }
 
 /// Where a node sits relative to its siblings, as a (target, placement) a move can aim at.
@@ -266,6 +293,7 @@ fn move_then_move_back_restores_every_byte() {
                         source: loc(&t, a, &fx.file),
                         expected_name: Some(node.display_name().into()),
                         target: loc(&t, target, &fx.file),
+                        expected_target_name: Some(t.nodes[target].display_name().into()),
                         placement,
                     };
                     let out = match apply_op(&fx.src, &fx.file, &op) {
@@ -281,6 +309,15 @@ fn move_then_move_back_restores_every_byte() {
                             } else if is_sibling(placement) && (tn.parent.is_none() || !tn.direct) {
                                 assert_eq!(e.code(), "unsupported", "{what}: {e}");
                                 "refused: sibling of a root or of a node inside {…}"
+                            } else if let Some(name) = scope_refusal(&e) {
+                                // The refusal must be about a name the moved code really uses,
+                                // and a module-level name is in scope everywhere.
+                                let moved = &fx.src[node.span.start as usize..node.span.end as usize];
+                                assert!(uses_word(moved, &name), "{what}: refused over `{name}`, which it does not use: {e}");
+                                if e.to_string().contains("is not in scope where it would go") {
+                                    assert_eq!(root_binding(&fx.src, &fx.file, &name), None, "{what}: {e}");
+                                }
+                                "refused: the moved code would refer to something else where it lands"
                             } else {
                                 panic!("{what}: unexpected refusal: {e} [{}]", e.code());
                             };
@@ -316,6 +353,7 @@ fn move_then_move_back_restores_every_byte() {
                         source: moved.clone(),
                         expected_name: Some(node.display_name().into()),
                         target: loc(&t2, home_new, &fx.file),
+                        expected_target_name: Some(t2.nodes[home_new].display_name().into()),
                         placement: home_placement,
                     };
                     let restored = apply_op(&out.code, &fx.file, &back)

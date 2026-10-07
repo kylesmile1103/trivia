@@ -38,6 +38,7 @@ fn check_insert_into(src: &str, parent: &str, snippet: &str, specs: Vec<ImportSp
         let target = locator_of(&src, FILE, parent);
         let out = apply(&src, FILE, &Op::Insert {
             target,
+            expected_name: None,
             placement: Placement::LastChild,
             snippet: snippet.into(),
             imports: specs.clone(),
@@ -221,8 +222,10 @@ fn type_only_imports_from_the_same_source_are_never_merged_into() {
 fn already_bound_names_and_unused_specs_add_nothing() {
     let src = page("import { Button } from \"@/ui/button\"\n", &["<Button />"]);
     let expected = page("import { Button } from \"@/ui/button\"\n", &["<Button />", "<Button />"]);
-    // `Button` is bound; `Unused` is not referenced by the snippet: neither is imported.
-    check_insert_src(&src, "<Button />", vec![spec("Button", "@/ui/other"), spec("Unused", "@/ui/unused")], &expected);
+    // `Button` is bound by the requested import; `Unused` is not referenced by the snippet:
+    // neither is imported. (A requested import the file binds differently is refused, see
+    // `a_name_bound_to_another_module_or_a_local_is_refused`.)
+    check_insert_src(&src, "<Button />", vec![spec("Button", "@/ui/button"), spec("Unused", "@/ui/unused")], &expected);
 }
 
 /// Rule 9 applied literally: a remove that takes away a name's last reference prunes its
@@ -234,6 +237,7 @@ fn removing_the_only_use_of_a_previously_unused_import_prunes_it() {
     let target = locator_of(&src, FILE, "main");
     let out = apply(&src, FILE, &Op::Insert {
         target,
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<Button />".into(),
         imports: vec![],
@@ -302,6 +306,7 @@ fn use_client_directive_stays_first() {
     for (src, expected) in [(src.clone(), expected.clone()), (to_crlf(&src), to_crlf(&expected))] {
         let out = apply(&src, "src/hand/Directive.tsx", &Op::Insert {
             target: target.clone(),
+            expected_name: None,
             placement: Placement::LastChild,
             snippet: "<Zeta />".into(),
             imports: vec![spec("Zeta", "@/z")],
@@ -321,6 +326,7 @@ fn crlf_new_declaration_after_the_last_import_and_after_a_directive() {
     let target = locator_of(src, FILE, "main");
     let out = apply(src, FILE, &Op::Insert {
         target,
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<B />".into(),
         imports: vec![spec("B", "b")],
@@ -416,6 +422,7 @@ fn conflicting_or_malformed_import_specs_are_refused() {
     let target = locator_of(&src, FILE, "main");
     let insert = |imports: Vec<ImportSpec>| Op::Insert {
         target: target.clone(),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<Zeta />".into(),
         imports,
@@ -428,6 +435,7 @@ fn conflicting_or_malformed_import_specs_are_refused() {
     // Two different defaults from one module.
     let op = Op::Insert {
         target: target.clone(),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<A><B /></A>".into(),
         imports: vec![default_spec("A", "m"), default_spec("B", "m")],
@@ -437,4 +445,119 @@ fn conflicting_or_malformed_import_specs_are_refused() {
     let out = apply(&src, FILE, &insert(vec![spec("Zeta", "z"), spec("Zeta", "z")]));
     assert_eq!(out.code.matches("import { Zeta } from \"z\"").count(), 1);
     assert!(apply_op(&src, FILE, &insert(vec![spec("Zeta", "z")])).is_ok());
+}
+
+// --- names that are already bound ---------------------------------------------------------
+
+/// Insert `snippet` into `<main>` with `imports` (built from JSON, as the designer sends it)
+/// and return the error code and message.
+fn refusal(src: &str, snippet: &str, imports: serde_json::Value) -> (&'static str, String) {
+    let op: Op = serde_json::from_value(serde_json::json!({
+        "op": "insert", "target": locator_of(src, FILE, "main"), "placement": "lastChild",
+        "snippet": snippet, "imports": imports,
+    }))
+    .unwrap();
+    match apply_op(src, FILE, &op) {
+        Ok(out) => panic!("{op:?} should be refused but wrote:\n{}", out.code),
+        Err(e) => (e.code(), e.to_string()),
+    }
+}
+
+/// A requested import whose name the file already binds to something else would make the
+/// new element render that other thing. bindQuery refuses the same situation.
+#[test]
+fn a_name_bound_to_another_module_or_a_local_is_refused() {
+    let shadcn = serde_json::json!([{ "name": "Button", "source": "@/components/ui/button" }]);
+    let snippet = "<Button variant=\"outline\">b</Button>";
+    for (imports, what) in [
+        ("import { Button } from \"@mui/material\"\n", "import { Button } from \"@mui/material\""),
+        ("import { Button } from \"react-aria-components\"\n", "import { Button } from \"react-aria-components\""),
+        ("import { MuiButton as Button } from \"@/components/ui/button\"\n", "import { MuiButton as Button }"),
+        ("import Button from \"@/components/ui/button\"\n", "import Button from"),
+        ("import * as Button from \"@/components/ui/button\"\n", "import * as Button from"),
+    ] {
+        let src = page(imports, &[]);
+        let (code, message) = refusal(&src, snippet, shadcn.clone());
+        assert_eq!(code, "unsupported", "{imports}: {message}");
+        assert!(message.contains(what) && message.contains("@/components/ui/button"), "{imports}: {message}");
+    }
+    for local in ["const Button = (p: object) => <button {...p} />\n", "function Button() {\n  return null\n}\n"] {
+        let src = page(local, &[]);
+        let (code, message) = refusal(&src, snippet, shadcn.clone());
+        assert_eq!(code, "unsupported", "{local}: {message}");
+        assert!(message.contains("`Button` is already declared in this file"), "{local}: {message}");
+    }
+    // A default spec needs a default import of that module.
+    let src = page("import { Logo } from \"@/logo\"\n", &[]);
+    let (code, message) = refusal(&src, "<Logo />", serde_json::json!([{ "name": "Logo", "source": "@/logo", "default": true }]));
+    assert_eq!(code, "unsupported", "{message}");
+}
+
+#[test]
+fn a_name_bound_by_the_requested_import_is_reused() {
+    let imports = "import Logo from \"@/logo\"\nimport { Button as Button } from \"@/ui/button\"\nimport { default as Mark } from \"@/mark\"\n";
+    let used = ["<Logo />", "<Button />", "<Mark />"];
+    for (snippet, spec) in [
+        ("<Logo />", default_spec("Logo", "@/logo")),
+        ("<Button />", spec("Button", "@/ui/button")),
+        ("<Mark />", default_spec("Mark", "@/mark")),
+    ] {
+        check_insert(imports, &used, snippet, vec![spec], imports);
+    }
+}
+
+/// The import exists, but the destination sits in a scope that declares its own `Button`,
+/// so the new `<Button>` would render that local one.
+#[test]
+fn a_requested_name_shadowed_at_the_destination_is_refused() {
+    let src = "import { Button } from \"@/ui/button\"\n\nexport function Page() {\n  const Button = () => null\n  return (\n    <main>\n    </main>\n  )\n}\n";
+    let (code, message) = refusal(src, "<Button />", serde_json::json!([{ "name": "Button", "source": "@/ui/button" }]));
+    assert_eq!(code, "unsupported", "{message}");
+    assert!(message.contains("`Button`") && message.contains("shadow"), "{message}");
+}
+
+// --- block comments around the insertion point --------------------------------------------
+
+#[test]
+fn a_new_declaration_goes_after_a_block_comment_that_ends_on_a_later_line() {
+    for semi in ["", ";"] {
+        let imports = format!("import {{ A }} from \"./a\"{semi} /* the a\n   component */\n");
+        check_insert(
+            &imports,
+            &["<A />"],
+            "<Zeta />",
+            vec![spec("Zeta", "@/z")],
+            &format!("{imports}import {{ Zeta }} from \"@/z\"{semi}\n"),
+        );
+    }
+    // Two comments, the second also running onto the next line.
+    let imports = "import { A } from \"./a\" /* one */ /* two\n */ /* three\n */\n";
+    check_insert(imports, &["<A />"], "<Zeta />", vec![spec("Zeta", "@/z")], &format!("{imports}import {{ Zeta }} from \"@/z\"\n"));
+}
+
+#[test]
+fn a_merged_specifier_goes_after_a_block_comment_that_ends_on_a_later_line() {
+    check_insert(
+        "import {\n  Card, /* the card,\n  see docs */\n} from \"@/ui/card\"\n",
+        &["<Card />"],
+        "<CardTitle />",
+        vec![spec("CardTitle", "@/ui/card")],
+        "import {\n  Card, /* the card,\n  see docs */\n  CardTitle,\n} from \"@/ui/card\"\n",
+    );
+    // No trailing comma: one goes after `Card` and the new name has none. (Removing it again
+    // keeps that comma, as for any specifier list with a comment after the comma: see
+    // `pruning_an_import_never_removes_a_comment` in formatting.rs.)
+    let src = page("import {\n  Card /* the card,\n  see docs */\n} from \"@/ui/card\"\n", &["<Card />"]);
+    let expected = page("import {\n  Card, /* the card,\n  see docs */\n  CardTitle\n} from \"@/ui/card\"\n", &["<Card />", "<CardTitle />"]);
+    for (src, expected) in [(src.clone(), expected.clone()), (to_crlf(&src), to_crlf(&expected))] {
+        let out = apply(&src, FILE, &Op::Insert {
+            target: locator_of(&src, FILE, "main"),
+            expected_name: Some("main".into()),
+            placement: Placement::LastChild,
+            snippet: "<CardTitle />".into(),
+            imports: vec![spec("CardTitle", "@/ui/card")],
+        });
+        assert_text_eq(&out.code, &expected, "no trailing comma");
+        assert_consistent_line_endings(&src, &out.code, "no trailing comma");
+    }
 }

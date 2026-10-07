@@ -106,7 +106,9 @@ pub struct Attr {
     pub value: Option<AttrValue>,
 }
 
-/// A non-whitespace child of an element: a JSX node or other content (text, `{…}`).
+/// A child of an element that renders: a JSX node or other content (text, `{…}`). Text that
+/// is only whitespace spanning lines is layout and is left out; whitespace on one line
+/// (`<span> </span>`) renders as a text node, so it is content.
 #[derive(Debug, Clone, Copy)]
 pub struct Content {
     pub span: Span,
@@ -133,7 +135,7 @@ pub struct JsxNode {
     pub direct: bool,
     /// All child JSX nodes, in index order.
     pub children: Vec<usize>,
-    /// Non-whitespace children in source order.
+    /// Children that render, in source order (see [`Content`]).
     pub content: Vec<Content>,
 }
 
@@ -304,7 +306,10 @@ impl Collector<'_> {
     fn visit_children<'a>(&mut self, idx: usize, children: &[JSXChild<'a>]) {
         for child in children {
             let content = match child {
-                JSXChild::Text(t) if t.value.trim().is_empty() => None,
+                // As written (not decoded): `&nbsp;` is content wherever it sits.
+                JSXChild::Text(t) if !text::jsx_text_renders(&self.src[t.span.start as usize..t.span.end as usize]) => {
+                    None
+                }
                 JSXChild::Element(_) | JSXChild::Fragment(_) => {
                     self.next_is_direct = true;
                     Some(Content { span: child.span(), node: Some(self.nodes.len()) })

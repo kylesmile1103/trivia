@@ -51,11 +51,11 @@ fn remove(target: &str, expected: Option<&str>) -> Op {
 }
 
 fn insert(target: &str, placement: Placement, snippet: &str) -> Op {
-    Op::Insert { target: target.into(), placement, snippet: snippet.into(), imports: vec![] }
+    Op::Insert { target: target.into(), expected_name: None, placement, snippet: snippet.into(), imports: vec![] }
 }
 
 fn move_to(source: &str, target: &str, placement: Placement) -> Op {
-    Op::Move { source: source.into(), expected_name: None, target: target.into(), placement }
+    Op::Move { source: source.into(), expected_name: None, target: target.into(), expected_target_name: None, placement }
 }
 
 #[test]
@@ -72,8 +72,14 @@ fn every_op_error_path_has_its_code() {
     assert_eq!(fails(s, remove(&at("0.0"), Some("Badge"))), "stale_locator");
     let stale = |op: Op| apply_op(SRC, FILE, &op).unwrap_err().code();
     assert_eq!(stale(Op::UpdateProp { target: at("0.0"), expected_name: Some("B".into()), prop: "a".into(), value: json!(1) }), "stale_locator");
-    assert_eq!(stale(Op::Move { source: at("0.0"), expected_name: Some("B".into()), target: at("0"), placement: Placement::LastChild }), "stale_locator");
-    assert_eq!(stale(Op::MoveNode { source: at("0.0"), expected_name: Some("B".into()), parent: at("0"), index: 0 }), "stale_locator");
+    assert_eq!(stale(Op::Move { source: at("0.0"), expected_name: Some("B".into()), target: at("0"), expected_target_name: None, placement: Placement::LastChild }), "stale_locator");
+    assert_eq!(stale(Op::MoveNode { source: at("0.0"), expected_name: Some("B".into()), parent: at("0"), expected_parent_name: None, index: 0 }), "stale_locator");
+    // …and so does every locator an op names: insert targets, insertChild parents, move destinations.
+    let named = |name: &str| Some(name.to_string());
+    assert_eq!(stale(Op::Insert { target: at("0"), expected_name: named("div"), placement: Placement::LastChild, snippet: "<b />".into(), imports: vec![] }), "stale_locator");
+    assert_eq!(stale(Op::InsertChild { parent: at("0"), expected_name: named("div"), index: 0, snippet: "<b />".into(), imports: vec![] }), "stale_locator");
+    assert_eq!(stale(Op::Move { source: at("0.0"), expected_name: named("Button"), target: at("0"), expected_target_name: named("div"), placement: Placement::LastChild }), "stale_locator");
+    assert_eq!(stale(Op::MoveNode { source: at("0.0"), expected_name: named("Button"), parent: at("0"), expected_parent_name: named("div"), index: 0 }), "stale_locator");
 
     // Roots, nodes inside `{…}`, fragments, other files.
     assert_eq!(fails(s, insert(&at("0"), Placement::Before, "<b />")), "unsupported");
@@ -93,17 +99,18 @@ fn every_op_error_path_has_its_code() {
     // The edit itself would not parse.
     assert_eq!(fails(s, Op::UpdateProp { target: at("0.0"), expected_name: None, prop: "a::b".into(), value: json!(1) }), "invalid_result");
 
-    assert_eq!(fails(s, Op::InsertChild { parent: at("0"), index: 4, snippet: "<b />".into(), imports: vec![] }), "invalid_op");
-    assert_eq!(fails(s, Op::MoveNode { source: at("0.0"), expected_name: None, parent: at("0.2"), index: 2 }), "invalid_op");
+    assert_eq!(fails(s, Op::InsertChild { parent: at("0"), expected_name: None, index: 4, snippet: "<b />".into(), imports: vec![] }), "invalid_op");
+    assert_eq!(fails(s, Op::MoveNode { source: at("0.0"), expected_name: None, parent: at("0.2"), expected_parent_name: None, index: 2 }), "invalid_op");
     assert_eq!(fails(s, Op::UpdateProp { target: at("0.0"), expected_name: None, prop: "data-ast-node".into(), value: json!("x") }), "invalid_op");
     assert_eq!(fails(s, Op::UpdateProp { target: at("0.0"), expected_name: None, prop: "bad name".into(), value: json!("x") }), "invalid_op");
     // Into itself or its own subtree (`0.2` is the fragment holding `<i />`).
     assert_eq!(fails(s, move_to(&at("0.0"), &at("0.0"), Placement::FirstChild)), "invalid_op");
     assert_eq!(fails(s, move_to(&at("0.2"), &at("0.2.0"), Placement::LastChild)), "invalid_op");
     assert_eq!(fails(s, move_to(&at("0.2"), &at("0.2.0"), Placement::Before)), "invalid_op");
-    assert_eq!(fails(s, Op::MoveNode { source: at("0.2"), expected_name: None, parent: at("0.2.0"), index: 0 }), "invalid_op");
+    assert_eq!(fails(s, Op::MoveNode { source: at("0.2"), expected_name: None, parent: at("0.2.0"), expected_parent_name: None, index: 0 }), "invalid_op");
     let bad_import = Op::Insert {
         target: at("0"),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<Z />".into(),
         imports: vec![spec("Z", "")],
@@ -143,6 +150,7 @@ fn names_bound_only_as_types_are_refused() {
     let src = "import type { Button } from \"@/ui/button\"\nimport { type Icon } from \"lucide-react\"\ntype Card = { title: string }\n\nexport const X = () => <main />\n";
     let insert = |snippet: &str| Op::Insert {
         target: format!("{FILE}#X#0"),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: snippet.into(),
         imports: vec![spec("Button", "@/ui/button"), spec("Icon", "lucide-react"), spec("Card", "@/ui/card")],
@@ -164,7 +172,7 @@ fn successful_no_ops_say_unchanged() {
     };
     same(move_to(&at("0.0"), &at("0.0"), Placement::Before));
     same(move_to(&at("0.0"), &at("0"), Placement::FirstChild));
-    same(Op::MoveNode { source: at("0.0"), expected_name: Some("Button".into()), parent: at("0"), index: 0 });
+    same(Op::MoveNode { source: at("0.0"), expected_name: Some("Button".into()), parent: at("0"), expected_parent_name: None, index: 0 });
     same(Op::UpdateProp { target: at("0.0"), expected_name: None, prop: "variant".into(), value: json!(null) });
 }
 
@@ -188,8 +196,11 @@ fn ops_from_the_api_doc_deserialize() {
         }
     }
     assert_eq!(ops.len(), 7, "one example per op: {ops:?}");
-    assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, .. } if imports.len() == 1));
+    assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, expected_name: Some(n), .. } if imports.len() == 1 && n == "CardContent"));
+    assert!(matches!(&ops[1], Op::InsertChild { expected_name: Some(n), .. } if n == "CardContent"));
     assert!(matches!(&ops[2], Op::UpdateProp { expected_name: Some(n), .. } if n == "Button"));
+    assert!(matches!(&ops[4], Op::Move { expected_name: Some(n), expected_target_name: Some(t), .. } if n == "Button" && t == "CardFooter"));
+    assert!(matches!(&ops[5], Op::MoveNode { expected_name: Some(n), expected_parent_name: Some(p), .. } if n == "Button" && p == "CardFooter"));
     assert!(matches!(&ops[6], Op::BindQuery(b) if b.options_fn == "listCustomersOptions" && b.items_path.as_deref() == Some("items")));
     for placement in ["before", "after", "firstChild", "lastChild"] {
         let text = format!(r#"{{ "op": "move", "source": "a#B#0", "target": "a#B#0", "placement": "{placement}" }}"#);
@@ -221,11 +232,11 @@ fn exercise(src: &str, file: &str, locators: &[String]) -> bool {
         let _ = inspect(src, loc);
         for op in [
             Op::Remove { target: loc.clone(), expected_name: None },
-            Op::Insert { target: loc.clone(), placement: Placement::LastChild, snippet: "<b>x</b>".into(), imports: vec![] },
-            Op::Insert { target: loc.clone(), placement: Placement::Before, snippet: "<Zeta />".into(), imports: vec![spec("Zeta", "@/z")] },
+            Op::Insert { target: loc.clone(), expected_name: None, placement: Placement::LastChild, snippet: "<b>x</b>".into(), imports: vec![] },
+            Op::Insert { target: loc.clone(), expected_name: None, placement: Placement::Before, snippet: "<Zeta />".into(), imports: vec![spec("Zeta", "@/z")] },
             Op::UpdateProp { target: loc.clone(), expected_name: None, prop: "title".into(), value: json!("a\"b&c") },
             Op::UpdateProp { target: loc.clone(), expected_name: None, prop: "className".into(), value: json!(null) },
-            Op::Move { source: loc.clone(), expected_name: None, target: locators[0].clone(), placement: Placement::FirstChild },
+            Op::Move { source: loc.clone(), expected_name: None, target: locators[0].clone(), expected_target_name: None, placement: Placement::FirstChild },
         ] {
             if let Ok(out) = apply_op(src, file, &op) {
                 // Whatever succeeds must have produced code that parses.
@@ -305,4 +316,58 @@ fn no_panic_on_garbage() {
     let deep = format!("export const X = () => {}{}", "<a>".repeat(300), "</a>".repeat(300));
     assert_eq!(annotate(&deep, FILE).unwrap().len(), 300);
     exercise(&deep, FILE, &[format!("{FILE}#X#0"), format!("{FILE}#X#0{}", ".0".repeat(298))]);
+}
+
+/// The parser recurses once per nesting level, so a snippet nested thousands of levels deep
+/// would overflow the native stack and take the whole dev server down with it. Such snippets
+/// are refused before parsing (`invalid_snippet`). Runs on a thread with a large stack, so
+/// that if the check were missing this test would fail on its assertion instead of crashing.
+#[test]
+fn deeply_nested_snippets_are_refused_before_parsing() {
+    std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(|| {
+            let insert = |snippet: String| -> Result<(), String> {
+                let op: Op = serde_json::from_value(json!({
+                    "op": "insert", "target": at("0"), "placement": "lastChild", "snippet": snippet
+                }))
+                .unwrap();
+                match apply_op(SRC, FILE, &op) {
+                    Ok(_) => Ok(()),
+                    Err(e) if e.code() == "invalid_snippet" => Err(e.to_string()),
+                    Err(e) => panic!("unexpected {}: {e}", e.code()),
+                }
+            };
+            let nested = |open: &str, inner: &str, close: &str, n: usize| format!("{}{inner}{}", open.repeat(n), close.repeat(n));
+
+            // The report's payload, and the documented limit (256 levels).
+            let err = insert(nested("<a>", "", "</a>", 20_000)).expect_err("20k levels");
+            assert!(err.contains("256"), "{err}");
+            assert!(insert(nested("<a>", "", "</a>", 255)).is_ok());
+            assert!(insert(nested("<a>", "", "</a>", 257)).is_err());
+            // Brackets, `{…}` and attribute values count too.
+            assert!(insert(format!("<a>{{{}}}</a>", nested("(", "x", ")", 300))).is_err());
+            assert!(insert(format!("<a>{{{}}}</a>", nested("[", "x", "]", 300))).is_err());
+            assert!(insert(format!("<a>{{{}}}</a>", nested("{a:", "1", "}", 300))).is_err());
+            assert!(insert(nested("<a b={", "1", "} />", 300)).is_err());
+            assert!(insert(format!("<a>{{{}}}</a>", nested("`${", "x", "}`", 300))).is_err());
+
+            // Width is not depth: many siblings, and brackets inside text, strings, comments
+            // and templates, are fine.
+            assert!(insert(format!("<ul>{}</ul>", "<li>(x) [y] {'{'}</li>".repeat(300))).is_ok());
+            assert!(insert(format!("<p title=\"{}\">{}</p>", "(<[{".repeat(100), "(".repeat(300))).is_ok());
+            assert!(insert(format!("<p>{{/* {} */ `{}` + \"{}\"}}</p>", "(".repeat(300), "[".repeat(300), "{".repeat(300))).is_ok());
+
+            // Text that only looks like closing tags does not hide real nesting.
+            assert!(insert(nested("<a t=\"/></a>\">", "", "</a>", 20_000)).is_err());
+            assert!(insert(nested("<a>{\"</a>\"}", "", "</a>", 20_000)).is_err());
+            assert!(insert(nested("<a>{/[</a>]/}", "", "</a>", 20_000)).is_err());
+            // And whatever the depth estimate says, a snippet with more than 2048 tags and
+            // brackets in total is refused, so no spelling can get a deeper one to the parser.
+            let err = insert(format!("<ul>{}</ul>", "<li />".repeat(2100))).expect_err("2100 tags");
+            assert!(err.contains("2048"), "{err}");
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
