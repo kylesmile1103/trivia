@@ -6,9 +6,22 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 
-import { createServer, type ViteDevServer } from 'vite'
+import { createServer, type ServerOptions, type ViteDevServer } from 'vite'
 
 import astLocator, { type AstLocatorOptions } from '../src/index.js'
+
+/**
+ * Test-only request header naming the client address the server sees. A Unix socket has no
+ * remote address (which the API refuses), so by default the harness stands in for a loopback
+ * TCP client, 127.0.0.1. `none` leaves the address undefined, as a real Unix socket does.
+ */
+export const REMOTE = 'x-test-remote-address'
+
+/** Headers that make a request look like it comes from `address`. */
+export const from = (address: string, headers: Record<string, string> = {}): Record<string, string> => ({
+  [REMOTE]: address,
+  ...headers,
+})
 
 export const PLAYGROUND = path.resolve(import.meta.dirname, '../../../examples/playground')
 
@@ -28,7 +41,11 @@ export interface TestServer {
   close(): Promise<void>
 }
 
-export async function startServer(root: string, options: AstLocatorOptions = {}): Promise<TestServer> {
+export async function startServer(
+  root: string,
+  options: AstLocatorOptions = {},
+  server: ServerOptions = {},
+): Promise<TestServer> {
   const vite = await createServer({
     root,
     configFile: false,
@@ -38,10 +55,17 @@ export async function startServer(root: string, options: AstLocatorOptions = {})
     plugins: [astLocator(options)],
     resolve: { alias: { '@': path.join(root, 'src') } },
     optimizeDeps: { noDiscovery: true, include: [] },
-    server: { middlewareMode: true, ws: false, watch: null },
+    server: { ...server, middlewareMode: true, ws: false, watch: null },
   })
   const socket = path.join(os.tmpdir(), `trivia-${process.pid}-${Math.random().toString(36).slice(2)}.sock`)
-  const httpServer = http.createServer(vite.middlewares)
+  const httpServer = http.createServer((req, res) => {
+    const named = req.headers[REMOTE]
+    delete req.headers[REMOTE]
+    const address = typeof named !== 'string' ? '127.0.0.1' : named === 'none' ? undefined : named
+    // Set on every request: the global agent keeps sockets alive across requests.
+    Object.defineProperty(req.socket, 'remoteAddress', { value: address, configurable: true })
+    vite.middlewares(req, res)
+  })
   await new Promise<void>((resolve, reject) => {
     httpServer.once('error', reject)
     httpServer.listen(socket, resolve)
@@ -67,6 +91,8 @@ export interface RequestOptions {
   /** Sent as JSON unless it is already a string. */
   body?: unknown
   headers?: Record<string, string>
+  /** false sends no Host header at all (Node adds one by default). */
+  setHost?: boolean
 }
 
 export function request(socket: string, url: string, options: RequestOptions = {}): Promise<Reply> {
@@ -78,7 +104,7 @@ export function request(socket: string, url: string, options: RequestOptions = {
     ...options.headers,
   }
   return new Promise((resolve, reject) => {
-    const req = http.request({ socketPath: socket, path: url, method, headers }, (res) => {
+    const req = http.request({ socketPath: socket, path: url, method, headers, setHost: options.setHost ?? true }, (res) => {
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
       res.on('end', () => {
