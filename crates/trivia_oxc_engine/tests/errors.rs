@@ -187,9 +187,10 @@ fn ops_from_the_api_doc_deserialize() {
             ops.push(op);
         }
     }
-    assert_eq!(ops.len(), 6, "one example per op: {ops:?}");
+    assert_eq!(ops.len(), 7, "one example per op: {ops:?}");
     assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, .. } if imports.len() == 1));
     assert!(matches!(&ops[2], Op::UpdateProp { expected_name: Some(n), .. } if n == "Button"));
+    assert!(matches!(&ops[6], Op::BindQuery(b) if b.options_fn == "listCustomersOptions" && b.items_path.as_deref() == Some("items")));
     for placement in ["before", "after", "firstChild", "lastChild"] {
         let text = format!(r#"{{ "op": "move", "source": "a#B#0", "target": "a#B#0", "placement": "{placement}" }}"#);
         assert!(serde_json::from_str::<Op>(&text).is_ok(), "{placement}");
