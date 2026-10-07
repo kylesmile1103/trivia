@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **New session? Start with `docs/HANDOFF.md`.** It covers the current status, the exact next steps (unmerged `swarm/fix2-*` branches, the push conditions, the email rewrite), the decisions, and the catches.
+
 ## What Trivia is
 
 A local-first visual React UI builder: a port of NetEase Tango's idea (edit the real source AST, no DSL)
