@@ -9,13 +9,23 @@
 import { toast } from 'sonner'
 
 import { ApiError } from '@/bridge/client'
-import type { ImportSpec } from '@/bridge/types'
+import type { ImportSpec, NodeDetails, Placement } from '@/bridge/types'
 import type { Template } from '@/registry/templates'
-import { dispatch } from '@/state/actions'
+import { dispatch, isApplying } from '@/state/actions'
 import { type DesignerState, designer } from '@/state/store'
 
 import type { CanvasApi } from './api'
-import { type Point, type Rect, elementsFor, guessName, hitTest, locatorOf, scrollTargetAt, usageParent } from './dom'
+import {
+  type Point,
+  type Rect,
+  contradictedBy,
+  elementsFor,
+  guessName,
+  hitTest,
+  locatorOf,
+  scrollTargetAt,
+  usageParent,
+} from './dom'
 import { type DragSubject, type DropPlan, computeDrop } from './dropzone'
 import { FrameSession, type FrameTransform } from './frame-session'
 import { isRootLocator, parseLocator } from './locator'
@@ -61,6 +71,8 @@ export interface CanvasView {
   selection: Highlight | null
   /** The selection is being dragged to a new place. */
   moving: boolean
+  /** An edit hasn't rendered yet: the canvas ignores presses, Delete and drops until it has. */
+  updating: boolean
   drop: DropView | null
   cursor: CursorChip | null
 }
@@ -71,6 +83,7 @@ export const EMPTY_VIEW: CanvasView = {
   hover: null,
   selection: null,
   moving: false,
+  updating: false,
   drop: null,
   cursor: null,
 }
@@ -80,7 +93,13 @@ interface Gesture {
   start: Point
   locator: string
   dragging: boolean
+  /** `CanvasController.epoch` at the press: the DOM `locator` was read from. */
+  epoch: number
 }
+
+/** One toast for every refusal, so repeated presses replace it instead of stacking. */
+const REFUSED_TOAST = 'canvas-refused'
+const UPDATING = 'Waiting for the app to update…'
 
 type DropState = { ok: true; plan: DropPlan } | { ok: false; reason: string } | null
 
@@ -102,6 +121,12 @@ export class CanvasController {
    * one would outline whatever node sits at that position today.
    */
   private held: { selection: Highlight | null } | null = null
+  /**
+   * Bumped whenever the DOM's locators may stop describing the source: an edit landed, the
+   * app re-rendered, or a new document attached. Names looked up for a locator read from the
+   * DOM are trusted only while it is unchanged since that read.
+   */
+  private epoch = 0
   private attachedAt = 0
   private view: CanvasView = EMPTY_VIEW
 
@@ -164,11 +189,28 @@ export class CanvasController {
     }
   }
 
+  /**
+   * The DOM's locators can't be trusted right now: an edit is on its way to disk, or it (or a
+   * change from elsewhere) hasn't rendered yet. Until HMR lands, the DOM still carries the old
+   * source's locators, so a locator read from it names whatever sits at that position in the
+   * new source, and an engine lookup would confirm that node (CLAUDE.md rule 4, docs/api.md).
+   * Presses, Delete and drops wait it out; the overlay shows a busy cursor meanwhile.
+   */
+  private get stale(): boolean {
+    return isApplying() || this.awaitingEdit || this.session.updating
+  }
+
   // ---------------------------------------------------------------------------------------
   // Frame and store events
 
+  /** A new document renders the source as it is now (first load or a full reload). */
   private onAttached(): void {
     this.attachedAt = performance.now()
+    // An update the old document was waiting for went with it (FrameSession.detach drops it
+    // without settling), and the new one has nothing to hold.
+    this.awaitingEdit = false
+    this.held = null
+    this.epoch++
     this.previews.reset()
     this.info.clear()
     designer.getState().bumpRevision()
@@ -178,6 +220,7 @@ export class CanvasController {
   private onSettled(): void {
     this.awaitingEdit = false
     this.held = null
+    this.epoch++
     this.info.clear()
     this.previews.clear()
     designer.getState().bumpRevision()
@@ -187,7 +230,9 @@ export class CanvasController {
     // An edit (or undo/redo) returned: its HMR is on the way.
     if (s.history !== prev.history) {
       this.awaitingEdit = true
+      this.epoch++
       this.session.expectUpdate()
+      this.session.scheduleLayout()
     }
     if (s.details && s.details !== prev.details) this.info.seed(s.details)
     if (s.selected !== prev.selected) {
@@ -229,12 +274,15 @@ export class CanvasController {
     // The native mousedown focuses the overlay (tabIndex 0) for the keyboard shortcuts; focusing
     // it here instead would count as programmatic focus and paint the focus-visible ring.
     if (e.button !== 0 || s.mode !== 'design') return
+    // What is under the cursor is the old render: selecting or dragging it would act on
+    // whatever node now holds its position in source. The busy cursor says to wait.
+    if (this.stale) return
     this.held = null
     const point = { x: e.clientX, y: e.clientY }
     const hit = this.hitAt(point)
     const locator = hit ? locatorOf(hit) : null
     s.select(locator)
-    this.gesture = locator ? { pointerId: e.pointerId, start: point, locator, dragging: false } : null
+    this.gesture = locator ? { pointerId: e.pointerId, start: point, locator, dragging: false, epoch: this.epoch } : null
   }
 
   private readonly onPointerMove = (e: PointerEvent): void => {
@@ -243,7 +291,9 @@ export class CanvasController {
     const g = this.gesture
     if (g && g.pointerId === e.pointerId) {
       if (!g.dragging && Math.hypot(point.x - g.start.x, point.y - g.start.y) > DRAG_THRESHOLD_PX) {
-        this.beginMove(g, e.pointerId)
+        // The app re-rendered since the press: its locator may name another node by now.
+        if (this.stale || g.epoch !== this.epoch) this.gesture = null
+        else this.beginMove(g, e.pointerId)
       }
       if (g.dragging) {
         this.session.scheduleLayout() // measure() recomputes the drop target
@@ -256,11 +306,9 @@ export class CanvasController {
   private readonly onPointerUp = (e: PointerEvent): void => {
     const g = this.gesture
     if (!g || g.pointerId !== e.pointerId) return
+    if (g.dragging) this.updateDrop({ x: e.clientX, y: e.clientY }) // while the gesture still says which DOM it read
     this.gesture = null
-    if (g.dragging) {
-      this.updateDrop({ x: e.clientX, y: e.clientY })
-      void this.finishMove(true)
-    }
+    if (g.dragging) void this.finishMove(true, g.epoch)
   }
 
   private readonly onPointerCancel = (e: PointerEvent): void => {
@@ -299,7 +347,8 @@ export class CanvasController {
     s.setDrag({ kind: 'node', locator: g.locator, name })
   }
 
-  private async finishMove(commit: boolean): Promise<void> {
+  /** End a node drag; `since` is the epoch of the press that read its locator. */
+  private async finishMove(commit: boolean, since = this.epoch): Promise<void> {
     const s = designer.getState()
     const drag = s.drag
     const drop = s.drop
@@ -308,10 +357,18 @@ export class CanvasController {
     s.setDrag(null)
     this.session.scheduleLayout()
     if (!commit || drag?.kind !== 'node' || !drop) return
-    const name = await this.resolveName(drag.locator)
-    if (name === null) return
+    const names = await this.expectedNames([drag.locator, drop.target], since, 'Nothing was moved')
+    if (names === null) return
+    const [name, targetName] = names
     await dispatch(
-      { op: 'move', source: drag.locator, expectedName: name, target: drop.target, placement: drop.placement },
+      {
+        op: 'move',
+        source: drag.locator,
+        expectedName: name,
+        target: drop.target,
+        expectedTargetName: targetName,
+        placement: drop.placement,
+      },
       `Move ${name}`,
     )
   }
@@ -359,9 +416,15 @@ export class CanvasController {
       toast.error('The dropped item is not a component template.')
       return
     }
-    if (!drop) return
-    void dispatch(
-      { op: 'insert', target: drop.target, placement: drop.placement, snippet: template.snippet, imports: template.imports },
+    if (!drop) return // refused (the chip said why) or over nothing droppable
+    void this.insertTemplate(template, drop.target, drop.placement, this.epoch)
+  }
+
+  private async insertTemplate(template: Template, target: string, placement: Placement, since: number): Promise<void> {
+    const names = await this.expectedNames([target], since, `${template.label} was not inserted`)
+    if (names === null) return
+    await dispatch(
+      { op: 'insert', target, expectedName: names[0], placement, snippet: template.snippet, imports: template.imports },
       `Insert ${template.label}`,
     )
   }
@@ -378,10 +441,12 @@ export class CanvasController {
     const uiDir = s.health?.uiDir
     const point = this.toFrame(client)
     const subject: DragSubject = s.drag?.kind === 'node' ? { kind: 'node', locator: s.drag.locator } : { kind: 'palette' }
-    this.dropState =
-      doc && uiDir && point
-        ? computeDrop({ doc, uiDir, point, subject, components: s.componentsByName, info: (l) => this.detailsFor(l) })
-        : null
+    const refusal = this.dropRefusal()
+    this.dropState = !(doc && uiDir && point)
+      ? null
+      : refusal
+        ? { ok: false, reason: refusal }
+        : computeDrop({ doc, uiDir, point, subject, components: s.componentsByName, info: (l) => this.detailsFor(l) })
     const t = this.session.transform()
     const plan = this.dropState?.ok ? this.dropState.plan : null
     if (!plan || !t) {
@@ -391,6 +456,14 @@ export class CanvasController {
     const rect = indicatorRect(plan, t)
     const same = s.drop && s.drop.target === plan.target && s.drop.placement === plan.placement && sameRect(s.drop.rect, rect)
     if (!same) s.setDrop({ target: plan.target, placement: plan.placement, rect })
+  }
+
+  /** Why nothing may be dropped right now (shown on the cursor chip), or null. */
+  private dropRefusal(): string | null {
+    if (this.stale) return UPDATING
+    const g = this.gesture
+    if (g?.dragging && g.epoch !== this.epoch) return 'The app changed during the drag'
+    return null
   }
 
   // ---------------------------------------------------------------------------------------
@@ -433,17 +506,17 @@ export class CanvasController {
     if (s.mode !== 'design' || e.metaKey || e.ctrlKey || e.altKey || !s.selected || this.gesture?.dragging) return
     if (e.key === 'Delete' || e.key === 'Backspace') {
       handled()
-      void this.removeNode(s.selected)
+      void this.removeNode(s.selected, this.epoch)
     } else if (e.key === 'ArrowUp') {
       handled()
       void this.selectParent(s.selected)
     }
   }
 
-  private async removeNode(locator: string): Promise<void> {
-    const name = await this.resolveName(locator)
-    if (name === null) return
-    await dispatch({ op: 'remove', target: locator, expectedName: name }, `Delete ${name}`)
+  private async removeNode(locator: string, since: number): Promise<void> {
+    const names = await this.expectedNames([locator], since, 'Nothing was deleted')
+    if (names === null) return
+    await dispatch({ op: 'remove', target: locator, expectedName: names[0] }, `Delete ${names[0]}`)
   }
 
   private async selectParent(locator: string): Promise<void> {
@@ -538,7 +611,7 @@ export class CanvasController {
           : { at, kind: 'insert', subject: s.drag?.kind === 'palette' ? s.drag.template.label : 'Component', target, refused: ds?.ok === false }
     }
 
-    this.publish({ status, bounds, hover, selection, moving, drop, cursor })
+    this.publish({ status, bounds, hover, selection, moving, updating: this.stale, drop, cursor })
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {
@@ -596,16 +669,42 @@ export class CanvasController {
     return this.detailsFor(locator)?.name ?? guessName(el)
   }
 
-  /** The JSX name for an op's `expectedName`; reports the failure when the engine can't say. */
-  private async resolveName(locator: string): Promise<string | null> {
-    const known = this.detailsFor(locator)
-    if (known) return known.name
-    try {
-      return (await this.info.load(locator)).name
-    } catch (error) {
-      toast.error(errorMessage(error))
+  /**
+   * The engine's names for locators the user picked on the canvas, for an op's expected names.
+   * They must describe the source the DOM was rendered from: a lookup made after the source
+   * changed names whatever sits at the locator now, and the engine's 409 could never fire.
+   * So this refuses (null, reported as `refused: …`) when the canvas is updating or changed
+   * since `since`, or when the DOM itself contradicts what the engine says is there; it
+   * reports a failed lookup the same way.
+   */
+  private async expectedNames(locators: readonly string[], since: number, refused: string): Promise<string[] | null> {
+    const fresh = () => !this.stale && this.epoch === since
+    if (!fresh()) {
+      toast.info(`${refused}: the canvas is still updating`, { id: REFUSED_TOAST, description: 'Try again once the app has re-rendered.' })
       return null
     }
+    let details: NodeDetails[]
+    try {
+      details = await Promise.all(locators.map((l) => this.detailsFor(l) ?? this.info.load(l)))
+    } catch (error) {
+      toast.error(`${refused}: ${errorMessage(error)}`, { id: REFUSED_TOAST })
+      return null
+    }
+    if (!fresh()) {
+      toast.info(`${refused}: the app changed meanwhile`, { id: REFUSED_TOAST, description: 'Try again on what it shows now.' })
+      return null
+    }
+    for (const d of details) {
+      const shown = contradictedBy(this.elementsOf(d.locator), d.name)
+      if (shown !== null) {
+        toast.error(`${refused}: the canvas is out of date`, {
+          id: REFUSED_TOAST,
+          description: `It shows <${shown}> where ${d.file} now has <${d.name}>. Try again once the app has re-rendered.`,
+        })
+        return null
+      }
+    }
+    return details.map((d) => d.name)
   }
 }
 

@@ -5,11 +5,12 @@
 //   mutation, previews). Coalesced to one call per animation frame.
 // - `settled`: the app finished re-rendering after a source change (HMR). A change is expected
 //   when Vite re-imports a module (`?t=<timestamp>`, visible in the iframe's resource timeline)
-//   or when the designer's own edit returns; it has settled once DOM mutations go quiet.
+//   or when the designer's own edit returns; it has settled once the rendered DOM (outside
+//   <head>) has changed and gone quiet, or after MAX_WAIT_MS regardless.
 
 /** Mutations must pause this long before an update counts as rendered. */
 const QUIET_MS = 120
-/** Resource timing is delivered late: mutations this long before the trigger still count. */
+/** Resource timing is delivered late: mutations this long before such a trigger still count. */
 const EARLY_MS = 300
 /** Settle anyway after this long (a no-op edit, or an app that mutates constantly). */
 const MAX_WAIT_MS = 1500
@@ -46,6 +47,8 @@ export class FrameSession {
   private raf = 0
   private pending = false
   private triggeredAt = 0
+  /** Mutations from this time on count as the expected update's render. */
+  private renderedAfter = 0
   private lastMutationAt = -Infinity
   private settleTimer = 0
   private animatingUntil = 0
@@ -75,12 +78,19 @@ export class FrameSession {
     return this.pending
   }
 
-  /** A source change is on its way (e.g. the designer's own edit just returned). */
-  expectUpdate(): void {
-    if (!this.pending) {
-      this.pending = true
-      this.triggeredAt = performance.now()
+  /**
+   * A source change is on its way. `seenLate` marks a trigger observed after the fact (Vite's
+   * re-import, from resource timing), whose render may already have happened. Anything else
+   * (the designer's own edit just returned) comes before its HMR: only later mutations are
+   * its render, so an app that happened to change a moment earlier doesn't end the wait.
+   */
+  expectUpdate(seenLate = false): void {
+    const now = performance.now()
+    if (!this.pending || !seenLate) {
+      this.triggeredAt = now
+      this.renderedAfter = seenLate ? now - EARLY_MS : now
     }
+    this.pending = true
     this.armSettle(QUIET_MS)
   }
 
@@ -152,7 +162,7 @@ export class FrameSession {
     this.resizeObserver = resizes
     this.tracked = []
     const hot = new win.PerformanceObserver((list) => {
-      if (list.getEntries().some((entry) => isHotUpdate(entry.name, win.location.origin))) this.expectUpdate()
+      if (list.getEntries().some((entry) => isHotUpdate(entry.name, win.location.origin))) this.expectUpdate(true)
     })
     hot.observe({ type: 'resource' })
     this.teardown.push(() => {
@@ -178,7 +188,11 @@ export class FrameSession {
   }
 
   private onMutations(records: MutationRecord[]): void {
-    if (records.some((r) => !this.isOwnMutation(r))) {
+    // Only the document outside <head> renders the app (and carries its locators). Vite can
+    // apply a stylesheet's hot update (Tailwind's output) in a batch of its own, before the
+    // module that re-renders the DOM, so <head> changes don't count as an update's render.
+    // They still move boxes, hence the layout either way.
+    if (records.some((r) => !this.isOwnMutation(r) && !inHead(r.target))) {
       this.lastMutationAt = performance.now()
       if (this.pending) this.armSettle(QUIET_MS)
     }
@@ -194,7 +208,7 @@ export class FrameSession {
     if (!this.pending) return
     const now = performance.now()
     const sinceMutation = now - this.lastMutationAt
-    const rendered = this.lastMutationAt >= this.triggeredAt - EARLY_MS
+    const rendered = this.lastMutationAt >= this.renderedAfter
     if ((rendered && sinceMutation >= QUIET_MS) || now - this.triggeredAt >= MAX_WAIT_MS) {
       this.pending = false
       this.listener.settled()
@@ -203,6 +217,10 @@ export class FrameSession {
     }
     this.armSettle(rendered ? Math.max(16, QUIET_MS - sinceMutation) : QUIET_MS)
   }
+}
+
+function inHead(node: Node): boolean {
+  return node.ownerDocument?.head?.contains(node) ?? false
 }
 
 /** Vite re-imports hot-updated modules (and CSS) from the app's origin with `t=<timestamp>`. */
