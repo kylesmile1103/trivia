@@ -14,14 +14,24 @@ const LOCATOR = 'src/pages/Dashboard.tsx#Dashboard#0.0.1.0'
 const TAG = '<div className="grid gap-2">'
 
 let original: string
+let errors: string[]
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
   original = await readFile(DASHBOARD, 'utf8')
   expect(original.split(TAG).length - 1, 'fixture: the target tag occurs exactly once').toBe(1)
+  errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
 })
 
 test.afterEach(async () => {
-  if ((await readFile(DASHBOARD, 'utf8')) !== original) await writeFile(DASHBOARD, original)
+  try {
+    expect(errors, 'no page errors (designer or canvas)').toEqual([])
+  } finally {
+    if ((await readFile(DASHBOARD, 'utf8')) !== original) await writeFile(DASHBOARD, original)
+  }
 })
 
 /** Open the harness on LOCATOR and count the engine writes the page makes. */
