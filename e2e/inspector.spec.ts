@@ -191,8 +191,8 @@ test('Step 3: select the Save button, set variant=outline, one attribute written
   await expect(inspector.getByRole('heading', { name: 'Button', exact: true })).toBeVisible()
   await expect(inspector.getByRole('button', { name: /^Copy source position/ })).toHaveText(`src/pages/Dashboard.tsx:${line}`)
   await expect(inspector.getByRole('navigation', { name: 'Ancestors' })).toHaveText(/Dashboard.*div.*Card.*CardFooter.*Button/)
-  const variant = inspector.getByRole('combobox', { name: 'variant' })
-  const size = inspector.getByRole('combobox', { name: 'size' })
+  const variant = inspector.getByRole('combobox', { name: 'variant', exact: true })
+  const size = inspector.getByRole('combobox', { name: 'size', exact: true })
   await expect(variant).toHaveText('default') // absent in source: the cva default as placeholder
   await expect(size).toHaveText('default')
   const classes = inspector.getByRole('region', { name: 'Classes' })
@@ -304,7 +304,7 @@ test('expression-bound props are read-only; literal props on the same element st
   await expect(inspector.getByRole('heading', { name: 'Badge', exact: true })).toBeVisible()
   await expect(inspector.getByText('in expression', { exact: true })).toBeVisible()
 
-  await expect(inspector.getByRole('combobox', { name: 'variant' })).toHaveText('secondary')
+  await expect(inspector.getByRole('combobox', { name: 'variant', exact: true })).toHaveText('secondary')
   await expect(inspector.getByRole('button', { name: 'Reset variant' })).toBeVisible()
   // key={plan}: shown as code with the reason, no setter, no reset.
   await expect(inspector.locator('code', { hasText: /^plan$/ })).toBeVisible()
