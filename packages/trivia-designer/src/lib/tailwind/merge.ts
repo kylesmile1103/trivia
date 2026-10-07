@@ -1,7 +1,8 @@
 // Merge new utilities into a user-authored className with tailwind-merge's conflict rules,
 // while touching as little of the string as possible: a replacement takes the place of the
 // first token it overrides, other tokens keep their order, and the whitespace between tokens
-// (including line breaks in multi-line classNames) is preserved.
+// (including line breaks in multi-line classNames) is preserved. Removing a token drops one
+// separator next to it and keeps the line structure (see removeAt).
 //
 // Unlike `twMerge(current, additions)`, conflicts *among existing tokens* that no addition
 // touches are left as written — cleaning those up would be an unrequested edit.
@@ -65,6 +66,21 @@ export function removeUtilities(current: string, utilities: Iterable<Utility>, t
   return join(tokens)
 }
 
+/**
+ * Remove every occurrence of the exact tokens (`removeClasses('p-4 flex md:p-4', ['p-4'])` →
+ * `'flex md:p-4'`), keeping all other bytes; "" when nothing is left.
+ */
+export function removeClasses(current: string, tokens: Iterable<string>): string {
+  const remove = new Set(tokens)
+  const parts = tokenize(current)
+  const { pieces } = parts
+  for (let i = 0; i < pieces.length; ) {
+    if (remove.has(pieces[i]!.token)) removeAt(pieces, i)
+    else i++
+  }
+  return join(parts)
+}
+
 /** True when `addition` written after `existing` makes `existing` redundant (or equals it). */
 function overrides(addition: string, existing: string): boolean {
   return twMerge(existing, addition) === addition
@@ -84,10 +100,19 @@ function tokenize(className: string): Tokens {
   return { leading, pieces, trailing: pieces.length === 0 ? '' : className.slice(end) }
 }
 
+/**
+ * Remove a token and one separator next to it. Usually the one before it; but a token that
+ * starts a line (`\n  gap-2 px-2`) gives up the one after it, so the next token takes over its
+ * line start instead of joining the previous line. The first token keeps the leading
+ * whitespace the same way.
+ */
 function removeAt(pieces: Piece[], i: number): void {
+  const removed = pieces[i]!
+  const next = pieces[i + 1]
   pieces.splice(i, 1)
-  // The new first token loses the separator it had after the removed one.
-  if (i === 0 && pieces[0]) pieces[0].before = ''
+  if (next === undefined) return
+  if (i === 0) next.before = ''
+  else if (removed.before.includes('\n') && !next.before.includes('\n')) next.before = removed.before
 }
 
 function join({ leading, pieces, trailing }: Tokens): string {

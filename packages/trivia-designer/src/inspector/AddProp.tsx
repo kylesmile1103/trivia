@@ -1,13 +1,15 @@
 // "Add prop": write any attribute name with a string value. Expressions belong in code; the
-// engine renders a string value as `name="value"`.
+// engine renders a string value as `name="value"`. Only Enter (or the check button) adds it:
+// leaving the element with the form filled in writes nothing, and says so (see ./leave).
 
 import { Check, Plus } from 'lucide-react'
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 import type { CommitProp } from './commit'
+import { notApplied } from './leave'
 import { validatePropName } from './model'
 import { ROW } from './PropField'
 
@@ -24,6 +26,14 @@ export function AddProp({ written, commit }: AddPropProps) {
   const [attempted, setAttempted] = useState(false)
   const [busy, setBusy] = useState(false)
   const error = validatePropName(name.trim(), written)
+
+  const unmount = useRef(() => {})
+  useLayoutEffect(() => {
+    unmount.current = () => {
+      if (open && !busy && name.trim() !== '') notApplied(`Prop “${name.trim()}”`, 'Typed without pressing Enter, which adds it.')
+    }
+  })
+  useEffect(() => () => unmount.current(), [])
 
   const close = () => {
     setOpen(false)

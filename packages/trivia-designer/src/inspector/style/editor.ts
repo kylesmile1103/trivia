@@ -25,6 +25,8 @@ import {
 } from '@/lib/tailwind'
 import { useDesigner } from '@/state/store'
 
+import { selectionLeft } from '../leave'
+
 /**
  * Lengths map onto the spacing scale only. Radius and font-size tokens depend on the project's
  * theme (shadcn redefines `rounded-lg`), so the panel offers them by name and writes typed
@@ -57,6 +59,12 @@ export interface StyleEditor {
   commitClasses(classes: readonly string[], label: string): void
   /** Remove the base tokens of these utilities. */
   clear(utilities: readonly Utility[], label: string): void
+  /**
+   * True once the selection has moved off this element. A control unmounting with an
+   * uncommitted value then commits it, as blur would; any other unmount writes nothing
+   * (see inspector/leave.ts).
+   */
+  left(): boolean
 }
 
 export const StyleEditorContext = createContext<StyleEditor | null>(null)
@@ -143,6 +151,7 @@ export function useStyleEditor({ locator, className, onPreview, onCommit }: Styl
       clear(utilities, label) {
         write(removeUtilities(current, utilities, PANEL_THEME), `Clear ${label.toLowerCase()}`, [])
       },
+      left: () => selectionLeft(locator),
     }),
     [locator, current, state, computed, preview, write],
   )
@@ -202,7 +211,11 @@ function usePreview(locator: string, onPreview: (style: Declarations | null) => 
   useEffect(
     () => () => {
       if (hold.current) clearTimeout(hold.current.timer)
+      hold.current = null
       if (active.current) latest.current(null)
+      // A control committing as the panel goes (the element is being left) must not arm a
+      // hold whose timer would later clear a preview this panel no longer owns.
+      active.current = false
     },
     [],
   )

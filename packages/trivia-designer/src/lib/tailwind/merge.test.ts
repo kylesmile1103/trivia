@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge'
 import { describe, expect, it } from 'vitest'
 
-import { mergeClassName, removeUtilities } from './merge'
+import { mergeClassName, removeClasses, removeUtilities } from './merge'
 
 describe('mergeClassName: conflict resolution', () => {
   it.each([
@@ -62,6 +62,16 @@ describe('mergeClassName: keeps unrelated tokens and their order', () => {
     expect(mergeClassName('\n  px-2\n  py-4\n', 'p-6')).toBe('\n  p-6\n')
   })
 
+  it('keeps line structure when an addition removes a token that starts a line', () => {
+    // px-2 is replaced in place; py-4 goes, and flex keeps py-4's line start.
+    expect(mergeClassName('\n  px-2\n  py-4 flex\n', 'p-6')).toBe('\n  p-6\n  flex\n')
+  })
+
+  it('ignores tokens that are already present, and keeps unknown tokens (partial input)', () => {
+    expect(mergeClassName('p-4 flex', 'flex')).toBe('p-4 flex')
+    expect(mergeClassName('p-4', 'p-')).toBe('p-4 p-')
+  })
+
   it('applies several additions in order, like twMerge', () => {
     expect(mergeClassName('flex p-4', ['px-2', 'p-6'])).toBe('flex p-6')
     expect(mergeClassName('flex p-4', 'p-6 px-2')).toBe('flex p-6 px-2')
@@ -100,5 +110,39 @@ describe('removeUtilities', () => {
 
   it('collapses to "" when nothing is left', () => {
     expect(removeUtilities(' p-4 ', ['p'])).toBe('')
+  })
+
+  it('keeps line structure when the removed token starts a line', () => {
+    expect(removeUtilities('\n  flex items-center\n  p-4 gap-2\n', ['p'])).toBe('\n  flex items-center\n  gap-2\n')
+  })
+})
+
+describe('removeClasses', () => {
+  const multi = '\n        flex items-center\n        gap-2 px-2 p-4\n      '
+
+  it('removes exact tokens and keeps every other byte', () => {
+    expect(removeClasses(multi, ['items-center'])).toBe('\n        flex\n        gap-2 px-2 p-4\n      ')
+    expect(removeClasses(multi, ['px-2'])).toBe('\n        flex items-center\n        gap-2 p-4\n      ')
+    expect(removeClasses(multi, ['p-4'])).toBe('\n        flex items-center\n        gap-2 px-2\n      ')
+    expect(removeClasses('flex  p-4   gap-2', ['p-4'])).toBe('flex   gap-2')
+  })
+
+  it('keeps the line start when the token starts a line', () => {
+    expect(removeClasses(multi, ['flex'])).toBe('\n        items-center\n        gap-2 px-2 p-4\n      ')
+    expect(removeClasses(multi, ['gap-2'])).toBe('\n        flex items-center\n        px-2 p-4\n      ')
+  })
+
+  it('drops a line the token had to itself', () => {
+    expect(removeClasses('\n  flex\n  p-4\n  gap-2\n', ['p-4'])).toBe('\n  flex\n  gap-2\n')
+    expect(removeClasses('flex\n  p-4', ['p-4'])).toBe('flex')
+  })
+
+  it('removes every occurrence and nothing that only starts with the token', () => {
+    expect(removeClasses('p-4 flex p-4 md:p-4 p-40', ['p-4'])).toBe('flex md:p-4 p-40')
+  })
+
+  it('collapses to "" when nothing is left', () => {
+    expect(removeClasses('  flex  ', ['flex'])).toBe('')
+    expect(removeClasses('', ['flex'])).toBe('')
   })
 })

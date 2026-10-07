@@ -1,17 +1,27 @@
 // The className manager: the user-authored tokens as removable chips, plus an input to add
-// tokens. Typing previews live in the canvas (two-phase editing); Enter writes the full new
-// className through the action bus; Escape cancels. Conflicting utilities replace the token
-// they override, in place (see ./classes).
+// tokens. Typing previews live in the canvas (two-phase editing); Enter writes the new
+// className through the action bus; Escape cancels.
+//
+// Every write is the authored string with only the touched tokens changed (lib/tailwind's
+// mergeClassName / removeClasses), so a multi-line className keeps its line breaks and
+// indentation. A conflicting addition replaces the token it overrides in place, unless a later
+// authored token would override the addition in turn under a component's own
+// `cn(base, className)` (later wins); then it is appended, so it takes effect either way.
+//
+// Typed classes are applied only by Enter: blur — including leaving the element, when the
+// selection moves on — never writes a half-typed token. Leaving with classes typed but not
+// applied says so in a toast instead of dropping them silently.
 
 import { X } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { Input } from '@/components/ui/input'
 import type { NodeDetails } from '@/bridge/types'
 import { canvas } from '@/canvas/api'
+import { mergeClassName, removeClasses, splitClassName } from '@/lib/tailwind'
 import { cn } from '@/lib/utils'
 
-import { classValue, mergeClasses, removeClass, splitClasses } from './classes'
+import { notApplied } from './leave'
 
 interface ClassManagerProps {
   details: NodeDetails
@@ -21,20 +31,38 @@ interface ClassManagerProps {
   commit(value: string | null): Promise<boolean>
 }
 
+/** The value to write: null (remove the attribute) when no class is left — an empty
+ *  `className=""` is noise in the user's source. */
+function attributeValue(className: string): string | null {
+  return splitClassName(className).length > 0 ? className : null
+}
+
+/**
+ * `current` with the typed classes added. A typed class that is already there is ignored
+ * rather than re-asserted: as an addition, `p-4` would also drop an authored `px-2` before it,
+ * which still wins on a plain element (Tailwind orders `px-*` after `p-*`).
+ */
+function withClasses(current: string, tokens: readonly string[], typed: readonly string[]): string {
+  const fresh = typed.filter((t) => !tokens.includes(t))
+  return fresh.length > 0 ? mergeClassName(current, fresh) : current
+}
+
 export function ClassManager({ details, authored, commit }: ClassManagerProps) {
   const locator = details.locator
   const [draft, setDraft] = useState('')
   const [focused, setFocused] = useState(false)
-  // Tokens just written, shown until the refreshed details replace `details`.
-  const [pending, setPending] = useState<{ basis: NodeDetails; tokens: string[] } | null>(null)
+  // The className just written, shown until the refreshed details replace `details`.
+  const [pending, setPending] = useState<{ basis: NodeDetails; value: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const previewing = useRef(false)
 
-  const tokens = pending !== null && pending.basis === details ? pending.tokens : splitClasses(authored)
-  const added = splitClasses(draft)
-  const next = added.length > 0 ? mergeClasses(tokens, added) : tokens
-  const replaced = new Set(tokens.filter((t) => !next.includes(t)))
-  const incoming = next.filter((t) => !tokens.includes(t))
+  const current = pending !== null && pending.basis === details ? pending.value : authored
+  const tokens = splitClassName(current)
+  const added = splitClassName(draft)
+  const next = withClasses(current, tokens, added)
+  const nextTokens = splitClassName(next)
+  const replaced = new Set(tokens.filter((t) => !nextTokens.includes(t)))
+  const incoming = nextTokens.filter((t) => !tokens.includes(t))
 
   const preview = (value: string | null) => {
     canvas.previewClassName(locator, authored, value)
@@ -44,24 +72,29 @@ export function ClassManager({ details, authored, commit }: ClassManagerProps) {
     if (previewing.current) preview(null)
   }
 
-  // Leaving the element (or unmounting) must not strand a preview in the canvas.
-  useEffect(
-    () => () => {
+  // Leaving the element (or unmounting) must not strand a preview in the canvas, nor drop
+  // typed classes without a word. Through a ref: the cleanup must see the last render's draft.
+  const leave = useRef(() => {})
+  useLayoutEffect(() => {
+    leave.current = () => {
       if (previewing.current) canvas.clearPreviews()
-    },
-    [],
-  )
+      if (added.length > 0 && next !== current) {
+        notApplied(`Classes “${added.join(' ')}” on <${details.name}>`, 'Typed without pressing Enter, which applies classes.')
+      }
+    }
+  })
+  useEffect(() => () => leave.current(), [])
 
   const onDraftChange = (value: string) => {
     setDraft(value)
-    const tokensToAdd = splitClasses(value)
+    const tokensToAdd = splitClassName(value)
     if (tokensToAdd.length === 0) endPreview()
-    else preview(mergeClasses(tokens, tokensToAdd).join(' '))
+    else preview(withClasses(current, tokens, tokensToAdd))
   }
 
-  const write = async (nextTokens: string[]) => {
-    setPending({ basis: details, tokens: nextTokens })
-    const ok = await commit(classValue(nextTokens))
+  const write = async (value: string) => {
+    setPending({ basis: details, value })
+    const ok = await commit(attributeValue(value))
     // The file is written (or the edit refused); HMR brings the real classes from here.
     canvas.clearPreviews()
     previewing.current = false
@@ -73,7 +106,7 @@ export function ClassManager({ details, authored, commit }: ClassManagerProps) {
     if (added.length === 0) return
     const typed = draft
     setDraft('')
-    if (next.join(' ') === tokens.join(' ')) {
+    if (next === current) {
       // Every token is already there: nothing to write.
       canvas.clearPreviews()
       previewing.current = false
@@ -90,7 +123,7 @@ export function ClassManager({ details, authored, commit }: ClassManagerProps) {
 
   const remove = async (token: string, viaKeyboard: boolean) => {
     endPreview()
-    await write(removeClass(tokens, token))
+    await write(removeClasses(current, [token]))
     // The chip (and its focused button) is gone; keep keyboard users in the manager.
     if (viaKeyboard) inputRef.current?.focus()
   }
@@ -124,9 +157,9 @@ export function ClassManager({ details, authored, commit }: ClassManagerProps) {
                 type="button"
                 aria-label={`Remove class ${token}`}
                 className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-                onPointerEnter={() => draft === '' && preview(classValue(removeClass(tokens, token)) ?? '')}
+                onPointerEnter={() => draft === '' && preview(removeClasses(current, [token]))}
                 onPointerLeave={() => draft === '' && endPreview()}
-                onFocus={() => draft === '' && preview(classValue(removeClass(tokens, token)) ?? '')}
+                onFocus={() => draft === '' && preview(removeClasses(current, [token]))}
                 onBlur={() => draft === '' && endPreview()}
                 onClick={(event) => void remove(token, event.detail === 0)}
               >
@@ -158,7 +191,7 @@ export function ClassManager({ details, authored, commit }: ClassManagerProps) {
         onKeyDown={onKeyDown}
         onFocus={() => {
           setFocused(true)
-          if (added.length > 0) preview(next.join(' '))
+          if (added.length > 0) preview(next)
         }}
         onBlur={() => {
           // Keep the typed text, drop the preview: blur is not a commit for class tokens.
