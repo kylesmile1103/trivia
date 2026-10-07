@@ -322,7 +322,9 @@ component's scope, pick a unique one or fail. Never shadow.
   `null`, use a relative path from the edited file to `modules.queries.file`, without `.ts`.
 
 **List binding.** Insert this as the first statement of the enclosing component's body, unless a
-`useQuery` that spreads the same `queryOptionsFn(...)` already exists:
+`useQuery` that spreads the same `queryOptionsFn(...)` already exists. When its arguments read the
+component's own locals, insert it right after the last statement declaring them instead, and refuse
+when that would put it after an early `return` or after the bound element:
 
 ```tsx
 const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions({ query: { page: 1, pageSize: 20 } }) })

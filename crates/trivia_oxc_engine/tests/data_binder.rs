@@ -764,6 +764,265 @@ fn query_binding_deserializes_from_camel_case_json() {
     assert!(out.code.contains(PROPS));
 }
 
+// ---------------------------------------------------------------------------------------
+// optionsArgs that read the component's locals: the hook must come after their declarations
+// ---------------------------------------------------------------------------------------
+
+/// `<DataTable rows>` bound to a single-row query whose args are `args`.
+fn orders(src: &str, args: &str) -> QueryBinding {
+    QueryBinding {
+        target: locator_of(src, FILE, "DataTable"),
+        expected_name: Some("DataTable".into()),
+        options_fn: "getCustomerOrdersOptions".into(),
+        options_import: OPTIONS_IMPORT.into(),
+        options_args: Some(args.into()),
+        resource: "Order".into(),
+        items_path: None,
+        data_prop: "rows".into(),
+        loading_prop: Some("isLoading".into()),
+    }
+}
+
+const ORDER_IMPORTS: &str = "import { useQuery } from \"@tanstack/react-query\"\nimport { getCustomerOrdersOptions } from \"@/api/generated/@tanstack/react-query.gen\"\n";
+
+/// The documented single-row shape `getXOptions({ path: { id } })`, with `id` from a hook:
+/// a hook written first would read `id` in its temporal dead zone (ReferenceError on render).
+#[test]
+fn hook_goes_after_the_local_its_args_read() {
+    let src = r#"import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerPage() {
+  const { id } = useParams()
+  return <DataTable rows={[]} />
+}
+"#;
+    let out = bind_idempotent(src, FILE, &orders(src, "{ path: { id } }"));
+    let expected = format!(
+        r#"import {{ useParams }} from "react-router"
+import {{ DataTable }} from "@/components/data-table"
+{ORDER_IMPORTS}
+export function CustomerPage() {{
+  const {{ id }} = useParams()
+  const {{ data: orderData, isLoading: isOrderLoading }} = useQuery({{ ...getCustomerOrdersOptions({{ path: {{ id }} }}) }})
+  return <DataTable rows={{orderData ?? []}} isLoading={{isOrderLoading}} />
+}}
+"#
+    );
+    assert_eq!(out.code, expected);
+
+    // CRLF: the hook's line break goes before the declaration's `\r\n`, not between them.
+    let src = src.replace('\n', "\r\n");
+    let out = bind_idempotent(&src, FILE, &orders(&src, "{ path: { id } }"));
+    assert_eq!(out.code, expected.replace('\n', "\r\n"));
+}
+
+#[test]
+fn hook_goes_after_the_last_declaration_its_args_read_keeping_comments_and_blank_lines() {
+    let src = r#"import { useState } from "react"
+import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerOrders() {
+  const { id } = useParams()
+  const [page, setPage] = useState(1) // 1-based
+
+  const title = `Orders of ${id}`
+  return <DataTable rows={[]} caption={title} onPage={setPage} />
+}
+"#;
+    let out = bind_idempotent(src, FILE, &orders(src, "{ path: { id }, query: { page } }"));
+    let expected = src
+        .replacen(
+            "import { DataTable } from \"@/components/data-table\"\n",
+            &format!("import {{ DataTable }} from \"@/components/data-table\"\n{ORDER_IMPORTS}"),
+            1,
+        )
+        .replacen(
+            "  const [page, setPage] = useState(1) // 1-based\n",
+            "  const [page, setPage] = useState(1) // 1-based\n  const { data: orderData, isLoading: isOrderLoading } = useQuery({ ...getCustomerOrdersOptions({ path: { id }, query: { page } }) })\n",
+            1,
+        )
+        .replacen("rows={[]}", "rows={orderData ?? []}", 1)
+        .replacen("onPage={setPage} />", "onPage={setPage} isLoading={isOrderLoading} />", 1);
+    assert_eq!(out.code, expected);
+}
+
+#[test]
+fn semicolon_files_and_same_line_statements_after_the_declaration() {
+    // `;` style follows the file; code on the declaration's line moves to the next line.
+    let src = "import { DataTable } from \"@/components/data-table\";\n\nexport function CustomerPage() {\n  const id = useId(); return <DataTable rows={[]} />;\n}\n";
+    let out = bind_idempotent(src, FILE, &orders(src, "{ path: { id } }"));
+    assert!(
+        out.code.contains(
+            "  const id = useId();\n  const { data: orderData, isLoading: isOrderLoading } = useQuery({ ...getCustomerOrdersOptions({ path: { id } }) });\n  return <DataTable rows={orderData ?? []} isLoading={isOrderLoading} />;\n"
+        ),
+        "{}",
+        out.code
+    );
+}
+
+#[test]
+fn props_module_values_hoisted_functions_and_the_args_own_bindings_keep_the_hook_first() {
+    // `tag` is declared only in a nested callback of the component, but the args bind their
+    // own `tag`; `firstPage` is a hoisted function declaration; `tags` is a prop.
+    let src = r#"import { DataTable } from "@/components/data-table"
+
+const PAGE_SIZE = 20
+
+export function Customers({ tags }: { tags: string[] }) {
+  return (
+    <div>
+      {tags.map((tag) => <span key={tag}>{tag}</span>)}
+      <DataTable data={[]} />
+    </div>
+  )
+
+  function firstPage() {
+    return 1
+  }
+}
+"#;
+    let mut binding = customers(src, FILE);
+    binding.options_args =
+        Some("{ query: { page: firstPage(), pageSize: PAGE_SIZE, tags: tags.map((tag) => tag.trim()) } }".into());
+    let out = bind_idempotent(src, FILE, &binding);
+    assert!(
+        out.code.contains(
+            "export function Customers({ tags }: { tags: string[] }) {\n  const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions({ query: { page: firstPage(), pageSize: PAGE_SIZE, tags: tags.map((tag) => tag.trim()) } }) })\n\n  return (\n"
+        ),
+        "{}",
+        out.code
+    );
+}
+
+#[test]
+fn generated_names_never_shadow_a_name_the_args_read() {
+    // `customerData` here is a global the args read; declaring it would read itself (TDZ).
+    let src = "import { DataTable } from \"@/components/data-table\"\n\nexport function Customers() {\n  return <DataTable />\n}\n";
+    let mut binding = customers(src, FILE);
+    binding.options_args = Some("{ query: { cursor: customerData } }".into());
+    let out = bind_idempotent(src, FILE, &binding);
+    assert!(
+        out.code.contains("const { data: customerData2, isLoading: isCustomerLoading2 } = useQuery({ ...listCustomersOptions({ query: { cursor: customerData } }) })"),
+        "{}",
+        out.code
+    );
+}
+
+/// The error for `binding`, which must be `unsupported` and mention every `needles`.
+fn refused(src: &str, binding: &QueryBinding, needles: &[&str]) {
+    let err = match bind_query(src, FILE, binding) {
+        Ok(out) => panic!("expected a refusal, got:\n{}", out.code),
+        Err(e) => e,
+    };
+    assert_eq!(err.code(), "unsupported", "{err}");
+    for needle in needles {
+        assert!(err.to_string().contains(needle), "{needle:?} missing from: {err}");
+    }
+}
+
+#[test]
+fn args_reading_a_local_declared_after_an_early_return_are_refused() {
+    // After the declaration, the hook would only run when `ready` is true: rules of hooks.
+    let src = r#"import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerPage({ ready }: { ready: boolean }) {
+  if (!ready) {
+    return null
+  }
+  const { id } = useParams()
+  return <DataTable rows={[]} />
+}
+"#;
+    refused(src, &orders(src, "{ path: { id } }"), &["`id`", "return", "rules of hooks"]);
+
+    // A `return` nested in a callback is not an early return of the component.
+    let src = r#"import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerPage() {
+  const onRow = (row: { id: string }) => {
+    return row.id
+  }
+  const { id } = useParams()
+  return <DataTable rows={[]} onRow={onRow} />
+}
+"#;
+    let out = bind_idempotent(src, FILE, &orders(src, "{ path: { id } }"));
+    assert!(out.code.contains("  const { id } = useParams()\n  const { data: orderData"), "{}", out.code);
+}
+
+#[test]
+fn args_reading_a_name_only_declared_in_a_nested_scope_are_refused() {
+    let src = r#"import { DataTable } from "@/components/data-table"
+
+export function Regions({ regions }: { regions: string[] }) {
+  return (
+    <div>
+      {regions.map((region) => {
+        return <DataTable key={region} rows={[]} />
+      })}
+    </div>
+  )
+}
+"#;
+    refused(src, &orders(src, "{ path: { region } }"), &["`region`", "nested"]);
+
+    // Same through a concise arrow body.
+    let src = r#"import { DataTable } from "@/components/data-table"
+
+export const Regions = ({ regions }: { regions: string[] }) => (
+  <div>{regions.map((region) => <DataTable key={region} rows={[]} />)}</div>
+)
+"#;
+    refused(src, &orders(src, "{ path: { region } }"), &["`region`", "nested"]);
+}
+
+#[test]
+fn args_reading_a_local_declared_after_the_element_are_refused() {
+    // The element (and so its props reading the hook's names) is evaluated before `id` exists.
+    let src = r#"import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerPage() {
+  const table = <DataTable rows={[]} />
+  const { id } = useParams()
+  return <section data-id={id}>{table}</section>
+}
+"#;
+    refused(src, &orders(src, "{ path: { id } }"), &["`id`", "<DataTable>"]);
+}
+
+#[test]
+fn deeply_nested_or_huge_options_args_are_refused_before_parsing() {
+    // Each of these used to recurse once per level in the parser: at this size, the
+    // process dies of a stack overflow instead of answering.
+    let deep_brackets = format!("{}{}", "[".repeat(200_000), "]".repeat(200_000));
+    let deep_objects = format!("{}1{}", "{ a: ".repeat(300), " }".repeat(300));
+    let deep_templates = format!("{}1{}", "`${".repeat(300), "}`".repeat(300));
+    let long_chain = format!("{}1", "x = ".repeat(100_000));
+    for (what, args) in [
+        ("brackets", deep_brackets),
+        ("objects", deep_objects),
+        ("templates", deep_templates),
+        ("assignment chain", long_chain),
+    ] {
+        let mut binding = customers(LIST, LIST_FILE);
+        binding.options_args = Some(args);
+        let err = bind_query(LIST, LIST_FILE, &binding).unwrap_err();
+        assert_eq!(err.code(), "invalid_op", "{what}: {err}");
+        assert!(err.to_string().len() < 400, "{what}: the message must not echo the whole input: {err}");
+    }
+
+    // Brackets inside strings and comments are text, not nesting.
+    let mut binding = customers(LIST, LIST_FILE);
+    let parens = "(".repeat(300);
+    binding.options_args = Some(format!("{{ query: {{ q: \"{parens}\", r: '{parens}' /* {parens} */ }} }}"));
+    assert!(bind(LIST, LIST_FILE, &binding).changed);
+}
+
 /// `bindQuery` is part of the `Op` vocabulary, so it shares the HTTP API, batches and undo.
 #[test]
 fn bind_query_round_trips_through_the_op_json_wire_format() {

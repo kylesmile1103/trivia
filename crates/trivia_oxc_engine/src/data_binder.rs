@@ -5,8 +5,11 @@
 //! hey-api factory `listCustomersOptions` writes:
 //!
 //! * `const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions(…) })`
-//!   as the first statement of the enclosing component. Rules of hooks: always the
-//!   component's own top-level body, never a nested callback and never module scope.
+//!   as the first statement of the enclosing component. When `optionsArgs` reads the
+//!   component's own locals (`{ path: { id } }` after `const { id } = useParams()`), the hook
+//!   goes right after the last statement declaring one of them instead, so it never reads a
+//!   binding before its declaration. Rules of hooks: always the component's own top-level
+//!   body, never a nested callback, never module scope and never after an early `return`.
 //! * `import { useQuery } from "@tanstack/react-query"` and the factory's import, through
 //!   [`import_manager::ensure_imports`] (merged into existing declarations when possible).
 //! * `data={customerData?.items ?? []}` and `isLoading={isCustomerLoading}` on the element.
@@ -15,11 +18,21 @@
 //! a `useQuery` in the component that already spreads the same factory is reused (its
 //! destructured names are read, and only a missing `isLoading` is added), so binding the
 //! same element twice leaves the file unchanged.
+//!
+//! Refused with `unsupported` rather than written: `optionsArgs` reading a local that is
+//! declared after an early `return`, at or after the statement rendering the element, or only
+//! inside a nested function or block (the hook could not see it).
+
+use std::borrow::Cow;
+use std::cell::Cell;
+use std::collections::BTreeSet;
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
+use oxc_ast_visit::Visit;
 use oxc_semantic::{Scoping, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
+use oxc_syntax::scope::{ScopeFlags, ScopeId};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, Result};
@@ -33,6 +46,15 @@ use crate::text::{self, Edit};
 pub const TANSTACK_QUERY: &str = "@tanstack/react-query";
 
 const USE_QUERY: &str = "useQuery";
+
+/// `optionsArgs` limits, checked before it is parsed. The parser recurses once per nesting
+/// level (about 1.5 KB of stack per bracket level in a release build), so unbounded input
+/// could overflow the stack and kill the host process (the dev server) instead of being
+/// refused. Real arguments are small object literals such as `{ query: { page: 1 } }`.
+const MAX_ARGS_DEPTH: usize = 256;
+/// Also bounds the nesting brackets don't show (`a = b = …`, `x => y => …`, JSX, `!!…`):
+/// at most one level per byte.
+const MAX_ARGS_LEN: usize = 4096;
 
 /// Bind `target` to `useQuery({ ...<options_fn>(<options_args>) })`.
 ///
@@ -88,7 +110,8 @@ pub fn bind_query(source: &str, file: &str, binding: &QueryBinding) -> Result<Ou
 
     let component = find_component(&program, node)?;
     let semantic = SemanticBuilder::new().build(&program).semantic;
-    let scope = ComponentScope { program: &program, scoping: semantic.scoping(), span: component.span };
+    let scope =
+        ComponentScope { program: &program, scoping: semantic.scoping(), span: component.span, reads: &request.reads };
     scope.check_import(USE_QUERY, TANSTACK_QUERY)?;
     scope.check_import(&binding.options_fn, &binding.options_import)?;
 
@@ -97,12 +120,15 @@ pub fn bind_query(source: &str, file: &str, binding: &QueryBinding) -> Result<Ou
         Body::Block(body) => match find_existing_hook(body, &binding.options_fn)? {
             Some(hook) => reuse_hook(source, &hook, &request, &scope, &style)?,
             None => {
+                let after = hook_anchor(source, &component, &scope, node)?;
                 let names = scope.fresh_names(&request);
-                let edit = insert_hook(source, body, &request, &names, &style);
+                let edit = insert_hook(source, body, after, &request, &names, &style);
                 (names.refs(), vec![edit])
             }
         },
         Body::Expression { arrow, expr } => {
+            // No statements to wait for: this only refuses names the hook cannot see.
+            hook_anchor(source, &component, &scope, node)?;
             let names = scope.fresh_names(&request);
             let edits = convert_expression_body(source, arrow, expr, &request, &names, &style)?;
             (names.refs(), edits)
@@ -139,6 +165,9 @@ struct Request<'b> {
     options_fn: &'b str,
     /// Trimmed factory argument.
     args: Option<&'b str>,
+    /// Names `args` reads from its surroundings (sorted): the hook must go where each one is
+    /// already declared, and its own variables must not take any of them.
+    reads: Vec<String>,
     /// `customer` / `Customer`, derived from the resource name.
     camel: String,
     pascal: String,
@@ -179,16 +208,23 @@ impl<'b> Request<'b> {
                 Some(segments)
             }
         };
-        let args = match &b.options_args {
-            None => None,
+        let (args, reads) = match &b.options_args {
+            None => (None, Vec::new()),
             Some(args) => {
                 let args = args.trim();
-                validate_args(args, file)?;
-                Some(args)
+                (Some(args), validate_args(args, file)?)
             }
         };
         let (camel, pascal) = resource_names(&b.resource)?;
-        Ok(Self { options_fn: &b.options_fn, args, camel, pascal, items_path, wants_loading: b.loading_prop.is_some() })
+        Ok(Self {
+            options_fn: &b.options_fn,
+            args,
+            reads,
+            camel,
+            pascal,
+            items_path,
+            wants_loading: b.loading_prop.is_some(),
+        })
     }
 
     fn data_base(&self) -> String {
@@ -201,11 +237,23 @@ impl<'b> Request<'b> {
 }
 
 /// `optionsArgs` must be exactly one argument expression: it is spliced into
-/// `<optionsFn>(<args>)`, so `a, b`, `a) || (b` or a trailing `// comment` are refused.
-fn validate_args(args: &str, file: &str) -> Result<()> {
-    let invalid = |why: &str| EngineError::InvalidOp(format!("optionsArgs `{args}` {why}"));
+/// `<optionsFn>(<args>)`, so `a, b`, `a) || (b` or a trailing `// comment` are refused, and
+/// so is anything over [`MAX_ARGS_LEN`] bytes or [`MAX_ARGS_DEPTH`] levels deep.
+///
+/// Returns the names the expression reads without declaring them (value references only:
+/// types are erased and have no temporal dead zone), sorted.
+fn validate_args(args: &str, file: &str) -> Result<Vec<String>> {
+    let shown = abbreviate(args);
+    let invalid = |why: &str| EngineError::InvalidOp(format!("optionsArgs `{shown}` {why}"));
     if args.is_empty() {
         return Err(invalid("is empty (use null for no argument)"));
+    }
+    if args.len() > MAX_ARGS_LEN {
+        return Err(invalid(&format!("is {} bytes long; at most {MAX_ARGS_LEN} are accepted", args.len())));
+    }
+    let depth = nesting_depth(args);
+    if depth > MAX_ARGS_DEPTH {
+        return Err(invalid(&format!("nests {depth} levels deep; at most {MAX_ARGS_DEPTH} are accepted")));
     }
     if args.contains(locator::ATTR) {
         return Err(invalid("must not mention the dev-only locator attribute"));
@@ -226,7 +274,72 @@ fn validate_args(args: &str, file: &str) -> Result<()> {
         },
         _ => false,
     };
-    if single_argument { Ok(()) } else { Err(invalid("must be exactly one expression")) }
+    if !single_argument {
+        return Err(invalid("must be exactly one expression"));
+    }
+    let semantic = SemanticBuilder::new().build(&program).semantic;
+    let s = semantic.scoping();
+    let reads: BTreeSet<String> = s
+        .root_unresolved_references()
+        .iter()
+        .filter(|(name, refs)| name.as_str() != PROBE && refs.iter().any(|&r| s.get_reference(r).is_value()))
+        .map(|(name, _)| name.to_string())
+        .collect();
+    Ok(reads.into_iter().collect())
+}
+
+/// Deepest nesting of `(`, `[`, `{`, template literals and their `${…}` in `src`, outside
+/// string literals and comments. A cheap guard run before parsing, not a tokenizer: brackets
+/// in a regex literal count too, which can only overestimate.
+fn nesting_depth(src: &str) -> usize {
+    let b = src.as_bytes();
+    let mut open: Vec<u8> = Vec::new();
+    let mut deepest = 0;
+    let mut i = 0;
+    while i < b.len() {
+        if open.last() == Some(&b'`') {
+            match b[i] {
+                b'\\' => i += 1,
+                b'`' => drop(open.pop()),
+                b'$' if b.get(i + 1) == Some(&b'{') => {
+                    open.push(b'{');
+                    i += 1;
+                }
+                _ => {}
+            }
+        } else {
+            match b[i] {
+                quote @ (b'"' | b'\'') => {
+                    i += 1;
+                    while i < b.len() && b[i] != quote && b[i] != b'\n' {
+                        i += if b[i] == b'\\' { 2 } else { 1 };
+                    }
+                }
+                b'/' if b.get(i + 1) == Some(&b'/') => {
+                    while i < b.len() && b[i] != b'\n' {
+                        i += 1;
+                    }
+                }
+                // Lands on the comment's closing `/` (or past the end when it is unclosed).
+                b'/' if b.get(i + 1) == Some(&b'*') => i = src[i + 2..].find("*/").map_or(b.len(), |n| i + 3 + n),
+                c @ (b'(' | b'[' | b'{' | b'`') => open.push(c),
+                b')' | b']' | b'}' => drop(open.pop()),
+                _ => {}
+            }
+        }
+        deepest = deepest.max(open.len());
+        i += 1;
+    }
+    deepest
+}
+
+/// `s` for an error message: its first 60 characters and `…` when it is longer than 80.
+fn abbreviate(s: &str) -> Cow<'_, str> {
+    if s.chars().nth(80).is_none() {
+        Cow::Borrowed(s)
+    } else {
+        Cow::Owned(format!("{}…", s.chars().take(60).collect::<String>()))
+    }
 }
 
 /// `Customer` → (`customer`, `Customer`); `customer-orders` → (`customerOrders`, `CustomerOrders`).
@@ -256,6 +369,10 @@ fn resource_names(resource: &str) -> Result<(String, String)> {
 struct Component<'p, 'a> {
     /// Span of the whole function (parameters included): the scope that must stay clash-free.
     span: Span,
+    /// The parameter list: everything bound there is in scope at the first statement.
+    params: Span,
+    /// The function's scope (parameters and top-level declarations), set by `SemanticBuilder`.
+    scope_id: &'p Cell<Option<ScopeId>>,
     body: Body<'p, 'a>,
 }
 
@@ -316,9 +433,9 @@ fn find_component<'p, 'a>(program: &'p Program<'a>, node: &JsxNode) -> Result<Co
              uppercase letter, hooks with `use`); useQuery can only be called from one of those"
         )));
     }
-    let (span, is_async, is_generator) = match callable {
-        Callable::Function(f) => (f.span, f.r#async, f.generator),
-        Callable::Arrow(a) => (a.span, a.r#async, false),
+    let (span, params, scope_id, is_async, is_generator) = match callable {
+        Callable::Function(f) => (f.span, f.params.span, &f.scope_id, f.r#async, f.generator),
+        Callable::Arrow(a) => (a.span, a.params.span, &a.scope_id, a.r#async, false),
     };
     if is_async || is_generator {
         let what = if is_async { "async" } else { "a generator" };
@@ -343,7 +460,7 @@ fn find_component<'p, 'a>(program: &'p Program<'a>, node: &JsxNode) -> Result<Co
     if !contains(body_span) {
         return Err(outside());
     }
-    Ok(Component { span, body })
+    Ok(Component { span, params, scope_id, body })
 }
 
 fn function_component<'p, 'a>(f: &'p Function<'a>) -> (Option<&'p str>, Option<Callable<'p, 'a>>) {
@@ -394,6 +511,8 @@ struct ComponentScope<'s, 'p, 'a> {
     program: &'p Program<'a>,
     scoping: &'s Scoping,
     span: Span,
+    /// [`Request::reads`]: names the new hook's own arguments refer to.
+    reads: &'s [String],
 }
 
 /// The variables a fresh hook declares.
@@ -420,12 +539,14 @@ impl ComponentScope<'_, '_, '_> {
     }
 
     /// True when declaring `name` at the top of the component would clash with, or shadow,
-    /// an existing binding or global the component (or the module) can see.
+    /// an existing binding or global the component (or the module) can see, or a name the
+    /// hook's own arguments read (`const { data: x } = useQuery(…(x))` reads itself).
     fn taken(&self, name: &str) -> bool {
         let s = self.scoping;
         s.get_root_binding(name.into()).is_some()
             || s.root_unresolved_references().keys().any(|k| k.as_str() == name)
             || s.symbol_ids().any(|id| s.symbol_name(id) == name && self.inside(s.symbol_span(id)))
+            || self.reads.iter().any(|r| r == name)
     }
 
     /// The element will read a name the existing hook declares. Refuse when the component
@@ -614,9 +735,124 @@ fn continues_previous_line(src: &str, pos: u32) -> bool {
     matches!(src.as_bytes().get(pos as usize), Some(b'(' | b'[' | b'`' | b'+' | b'-' | b'/' | b'<'))
 }
 
-/// The edit that inserts a new hook as the first statement of a block body.
-fn insert_hook(src: &str, body: &FunctionBody<'_>, req: &Request<'_>, names: &Names, style: &Style) -> Edit {
+/// Where a new hook can go so that every component local its arguments read is declared
+/// before it: `None` for the first statement, `Some(i)` for right after `statements[i]`, the
+/// last top-level statement declaring one of them. Parameters, hoisted function declarations
+/// and module-level names are in scope from the first statement on.
+///
+/// Refuses (`unsupported`) a name the hook could not see from the component's top level, and
+/// a placement after an early `return` (rules of hooks) or after the element it feeds.
+fn hook_anchor(
+    src: &str,
+    component: &Component<'_, '_>,
+    scope: &ComponentScope<'_, '_, '_>,
+    node: &JsxNode,
+) -> Result<Option<usize>> {
+    let s = scope.scoping;
+    let function_scope = component
+        .scope_id
+        .get()
+        .ok_or_else(|| EngineError::Internal("the component function has no scope after semantic analysis".into()))?;
+    let statements: &[Statement<'_>] = match &component.body {
+        Body::Block(body) => &body.statements,
+        Body::Expression { .. } => &[],
+    };
+    let within = |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
+
+    let mut anchor: Option<(usize, &str)> = None;
+    for name in scope.reads.iter().map(String::as_str) {
+        let Some(symbol) = s.get_binding(function_scope, name.into()) else {
+            let nested = s.symbol_ids().any(|id| s.symbol_name(id) == name && scope.inside(s.symbol_span(id)));
+            if nested && s.find_binding(function_scope, name.into()).is_none() {
+                return Err(EngineError::Unsupported(format!(
+                    "optionsArgs reads `{name}`, which this component declares only inside a nested function or \
+                     block; useQuery goes at the component's top level, where `{name}` is not in scope. Declare it \
+                     at the top level of the component first"
+                )));
+            }
+            continue;
+        };
+        let declared = s.symbol_span(symbol);
+        if within(component.params, declared) || s.symbol_flags(symbol).is_function() {
+            continue;
+        }
+        if let Some(i) = statements.iter().position(|st| within(st.span(), declared))
+            && anchor.is_none_or(|(j, _)| i > j)
+        {
+            anchor = Some((i, name));
+        }
+    }
+    let Some((i, name)) = anchor else { return Ok(None) };
+
+    if let Some(ret) = statements[..=i].iter().find_map(component_return) {
+        let (line, _) = text::line_col(src, ret.start);
+        return Err(EngineError::Unsupported(format!(
+            "optionsArgs reads `{name}`, which is declared after the early `return` on line {line}; a useQuery placed \
+             after `{name}` would not run on every render, which breaks the rules of hooks. Declare `{name}` before \
+             that return"
+        )));
+    }
+    let tag = node.display_name();
+    if statements.iter().position(|st| within(st.span(), node.span)).is_none_or(|r| r <= i) {
+        return Err(EngineError::Unsupported(format!(
+            "optionsArgs reads `{name}`, which is declared at or after the statement that renders <{tag}>; the hook \
+             has to follow `{name}` and precede <{tag}>, which reads its result. Declare `{name}` above that statement"
+        )));
+    }
+    Ok(Some(i))
+}
+
+/// The first `return` in `stmt` that returns from the component itself rather than from a
+/// function nested in it.
+fn component_return(stmt: &Statement<'_>) -> Option<Span> {
+    struct FirstReturn(Option<Span>);
+    impl<'a> Visit<'a> for FirstReturn {
+        fn visit_return_statement(&mut self, it: &ReturnStatement<'a>) {
+            if self.0.is_none() {
+                self.0 = Some(it.span);
+            }
+        }
+        fn visit_function(&mut self, _: &Function<'a>, _: ScopeFlags) {}
+        fn visit_arrow_function_expression(&mut self, _: &ArrowFunctionExpression<'a>) {}
+    }
+    let mut first = FirstReturn(None);
+    first.visit_statement(stmt);
+    first.0
+}
+
+/// The edit that inserts a new hook into a block body: as its first statement, or right after
+/// `statements[i]` for `after: Some(i)` (see [`hook_anchor`]).
+fn insert_hook(
+    src: &str,
+    body: &FunctionBody<'_>,
+    after: Option<usize>,
+    req: &Request<'_>,
+    names: &Names,
+    style: &Style,
+) -> Edit {
     let nl = style.nl;
+    if let Some(i) = after {
+        let anchor = body.statements[i].span();
+        let indent = if text::starts_line(src, anchor.start) {
+            text::line_indent(src, anchor.start).to_string()
+        } else {
+            format!("{}{}", text::line_indent(src, body.span.start), style.unit)
+        };
+        let next = body.statements.get(i + 1).map(|s| s.span().start);
+        let semi = style.semi || next.is_some_and(|start| continues_previous_line(src, start));
+        let hook = hook_statement(req, names, &indent, style, semi);
+        return match trivia_to_line_break(src, anchor.end) {
+            // The statement (plus any trailing comment) ends its line: the hook gets the next.
+            Some(eol) => Edit::insert(eol, format!("{nl}{indent}{hook}")),
+            // Code follows on the same line (`const id = f(); return …`): break before it.
+            None => {
+                let rest = &src[anchor.end as usize..];
+                let code = anchor.end + (rest.len() - rest.trim_start().len()) as u32;
+                Edit::replace(anchor.end, code, format!("{nl}{indent}{hook}{nl}{indent}"))
+            }
+        };
+    }
+
     let first = body.statements.first().map(|s| s.span().start);
     let indent = match first {
         Some(start) if text::starts_line(src, start) => text::line_indent(src, start).to_string(),
@@ -1001,6 +1237,36 @@ mod tests {
             let err = validate_args(bad, "a.tsx").unwrap_err();
             assert_eq!(err.code(), "invalid_op", "{bad:?} → {err}");
         }
+    }
+
+    #[test]
+    fn args_report_the_names_they_read() {
+        let reads = validate_args("{ path: { id }, query: { tags: tags.map((t) => t.trim()) } }", "a.tsx").unwrap();
+        assert_eq!(reads, ["id", "tags"]);
+        // Type positions are erased: no temporal dead zone to respect.
+        assert_eq!(validate_args("{ query: q as Query, n: 1 as typeof limit }", "a.tsx").unwrap(), ["q"]);
+        assert!(validate_args("{ page: 1 }", "a.tsx").unwrap().is_empty());
+    }
+
+    #[test]
+    fn nesting_depth_skips_strings_comments_and_template_text() {
+        assert_eq!(nesting_depth("{ query: { page: 1 } }"), 2);
+        assert_eq!(nesting_depth("f([{ a: (1) }])"), 4);
+        assert_eq!(nesting_depth(r#"{ a: "((((", b: '[[\'[[', c: /* {{{{ */ 1 } // ((("#), 1);
+        // A template counts, and so does each `${…}` inside it; its text does not.
+        assert_eq!(nesting_depth("`(((${ `${ x }` }`"), 4);
+        assert_eq!(nesting_depth("`\\${ not a substitution`"), 1);
+        assert_eq!(nesting_depth(")))]]]"), 0);
+        assert_eq!(nesting_depth("/* unclosed {{{"), 0);
+    }
+
+    #[test]
+    fn long_args_are_abbreviated_in_messages() {
+        assert_eq!(abbreviate("{ page: 1 }"), "{ page: 1 }");
+        let long = "x".repeat(81);
+        assert_eq!(abbreviate(&long), format!("{}…", "x".repeat(60)));
+        let err = validate_args(&"[".repeat(300), "a.tsx").unwrap_err().to_string();
+        assert!(err.contains("300 levels deep") && err.len() < 200, "{err}");
     }
 
     #[test]
