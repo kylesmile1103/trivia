@@ -36,7 +36,15 @@ async function run(call: () => Promise<ApplyResult>, last: Op | undefined): Prom
   }
 }
 
+/** Remember what is selected so a history jump can't silently retarget the selection. */
+function guardSelection(): void {
+  const s = designer.getState()
+  const name = s.details && s.details.locator === s.selected ? s.details.name : null
+  if (name !== null) s.expectSelectedName(name)
+}
+
 export async function undo(): Promise<void> {
+  guardSelection()
   try {
     const r = await engine.undo()
     designer.getState().setHistory(r.history)
@@ -46,6 +54,7 @@ export async function undo(): Promise<void> {
 }
 
 export async function redo(): Promise<void> {
+  guardSelection()
   try {
     const r = await engine.redo()
     designer.getState().setHistory(r.history)

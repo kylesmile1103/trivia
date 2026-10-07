@@ -33,6 +33,12 @@ export interface DesignerState {
   drop: DropTarget | null
   /** Bumped by the canvas whenever the iframe DOM changes (HMR); consumers re-measure/refetch. */
   revision: number
+  /**
+   * Set around undo/redo: the tag name of the selected node before the history jump. Locators
+   * are positions, so after the jump the same locator can name a different element; when the
+   * refreshed details disagree, the selection is dropped instead of silently retargeted.
+   */
+  expectedSelectedName: string | null
 
   setHealth(health: Health | null): void
   setComponents(components: ComponentSchema[]): void
@@ -45,6 +51,7 @@ export interface DesignerState {
   setDrag(drag: DragSource | null): void
   setDrop(drop: DropTarget | null): void
   bumpRevision(): void
+  expectSelectedName(name: string | null): void
 }
 
 export const useDesigner = create<DesignerState>()((set) => ({
@@ -60,19 +67,29 @@ export const useDesigner = create<DesignerState>()((set) => ({
   drag: null,
   drop: null,
   revision: 0,
+  expectedSelectedName: null,
 
   setHealth: (health) => set({ health }),
   setComponents: (components) =>
     set({ components, componentsByName: Object.fromEntries(components.map((c) => [c.name, c])) }),
-  select: (selected) => set((s) => (s.selected === selected ? s : { selected, details: null })),
+  select: (selected) =>
+    set((s) => (s.selected === selected ? s : { selected, details: null, expectedSelectedName: null })),
   hover: (hovered) => set({ hovered }),
-  setDetails: (details) => set({ details }),
+  setDetails: (details) =>
+    set((s) => {
+      const expected = s.expectedSelectedName
+      if (expected === null || details === null || details.locator !== s.selected) return { details }
+      return details.name === expected
+        ? { details, expectedSelectedName: null }
+        : { details: null, selected: null, expectedSelectedName: null }
+    }),
   setHistory: (history) => set({ history }),
   setMode: (mode) => set({ mode, hovered: null }),
   setZoom: (zoom) => set({ zoom: Math.min(2, Math.max(0.25, zoom)) }),
   setDrag: (drag) => set({ drag, drop: drag ? null : null }),
   setDrop: (drop) => set({ drop }),
   bumpRevision: () => set((s) => ({ revision: s.revision + 1 })),
+  expectSelectedName: (expectedSelectedName) => set({ expectedSelectedName }),
 }))
 
 /** Non-React access (event handlers, the action bus). */
