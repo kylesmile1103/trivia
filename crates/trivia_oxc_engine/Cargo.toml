@@ -13,6 +13,8 @@ oxc_ast_visit.workspace = true
 oxc_parser.workspace = true
 oxc_semantic.workspace = true
 oxc_span.workspace = true
+# JSX entity table, so decoding matches the OXC/TS JSX transforms exactly.
+oxc_syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -43,9 +43,15 @@ impl Locator {
         if file.is_empty() || scope.is_empty() || path.is_empty() {
             return Err(invalid());
         }
+        // Canonical segments only (`0`, `12`; not `+1`, `01` or ``), so a node has one spelling.
         let path = path
             .split('.')
-            .map(|seg| seg.parse::<u32>().map_err(|_| invalid()))
+            .map(|seg| {
+                let canonical = !seg.is_empty()
+                    && seg.bytes().all(|b| b.is_ascii_digit())
+                    && (seg == "0" || !seg.starts_with('0'));
+                if canonical { seg.parse::<u32>().map_err(|_| invalid()) } else { Err(invalid()) }
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self { file: file.to_string(), scope: scope.to_string(), path })
     }
@@ -81,7 +87,8 @@ pub enum NodeKind {
 /// A literal attribute value the inspector can show and edit.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrValue {
-    /// `name="text"`
+    /// `name="text"`. `span` includes the quotes; `value` is the runtime string, with HTML
+    /// character references decoded (`"a &amp; b"` → `a & b`) as the JSX transform does.
     String { span: Span, value: String },
     /// `name={expr}`; `literal` is set when `expr` is a plain literal.
     Expression { span: Span, source: String, literal: Option<serde_json::Value> },
@@ -323,9 +330,10 @@ impl Collector<'_> {
                 JSXAttributeItem::Attribute(a) => {
                     let name_span = a.name.span();
                     let value = a.value.as_ref().map(|v| match v {
-                        JSXAttributeValue::StringLiteral(s) => {
-                            AttrValue::String { span: s.span, value: s.value.as_str().to_string() }
-                        }
+                        JSXAttributeValue::StringLiteral(s) => AttrValue::String {
+                            span: s.span,
+                            value: text::decode_jsx_entities(s.value.as_str()).into_owned(),
+                        },
                         JSXAttributeValue::ExpressionContainer(c) => {
                             let expr_span = c.expression.span();
                             AttrValue::Expression {
@@ -401,19 +409,30 @@ impl<'a> Visit<'a> for Collector<'_> {
     }
 }
 
+/// A JSON number for a JS number. Integral values (within the safe-integer range) become JSON
+/// integers, so `{3}` reads back as `3` and is written back as `3`, never `3.0`.
+fn number_value(n: f64) -> Option<serde_json::Value> {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    if n.fract() == 0.0 && n.abs() <= MAX_SAFE_INTEGER && !(n == 0.0 && n.is_sign_negative()) {
+        Some(serde_json::Value::from(n as i64))
+    } else {
+        serde_json::Number::from_f64(n).map(serde_json::Value::Number)
+    }
+}
+
 fn literal_value(expr: &JSXExpression<'_>) -> Option<serde_json::Value> {
     use serde_json::Value;
     match expr {
         JSXExpression::BooleanLiteral(b) => Some(Value::Bool(b.value)),
         JSXExpression::NullLiteral(_) => Some(Value::Null),
-        JSXExpression::NumericLiteral(n) => serde_json::Number::from_f64(n.value).map(Value::Number),
+        JSXExpression::NumericLiteral(n) => number_value(n.value),
         JSXExpression::StringLiteral(s) => Some(Value::String(s.value.as_str().to_string())),
         JSXExpression::TemplateLiteral(t) if t.expressions.is_empty() => {
             t.quasis.first().and_then(|q| q.value.cooked.as_ref()).map(|c| Value::String(c.as_str().to_string()))
         }
         JSXExpression::UnaryExpression(u) if u.operator == oxc_ast::ast::UnaryOperator::UnaryNegation => {
             match &u.argument {
-                Expression::NumericLiteral(n) => serde_json::Number::from_f64(-n.value).map(Value::Number),
+                Expression::NumericLiteral(n) => number_value(-n.value),
                 _ => None,
             }
         }
@@ -436,16 +455,22 @@ pub struct Insertion {
 /// the tag name) so that a usage-site value passed down through `{...props}` overrides the
 /// definition-site one inside wrapper components such as shadcn's `<Button>`.
 ///
-/// Fragments are skipped (they cannot carry attributes) but still take their index.
+/// Fragments are skipped (they cannot carry attributes: React warns about any prop but `key`)
+/// but still take their index. That covers `<>`, `<Fragment>`, `<React.Fragment>` and the
+/// names this file imports React's `Fragment` under (`import { Fragment as F }` → `<F>`,
+/// `import * as R from "react"` → `<R.Fragment>`).
+///
+/// An element that already has a `data-ast-node` attribute keeps it and gets no second one.
 pub fn annotate(program: &Program<'_>, file: &str) -> Vec<Insertion> {
     let table = JsxTable::build(program);
+    let fragments = fragment_names(program);
     table
         .nodes
         .iter()
         .enumerate()
         .filter(|(_, n)| {
             n.kind == NodeKind::Element
-                && !matches!(n.name.as_deref(), Some("Fragment" | "React.Fragment"))
+                && !n.name.as_ref().is_some_and(|name| fragments.contains(name))
                 && !n.attributes.iter().any(|a| a.name.as_deref() == Some(ATTR))
         })
         .map(|(i, _)| {
@@ -462,6 +487,31 @@ pub fn annotate(program: &Program<'_>, file: &str) -> Vec<Insertion> {
 pub fn annotate_source(program: &Program<'_>, file: &str) -> Result<String> {
     let edits: Vec<Edit> = annotate(program, file).into_iter().map(|i| Edit::insert(i.offset, i.text)).collect();
     Ok(text::apply_edits(program.source_text, &edits)?.0)
+}
+
+/// Tag names that refer to React's `Fragment` in this file.
+fn fragment_names(program: &Program<'_>) -> Vec<String> {
+    let mut names = vec!["Fragment".to_string(), "React.Fragment".to_string()];
+    for stmt in &program.body {
+        let Statement::ImportDeclaration(decl) = stmt else { continue };
+        if decl.source.value.as_str() != "react" || !decl.import_kind.is_value() {
+            continue;
+        }
+        for spec in decl.specifiers.iter().flatten() {
+            match spec {
+                ImportDeclarationSpecifier::ImportSpecifier(s) => {
+                    if s.imported.name() == "Fragment" {
+                        names.push(s.local.name.to_string());
+                    }
+                }
+                ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => names.push(format!("{}.Fragment", s.local.name)),
+                ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
+                    names.push(format!("{}.Fragment", s.local.name));
+                }
+            }
+        }
+    }
+    names
 }
 
 fn escape_attr(s: &str) -> String {

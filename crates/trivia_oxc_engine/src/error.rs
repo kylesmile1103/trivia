@@ -23,6 +23,9 @@ pub enum EngineError {
     InvalidOp(String),
     #[error("path `{0}` must be a .tsx/.jsx file inside the project root")]
     PathOutsideRoot(String),
+    /// The file on disk is not the text the caller based its write on (edited elsewhere).
+    #[error("{0}")]
+    Conflict(String),
     #[error("{path}: {source}")]
     Io { path: String, source: std::io::Error },
     #[error("internal engine error: {0}")]
@@ -43,6 +46,7 @@ impl EngineError {
             Self::InvalidResult(_) => "invalid_result",
             Self::InvalidOp(_) => "invalid_op",
             Self::PathOutsideRoot(_) => "path_outside_root",
+            Self::Conflict(_) => "conflict",
             Self::Io { .. } => "io_error",
             Self::Internal(_) => "internal",
         }

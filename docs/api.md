@@ -59,13 +59,26 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
   and objects become `{…}` expressions. `true` on a bare shorthand attribute is a no-op.
+  An existing attribute keeps its form: a `'…'` string keeps its quote (a character JSX can't
+  hold raw is written as a reference, e.g. `&quot;`), `{'…'}` / `` {`…`} `` keep their literal
+  kind, other `{…}` values keep their braces. Setting the value a prop already has is a no-op
+  (`changed: false`). `null` removes every occurrence of a duplicated prop.
+- `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
+  references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
+  `attributes[].source` is the text as written.
 - `expectedName` (optional, recommended) makes a stale locator fail loudly (409) instead of
   editing the wrong node.
 - `index` counts the parent's JSX children (same numbering as locator segments) **before** the
   op. `index == children.length` appends.
 - Snippets must be exactly one JSX element/fragment. Every component it uses must already be
   bound in the file or listed in `imports`, else 422 `unresolved_component`.
-- Cross-file `move` is not supported yet (422).
+  Nothing may surround the element (a comment or wrapping parentheses would become JSX text):
+  400 `invalid_snippet`. `imports` the snippet doesn't reference are ignored; a name bound only
+  as a type (`import type`) is refused with 422 `unsupported`.
+- Cross-file `move` is not supported yet (422). Moving a node into itself or its own subtree
+  is 400 `invalid_op`.
+- The engine's guarded write (undo/redo `restore`) itself answers `conflict` when the file no
+  longer has the expected content.
 
 ## Locators
 
