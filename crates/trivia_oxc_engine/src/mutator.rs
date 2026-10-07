@@ -19,9 +19,12 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use oxc_allocator::Allocator;
+use oxc_ast::AstKind;
 use oxc_ast::ast::{Expression, Program, Statement, StringLiteral, TemplateLiteral};
 use oxc_ast_visit::{Visit, walk};
+use oxc_semantic::{AstNode, AstNodes, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
+use oxc_syntax::symbol::SymbolFlags;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -49,12 +52,21 @@ impl Placement {
 
 /// A serializable edit. This is the single action vocabulary shared by the designer, the
 /// HTTP/napi boundary and (later) agents: every change to user code goes through it.
+///
+/// Every locator an op names can carry the tag name the caller saw there (`expectedName`,
+/// `expectedTargetName`, `expectedParentName`): when the locator now resolves to another
+/// tag (a hand edit shifted it), the op fails with `stale_locator` instead of editing the
+/// wrong node (CLAUDE.md rule 4). Unknown fields are rejected, so a misspelled guard is an
+/// error rather than silently no guard.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum Op {
     /// Insert `snippet` (one JSX element) relative to `target`.
     Insert {
         target: String,
+        /// Stale-locator guard: the tag name the caller saw at `target`.
+        #[serde(default)]
+        expected_name: Option<String>,
         placement: Placement,
         snippet: String,
         #[serde(default)]
@@ -63,6 +75,9 @@ pub enum Op {
     /// Insert `snippet` before the parent's `index`-th child (`index == len` appends).
     InsertChild {
         parent: String,
+        /// Stale-locator guard: the tag name the caller saw at `parent`.
+        #[serde(default)]
+        expected_name: Option<String>,
         index: usize,
         snippet: String,
         #[serde(default)]
@@ -82,20 +97,29 @@ pub enum Op {
         #[serde(default)]
         expected_name: Option<String>,
     },
-    /// Move `source` relative to `target` (same file).
+    /// Move `source` relative to `target` (same file). Refused when the moved code uses a
+    /// binding that is not the same one at the destination (see `Doc::check_scope`).
     Move {
         source: String,
+        /// Stale-locator guard: the tag name the caller saw at `source`.
         #[serde(default)]
         expected_name: Option<String>,
         target: String,
+        /// Stale-locator guard: the tag name the caller saw at `target`.
+        #[serde(default)]
+        expected_target_name: Option<String>,
         placement: Placement,
     },
     /// Move `source` before the parent's `index`-th child, counted before the move.
     MoveNode {
         source: String,
+        /// Stale-locator guard: the tag name the caller saw at `source`.
         #[serde(default)]
         expected_name: Option<String>,
         parent: String,
+        /// Stale-locator guard: the tag name the caller saw at `parent`.
+        #[serde(default)]
+        expected_parent_name: Option<String>,
         index: usize,
     },
     /// Bind an element to a TanStack Query: inject `useQuery` into its component and set its
@@ -135,12 +159,12 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
     let table = JsxTable::build(&program);
     let doc = Doc { src: source, file, program: &program, table: &table };
     match op {
-        Op::Insert { target, placement, snippet, imports } => {
-            let target = table.resolve(&doc.locate(target)?)?;
+        Op::Insert { target, expected_name, placement, snippet, imports } => {
+            let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
             doc.insert(target, *placement, snippet, imports)
         }
-        Op::InsertChild { parent, index, snippet, imports } => {
-            let parent = table.resolve(&doc.locate(parent)?)?;
+        Op::InsertChild { parent, expected_name, index, snippet, imports } => {
+            let parent = table.resolve_expected(&doc.locate(parent)?, expected_name.as_deref())?;
             let (target, placement) = doc.index_anchor(parent, *index)?;
             doc.insert(target, placement, snippet, imports)
         }
@@ -152,14 +176,14 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
             let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
             doc.remove(target)
         }
-        Op::Move { source: from, expected_name, target, placement } => {
+        Op::Move { source: from, expected_name, target, expected_target_name, placement } => {
             let from = table.resolve_expected(&doc.locate(from)?, expected_name.as_deref())?;
-            let target = table.resolve(&doc.locate(target)?)?;
+            let target = table.resolve_expected(&doc.locate(target)?, expected_target_name.as_deref())?;
             doc.move_to(from, target, *placement)
         }
-        Op::MoveNode { source: from, expected_name, parent, index } => {
+        Op::MoveNode { source: from, expected_name, parent, expected_parent_name, index } => {
             let from = table.resolve_expected(&doc.locate(from)?, expected_name.as_deref())?;
-            let parent = table.resolve(&doc.locate(parent)?)?;
+            let parent = table.resolve_expected(&doc.locate(parent)?, expected_parent_name.as_deref())?;
             let (target, placement) = doc.index_anchor(parent, *index)?;
             doc.move_to(from, target, placement)
         }
@@ -386,10 +410,125 @@ impl Doc<'_, '_> {
         let (edit, offset) = self.anchor_edit(anchor, snippet, &body)?;
         // Only the imports the snippet actually references: the op touches nothing else.
         let used: Vec<ImportSpec> = imports.iter().filter(|s| parsed.free.contains(&s.name)).cloned().collect();
+        if !used.is_empty() {
+            self.check_not_shadowed(anchor.node(), &used)?;
+        }
         let mut edits = vec![edit];
         edits.extend(import_manager::ensure_imports(self.src, self.program, &used, &parsed.components)?);
         let (code, starts) = text::apply_edits(self.src, &edits)?;
-        finish(self.file, self.src, code, Some(starts[0] + offset))
+        let imported: Vec<&str> = used.iter().map(|s| s.name.as_str()).collect();
+        finish(self.file, self.src, code, Some(starts[0] + offset), &imported)
+    }
+
+    /// The AST node of JSX node `idx`. Its scope is also its children's: JSX makes none.
+    fn jsx_ast_node<'n, 'x>(&self, nodes: &'n AstNodes<'x>, idx: usize) -> Result<&'n AstNode<'x>> {
+        let span = self.table.nodes[idx].span;
+        nodes
+            .iter()
+            .find(|n| match n.kind() {
+                AstKind::JSXElement(e) => e.span == span,
+                AstKind::JSXFragment(f) => f.span == span,
+                _ => false,
+            })
+            .ok_or_else(|| EngineError::Internal(format!("no AST node for {}", self.name(idx))))
+    }
+
+    /// Refuse a move that would change what the moved code refers to. Each identifier the
+    /// moved node uses without declaring it must resolve to the same binding where it lands
+    /// (next to or inside `dest`), or stay a global there; `this` (and `arguments`) must keep
+    /// their function. Module-level names always pass, and so does any move within one scope;
+    /// what fails is moving out of the callback or component that declares a name
+    /// (`.map((item) => …)`, a render prop's `{ field }`, a component's `useState`), or into
+    /// one that declares the same name for something else.
+    fn check_scope(&self, from: usize, dest: usize) -> Result<()> {
+        let semantic = SemanticBuilder::new().with_build_nodes(true).build(self.program).semantic;
+        let (scoping, nodes) = (semantic.scoping(), semantic.nodes());
+        let moved = self.table.nodes[from].span;
+        let inside = |span: Span| moved.start <= span.start && span.end <= moved.end;
+        let line = |span: Span| text::line_col(self.src, span.start).0;
+        let dest = self.jsx_ast_node(nodes, dest)?;
+        // What `this` is bound by: the nearest non-arrow function, class or static block.
+        let this_binder = |id| {
+            nodes
+                .ancestors(id)
+                .find(|n| {
+                    let kind = n.kind();
+                    matches!(kind, AstKind::Function(_) | AstKind::Class(_) | AstKind::StaticBlock(_) | AstKind::Program(_))
+                })
+                .map(|n| (n.id(), n.kind().span()))
+        };
+        let refuse = |why: String| {
+            Err(EngineError::Unsupported(format!("cannot move {}: {why}; move it by hand", self.name(from))))
+        };
+        // `this` at node `id` keeps its meaning: bound inside the moved code, or by the same
+        // function where it lands.
+        let this_moves = |id| {
+            let here = this_binder(id);
+            let there = this_binder(dest.id());
+            here.is_some_and(|(_, span)| inside(span)) || here.map(|(id, _)| id) == there.map(|(id, _)| id)
+        };
+        for node in nodes.iter() {
+            match node.kind() {
+                AstKind::IdentifierReference(ident) if inside(ident.span) => {
+                    let here = scoping.get_reference(ident.reference_id()).symbol_id();
+                    if here.is_some_and(|symbol| inside(scoping.symbol_span(symbol))) {
+                        continue;
+                    }
+                    let name = ident.name.as_str();
+                    let there = scoping.find_binding(dest.scope_id(), ident.name);
+                    let why = match (here, there) {
+                        (None, None) if name == "arguments" && !this_moves(node.id()) => {
+                            "`arguments` would belong to a different function where it would go".to_string()
+                        }
+                        _ if here == there => continue,
+                        (Some(symbol), None) => format!(
+                            "`{name}` (declared on line {}) is not in scope where it would go",
+                            line(scoping.symbol_span(symbol))
+                        ),
+                        (Some(symbol), Some(other)) => format!(
+                            "`{name}` there is the binding declared on line {}, not the one it uses here (line {})",
+                            line(scoping.symbol_span(other)),
+                            line(scoping.symbol_span(symbol))
+                        ),
+                        (None, Some(other)) => format!(
+                            "`{name}` there would be the local declared on line {} instead of the global it is here",
+                            line(scoping.symbol_span(other))
+                        ),
+                        (None, None) => continue,
+                    };
+                    return refuse(why);
+                }
+                AstKind::ThisExpression(this) if inside(this.span) && !this_moves(node.id()) => {
+                    return refuse("`this` would refer to a different object where it would go".into());
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Refuse an insert whose requested imports would be shadowed where the snippet lands
+    /// (next to or inside `dest`): a `<Button>` placed in a scope that declares its own
+    /// `Button` would render that one, not the import.
+    fn check_not_shadowed(&self, dest: usize, used: &[ImportSpec]) -> Result<()> {
+        let semantic = SemanticBuilder::new().with_build_nodes(true).build(self.program).semantic;
+        let scoping = semantic.scoping();
+        let dest = self.jsx_ast_node(semantic.nodes(), dest)?;
+        for spec in used {
+            let there = scoping.find_binding(dest.scope_id(), spec.name.as_str().into());
+            if let Some(local) = there
+                && there != scoping.get_root_binding(spec.name.as_str().into())
+            {
+                return Err(EngineError::Unsupported(format!(
+                    "`{}` where the element would go is the local declared on line {}, which would shadow `{}`; \
+                     rename that local first",
+                    spec.name,
+                    text::line_col(self.src, scoping.symbol_span(local).start).0,
+                    spec.declaration()
+                )));
+            }
+        }
+        Ok(())
     }
 
     fn update_prop(&self, target: usize, prop: &str, value: &Value) -> Result<Outcome> {
@@ -401,7 +540,7 @@ impl Doc<'_, '_> {
         if !is_attr_name(prop) || prop == crate::locator::ATTR {
             return Err(EngineError::InvalidOp(format!("`{prop}` is not an editable prop name")));
         }
-        let unchanged = || finish(self.file, src, src.to_string(), Some(node.span.start));
+        let unchanged = || finish(self.file, src, src.to_string(), Some(node.span.start), &[]);
         let occurrences: Vec<usize> =
             (0..node.attributes.len()).filter(|&i| node.attributes[i].name.as_deref() == Some(prop)).collect();
         let edits = match (occurrences.last(), value) {
@@ -436,7 +575,7 @@ impl Doc<'_, '_> {
             }
         };
         let (code, _) = text::apply_edits(src, &edits)?;
-        finish(self.file, src, code, Some(node.span.start))
+        finish(self.file, src, code, Some(node.span.start), &[])
     }
 
     /// The byte range that removing attribute `i` deletes: the attribute and the whitespace
@@ -550,7 +689,7 @@ impl Doc<'_, '_> {
         let before = import_manager::import_reference_counts(self.program);
         let (code, _) = text::apply_edits(self.src, &[Edit::delete(start, end)])?;
         let code = import_manager::prune_dropped(&code, self.file, &before)?;
-        finish(self.file, self.src, code, None)
+        finish(self.file, self.src, code, None, &[])
     }
 
     fn move_to(&self, from: usize, target: usize, placement: Placement) -> Result<Outcome> {
@@ -566,8 +705,9 @@ impl Doc<'_, '_> {
         let anchor = self.anchor(target, placement)?;
         if anchor.node() == from {
             // Before/after itself, or first/last child where it already is.
-            return finish(self.file, self.src, self.src.to_string(), Some(node.span.start));
+            return finish(self.file, self.src, self.src.to_string(), Some(node.span.start), &[]);
         }
+        self.check_scope(from, anchor.node())?;
         let moved = &self.src[node.span.start as usize..node.span.end as usize];
         let from_indent = text::line_indent(self.src, node.span.start);
         let frozen = literal_ranges(self.src, self.program, node.span);
@@ -575,14 +715,27 @@ impl Doc<'_, '_> {
         let (insert, offset) = self.anchor_edit(anchor, moved, &body)?;
         let (start, end) = removal_range(self.src, node.span);
         let (code, starts) = text::apply_edits(self.src, &[insert, Edit::delete(start, end)])?;
-        finish(self.file, self.src, code, Some(starts[0] + offset))
+        finish(self.file, self.src, code, Some(starts[0] + offset), &[])
     }
 }
 
 /// Validate the new code and compute the locator of the node now starting at `node_start`.
-fn finish(file: &str, original: &str, code: String, node_start: Option<u32>) -> Result<Outcome> {
+/// Each name in `imported` must now be bound by an import: an import the op meant to add
+/// that binds nothing (written into a comment, say) makes the result broken, not a success.
+fn finish(file: &str, original: &str, code: String, node_start: Option<u32>, imported: &[&str]) -> Result<Outcome> {
     let alloc = Allocator::default();
     let program = parse(&alloc, &code, file).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
+    if !imported.is_empty() {
+        let semantic = SemanticBuilder::new().build(&program).semantic;
+        let scoping = semantic.scoping();
+        let is_import = |name: &str| {
+            let binding = scoping.get_root_binding(name.into());
+            binding.is_some_and(|id| scoping.symbol_flags(id).contains(SymbolFlags::Import))
+        };
+        if let Some(name) = imported.iter().find(|name| !is_import(name)) {
+            return Err(EngineError::InvalidResult(format!("`{name}` would not be imported in the result")));
+        }
+    }
     let locator = node_start.and_then(|start| {
         let table = JsxTable::build(&program);
         table.node_starting_at(start).map(|i| table.locator(i, file).to_string())
@@ -649,12 +802,45 @@ struct SnippetInfo {
     frozen: Vec<(u32, u32)>,
 }
 
+/// Deepest nesting a snippet may have, counting elements, `{…}` containers, brackets and
+/// template substitutions ([`text::nesting_depth`]).
+pub const MAX_SNIPPET_DEPTH: usize = 256;
+
+/// Most tags and brackets (`<`, `(`, `[`, `{` bytes) a snippet may contain. The depth above
+/// is an estimate; this bounds the real depth however the snippet is spelled.
+pub const MAX_SNIPPET_TAGS_AND_BRACKETS: usize = 2048;
+
+/// The parser, and every visitor after it, recurses once per nesting level, and a snippet
+/// comes from outside the process: thousands of levels would overflow the native stack and
+/// kill the host (the user's dev server) instead of failing. So the nesting is checked on the
+/// bytes before anything parses them.
+fn check_snippet_nesting(snippet: &str) -> Result<()> {
+    let openers = snippet.bytes().filter(|b| matches!(b, b'<' | b'(' | b'[' | b'{')).count();
+    if openers <= MAX_SNIPPET_DEPTH {
+        // Every level starts at one of them.
+        return Ok(());
+    }
+    let depth = text::nesting_depth(snippet);
+    if depth > MAX_SNIPPET_DEPTH {
+        return Err(EngineError::InvalidSnippet(format!(
+            "it nests {depth} levels deep (elements, `{{…}}` and brackets); the limit is {MAX_SNIPPET_DEPTH}"
+        )));
+    }
+    if openers > MAX_SNIPPET_TAGS_AND_BRACKETS {
+        return Err(EngineError::InvalidSnippet(format!(
+            "it has {openers} tags and brackets; the limit is {MAX_SNIPPET_TAGS_AND_BRACKETS}"
+        )));
+    }
+    Ok(())
+}
+
 /// Parse a snippet as exactly one JSX element/fragment, with nothing else around it (no
 /// comments, no parentheses: those would become JSX text once spliced into children).
 fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
     if snippet.is_empty() {
         return Err(EngineError::InvalidSnippet("empty snippet".into()));
     }
+    check_snippet_nesting(snippet)?;
     const PREFIX: &str = "(\n";
     let wrapped = format!("{PREFIX}{snippet}\n);");
     let alloc = Allocator::default();

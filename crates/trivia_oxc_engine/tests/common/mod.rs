@@ -164,6 +164,17 @@ pub fn first_named_import_source(src: &str, file: &str) -> Option<String> {
     })
 }
 
+/// How the file binds `name` at module level: `None` when it does not, `Some(true)` for an
+/// import, `Some(false)` for a declaration in the file.
+pub fn root_binding(src: &str, file: &str, name: &str) -> Option<bool> {
+    let alloc = Allocator::default();
+    let program = parse(&alloc, src, file).unwrap();
+    let semantic = oxc_semantic::SemanticBuilder::new().build(&program).semantic;
+    let scoping = semantic.scoping();
+    let id = scoping.get_root_binding(name.into())?;
+    Some(scoping.symbol_flags(id).contains(oxc_syntax::symbol::SymbolFlags::Import))
+}
+
 /// Local names of every import specifier in the file.
 pub fn import_locals(src: &str, file: &str) -> std::collections::BTreeSet<String> {
     let alloc = Allocator::default();

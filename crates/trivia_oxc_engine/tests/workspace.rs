@@ -72,6 +72,7 @@ fn listing(dir: &Path) -> Vec<String> {
 fn insert_heading(file: &str) -> Op {
     Op::Insert {
         target: format!("{file}#App#0"),
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: "<h2>Added</h2>".into(),
         imports: vec![],

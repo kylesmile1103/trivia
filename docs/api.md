@@ -47,14 +47,16 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
 ## Ops (`Op`, tagged by `op`)
 
 ```jsonc
-{ "op": "insert", "target": "<loc>", "placement": "before|after|firstChild|lastChild",
+{ "op": "insert", "target": "<loc>", "expectedName": "CardContent", "placement": "before|after|firstChild|lastChild",
   "snippet": "<Button variant=\"destructive\">Delete</Button>",
   "imports": [{ "name": "Button", "source": "@/components/ui/button" }] }
-{ "op": "insertChild", "parent": "<loc>", "index": 2, "snippet": "…", "imports": [] }
+{ "op": "insertChild", "parent": "<loc>", "expectedName": "CardContent", "index": 2, "snippet": "…", "imports": [] }
 { "op": "updateProp", "target": "<loc>", "expectedName": "Button", "prop": "variant", "value": "outline" }
 { "op": "remove", "target": "<loc>", "expectedName": "Button" }
-{ "op": "move", "source": "<loc>", "expectedName": "Button", "target": "<loc>", "placement": "before" }
-{ "op": "moveNode", "source": "<loc>", "expectedName": "Button", "parent": "<loc>", "index": 0 }
+{ "op": "move", "source": "<loc>", "expectedName": "Button", "target": "<loc>", "expectedTargetName": "CardFooter",
+  "placement": "before" }
+{ "op": "moveNode", "source": "<loc>", "expectedName": "Button", "parent": "<loc>", "expectedParentName": "CardFooter",
+  "index": 0 }
 { "op": "bindQuery", "target": "<loc>", "expectedName": "DataTable",
   "optionsFn": "listCustomersOptions", "optionsImport": "@/api/generated/@tanstack/react-query.gen",
   "optionsArgs": "{ query: { page: 1, pageSize: 20 } }", "resource": "Customer",
@@ -70,8 +72,15 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
 - `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
   references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
   `attributes[].source` is the text as written.
-- `expectedName` (optional, recommended) makes a stale locator fail loudly (409) instead of
-  editing the wrong node.
+- Stale-locator guards (optional, recommended): the tag name the caller saw at each locator
+  the op names: `expectedName` for `target` (`insert`, `updateProp`, `remove`, `bindQuery`),
+  for `parent` (`insertChild`) and for `source` (`move`, `moveNode`); `expectedTargetName` for
+  a move's `target`; `expectedParentName` for a `moveNode`'s `parent`. When the locator now
+  resolves to a different tag (a hand edit shifted it), the op fails with 409 `stale_locator`
+  instead of editing the wrong node. Fragments are named `<>`.
+- Unknown fields are rejected with 400 `invalid_op`, on every op, on `imports` entries and on
+  `bindQuery`'s fields, so a misspelled guard (`expectedname`) is an error, never silently no
+  guard.
 - `index` counts the parent's JSX children (same numbering as locator segments) **before** the
   op. `index == children.length` appends.
 - Snippets must be exactly one JSX element/fragment. Every component it uses must already be
@@ -79,7 +88,25 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
   Nothing may surround the element (a comment or wrapping parentheses would become JSX text):
   400 `invalid_snippet`. `imports` the snippet doesn't reference are ignored; a name bound only
   as a type (`import type`) is refused with 422 `unsupported`.
+- An `imports` entry whose name the file already binds is reused only when that binding is the
+  requested import (a value import of that name, or `import X` / `{ default as X }` for
+  `"default": true`, from the same `source`). Anything else — another module
+  (`import { Button } from "@mui/material"`), a local declaration, a local that shadows the
+  name where the element lands — is 422 `unsupported`, naming the binding: the element would
+  otherwise render that other thing. The engine resolves no module paths, so the same module
+  spelled differently (`"../components/ui/button"`) is refused too; leave its entry out of
+  `imports` to use the existing binding as it is.
+- Snippets are checked before parsing: at most 256 levels of nesting (elements, `{…}`,
+  `(…)`, `[…]`, `{…}`, template substitutions) and at most 2048 tags and brackets (`<`, `(`,
+  `[`, `{`) in total; beyond that, 400 `invalid_snippet`. (The parser recurses once per level;
+  a deeper snippet could overflow the native stack and take the dev server down.)
 - Cross-file `move` is not supported yet (422).
+- A `move`/`moveNode` must not change what the moved code refers to: every identifier it uses
+  but does not declare must resolve to the same binding where it lands, or stay a global
+  there, and `this` must keep its function. Moving `<span>{item.name}</span>` out of
+  `items.map((item) => …)`, or `<b>{label}</b>` into another component of the file (with or
+  without its own `label`), is 422 `unsupported`, naming the identifier. Module-level names
+  (imports, top-level constants) and static JSX move freely between components.
 - `bindQuery` writes `const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions(…) })`
   as the first statement of the element's component, imports `useQuery` and the factory, and sets
   `data={customerData?.items ?? []}` / `isLoading={isCustomerLoading}`. It is idempotent (re-binding returns

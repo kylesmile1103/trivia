@@ -39,7 +39,7 @@ const USE_QUERY: &str = "useQuery";
 /// Serializes like the rest of the engine's ops (camelCase), so it can back an
 /// `Op::BindQuery` variant without changes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryBinding {
     /// Locator of the element to bind, e.g. the `<DataTable>`.
     pub target: String,

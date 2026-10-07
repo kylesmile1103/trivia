@@ -12,6 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_allocator::Allocator;
+use oxc_ast::Comment;
 use oxc_ast::ast::{
     Declaration, ExportDefaultDeclarationKind, ImportDeclaration, ImportDeclarationSpecifier, JSXAttributeValue,
     Program, Statement, StringLiteral,
@@ -27,12 +28,23 @@ use crate::{mutator, parse};
 
 /// `import { name } from "source"`, or `import name from "source"` when `default`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportSpec {
     pub name: String,
     pub source: String,
     #[serde(default)]
     pub default: bool,
+}
+
+impl ImportSpec {
+    /// The declaration this spec asks for, as source text (for messages).
+    pub(crate) fn declaration(&self) -> String {
+        if self.default {
+            format!("import {} from \"{}\"", self.name, self.source)
+        } else {
+            format!("import {{ {} }} from \"{}\"", self.name, self.source)
+        }
+    }
 }
 
 /// Refuse malformed specs and specs that contradict each other (one name, two imports).
@@ -52,9 +64,15 @@ pub(crate) fn validate_specs(specs: &[ImportSpec]) -> Result<()> {
 }
 
 /// Edits that make every name in `needed` resolvable, using `specs` for the missing ones.
-/// Specs whose name is already bound at module level are left alone. A name bound only as a
-/// type (`import type { X }`, `type X = …`) cannot be rendered or passed as a value, and the
-/// engine will not rewrite that declaration, so it is refused (`unsupported`).
+///
+/// A spec whose name is already bound at module level adds nothing, but only when that
+/// binding is the import the spec asks for (a value import of the same name, or the default
+/// export, from the same module): otherwise the code would silently use some other component
+/// (`import { Button } from "@mui/material"`, a local `function Button`), so it is refused
+/// (`unsupported`). The engine resolves no modules, so the same module spelled another way
+/// (`../components/ui/button`) is refused too; leave its spec out to use the binding as it
+/// is. A name bound only as a type (`import type { X }`, `type X = …`) cannot be rendered or
+/// passed as a value, and the engine will not rewrite that declaration, so it is refused.
 pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], needed: &[String]) -> Result<Vec<Edit>> {
     validate_specs(specs)?;
     let semantic = SemanticBuilder::new().build(program).semantic;
@@ -86,6 +104,13 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
             _ => None,
         })
         .collect();
+
+    for spec in specs {
+        if let Some(id) = scoping.get_root_binding(spec.name.as_str().into()) {
+            let line = text::line_col(src, scoping.symbol_span(id).start).0;
+            check_bound_as(&imports, spec, line)?;
+        }
+    }
 
     // Group the specifiers that are actually missing by source, keeping first-seen order.
     let mut groups: Vec<Group<'_>> = Vec::new();
@@ -125,7 +150,7 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
         };
         let mut left = Group { source: group.source, default: None, named: Vec::new() };
         if !group.named.is_empty() {
-            match merge_named(src, decl, &group.named) {
+            match merge_named(src, &program.comments, decl, &group.named) {
                 Some(merge) => edits.extend(merge),
                 None => left.named = group.named,
             }
@@ -145,6 +170,58 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
         edits.push(new_declarations(src, program, &imports, &new_decls));
     }
     Ok(edits)
+}
+
+/// Accept a spec whose name the file already binds (declared on `line`) only when that
+/// binding is the declaration the spec asks for.
+fn check_bound_as(imports: &[&ImportDeclaration<'_>], spec: &ImportSpec, line: u32) -> Result<()> {
+    let name = spec.name.as_str();
+    let found = imports.iter().find_map(|decl| {
+        decl.specifiers.iter().flatten().find(|s| s.name().as_str() == name).map(|s| (decl, s))
+    });
+    let Some((decl, specifier)) = found else {
+        return Err(EngineError::Unsupported(format!(
+            "`{name}` is already declared in this file (line {line}), so `{}` cannot be added; rename that \
+             declaration first",
+            spec.declaration()
+        )));
+    };
+    let source = decl.source.value.as_str();
+    let (matches, existing) = match specifier {
+        ImportDeclarationSpecifier::ImportSpecifier(s) => {
+            let imported = s.imported.name();
+            let imported = imported.as_str();
+            let wanted = if spec.default { "default" } else { name };
+            let clause = if imported == name { name.to_string() } else { format!("{imported} as {name}") };
+            (imported == wanted && s.import_kind.is_value(), format!("import {{ {clause} }} from \"{source}\""))
+        }
+        ImportDeclarationSpecifier::ImportDefaultSpecifier(_) => {
+            (spec.default, format!("import {name} from \"{source}\""))
+        }
+        ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => {
+            (false, format!("import * as {name} from \"{source}\""))
+        }
+    };
+    if matches && source == spec.source && decl.import_kind.is_value() {
+        return Ok(());
+    }
+    Err(EngineError::Unsupported(format!(
+        "`{name}` is already bound in this file by `{existing}` (line {line}), not by `{}`, so the new element \
+         would use that binding instead; rename or remove it first (if it is the same component, insert \
+         without an import for `{name}`)",
+        spec.declaration()
+    )))
+}
+
+/// [`text::line_content_end`] of the line holding `pos`, but past any comment that starts on
+/// that line and ends on a later one: text appended to `import { A } from "a" /* the a\n
+/// component */` goes after the comment, never into it.
+fn line_end_past_comments(src: &str, comments: &[Comment], pos: u32) -> u32 {
+    let mut at = text::line_content_end(src, pos);
+    while let Some(comment) = comments.iter().find(|c| c.span.start >= pos && c.span.start < at && c.span.end > at) {
+        at = text::line_content_end(src, comment.span.end);
+    }
+    at
 }
 
 /// Missing specifiers from one module.
@@ -170,7 +247,7 @@ fn merge_default(src: &str, decl: &ImportDeclaration<'_>, name: &str) -> Option<
 
 /// Add named specifiers to an existing declaration. `None` when the declaration's shape
 /// (side-effect, namespace, empty braces) makes a separate declaration cleaner.
-fn merge_named(src: &str, decl: &ImportDeclaration<'_>, names: &[&str]) -> Option<Vec<Edit>> {
+fn merge_named(src: &str, comments: &[Comment], decl: &ImportDeclaration<'_>, names: &[&str]) -> Option<Vec<Edit>> {
     let specifiers = decl.specifiers.as_ref()?;
     let mut named: Vec<(String, Span)> = Vec::new();
     let mut default_span = None;
@@ -215,7 +292,7 @@ fn merge_named(src: &str, decl: &ImportDeclaration<'_>, names: &[&str]) -> Optio
         let closes_on_same_line = after.find('}').is_some_and(|p| !after[..p].contains('\n'));
         if multiline && !closes_on_same_line {
             // One per line, after the line of the last specifier (and its trailing comment).
-            let line_end = text::line_content_end(src, last.end);
+            let line_end = line_end_past_comments(src, comments, last.end);
             if after.trim_start_matches([' ', '\t']).starts_with(',') {
                 edits.push(Edit::insert(line_end, names.iter().map(|n| format!("{nl}{indent}{n},")).collect::<String>()));
             } else {
@@ -284,10 +361,13 @@ fn new_declarations(src: &str, program: &Program<'_>, imports: &[&ImportDeclarat
     match imports.last() {
         // After the last import's line (before its terminator, so CRLF pairs stay intact and a
         // trailing comment stays where it was).
-        Some(last) => Edit::insert(text::line_content_end(src, last.span.end), format!("{nl}{}", lines.join(nl))),
+        Some(last) => Edit::insert(
+            line_end_past_comments(src, &program.comments, last.span.end),
+            format!("{nl}{}", lines.join(nl)),
+        ),
         None => {
             let at = program.body.first().map_or_else(
-                || program.directives.last().map_or(0, |d| text::line_content_end(src, d.span.end)),
+                || program.directives.last().map_or(0, |d| line_end_past_comments(src, &program.comments, d.span.end)),
                 |s| leading_comments_start(src, program, s.span().start),
             );
             let after = if program.body.is_empty() { "" } else { &format!("{nl}{nl}") as &str };

@@ -32,6 +32,7 @@ fn injects_destructive_button_into_card_content_with_import() {
     let card_content = locator_of(&src, "CardContent");
     let out = apply_op(&src, FILE, &Op::Insert {
         target: card_content,
+        expected_name: None,
         placement: Placement::LastChild,
         snippet: r#"<Button variant="destructive">Delete</Button>"#.into(),
         imports: vec![ImportSpec { name: "Button".into(), source: "@/components/ui/button".into(), default: false }],
@@ -53,6 +54,7 @@ fn injects_destructive_button_into_card_content_with_import() {
 fn keeps_existing_import_untouched_when_already_bound() {
     let out = apply_op(SRC, FILE, &Op::Insert {
         target: locator_of(SRC, "CardFooter"),
+        expected_name: None,
         placement: Placement::FirstChild,
         snippet: "<Button variant=\"destructive\">Delete</Button>".into(),
         imports: vec![ImportSpec { name: "Button".into(), source: "@/components/ui/button".into(), default: false }],
@@ -90,6 +92,7 @@ fn move_reindents_and_preserves_everything_else() {
         source: locator_of(SRC, "Button"),
         expected_name: Some("Button".into()),
         target: locator_of(SRC, "CardContent"),
+        expected_target_name: None,
         placement: Placement::FirstChild,
     }).unwrap();
     let expected = SRC
