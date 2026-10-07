@@ -414,7 +414,7 @@ impl Doc<'_, '_> {
             self.check_not_shadowed(anchor.node(), &used)?;
         }
         let mut edits = vec![edit];
-        edits.extend(import_manager::ensure_imports(self.src, self.program, &used, &parsed.components)?);
+        edits.extend(import_manager::ensure_imports(self.src, self.file, self.program, &used, &parsed.components)?);
         let (code, starts) = text::apply_edits(self.src, &edits)?;
         let imported: Vec<&str> = used.iter().map(|s| s.name.as_str()).collect();
         finish(self.file, self.src, code, Some(starts[0] + offset), &imported)
@@ -802,20 +802,37 @@ struct SnippetInfo {
     frozen: Vec<(u32, u32)>,
 }
 
+/// Longest snippet accepted, in bytes (after trimming surrounding whitespace).
+///
+/// Operator chains nest one level per byte or two without a single bracket (`!!!!x`, `x!!!!`,
+/// `-+-+x`, `x+x+…`, `x=x=…`, `a?b:a?b:…`, `a=>a=>…`, `x.y.y…`), and the semantic pass costs
+/// about 1.2 KB of stack per level in a debug build (80 B in release). 4096 bytes of the
+/// worst chain therefore need about 5 MB, which fits the 8 MiB of a main thread with room to
+/// spare; 16 KiB would need about 20 MB (`tests/stack_budget.rs` runs the worst inputs on an
+/// 8 MiB thread). Palette templates are a few hundred bytes.
+pub const MAX_SNIPPET_BYTES: usize = 4096;
+
 /// Deepest nesting a snippet may have, counting elements, `{…}` containers, brackets and
 /// template substitutions ([`text::nesting_depth`]).
 pub const MAX_SNIPPET_DEPTH: usize = 256;
 
 /// Most tags and brackets (`<`, `(`, `[`, `{` bytes) a snippet may contain. The depth above
-/// is an estimate; this bounds the real depth however the snippet is spelled.
-pub const MAX_SNIPPET_TAGS_AND_BRACKETS: usize = 2048;
+/// is an estimate; this bounds the real depth however the snippet is spelled
+/// ([`text::MAX_TAGS_AND_BRACKETS`]).
+pub const MAX_SNIPPET_TAGS_AND_BRACKETS: usize = text::MAX_TAGS_AND_BRACKETS;
 
-/// The parser, and every visitor after it, recurses once per nesting level, and a snippet
-/// comes from outside the process: thousands of levels would overflow the native stack and
-/// kill the host (the user's dev server) instead of failing. So the nesting is checked on the
-/// bytes before anything parses them.
-fn check_snippet_nesting(snippet: &str) -> Result<()> {
-    let openers = snippet.bytes().filter(|b| matches!(b, b'<' | b'(' | b'[' | b'{')).count();
+/// The parser, and every pass after it, recurses once per nesting level, and a snippet comes
+/// from outside the process: thousands of levels would overflow the native stack and kill the
+/// host (the user's dev server) instead of failing. So its size and nesting are checked on
+/// the bytes before anything parses them.
+fn check_snippet_size(snippet: &str) -> Result<()> {
+    if snippet.len() > MAX_SNIPPET_BYTES {
+        return Err(EngineError::InvalidSnippet(format!(
+            "it is {} bytes long; the limit is {MAX_SNIPPET_BYTES}",
+            snippet.len()
+        )));
+    }
+    let openers = text::tags_and_brackets(snippet);
     if openers <= MAX_SNIPPET_DEPTH {
         // Every level starts at one of them.
         return Ok(());
@@ -840,7 +857,7 @@ fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
     if snippet.is_empty() {
         return Err(EngineError::InvalidSnippet("empty snippet".into()));
     }
-    check_snippet_nesting(snippet)?;
+    check_snippet_size(snippet)?;
     const PREFIX: &str = "(\n";
     let wrapped = format!("{PREFIX}{snippet}\n);");
     let alloc = Allocator::default();

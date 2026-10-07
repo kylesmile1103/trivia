@@ -108,16 +108,29 @@ proxy has to refuse non-loopback clients itself.
   as a type (`import type`) is refused with 422 `unsupported`.
 - An `imports` entry whose name the file already binds is reused only when that binding is the
   requested import (a value import of that name, or `import X` / `{ default as X }` for
-  `"default": true`, from the same `source`). Anything else — another module
+  `"default": true`, from the same module). Anything else — another module
   (`import { Button } from "@mui/material"`), a local declaration, a local that shadows the
   name where the element lands — is 422 `unsupported`, naming the binding: the element would
-  otherwise render that other thing. The engine resolves no module paths, so the same module
-  spelled differently (`"../components/ui/button"`) is refused too; leave its entry out of
-  `imports` to use the existing binding as it is.
-- Snippets are checked before parsing: at most 256 levels of nesting (elements, `{…}`,
-  `(…)`, `[…]`, `{…}`, template substitutions) and at most 2048 tags and brackets (`<`, `(`,
-  `[`, `{`) in total; beyond that, 400 `invalid_snippet`. (The parser recurses once per level;
-  a deeper snippet could overflow the native stack and take the dev server down.)
+  otherwise render that other thing.
+- Two `source`s are the same module when they are equal, or when both name a path in the
+  project and the paths match: relative specifiers are read against the edited file's
+  directory, `@/…` and `~/…` mean `src/…` (the shadcn `components.json` convention, tsconfig
+  `"@/*": ["./src/*"]`), and a `.ts` `.tsx` `.js` `.jsx` `.mjs` extension and a trailing
+  `/index` are dropped. In `src/pages/Page.tsx`, `"../components/ui/button"`,
+  `"@/components/ui/button.tsx"` and `"../components/ui/button/index"` are all
+  `"@/components/ui/button"`. Bare package names (`"@mui/material"`) must match exactly, and a
+  path that climbs out of the project only matches the same text. Nothing is resolved on disk,
+  so a project that maps `@/` elsewhere only loses reuse (its other spellings are refused).
+  A missing specifier joins the file's value import of the same module, in the file's spelling.
+  `bindQuery`'s `useQuery` and factory imports follow the same rules.
+- Snippets are checked before parsing: at most 4096 bytes (after trimming surrounding
+  whitespace), at most 256 levels of nesting (elements, `{…}`, `(…)`, `[…]`, `{…}`, template
+  substitutions) and at most 1024 tags and brackets (`<`, `(`, `[`, `{`, counted anywhere) in
+  total; beyond that, 400 `invalid_snippet`. (The parser and the passes after it recurse once
+  per level, and operator chains such as `!!!!x`, `x + x + …` or `a ? b : …` nest without a
+  bracket. With these limits the worst accepted snippet needs about 5 MB of stack in a debug
+  build, and much less in release, so it fits an 8 MiB main thread:
+  `crates/trivia_oxc_engine/tests/stack_budget.rs`. 16 KiB of `!` would need about 20 MB.)
 - Cross-file `move` is not supported yet (422).
 - A `move`/`moveNode` must not change what the moved code refers to: every identifier it uses
   but does not declare must resolve to the same binding where it lands, or stay a global
@@ -130,8 +143,14 @@ proxy has to refuse non-loopback clients itself.
   `data={customerData?.items ?? []}` / `isLoading={isCustomerLoading}`. When `optionsArgs` reads the component's
   own locals (`{ path: { id } }` after `const { id } = useParams()`), the hook goes right after the last statement
   declaring one of them; 422 `unsupported` when that would follow an early `return` (rules of hooks) or the
-  element itself, or when such a name is only declared in a nested function or block. `optionsArgs` is one
-  expression, at most 4096 bytes and nested at most 256 levels deep (else 400 `invalid_op`). It is idempotent (re-binding returns
+  element itself. The names `optionsArgs` reads must mean at the component's top level what they mean at the
+  element: one the element sees as a binding of a nested function or block (`ids.map((id) => <DataTable />)`)
+  is 422 `unsupported`; a name that is a global where the element is stays a global, even when an unrelated
+  nested scope declares the same name. A component local or parameter the args read that is assigned again
+  after its declaration (`let id = ""; try { id = … } catch {}`, `page++` in a callback, a second `var id`) is
+  422 `unsupported` as well: the hook would only ever see its first value. `optionsArgs` is one expression, at
+  most 4096 bytes, nested at most 256 levels deep and with at most 1024 brackets and tags (else 400
+  `invalid_op`). It is idempotent (re-binding returns
   `changed: false`). Rules and refusals: `crates/trivia_oxc_engine/src/data_binder.rs`; design: `docs/data-provider.md`. Moving a node into itself or its own subtree
   is 400 `invalid_op`.
 - The engine's guarded write (undo/redo `restore`) itself answers `conflict` when the file no

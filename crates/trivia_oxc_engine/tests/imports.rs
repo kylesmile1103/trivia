@@ -342,7 +342,7 @@ fn crlf_new_declaration_after_the_last_import_and_after_a_directive() {
     for src in ["\"use client\"\r\n", "\"use client\";\r\n// note\r\n", "\"use client\""] {
         let alloc = Allocator::default();
         let program = parse(&alloc, src, FILE).unwrap();
-        let edits = ensure_imports(src, &program, &[spec("B", "b")], &["B".to_string()]).unwrap();
+        let edits = ensure_imports(src, FILE, &program, &[spec("B", "b")], &["B".to_string()]).unwrap();
         let (code, _) = apply_edits(src, &edits).unwrap();
         assert_consistent_line_endings(src, &code, src);
         let nl = if src.contains('\r') { "\r\n" } else { "\n" };
@@ -560,4 +560,130 @@ fn a_merged_specifier_goes_after_a_block_comment_that_ends_on_a_later_line() {
         assert_text_eq(&out.code, &expected, "no trailing comma");
         assert_consistent_line_endings(&src, &out.code, "no trailing comma");
     }
+}
+
+// --- one module, several spellings -----------------------------------------------------
+
+/// Insert `snippet` into the first `<main>` of `src` (the file at `file`) with `imports`.
+fn insert_at(
+    file: &str,
+    src: &str,
+    snippet: &str,
+    imports: Vec<ImportSpec>,
+) -> trivia_oxc_engine::Result<trivia_oxc_engine::Outcome> {
+    apply_op(src, file, &Op::Insert {
+        target: locator_of(src, file, "main"),
+        expected_name: Some("main".into()),
+        placement: Placement::LastChild,
+        snippet: snippet.into(),
+        imports,
+    })
+}
+
+/// The designer always sends the project's spelling (`@/components/ui/button`); the file may
+/// already import that module through a relative path, with an extension or via `/index`.
+/// That is the same module, so its binding is reused and nothing is added.
+#[test]
+fn the_same_module_spelled_another_way_is_reused() {
+    let shadcn = vec![spec("Button", "@/components/ui/button")];
+    let snippet = "<Button variant=\"outline\">b</Button>";
+    for (file, existing) in [
+        ("src/pages/Page.tsx", "../components/ui/button"),
+        ("src/pages/Page.tsx", "@/components/ui/button.tsx"),
+        ("src/pages/Page.tsx", "../components/ui/button/index"),
+        ("src/pages/Page.tsx", "../components/ui/button/index.tsx"),
+        ("src/pages/Page.tsx", "~/components/ui/button.jsx"),
+        ("src/pages/Page.tsx", "./../components/ui/./button.js"),
+        ("src/pages/Page.tsx", "../components/../components/ui/button.mjs"),
+        ("src/App.tsx", "./components/ui/button/index"),
+        ("src/App.tsx", "./components/ui/button.tsx"),
+        ("src/components/ui/demo.tsx", "./button"),
+        ("src/components/ui/button/demo.tsx", "."),
+        ("src/components/ui/button/demo.tsx", "./index.ts"),
+    ] {
+        let imports = format!("import {{ Button }} from \"{existing}\"\n");
+        let src = page(&imports, &["<Button />"]);
+        let expected = page(&imports, &["<Button />", snippet]);
+        for (src, expected) in [(src.clone(), expected.clone()), (to_crlf(&src), to_crlf(&expected))] {
+            let what = format!("{file} importing from {existing:?}");
+            let out = insert_at(file, &src, snippet, shadcn.clone()).unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_text_eq(&out.code, &expected, &what);
+            let remove = Op::Remove { target: out.locator.unwrap(), expected_name: Some("Button".into()) };
+            assert_text_eq(&apply(&out.code, file, &remove).code, &src, &format!("{what} (removing it again)"));
+        }
+    }
+    // A default import of the same module, spelled with its extension.
+    let imports = "import Logo from \"../assets/logo.tsx\"\n";
+    let logo = vec![default_spec("Logo", "@/assets/logo")];
+    let out = insert_at("src/pages/Page.tsx", &page(imports, &[]), "<Logo />", logo).unwrap();
+    assert_text_eq(&out.code, &page(imports, &["<Logo />"]), "default import");
+}
+
+/// Everything else is still another module: other paths, a path outside `src/` or outside
+/// the project, other extensions, another case, and bare package names, which must match
+/// exactly.
+#[test]
+fn different_modules_are_still_refused() {
+    let snippet = "<Button variant=\"outline\">b</Button>";
+    let file = "src/pages/Page.tsx";
+    for (requested, existing) in [
+        ("@/components/ui/button", "@mui/material"),
+        ("@/components/ui/button", "react-aria-components"),
+        ("@/components/ui/button", "./components/ui/button"),
+        ("@/components/ui/button", "../../components/ui/button"),
+        ("@/components/ui/button", "../../../../components/ui/button"),
+        ("@/components/ui/button", "../components/ui/button-group"),
+        ("@/components/ui/button", "../components/ui/button/button"),
+        ("@/components/ui/button", "@/components/ui/Button"),
+        ("@/components/ui/button", "@/components/button"),
+        ("@/components/ui/button", "@/components/ui/button.css"),
+        ("@/components/ui/button", "@/components/ui/button.d.ts"),
+        ("@/components/ui/button", "components/ui/button"),
+        ("@/components/ui/button", "src/components/ui/button"),
+        ("@/components/ui/button", "@components/ui/button"),
+        ("@/components/ui/button", "/src/components/ui/button"),
+        ("@mui/material", "@mui/material/index"),
+        ("@mui/material", "@mui/material/Button"),
+        ("@mui/material", "@mui/material.js"),
+        ("react-aria-components", "./react-aria-components"),
+    ] {
+        let src = page(&format!("import {{ Button }} from \"{existing}\"\n"), &[]);
+        let what = format!("{requested:?} into a file importing from {existing:?}");
+        let err = match insert_at(file, &src, snippet, vec![spec("Button", requested)]) {
+            Ok(out) => panic!("{what}: should be refused but wrote\n{}", out.code),
+            Err(e) => e,
+        };
+        assert_eq!(err.code(), "unsupported", "{what}: {err}");
+        let message = err.to_string();
+        assert!(message.contains(existing) && message.contains(requested), "{what}: {message}");
+    }
+    // The exact same bare name is the same package.
+    let imports = "import { Button } from \"@mui/material\"\n";
+    let out = insert_at(file, &page(imports, &[]), snippet, vec![spec("Button", "@mui/material")]).unwrap();
+    assert_text_eq(&out.code, &page(imports, &[snippet]), "same package");
+}
+
+/// A specifier the file does not import yet joins the declaration of the same module, in
+/// the file's own spelling, instead of a second declaration of that module.
+#[test]
+fn a_missing_specifier_joins_the_same_module_spelled_another_way() {
+    let file = "src/pages/Page.tsx";
+    let src = page("import { Card } from \"../components/ui/card\"\n", &["<Card />"]);
+    let expected = page("import { Card, CardTitle } from \"../components/ui/card\"\n", &["<Card />", "<CardTitle />"]);
+    for (src, expected) in [(src.clone(), expected.clone()), (to_crlf(&src), to_crlf(&expected))] {
+        let out = insert_at(file, &src, "<CardTitle />", vec![spec("CardTitle", "@/components/ui/card")]).unwrap();
+        assert_text_eq(&out.code, &expected, "merged");
+        let remove = Op::Remove { target: out.locator.unwrap(), expected_name: Some("CardTitle".into()) };
+        assert_text_eq(&apply(&out.code, file, &remove).code, &src, "merged (removing it again)");
+    }
+    // Two requested names from one module spelled two ways share one new declaration.
+    let out = insert_at(
+        file,
+        &page("import { A } from \"./a\"\n", &["<A />"]),
+        "<CardTitle><CardDescription /></CardTitle>",
+        vec![spec("CardTitle", "@/components/ui/card"), spec("CardDescription", "../components/ui/card.tsx")],
+    )
+    .unwrap();
+    let imports = "import { A } from \"./a\"\nimport { CardTitle, CardDescription } from \"@/components/ui/card\"\n";
+    assert!(out.code.starts_with(imports), "{}", out.code);
 }

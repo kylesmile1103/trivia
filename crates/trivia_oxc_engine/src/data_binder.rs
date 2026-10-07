@@ -28,11 +28,13 @@ use std::cell::Cell;
 use std::collections::BTreeSet;
 
 use oxc_allocator::Allocator;
+use oxc_ast::AstKind;
 use oxc_ast::ast::*;
 use oxc_ast_visit::Visit;
-use oxc_semantic::{Scoping, SemanticBuilder};
+use oxc_semantic::{AstNodes, Scoping, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::{ScopeFlags, ScopeId};
+use oxc_syntax::symbol::SymbolId;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, Result};
@@ -47,13 +49,14 @@ pub const TANSTACK_QUERY: &str = "@tanstack/react-query";
 
 const USE_QUERY: &str = "useQuery";
 
-/// `optionsArgs` limits, checked before it is parsed. The parser recurses once per nesting
-/// level (about 1.5 KB of stack per bracket level in a release build), so unbounded input
-/// could overflow the stack and kill the host process (the dev server) instead of being
-/// refused. Real arguments are small object literals such as `{ query: { page: 1 } }`.
+/// `optionsArgs` limits, checked before it is parsed. The parser and the passes after it
+/// recurse once per nesting level, so unbounded input could overflow the stack and kill the
+/// host process (the dev server) instead of being refused. Real arguments are small object
+/// literals such as `{ query: { page: 1 } }`.
 const MAX_ARGS_DEPTH: usize = 256;
-/// Also bounds the nesting brackets don't show (`a = b = …`, `x => y => …`, JSX, `!!…`):
-/// at most one level per byte.
+/// Also bounds the nesting brackets don't show (`a = b = …`, `x => y => …`, `!!…`): at most
+/// one level per byte, which at the semantic pass's 1.2 KB per level (debug build) is about
+/// 5 MB, within an 8 MiB main-thread stack (see `mutator::MAX_SNIPPET_BYTES`).
 const MAX_ARGS_LEN: usize = 4096;
 
 /// Bind `target` to `useQuery({ ...<options_fn>(<options_args>) })`.
@@ -109,9 +112,15 @@ pub fn bind_query(source: &str, file: &str, binding: &QueryBinding) -> Result<Ou
     }
 
     let component = find_component(&program, node)?;
-    let semantic = SemanticBuilder::new().build(&program).semantic;
-    let scope =
-        ComponentScope { program: &program, scoping: semantic.scoping(), span: component.span, reads: &request.reads };
+    let semantic = SemanticBuilder::new().with_build_nodes(true).build(&program).semantic;
+    let scope = ComponentScope {
+        file,
+        program: &program,
+        scoping: semantic.scoping(),
+        nodes: semantic.nodes(),
+        span: component.span,
+        reads: &request.reads,
+    };
     scope.check_import(USE_QUERY, TANSTACK_QUERY)?;
     scope.check_import(&binding.options_fn, &binding.options_import)?;
 
@@ -149,7 +158,7 @@ pub fn bind_query(source: &str, file: &str, binding: &QueryBinding) -> Result<Ou
         ImportSpec { name: USE_QUERY.into(), source: TANSTACK_QUERY.into(), default: false },
         ImportSpec { name: binding.options_fn.clone(), source: binding.options_import.clone(), default: false },
     ];
-    let imports = import_manager::ensure_imports(source, &program, &specs, &[])?;
+    let imports = import_manager::ensure_imports(source, file, &program, &specs, &[])?;
     edits.extend(imports.into_iter().map(|e| keep_crlf_intact(source, e)));
 
     let (code, _) = text::apply_edits(source, &edits)?;
@@ -238,7 +247,8 @@ impl<'b> Request<'b> {
 
 /// `optionsArgs` must be exactly one argument expression: it is spliced into
 /// `<optionsFn>(<args>)`, so `a, b`, `a) || (b` or a trailing `// comment` are refused, and
-/// so is anything over [`MAX_ARGS_LEN`] bytes or [`MAX_ARGS_DEPTH`] levels deep.
+/// so is anything over [`MAX_ARGS_LEN`] bytes, [`MAX_ARGS_DEPTH`] levels deep (an estimate)
+/// or with more than [`text::MAX_TAGS_AND_BRACKETS`] brackets (which no spelling evades).
 ///
 /// Returns the names the expression reads without declaring them (value references only:
 /// types are erased and have no temporal dead zone), sorted.
@@ -254,6 +264,15 @@ fn validate_args(args: &str, file: &str) -> Result<Vec<String>> {
     let depth = nesting_depth(args);
     if depth > MAX_ARGS_DEPTH {
         return Err(invalid(&format!("nests {depth} levels deep; at most {MAX_ARGS_DEPTH} are accepted")));
+    }
+    // The depth scan above can be misled (it reads `//` in a regex class as a comment); this
+    // count cannot.
+    let brackets = text::tags_and_brackets(args);
+    if brackets > text::MAX_TAGS_AND_BRACKETS {
+        return Err(invalid(&format!(
+            "has {brackets} brackets and tags (`(`, `[`, `{{`, `<`); at most {} are accepted",
+            text::MAX_TAGS_AND_BRACKETS
+        )));
     }
     if args.contains(locator::ATTR) {
         return Err(invalid("must not mention the dev-only locator attribute"));
@@ -508,8 +527,11 @@ fn is_component_or_hook_name(name: &str) -> bool {
 // ---------------------------------------------------------------------------------------
 
 struct ComponentScope<'s, 'p, 'a> {
+    /// Project-relative path of the file (relative import specifiers are read against it).
+    file: &'s str,
     program: &'p Program<'a>,
     scoping: &'s Scoping,
+    nodes: &'s AstNodes<'a>,
     span: Span,
     /// [`Request::reads`]: names the new hook's own arguments refer to.
     reads: &'s [String],
@@ -536,6 +558,31 @@ struct Refs {
 impl ComponentScope<'_, '_, '_> {
     fn inside(&self, span: Span) -> bool {
         self.span.start <= span.start && span.end <= self.span.end
+    }
+
+    /// The scope `node` (an element) is evaluated in: its names resolve from there.
+    fn element_scope(&self, node: &JsxNode) -> Result<ScopeId> {
+        self.nodes
+            .iter()
+            .find(|n| matches!(n.kind(), AstKind::JSXElement(e) if e.span == node.span))
+            .map(|n| n.scope_id())
+            .ok_or_else(|| EngineError::Internal(format!("no AST node for <{}>", node.display_name())))
+    }
+
+    /// Where `symbol` gets another value after its declaration, if anywhere: a write
+    /// reference (`x = …`, `x += …`, `x++`, `[x] = …`, also inside callbacks), or a `var`
+    /// declaring it again.
+    fn assigned_again(&self, symbol: SymbolId) -> Option<(&'static str, Span)> {
+        let s = self.scoping;
+        let write = s.get_resolved_references(symbol).find(|r| r.is_write());
+        if let Some(reference) = write {
+            return Some(("assigned again", self.nodes.get_node(reference.node_id()).span()));
+        }
+        if s.symbol_flags(symbol).is_variable() {
+            // The first entry is the original declaration.
+            return s.symbol_redeclarations(symbol).get(1).map(|r| ("declared again", r.span));
+        }
+        None
     }
 
     /// True when declaring `name` at the top of the component would clash with, or shadow,
@@ -582,8 +629,9 @@ impl ComponentScope<'_, '_, '_> {
         Names { data: numbered(&data, n), loading: req.wants_loading.then(|| numbered(&loading, n)) }
     }
 
-    /// `name` must be free or already be `import { name } from "source"` (value import);
-    /// anything else would make the bound code call some other function.
+    /// `name` must be free or already be `import { name } from "source"` (value import, from
+    /// that module however the file spells it, see [`import_manager::same_module`]); anything
+    /// else would make the bound code call some other function.
     fn check_import(&self, name: &str, source: &str) -> Result<()> {
         let s = self.scoping;
         if s.symbol_ids().any(|id| s.symbol_name(id) == name && self.inside(s.symbol_span(id))) {
@@ -597,7 +645,7 @@ impl ComponentScope<'_, '_, '_> {
         }
         let imported = self.program.body.iter().any(|stmt| {
             let Statement::ImportDeclaration(decl) = stmt else { return false };
-            decl.source.value.as_str() == source
+            import_manager::same_module(self.file, decl.source.value.as_str(), source)
                 && decl.import_kind.is_value()
                 && decl.specifiers.iter().flatten().any(|spec| match spec {
                     ImportDeclarationSpecifier::ImportSpecifier(spec) => {
@@ -740,8 +788,15 @@ fn continues_previous_line(src: &str, pos: u32) -> bool {
 /// last top-level statement declaring one of them. Parameters, hoisted function declarations
 /// and module-level names are in scope from the first statement on.
 ///
-/// Refuses (`unsupported`) a name the hook could not see from the component's top level, and
-/// a placement after an early `return` (rules of hooks) or after the element it feeds.
+/// The args are written for the element, so each name they read must mean the same binding
+/// at the component's top level (where the hook goes) as where the element is. Only names
+/// that resolve to the component's own top-level bindings constrain the placement: a global
+/// stays a global, even when an unrelated nested scope declares the same name.
+///
+/// Refuses (`unsupported`) a name the element sees as a binding of a nested function or block
+/// (`.map((region) => <X />)`), a component binding that is assigned again after its
+/// declaration (the hook would read its first value), and a placement after an early
+/// `return` (rules of hooks) or after the element it feeds.
 fn hook_anchor(
     src: &str,
     component: &Component<'_, '_>,
@@ -753,25 +808,41 @@ fn hook_anchor(
         .scope_id
         .get()
         .ok_or_else(|| EngineError::Internal("the component function has no scope after semantic analysis".into()))?;
+    let element_scope = scope.element_scope(node)?;
     let statements: &[Statement<'_>] = match &component.body {
         Body::Block(body) => &body.statements,
         Body::Expression { .. } => &[],
     };
     let within = |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
+    let line = |span: Span| text::line_col(src, span.start).0;
+    let tag = node.display_name();
 
     let mut anchor: Option<(usize, &str)> = None;
     for name in scope.reads.iter().map(String::as_str) {
-        let Some(symbol) = s.get_binding(function_scope, name.into()) else {
-            let nested = s.symbol_ids().any(|id| s.symbol_name(id) == name && scope.inside(s.symbol_span(id)));
-            if nested && s.find_binding(function_scope, name.into()).is_none() {
-                return Err(EngineError::Unsupported(format!(
-                    "optionsArgs reads `{name}`, which this component declares only inside a nested function or \
-                     block; useQuery goes at the component's top level, where `{name}` is not in scope. Declare it \
-                     at the top level of the component first"
-                )));
-            }
-            continue;
-        };
+        let top = s.find_binding(function_scope, name.into());
+        let at_element = s.find_binding(element_scope, name.into());
+        if let Some(local) = at_element.filter(|_| at_element != top) {
+            let there = match top {
+                None => format!("where no `{name}` is declared"),
+                Some(other) => format!("where `{name}` is the one declared on line {}", line(s.symbol_span(other))),
+            };
+            return Err(EngineError::Unsupported(format!(
+                "optionsArgs reads `{name}`, which at <{tag}> is the `{name}` declared on line {} in a nested function \
+                 or block; useQuery goes at the component's top level, {there}. Read a value the component declares \
+                 at its top level instead, or bind by hand",
+                line(s.symbol_span(local))
+            )));
+        }
+        // Globals and module-level names are the same wherever the hook goes.
+        let Some(symbol) = top.filter(|&symbol| s.symbol_scope_id(symbol) == function_scope) else { continue };
+        if let Some((what, at)) = scope.assigned_again(symbol) {
+            return Err(EngineError::Unsupported(format!(
+                "optionsArgs reads `{name}`, which is {what} on line {}; useQuery would go right after its \
+                 declaration and only ever see the value it has there. Give `{name}` its final value in one \
+                 declaration (`const {name} = …`) first, or bind by hand",
+                line(at)
+            )));
+        }
         let declared = s.symbol_span(symbol);
         if within(component.params, declared) || s.symbol_flags(symbol).is_function() {
             continue;
@@ -785,14 +856,13 @@ fn hook_anchor(
     let Some((i, name)) = anchor else { return Ok(None) };
 
     if let Some(ret) = statements[..=i].iter().find_map(component_return) {
-        let (line, _) = text::line_col(src, ret.start);
         return Err(EngineError::Unsupported(format!(
-            "optionsArgs reads `{name}`, which is declared after the early `return` on line {line}; a useQuery placed \
+            "optionsArgs reads `{name}`, which is declared after the early `return` on line {}; a useQuery placed \
              after `{name}` would not run on every render, which breaks the rules of hooks. Declare `{name}` before \
-             that return"
+             that return",
+            line(ret)
         )));
     }
-    let tag = node.display_name();
     if statements.iter().position(|st| within(st.span(), node.span)).is_none_or(|r| r <= i) {
         return Err(EngineError::Unsupported(format!(
             "optionsArgs reads `{name}`, which is declared at or after the statement that renders <{tag}>; the hook \
