@@ -1,0 +1,33 @@
+{
+  "name": "@trivia/vite-plugin-ast-locator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only Vite plugin: stamps data-ast-node locators on JSX and serves the Trivia engine API",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@trivia/engine": "workspace:*",
+    "magic-string": "^1.4.3"
+  },
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.3"
+  }
+}
