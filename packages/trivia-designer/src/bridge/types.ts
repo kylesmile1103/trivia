@@ -19,6 +19,26 @@ export type Op =
   | { op: 'remove'; target: string; expectedName?: string }
   | { op: 'move'; source: string; expectedName?: string; target: string; placement: Placement }
   | { op: 'moveNode'; source: string; expectedName?: string; parent: string; index: number }
+  | ({ op: 'bindQuery' } & QueryBinding)
+
+/** Bind an element to a TanStack Query factory (engine: data_binder.rs). */
+export interface QueryBinding {
+  /** Locator of the element to bind, e.g. a <DataTable>. */
+  target: string
+  expectedName?: string
+  /** Generated option factory, e.g. "listCustomersOptions" (from trivia.manifest.json). */
+  optionsFn: string
+  /** Module exporting it, e.g. "@/api/generated/@tanstack/react-query.gen". */
+  optionsImport: string
+  /** JS expression passed to the factory, e.g. "{ query: { page: 1, pageSize: 20 } }". */
+  optionsArgs?: string | null
+  /** Resource name; "Customer" → customerData / isCustomerLoading. */
+  resource: string
+  /** Path to the items inside the response ("items", "data.items"); null for a bare array. */
+  itemsPath?: string | null
+  dataProp: string
+  loadingProp?: string | null
+}
 
 export interface HistoryState {
   canUndo: boolean

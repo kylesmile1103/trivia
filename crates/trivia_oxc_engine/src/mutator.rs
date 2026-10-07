@@ -98,6 +98,9 @@ pub enum Op {
         parent: String,
         index: usize,
     },
+    /// Bind an element to a TanStack Query: inject `useQuery` into its component and set its
+    /// data/loading props (see `data_binder`).
+    BindQuery(crate::data_binder::QueryBinding),
 }
 
 impl Op {
@@ -107,6 +110,7 @@ impl Op {
             Op::Insert { target, .. } | Op::UpdateProp { target, .. } | Op::Remove { target, .. } => target,
             Op::InsertChild { parent, .. } => parent,
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
+            Op::BindQuery(binding) => &binding.target,
         };
         Ok(Locator::parse(primary)?.file)
     }
@@ -159,6 +163,8 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
             let (target, placement) = doc.index_anchor(parent, *index)?;
             doc.move_to(from, target, placement)
         }
+        // Parses on its own: it edits a function body and imports, not just JSX.
+        Op::BindQuery(binding) => crate::data_binder::bind_query(source, file, binding),
     }
 }
 

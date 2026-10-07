@@ -55,6 +55,10 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
 { "op": "remove", "target": "<loc>", "expectedName": "Button" }
 { "op": "move", "source": "<loc>", "expectedName": "Button", "target": "<loc>", "placement": "before" }
 { "op": "moveNode", "source": "<loc>", "expectedName": "Button", "parent": "<loc>", "index": 0 }
+{ "op": "bindQuery", "target": "<loc>", "expectedName": "DataTable",
+  "optionsFn": "listCustomersOptions", "optionsImport": "@/api/generated/@tanstack/react-query.gen",
+  "optionsArgs": "{ query: { page: 1, pageSize: 20 } }", "resource": "Customer",
+  "itemsPath": "items", "dataProp": "data", "loadingProp": "isLoading" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -75,7 +79,11 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
   Nothing may surround the element (a comment or wrapping parentheses would become JSX text):
   400 `invalid_snippet`. `imports` the snippet doesn't reference are ignored; a name bound only
   as a type (`import type`) is refused with 422 `unsupported`.
-- Cross-file `move` is not supported yet (422). Moving a node into itself or its own subtree
+- Cross-file `move` is not supported yet (422).
+- `bindQuery` writes `const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions(…) })`
+  as the first statement of the element's component, imports `useQuery` and the factory, and sets
+  `data={customerData?.items ?? []}` / `isLoading={isCustomerLoading}`. It is idempotent (re-binding returns
+  `changed: false`). Rules and refusals: `crates/trivia_oxc_engine/src/data_binder.rs`; design: `docs/data-provider.md`. Moving a node into itself or its own subtree
   is 400 `invalid_op`.
 - The engine's guarded write (undo/redo `restore`) itself answers `conflict` when the file no
   longer has the expected content.

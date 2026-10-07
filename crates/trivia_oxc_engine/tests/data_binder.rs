@@ -763,3 +763,36 @@ fn query_binding_deserializes_from_camel_case_json() {
     let out = bind(LIST, LIST_FILE, &binding);
     assert!(out.code.contains(PROPS));
 }
+
+/// `bindQuery` is part of the `Op` vocabulary, so it shares the HTTP API, batches and undo.
+#[test]
+fn bind_query_round_trips_through_the_op_json_wire_format() {
+    let src = include_str!("fixtures/data/CustomerList.tsx");
+    let file = "src/pages/CustomerList.tsx";
+    let target = trivia_oxc_engine::annotate(src, file)
+        .unwrap()
+        .into_iter()
+        .find(|i| src[..i.offset as usize].ends_with("<DataTable"))
+        .map(|i| i.text.trim().trim_start_matches("data-ast-node=\"").trim_end_matches('"').to_string())
+        .expect("fixture has a <DataTable>");
+    let json = serde_json::json!({
+        "op": "bindQuery",
+        "target": target,
+        "expectedName": "DataTable",
+        "optionsFn": "listCustomersOptions",
+        "optionsImport": "@/api/generated/@tanstack/react-query.gen",
+        "optionsArgs": "{ query: { page: 1, pageSize: 20 } }",
+        "resource": "Customer",
+        "itemsPath": "items",
+        "dataProp": "data",
+        "loadingProp": "isLoading"
+    });
+    let op: trivia_oxc_engine::Op = serde_json::from_value(json.clone()).expect("bindQuery deserializes as an Op");
+    assert_eq!(op.file().unwrap(), file);
+    assert_eq!(serde_json::to_value(&op).unwrap(), json, "serializes back to the same wire shape");
+    let via_op = trivia_oxc_engine::apply_op(src, file, &op).unwrap();
+    let trivia_oxc_engine::Op::BindQuery(binding) = &op else { unreachable!() };
+    let direct = trivia_oxc_engine::bind_query(src, file, binding).unwrap();
+    assert!(via_op.changed);
+    assert_eq!(via_op.code, direct.code);
+}

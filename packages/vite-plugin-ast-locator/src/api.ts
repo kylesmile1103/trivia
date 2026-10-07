@@ -237,6 +237,8 @@ function describe(op: Json): string {
     case 'move':
     case 'moveNode':
       return `Move ${name}`
+    case 'bindQuery':
+      return `Bind ${name} to ${typeof op['optionsFn'] === 'string' ? op['optionsFn'] : 'a query'}`
     default:
       return 'Edit'
   }
