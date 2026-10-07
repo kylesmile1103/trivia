@@ -77,6 +77,20 @@ export function guessName(el: Element): string {
   return el.tagName.toLowerCase()
 }
 
+/**
+ * The tag the DOM shows for `elements` when it contradicts the engine's `name` for their
+ * locator, else null. An intrinsic JSX element (`<h2>`, `<my-widget>`) renders as itself, so
+ * every element stamped with its locator has its tag; a mismatch means the DOM was rendered
+ * from other source than the engine just read. Components (`Button`, `motion.div`) may render
+ * any tag and are never contradicted.
+ */
+export function contradictedBy(elements: readonly Element[], name: string): string | null {
+  const [first] = elements
+  if (!first || !/^[a-z][a-zA-Z0-9-]*$/.test(name)) return null
+  const tag = name.toLowerCase()
+  return elements.some((el) => el.localName.toLowerCase() === tag) ? null : first.localName
+}
+
 /** Euclidean distance from a point to a rect (0 inside); Tango's `distanceToRect`. */
 export function distanceToRect(p: Point, r: DOMRectReadOnly): number {
   const dx = p.x < r.left ? r.left - p.x : p.x > r.right ? p.x - r.right : 0

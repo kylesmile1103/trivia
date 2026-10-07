@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { type FrameLocator, type Locator, type Page, expect, test } from '@playwright/test'
+import { type FrameLocator, type Locator, type Page, type Route, expect, test } from '@playwright/test'
 
 const DASHBOARD = fileURLToPath(new URL('../examples/playground/src/pages/Dashboard.tsx', import.meta.url))
 const original = fs.readFileSync(DASHBOARD, 'utf8')
@@ -49,6 +49,42 @@ async function box(locator: Locator) {
 }
 
 const center = (b: { x: number; y: number; width: number; height: number }) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
+
+/** Every op the page sends to the engine's apply endpoint, in order. */
+function recordOps(page: Page): Array<Record<string, unknown>> {
+  const ops: Array<Record<string, unknown>> = []
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && new URL(req.url()).pathname === '/@trivia/api/apply') ops.push(req.postDataJSON().op)
+  })
+  return ops
+}
+
+const applied = (page: Page) => page.waitForResponse((res) => new URL(res.url()).pathname === '/@trivia/api/apply')
+
+/**
+ * Hold Vite's hot update of Dashboard.tsx (its `?t=` re-import), so the canvas keeps rendering
+ * the pre-edit DOM until the test lets it through, or fails it as a page that reloads would.
+ */
+async function holdHotUpdate(page: Page) {
+  const pattern = /\/src\/pages\/Dashboard\.tsx\?(?:import&)?t=\d+/
+  let decide: (how: 'continue' | 'abort') => void = () => {}
+  const decided = new Promise<'continue' | 'abort'>((resolve) => (decide = resolve))
+  let arrived: () => void = () => {}
+  /** Vite has seen the change and the app asked for the update: it is now being held. */
+  const held = new Promise<void>((resolve) => (arrived = resolve))
+  const handler = async (route: Route) => {
+    arrived()
+    const how = await decided
+    // The document that asked may be gone (reloaded) by then.
+    await (how === 'continue' ? route.continue() : route.abort()).catch(() => {})
+  }
+  await page.route(pattern, handler)
+  const end = async (how: 'continue' | 'abort') => {
+    decide(how)
+    await page.unroute(pattern, handler)
+  }
+  return { held, release: () => end('continue'), fail: () => end('abort') }
+}
 
 /** The overlay box must sit exactly on the element (sub-pixel tolerance). */
 async function expectSameRect(overlayBox: Locator, element: Locator) {
@@ -122,10 +158,83 @@ test('Delete removes the selected Button from the source; undo restores it', asy
   await expect(save).toBeVisible()
 })
 
+test('a click and Delete before an edit has rendered are refused, not applied to whatever now sits at that position', async ({ page }) => {
+  await openCanvas(page)
+  const ops = recordOps(page)
+  const overlay = page.getByTestId('canvas-overlay')
+  const selection = page.locator('[data-canvas-box="selection"]')
+  // CardContent's three children are all <div>s: only their positions tell them apart.
+  const input = app(page).getByPlaceholder('my-app')
+  const nameField = input.locator('xpath=..')
+  const publicRow = app(page).locator('[data-slot="card-content"] > div', { has: app(page).locator('#public') })
+  await page.mouse.click(center(await box(input)).x, center(await box(input)).y)
+  await page.keyboard.press('ArrowUp')
+  await expect(selection).toHaveAttribute('data-locator', (await nameField.getAttribute('data-ast-node'))!)
+
+  const hot = await holdHotUpdate(page)
+  const deleted = applied(page)
+  await page.keyboard.press('Delete')
+  await deleted
+  const afterDelete = dashboard()
+  expect(afterDelete).not.toContain('placeholder="my-app"')
+
+  // The canvas still shows the name field, so the "Public" row there carries the locator that
+  // now belongs to the plans row in source. Clicking it and pressing Delete must do nothing.
+  const stale = center(await box(publicRow))
+  await page.mouse.click(stale.x, stale.y)
+  await page.keyboard.press('Delete')
+  await page.waitForTimeout(300)
+  expect(dashboard()).toBe(afterDelete)
+  expect(ops).toHaveLength(1)
+  await expect(overlay).toHaveAttribute('aria-busy', 'true')
+
+  // Once HMR has rendered, the same gesture deletes the row the user clicked.
+  await hot.release()
+  await expect(input).toHaveCount(0)
+  await expect(overlay).not.toHaveAttribute('aria-busy')
+  const row = center(await box(publicRow))
+  await page.mouse.click(row.x, row.y)
+  const rowLoc = (await publicRow.getAttribute('data-ast-node'))!
+  await expect(selection).toHaveAttribute('data-locator', rowLoc)
+  await page.keyboard.press('Delete')
+  await expect.poll(dashboard).not.toContain('htmlFor="public"')
+  expect(dashboard()).toContain('plans.map')
+  expect(ops.at(-1)).toEqual({ op: 'remove', target: rowLoc, expectedName: 'div' })
+})
+
+test('a full reload while an edit renders lets go of the old selection box', async ({ page }) => {
+  await openCanvas(page)
+  const save = app(page).getByRole('button', { name: 'Save changes' })
+  const selection = page.locator('[data-canvas-box="selection"]')
+  await page.mouse.click(center(await box(save)).x, center(await box(save)).y)
+  await expect(selection).toHaveCount(1)
+
+  const hot = await holdHotUpdate(page)
+  const deleted = applied(page)
+  await page.keyboard.press('Delete')
+  await deleted
+  // The hot update fails and the app reloads instead (a module that isn't a Fast Refresh
+  // boundary, or a dependency Vite had to re-optimize). Reloading before Vite has even seen
+  // the change would just load the old module again.
+  await hot.held
+  await hot.fail()
+  await page.locator('iframe[title="App canvas"]').evaluate((iframe: HTMLIFrameElement) => iframe.contentWindow?.location.reload())
+  await expect(save).toHaveCount(0)
+  await expect(selection).toHaveCount(0) // nothing is selected: the box of the deleted button must go
+
+  // And the canvas takes input again.
+  const cancel = app(page).getByRole('button', { name: 'Cancel' })
+  await page.mouse.click(center(await box(cancel)).x, center(await box(cancel)).y)
+  await expect(selection).toHaveAttribute('data-locator', (await cancel.getAttribute('data-ast-node'))!)
+  await expectSameRect(selection, cancel)
+})
+
 test('dragging the Cancel button into CardContent moves it in source; selection follows', async ({ page }) => {
   await openCanvas(page)
+  const ops = recordOps(page)
   const cancel = app(page).getByRole('button', { name: 'Cancel' })
   const fields = app(page).locator('[data-slot="card-content"] > div')
+  const [cancelLoc, nameFieldLoc] = [await cancel.getAttribute('data-ast-node'), await fields.nth(0).getAttribute('data-ast-node')]
   const [cancelBox, nameField, publicRow] = [await box(cancel), await box(fields.nth(0)), await box(fields.nth(1))]
 
   // Press on Cancel, pass the 4px threshold, then hover the gap between the first two fields:
@@ -161,6 +270,10 @@ test('dragging the Cancel button into CardContent moves it in source; selection 
   await page.mouse.up()
   await expect(page.getByTestId('canvas-cursor-chip')).toHaveCount(0)
   await expect.poll(dashboard).not.toBe(original)
+  // Both ends of the move carry the name the engine must still find there.
+  expect(ops).toEqual([
+    { op: 'move', source: cancelLoc, expectedName: 'Button', target: nameFieldLoc, expectedTargetName: 'div', placement: 'after' },
+  ])
   const src = dashboard()
   const content = src.slice(src.indexOf('<CardContent'), src.indexOf('</CardContent>'))
   const footer = src.slice(src.indexOf('<CardFooter'), src.indexOf('</CardFooter>'))
@@ -196,6 +309,8 @@ test('a palette drop inserts the template where the indicator shows', async ({ p
     return dt
   }, JSON.stringify(template))
   const overlay = page.getByTestId('canvas-overlay')
+  const ops = recordOps(page)
+  const cancelLoc = await app(page).getByRole('button', { name: 'Cancel' }).getAttribute('data-ast-node')
   const cancel = await box(app(page).getByRole('button', { name: 'Cancel' }))
   const at = { clientX: cancel.x + 6, clientY: cancel.y + cancel.height / 2 } // left half: before, on the row axis
   await overlay.dispatchEvent('dragenter', { dataTransfer: data, ...at })
@@ -205,6 +320,9 @@ test('a palette drop inserts the template where the indicator shows', async ({ p
 
   await overlay.dispatchEvent('drop', { dataTransfer: data, ...at })
   await expect.poll(dashboard).toContain('<Badge variant="outline">Draft</Badge>')
+  expect(ops).toEqual([
+    { op: 'insert', target: cancelLoc, expectedName: 'Button', placement: 'before', snippet: template.snippet, imports: template.imports },
+  ])
   const src = dashboard()
   const footer = src.slice(src.indexOf('<CardFooter'), src.indexOf('</CardFooter>'))
   expect(footer).toContain('<Badge variant="outline">Draft</Badge>\n          <Button variant="ghost">Cancel</Button>')

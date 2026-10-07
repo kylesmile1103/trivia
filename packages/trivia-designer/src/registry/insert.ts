@@ -44,7 +44,9 @@ export async function insertIntoSelection(template: Template): Promise<void> {
   const placement = placementFor(node, componentsByName[node.name]?.acceptsChildren)
   const where = placement === 'after' ? 'after' : 'into'
   await dispatch(
-    { op: 'insert', target: selected, placement, snippet: template.snippet, imports: template.imports },
+    // The name the user saw selected: if the selection's position has since moved to another
+    // node, the engine refuses (409) instead of inserting next to the wrong one.
+    { op: 'insert', target: selected, expectedName: node.name, placement, snippet: template.snippet, imports: template.imports },
     `Insert ${template.label} ${where} <${node.name}>`,
   )
 }

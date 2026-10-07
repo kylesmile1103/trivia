@@ -55,9 +55,11 @@ export function Canvas() {
         role="application"
         aria-roledescription="design canvas"
         aria-label="Canvas. Click to select, drag to move, Delete to remove, Arrow Up for the parent, Escape to deselect."
+        // An edit is rendering: presses, Delete and drops wait for it (controller.ts `stale`).
+        aria-busy={view.updating || undefined}
         className={cn(
           'absolute inset-0 overflow-hidden outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
-          view.moving && 'cursor-grabbing',
+          view.moving ? 'cursor-grabbing' : view.updating && 'cursor-progress',
         )}
         style={{ pointerEvents: captures ? 'auto' : 'none' }}
       >

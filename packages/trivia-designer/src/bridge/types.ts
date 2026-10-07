@@ -11,14 +11,21 @@ export interface ImportSpec {
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
-/** One serializable edit — the action vocabulary for humans and agents alike. */
+/**
+ * One serializable edit — the action vocabulary for humans and agents alike.
+ *
+ * Every locator an op names can carry the tag name the sender saw there (`expectedName` for
+ * the op's own node: the insert target, the insertChild parent, the moved/removed/updated
+ * node; `expectedTargetName` / `expectedParentName` for a move's anchor). Locators are
+ * positions, so the engine answers 409 `stale_locator` when one now names something else.
+ */
 export type Op =
-  | { op: 'insert'; target: string; placement: Placement; snippet: string; imports?: ImportSpec[] }
-  | { op: 'insertChild'; parent: string; index: number; snippet: string; imports?: ImportSpec[] }
+  | { op: 'insert'; target: string; expectedName?: string; placement: Placement; snippet: string; imports?: ImportSpec[] }
+  | { op: 'insertChild'; parent: string; expectedName?: string; index: number; snippet: string; imports?: ImportSpec[] }
   | { op: 'updateProp'; target: string; expectedName?: string; prop: string; value: JsonValue }
   | { op: 'remove'; target: string; expectedName?: string }
-  | { op: 'move'; source: string; expectedName?: string; target: string; placement: Placement }
-  | { op: 'moveNode'; source: string; expectedName?: string; parent: string; index: number }
+  | { op: 'move'; source: string; expectedName?: string; target: string; expectedTargetName?: string; placement: Placement }
+  | { op: 'moveNode'; source: string; expectedName?: string; parent: string; expectedParentName?: string; index: number }
   | ({ op: 'bindQuery' } & QueryBinding)
 
 /** Bind an element to a TanStack Query factory (engine: data_binder.rs). */
