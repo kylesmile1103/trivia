@@ -9,5 +9,8 @@
     "dev:designer": "pnpm --filter @trivia/designer dev",
     "test": "cargo test --workspace && pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }
