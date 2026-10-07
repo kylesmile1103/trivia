@@ -109,7 +109,11 @@ the API writes to disk, so it must not be reachable from arbitrary web pages.
   (imports, top-level constants) and static JSX move freely between components.
 - `bindQuery` writes `const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions(…) })`
   as the first statement of the element's component, imports `useQuery` and the factory, and sets
-  `data={customerData?.items ?? []}` / `isLoading={isCustomerLoading}`. It is idempotent (re-binding returns
+  `data={customerData?.items ?? []}` / `isLoading={isCustomerLoading}`. When `optionsArgs` reads the component's
+  own locals (`{ path: { id } }` after `const { id } = useParams()`), the hook goes right after the last statement
+  declaring one of them; 422 `unsupported` when that would follow an early `return` (rules of hooks) or the
+  element itself, or when such a name is only declared in a nested function or block. `optionsArgs` is one
+  expression, at most 4096 bytes and nested at most 256 levels deep (else 400 `invalid_op`). It is idempotent (re-binding returns
   `changed: false`). Rules and refusals: `crates/trivia_oxc_engine/src/data_binder.rs`; design: `docs/data-provider.md`. Moving a node into itself or its own subtree
   is 400 `invalid_op`.
 - The engine's guarded write (undo/redo `restore`) itself answers `conflict` when the file no
