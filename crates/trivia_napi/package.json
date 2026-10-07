@@ -19,7 +19,8 @@
   },
   "scripts": {
     "build": "napi build --platform --release --esm",
-    "build:debug": "napi build --platform --esm"
+    "build:debug": "napi build --platform --esm",
+    "test": "node test/deep-nesting.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.8"
