@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { History } from '../src/history.js'
-import { copyPlayground, get, post, request, startServer, type TestServer } from './helpers.js'
+import { copyPlayground, from, get, post, request, startServer, type TestServer } from './helpers.js'
 
 const DASHBOARD = 'src/pages/Dashboard.tsx'
 const CANCEL = `${DASHBOARD}#Dashboard#0.0.2.0`
@@ -251,8 +251,10 @@ describe('request rules', () => {
       const r = await get(socket, '/health', { origin })
       expect([r.status, r.body.error?.code], origin).toEqual([403, 'forbidden'])
     }
-    const write = await post(socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') }, { origin: 'http://evil.example' })
-    expect([write.status, write.body.error.code]).toEqual([403, 'forbidden'])
+    for (const origin of ['http://evil.example', 'null']) {
+      const write = await post(socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') }, { origin })
+      expect([write.status, write.body.error.code], origin).toEqual([403, 'forbidden'])
+    }
     expect(read()).toBe(original)
   })
 
@@ -294,6 +296,122 @@ describe('request rules', () => {
   it('leaves other paths to Vite', async () => {
     const r = await request(socket, '/@trivia/apiary')
     expect(r.body?.ok).toBeUndefined()
+  })
+})
+
+describe('only this machine may call the API', () => {
+  const LAN = '192.168.1.66'
+  // Script in a text node: written to source, it runs in the user's browser.
+  const attack = { op: 'insert', target: APP_MAIN, placement: 'lastChild', snippet: '<p>{(() => "pwned")()}</p>' }
+  const READS = ['/health', '/components', `/inspect?locator=${encodeURIComponent(SAVE)}`, '/history', '/nope']
+  const WRITES: [string, unknown][] = [
+    ['/apply', { op: attack }],
+    ['/batch', { ops: [attack] }],
+    ['/undo', {}],
+    ['/redo', {}],
+  ]
+
+  it('refuses a write from another machine that sends no Origin (vite --host)', async () => {
+    const appBefore = read('src/App.tsx')
+    // A LAN peer addresses the server by its IP, which Vite's own host check lets through.
+    const r = await post(socket, '/apply', { op: attack }, from(LAN, { host: '192.168.1.10:5173' }))
+    expect([r.status, r.body.error?.code]).toEqual([403, 'forbidden'])
+    expect(r.body.error.message).toContain(`refusing a request from ${LAN}`)
+    expect(r.body.error.message).toContain('allowRemote')
+    expect(read('src/App.tsx')).toBe(appBefore)
+  })
+
+  it('refuses every endpoint to any non-loopback address', async () => {
+    await post(socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') }) // something to undo
+    const edited = read()
+    for (const address of [LAN, '::ffff:192.168.1.66', '10.0.0.2', '0.0.0.0', 'fe80::1', '::', '2001:db8::1']) {
+      for (const endpoint of READS) {
+        const r = await get(socket, endpoint, from(address))
+        expect([r.status, r.body.error?.code], `${address} GET ${endpoint}`).toEqual([403, 'forbidden'])
+      }
+      for (const [endpoint, body] of WRITES) {
+        const r = await post(socket, endpoint, body, from(address))
+        expect([r.status, r.body.error?.code], `${address} POST ${endpoint}`).toEqual([403, 'forbidden'])
+      }
+    }
+    expect(read()).toBe(edited)
+    expect((await get(socket, '/history')).body.data.undoLabel).toBe('Set variant')
+  })
+
+  it('refuses a client whose address is unknown (a Unix socket, a closed connection)', async () => {
+    const r = await get(socket, '/health', from('none'))
+    expect([r.status, r.body.error?.code]).toEqual([403, 'forbidden'])
+    expect(r.body.error.message).toContain('unknown address')
+  })
+
+  it('answers loopback clients: 127.0.0.0/8, ::1, IPv4-mapped 127.x', async () => {
+    for (const address of ['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1']) {
+      expect((await get(socket, '/health', from(address))).status, address).toBe(200)
+    }
+  })
+
+  it('allowRemote: true serves other machines (the dangerous opt-in)', async () => {
+    const open = await startServer(root, { allowRemote: true })
+    try {
+      expect((await get(open.socket, '/health', from(LAN))).status).toBe(200)
+      const r = await post(open.socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') }, from(LAN))
+      expect([r.status, r.body.data?.changed]).toEqual([200, true])
+      // The Origin rule still applies to remote browsers.
+      const page = await get(open.socket, '/health', from(LAN, { origin: 'http://192.168.1.66:8000' }))
+      expect([page.status, page.body.error?.code]).toEqual([403, 'forbidden'])
+    } finally {
+      await open.close()
+    }
+  })
+})
+
+describe('only hosts that name this machine (DNS rebinding)', () => {
+  // A rebinding page is served from its own name, so the Host header names the attacker's
+  // domain; a same-origin GET carries no Origin.
+  const FOREIGN = ['evil.example', 'evil.example:5173', 'localhost.evil.example', 'localhost.', 'x@localhost', '[::1']
+
+  it('refuses a foreign Host even where Vite does not check it (server.https)', async () => {
+    const tls = await startServer(root, {}, { https: {} })
+    try {
+      for (const host of FOREIGN) {
+        const r = await get(tls.socket, '/components', { host })
+        expect([r.status, r.body.error?.code], JSON.stringify(host)).toEqual([403, 'forbidden'])
+      }
+      // (Without any Host, Node itself answers an HTTP/1.1 request with 400.)
+      const empty = await request(tls.socket, '/@trivia/api/components', { headers: { host: '' }, setHost: false })
+      expect([empty.status, empty.body.error?.code]).toEqual([403, 'forbidden'])
+      expect(empty.body.error.message).toContain('host (none)')
+      const write = await post(tls.socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') }, { host: 'evil.example:5173' })
+      expect([write.status, write.body.error?.code]).toEqual([403, 'forbidden'])
+      expect(write.body.error.message).toContain('host evil.example:5173')
+      expect(read()).toBe(original)
+    } finally {
+      await tls.close()
+    }
+  })
+
+  it('accepts localhost and IP literals', async () => {
+    for (const host of ['localhost', 'localhost:5173', '127.0.0.1:5173', '[::1]:5173', '192.168.1.10:5173']) {
+      expect((await get(socket, '/health', { host })).status, host).toBe(200)
+    }
+  })
+
+  it("accepts Vite's resolved server.allowedHosts", async () => {
+    const named = await startServer(root, {}, { allowedHosts: ['dev.example', '.corp.example'], https: {} })
+    try {
+      for (const host of ['dev.example', 'dev.example:5173', 'corp.example', 'a.corp.example:5173']) {
+        expect((await get(named.socket, '/health', { host })).status, host).toBe(200)
+      }
+      expect((await get(named.socket, '/health', { host: 'evil.example' })).status).toBe(403)
+    } finally {
+      await named.close()
+    }
+    const any = await startServer(root, {}, { allowedHosts: true })
+    try {
+      expect((await get(any.socket, '/health', { host: 'evil.example' })).status).toBe(200)
+    } finally {
+      await any.close()
+    }
   })
 })
 

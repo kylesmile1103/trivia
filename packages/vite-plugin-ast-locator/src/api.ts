@@ -3,6 +3,7 @@
 // one queue, so two edits never interleave their read-modify-write of a file.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import net from 'node:net'
 
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from './engine.js'
 import { History } from './history.js'
@@ -29,8 +30,14 @@ const STATUS: Record<ErrorCode, number> = {
   internal: 500,
 }
 
-// The API writes to disk, so only pages served from this machine may call it.
+// The API writes to disk, so it answers only this machine (docs/api.md "Envelope"): loopback
+// clients, a Host header that names this machine, and pages served from localhost.
+const LOOPBACK = new net.BlockList()
+LOOPBACK.addSubnet('127.0.0.0', 8, 'ipv4') // also matches IPv4-mapped IPv6 (::ffff:127.0.0.1)
+LOOPBACK.addAddress('::1', 'ipv6')
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]'])
+/** `name[:port]` or `[ipv6][:port]`, lowercased. */
+const HOST_HEADER = /^(?:\[([0-9a-f:.]+)\]|([a-z0-9._-]+))(?::\d{1,5})?$/
 const MAX_BODY_BYTES = 5 * 1024 * 1024
 
 export interface ApiOptions {
@@ -44,6 +51,16 @@ export interface ApiOptions {
   historyLimit?: number
   /** Unexpected failures are logged here as well as returned as `internal`. */
   logger?: { error(message: string): void }
+  /**
+   * Also answer clients on other machines. Dangerous: anyone who can reach the server can then
+   * rewrite source files. Default false: loopback clients only.
+   */
+  allowRemote?: boolean
+  /**
+   * Vite's resolved `server.allowedHosts`: Host names accepted besides `localhost` and IP
+   * literals (`true`: any). Default: none.
+   */
+  allowedHosts?: readonly string[] | true
 }
 
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void
@@ -132,10 +149,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
   ])
 
   const dispatch = async (req: IncomingMessage, url: URL): Promise<unknown> => {
-    const origin = req.headers.origin
-    if (origin !== undefined && !isLocalOrigin(origin)) {
-      throw new ApiError('forbidden', `refusing a request from origin ${origin}: the engine API only serves localhost pages`)
-    }
+    checkCaller(req, options.allowRemote ?? false, options.allowedHosts ?? [])
     const name = url.pathname.slice(API_BASE.length)
     const route = routes.get(name)
     if (!route) throw new ApiError('invalid_op', `unknown endpoint ${url.pathname} (see docs/api.md)`)
@@ -180,6 +194,61 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.setHeader('content-type', 'application/json; charset=utf-8')
   res.setHeader('cache-control', 'no-store')
   res.end(JSON.stringify(body))
+}
+
+/**
+ * Refuse callers that are not on this machine. Three independent checks, each closing a
+ * different hole:
+ * - the client address: a non-browser client on the network (`vite --host`) sends no Origin;
+ * - the Host header: a DNS-rebinding page reaches 127.0.0.1 under its own name, and its
+ *   same-origin GETs carry no Origin. Vite has its own check, but skips it under
+ *   `server.https`, so the API does not rely on it;
+ * - the Origin header: a page on another site that calls the API cross-origin.
+ */
+function checkCaller(req: IncomingMessage, allowRemote: boolean, allowedHosts: readonly string[] | true): void {
+  const address = req.socket.remoteAddress
+  if (!allowRemote && !isLoopback(address)) {
+    throw new ApiError(
+      'forbidden',
+      `refusing a request from ${address ?? 'an unknown address'}: the engine API rewrites source files, so it only ` +
+        'answers loopback clients on this machine. astLocator({ allowRemote: true }) serves every client that can reach ' +
+        'this server, which lets any of them edit your code',
+    )
+  }
+  const authority = req.headers.host ?? req.headers[':authority'] // HTTP/2 sends :authority
+  const host = typeof authority === 'string' ? authority : undefined
+  if (!isAllowedHost(host, allowedHosts)) {
+    throw new ApiError(
+      'forbidden',
+      `refusing a request for host ${host || '(none)'}: the engine API only answers localhost, IP addresses and ` +
+        'server.allowedHosts (a guard against DNS rebinding)',
+    )
+  }
+  const origin = req.headers.origin
+  if (origin !== undefined && !isLocalOrigin(origin)) {
+    throw new ApiError('forbidden', `refusing a request from origin ${origin}: the engine API only serves localhost pages`)
+  }
+}
+
+/** 127.0.0.0/8 or ::1, also IPv4-mapped. Unknown (a Unix socket, a closed connection) is not. */
+function isLoopback(address: string | undefined): boolean {
+  if (address === undefined) return false
+  const family = net.isIP(address)
+  return family !== 0 && LOOPBACK.check(address, family === 4 ? 'ipv4' : 'ipv6')
+}
+
+/** Vite's rules: `localhost`, any IP literal (rebinding needs a name), `server.allowedHosts`. */
+function isAllowedHost(host: string | undefined, allowedHosts: readonly string[] | true): boolean {
+  if (allowedHosts === true) return true
+  const match = host === undefined ? null : HOST_HEADER.exec(host.trim().toLowerCase())
+  if (!match) return false
+  const [, ipv6, name = ''] = match
+  if (ipv6 !== undefined) return net.isIPv6(ipv6)
+  if (name === 'localhost' || net.isIPv4(name)) return true
+  return allowedHosts.some((entry) => {
+    const allowed = entry.toLowerCase()
+    return allowed === name || (allowed.startsWith('.') && (allowed.slice(1) === name || name.endsWith(allowed)))
+  })
 }
 
 function isLocalOrigin(origin: string): boolean {

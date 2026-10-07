@@ -25,6 +25,13 @@ export interface AstLocatorOptions {
   importBase?: string
   /** Serve the engine HTTP API at /@trivia/api. Default: true. */
   api?: boolean
+  /**
+   * **Dangerous.** Let clients on other machines call the engine API. It rewrites source files,
+   * so with `vite --host` (or Docker, or `server.host`) anyone who can reach the dev server
+   * could then edit your code. Default: false, the API answers loopback clients only. The
+   * Host and Origin checks apply either way.
+   */
+  allowRemote?: boolean
 }
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
@@ -70,6 +77,12 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
     configureServer(server) {
       if (options.api === false) return
       if (engine === undefined || paths === undefined) throw new Error('[trivia] configureServer ran before configResolved')
+      const allowRemote = options.allowRemote === true
+      if (allowRemote) {
+        server.config.logger.warn(
+          '[trivia] allowRemote: the engine API at /@trivia/api answers every client that can reach this server, and it rewrites source files',
+        )
+      }
       // Registered directly (not returned as a post hook), so it runs before Vite's own
       // transform and SPA-fallback middlewares.
       server.middlewares.use(
@@ -80,6 +93,8 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
           version: pkg.version,
           engine,
           logger: server.config.logger,
+          allowRemote,
+          allowedHosts: server.config.server.allowedHosts,
         }),
       )
     },

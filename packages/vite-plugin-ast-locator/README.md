@@ -26,6 +26,7 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 | `uiDir` | `components.json` `aliases.ui` mapped through `resolve.alias` (`@/components/ui` → `src/components/ui`); without a matching alias, `@/x` → `src/x`; else `src/components/ui` |
 | `importBase` | `components.json` `aliases.ui`, else `@/components/ui` |
 | `api` | `true`; `false` serves no API (locators only) |
+| `allowRemote` | `false`: the API answers loopback clients only. **`true` is dangerous**: with `vite --host` or Docker, anyone who can reach the dev server can rewrite your source files |
 
 ## Behaviour worth knowing
 
@@ -39,7 +40,10 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
   `409 conflict` without writing anything when a file changed outside the designer. With nothing to
   undo or redo they answer `{ files: [] }`.
 - Malformed requests (wrong method or content type, bad JSON, unknown endpoint) answer
-  `400 invalid_op`; a foreign `Origin` answers `403 forbidden`.
+  `400 invalid_op`.
+- Callers that are not on this machine answer `403 forbidden` on every endpoint: a client address
+  that is not loopback (unless `allowRemote`), a `Host` that is not `localhost`, an IP literal or
+  in `server.allowedHosts` (DNS rebinding), or a foreign `Origin`. See `docs/api.md`, Envelope.
 
 ```sh
 pnpm --filter @trivia/vite-plugin-ast-locator test       # vitest (needs pnpm build:engine)
