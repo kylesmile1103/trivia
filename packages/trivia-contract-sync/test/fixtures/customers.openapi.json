@@ -1,0 +1,249 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Customer API",
+    "version": "1.4.0",
+    "description": "Customer onboarding and KYC (fixture for @trivia/contract-sync)."
+  },
+  "servers": [{ "url": "https://api.example.test" }],
+  "tags": [
+    { "name": "Customers", "description": "Customer records" },
+    { "name": "System" }
+  ],
+  "paths": {
+    "/api/v1/customers": {
+      "get": {
+        "tags": ["Customers"],
+        "operationId": "listCustomers",
+        "summary": "List customers",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/CustomerStatus" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of customers",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CustomerPage" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "post": {
+        "tags": ["Customers"],
+        "operationId": "createCustomer",
+        "summary": "Create a customer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CreateCustomerRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CustomerDto" } }
+            }
+          },
+          "422": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/v1/customers/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+      ],
+      "get": {
+        "tags": ["Customers"],
+        "operationId": "getCustomerById",
+        "summary": "Get one customer",
+        "responses": {
+          "200": {
+            "description": "The customer",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CustomerDto" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "put": {
+        "tags": ["Customers"],
+        "operationId": "updateCustomer",
+        "summary": "Update a customer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/UpdateCustomerRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CustomerDto" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Customers"],
+        "operationId": "deleteCustomer",
+        "summary": "Delete a customer",
+        "responses": {
+          "204": { "description": "Deleted" }
+        }
+      }
+    },
+    "/api/v1/customers/{id}/approve-kyc": {
+      "post": {
+        "tags": ["Customers"],
+        "operationId": "approveCustomerKyc",
+        "summary": "Approve the customer's KYC review",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": { "type": "string", "maxLength": 500 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "KYC approved",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CustomerDto" } }
+            }
+          },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness probe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok", "degraded"] },
+                    "version": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CustomerStatus": {
+        "type": "string",
+        "enum": ["pending", "active", "suspended"]
+      },
+      "KycStatus": {
+        "type": "string",
+        "enum": ["not_started", "in_review", "approved", "rejected"]
+      },
+      "Address": {
+        "type": "object",
+        "required": ["line1", "city", "country"],
+        "properties": {
+          "line1": { "type": "string" },
+          "line2": { "type": ["string", "null"] },
+          "city": { "type": "string" },
+          "postalCode": { "type": "string" },
+          "country": { "type": "string", "minLength": 2, "maxLength": 2, "description": "ISO 3166-1 alpha-2" }
+        }
+      },
+      "CustomerDto": {
+        "type": "object",
+        "required": ["id", "fullName", "email", "status", "kycStatus", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "readOnly": true },
+          "fullName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": ["string", "null"] },
+          "status": { "$ref": "#/components/schemas/CustomerStatus" },
+          "kycStatus": { "$ref": "#/components/schemas/KycStatus" },
+          "creditLimit": { "type": "number", "format": "double" },
+          "birthDate": { "type": ["string", "null"], "format": "date" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "address": { "$ref": "#/components/schemas/Address" },
+          "createdAt": { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+      "CreateCustomerRequest": {
+        "type": "object",
+        "required": ["fullName", "email"],
+        "properties": {
+          "fullName": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": ["string", "null"] },
+          "birthDate": { "type": ["string", "null"], "format": "date" },
+          "creditLimit": { "type": "number", "format": "double" },
+          "address": { "$ref": "#/components/schemas/Address" }
+        }
+      },
+      "UpdateCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "fullName": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": ["string", "null"] },
+          "status": { "$ref": "#/components/schemas/CustomerStatus" },
+          "creditLimit": { "type": "number", "format": "double" },
+          "address": { "$ref": "#/components/schemas/Address" }
+        }
+      },
+      "CustomerPage": {
+        "type": "object",
+        "required": ["items", "total", "page", "pageSize"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/CustomerDto" } },
+          "total": { "type": "integer", "minimum": 0 },
+          "page": { "type": "integer", "minimum": 1 },
+          "pageSize": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "required": ["title", "status"],
+        "properties": {
+          "type": { "type": "string", "format": "uri" },
+          "title": { "type": "string" },
+          "status": { "type": "integer" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "RFC 9457 problem details",
+        "content": {
+          "application/problem+json": { "schema": { "$ref": "#/components/schemas/ProblemDetails" } }
+        }
+      }
+    }
+  }
+}
