@@ -229,6 +229,123 @@ test('a full reload while an edit renders lets go of the old selection box', asy
   await expectSameRect(selection, cancel)
 })
 
+/**
+ * Milliseconds, timed in the page, from when the designer heard back from the engine's last
+ * apply (or from now, if `sinceAnswer` is false) until the overlay stops being busy; capped at
+ * 5 s (returns Infinity).
+ */
+function busyFor(page: Page, sinceAnswer: boolean): Promise<number> {
+  return page.evaluate(
+    (sinceAnswer) =>
+      new Promise<number>((resolve) => {
+        const w = window as Window & { __answeredAt?: number }
+        const overlay = document.querySelector('[data-testid="canvas-overlay"]')!
+        const start = performance.now()
+        const check = () => {
+          const from = sinceAnswer ? w.__answeredAt : start
+          if (from !== undefined && !overlay.hasAttribute('aria-busy')) resolve(performance.now() - from)
+          else if (performance.now() - start > 5_000) resolve(Infinity)
+          else requestAnimationFrame(check)
+        }
+        check()
+      }),
+    sinceAnswer,
+  )
+}
+
+/** Record (as `window.__answeredAt`, page time) when the designer receives an apply's answer. */
+async function timeAnswers(page: Page) {
+  await page.evaluate(() => {
+    const w = window as Window & { __answeredAt?: number }
+    const fetch = window.fetch
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const res = await fetch(...args)
+      if (String(args[0]).endsWith('/@trivia/api/apply')) w.__answeredAt = performance.now()
+      return res
+    }
+  })
+}
+
+test('a click while an edit renders is kept: it selects once the app has rendered', async ({ page }) => {
+  await openCanvas(page)
+  const ops = recordOps(page)
+  const overlay = page.getByTestId('canvas-overlay')
+  const selection = page.locator('[data-canvas-box="selection"]')
+  const save = app(page).getByRole('button', { name: 'Save changes' })
+  const title = app(page).getByText('Project settings')
+  await page.mouse.click(center(await box(save)).x, center(await box(save)).y)
+  await expect(selection).toHaveCount(1)
+
+  const hot = await holdHotUpdate(page)
+  const deleted = applied(page)
+  await page.keyboard.press('Delete')
+  await deleted
+  await hot.held
+  // The canvas still shows the deleted button. A click now neither acts on that old render nor
+  // gets lost: it waits. (The title sits above the edit, so it keeps its place.)
+  const at = center(await box(title))
+  await page.mouse.click(at.x, at.y)
+  await page.waitForTimeout(300)
+  await expect(overlay).toHaveAttribute('aria-busy', 'true')
+  expect(await storeCall(page, 'return designer.getState().selected')).toBeNull()
+
+  await hot.release()
+  await expect(save).toHaveCount(0)
+  // Selected without a second click: the press was hit-tested again on the rendered app.
+  await expect(selection).toHaveAttribute('data-locator', (await title.getAttribute('data-ast-node'))!)
+  await expectSameRect(selection, title)
+  expect(ops).toHaveLength(1)
+})
+
+test('an app that animates without pause does not keep the canvas busy after an edit', async ({ page }) => {
+  await openCanvas(page)
+  const frame = (await (await page.locator('iframe[title="App canvas"]').elementHandle())!.contentFrame())!
+  // A ticker in the app's document: its DOM changes every 16 ms, as with an animation library
+  // or a clock, so it never goes quiet. It lives in this page only; no file is touched.
+  await frame.evaluate(() => {
+    const el = document.createElement('div')
+    el.setAttribute('data-e2e-ticker', '')
+    document.body.append(el)
+    let n = 0
+    setInterval(() => (el.style.width = `${n++ % 100}px`), 16)
+  })
+  await timeAnswers(page)
+  const save = app(page).getByRole('button', { name: 'Save changes' })
+  const cancel = app(page).getByRole('button', { name: 'Cancel' })
+  const selection = page.locator('[data-canvas-box="selection"]')
+  await page.mouse.click(center(await box(save)).x, center(await box(save)).y)
+  await expect(selection).toHaveCount(1)
+
+  const deleted = applied(page)
+  await page.keyboard.press('Delete')
+  await deleted
+  await expect(save).toHaveCount(0) // HMR rendered; the ticker keeps going
+  // Bounded from the edit's render (FrameSession BUSY_MS), and from the answer however slow
+  // Vite's hot update is (MAX_WAIT_MS).
+  expect(await busyFor(page, false)).toBeLessThan(1_000)
+  expect(await busyFor(page, true)).toBeLessThan(2_000)
+
+  await page.mouse.click(center(await box(cancel)).x, center(await box(cancel)).y)
+  await expect(selection).toHaveAttribute('data-locator', (await cancel.getAttribute('data-ast-node'))!)
+})
+
+test('when the hot update renders before the edit answers, the canvas settles right after the answer', async ({ page }) => {
+  await openCanvas(page)
+  const save = app(page).getByRole('button', { name: 'Save changes' })
+  await page.mouse.click(center(await box(save)).x, center(await box(save)).y)
+  await expect(page.locator('[data-canvas-box="selection"]')).toHaveCount(1)
+  await timeAnswers(page)
+  await page.route('**/@trivia/api/apply', async (route) => {
+    const response = await route.fetch() // the engine writes the file…
+    await save.waitFor({ state: 'detached' }) // …Vite's hot update renders it…
+    await page.waitForTimeout(250) // …and the app goes quiet, all before the designer hears back
+    await route.fulfill({ response })
+  })
+  await page.keyboard.press('Delete')
+  expect(await busyFor(page, true)).toBeLessThan(500)
+  expect(dashboard()).not.toContain('Save changes')
+})
+
 test('dragging the Cancel button into CardContent moves it in source; selection follows', async ({ page }) => {
   await openCanvas(page)
   const ops = recordOps(page)

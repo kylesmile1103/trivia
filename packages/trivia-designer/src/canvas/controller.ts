@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { ApiError } from '@/bridge/client'
 import type { ImportSpec, NodeDetails, Placement } from '@/bridge/types'
 import type { Template } from '@/registry/templates'
-import { dispatch, isApplying } from '@/state/actions'
+import { dispatch, isApplying, onIdle } from '@/state/actions'
 import { type DesignerState, designer } from '@/state/store'
 
 import type { CanvasApi } from './api'
@@ -71,7 +71,10 @@ export interface CanvasView {
   selection: Highlight | null
   /** The selection is being dragged to a new place. */
   moving: boolean
-  /** An edit hasn't rendered yet: the canvas ignores presses, Delete and drops until it has. */
+  /**
+   * An edit hasn't rendered yet: a press waits to select until it has, and drags, Delete and
+   * drops are refused meanwhile.
+   */
   updating: boolean
   drop: DropView | null
   cursor: CursorChip | null
@@ -113,6 +116,12 @@ export class CanvasController {
   private dropState: DropState = null
   /** Selection to scroll into view once it is rendered. */
   private reveal: string | null = null
+  /**
+   * A press made while the canvas was stale, waiting to select: where it landed in the app's
+   * document (frame coordinates plus the document's scroll), so scrolling meanwhile doesn't
+   * move it. The store's `pressPending` says whether anything has superseded it since.
+   */
+  private press: Point | null = null
   /** An edit returned and its HMR hasn't rendered yet. */
   private awaitingEdit = false
   /**
@@ -161,6 +170,12 @@ export class CanvasController {
   mount(): () => void {
     const stop = this.session.start()
     const unsubscribe = designer.subscribe((s, prev) => this.onStore(s, prev))
+    // An edit that answers without changing anything (refused, or a no-op) leaves no history
+    // change behind: a press waiting on it selects now.
+    const stopIdle = onIdle(() => {
+      this.settlePress()
+      this.session.scheduleLayout()
+    })
     const o = this.overlay
     const listeners: Array<[string, (e: never) => void, AddEventListenerOptions?]> = [
       ['pointerdown', this.onPointerDown],
@@ -184,6 +199,9 @@ export class CanvasController {
     return () => {
       for (const [type, fn, options] of listeners) o.removeEventListener(type, fn as EventListener, options)
       window.removeEventListener('resize', relayout)
+      if (this.press) designer.getState().setPressPending(false) // nothing will settle it now
+      this.press = null
+      stopIdle()
       unsubscribe()
       stop()
     }
@@ -194,7 +212,8 @@ export class CanvasController {
    * change from elsewhere) hasn't rendered yet. Until HMR lands, the DOM still carries the old
    * source's locators, so a locator read from it names whatever sits at that position in the
    * new source, and an engine lookup would confirm that node (CLAUDE.md rule 4, docs/api.md).
-   * Presses, Delete and drops wait it out; the overlay shows a busy cursor meanwhile.
+   * A press waits it out and then selects (`press`); drags, Delete and drops are refused. The
+   * overlay shows a busy cursor meanwhile.
    */
   private get stale(): boolean {
     return isApplying() || this.awaitingEdit || this.session.updating
@@ -223,6 +242,7 @@ export class CanvasController {
     this.epoch++
     this.info.clear()
     this.previews.clear()
+    this.settlePress()
     designer.getState().bumpRevision()
   }
 
@@ -231,7 +251,7 @@ export class CanvasController {
     if (s.history !== prev.history) {
       this.awaitingEdit = true
       this.epoch++
-      this.session.expectUpdate()
+      this.session.expectUpdate(s.lastEdit)
       this.session.scheduleLayout()
     }
     if (s.details && s.details !== prev.details) this.info.seed(s.details)
@@ -274,11 +294,16 @@ export class CanvasController {
     // The native mousedown focuses the overlay (tabIndex 0) for the keyboard shortcuts; focusing
     // it here instead would count as programmatic focus and paint the focus-visible ring.
     if (e.button !== 0 || s.mode !== 'design') return
-    // What is under the cursor is the old render: selecting or dragging it would act on
-    // whatever node now holds its position in source. The busy cursor says to wait.
-    if (this.stale) return
-    this.held = null
     const point = { x: e.clientX, y: e.clientY }
+    // What is under the cursor is the old render: selecting or dragging it would act on
+    // whatever node now holds its position in source. A drag can't start (the busy cursor
+    // says to wait), but the press isn't lost: it selects once the app has rendered.
+    if (this.stale) {
+      this.deferPress(point)
+      return
+    }
+    this.press = null
+    this.held = null
     const hit = this.hitAt(point)
     const locator = hit ? locatorOf(hit) : null
     s.select(locator)
@@ -323,6 +348,41 @@ export class CanvasController {
     this.pointer = null
     const s = designer.getState()
     if (s.hovered !== null) s.hover(null)
+  }
+
+  /** Remember a press made while stale (a later one replaces it); `settlePress` selects with it. */
+  private deferPress(client: Point): void {
+    const doc = this.session.doc
+    const point = this.toFrame(client)
+    const view = doc?.defaultView
+    if (!point || !view) return
+    this.press = { x: point.x + view.scrollX, y: point.y + view.scrollY }
+    designer.getState().setPressPending(true)
+  }
+
+  /**
+   * Once the canvas is no longer stale, a waiting press selects whatever the rendered app shows
+   * at its spot: the hit-test runs again on the new DOM, whose locators describe the source.
+   * It is dropped when anything selected since (`pressPending` cleared), when the canvas left
+   * design mode, and when there is nothing to select on (a build error, no locators).
+   */
+  private settlePress(): void {
+    const press = this.press
+    if (!press || this.stale) return
+    const s = designer.getState()
+    const doc = this.session.doc
+    const status = this.status(s, doc)
+    if (status === 'loading') return // a reloaded document that hasn't rendered yet
+    this.press = null
+    if (!s.pressPending) return
+    const view = doc?.defaultView
+    const uiDir = s.health?.uiDir
+    if (s.mode !== 'design' || status !== 'ready' || !doc || !view || !uiDir) {
+      s.setPressPending(false)
+      return
+    }
+    const hit = hitTest(doc, { x: press.x - view.scrollX, y: press.y - view.scrollY }, uiDir)
+    s.select(hit ? locatorOf(hit) : null)
   }
 
   private beginMove(g: Gesture, pointerId: number): void {
@@ -490,6 +550,7 @@ export class CanvasController {
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (isEditable(e.target)) return
+    this.settlePress() // a key acts on what the user clicked last, if the app has rendered since
     const s = designer.getState()
     // Handled keys stop here, so a global shortcut layer can't act on them a second time.
     const handled = () => {
@@ -498,7 +559,7 @@ export class CanvasController {
     }
     if (e.key === 'Escape') {
       if (this.gesture?.dragging) this.cancelMove()
-      else if (s.selected !== null) s.select(null)
+      else if (s.selected !== null || s.pressPending) s.select(null) // also drops a waiting press
       else return
       handled()
       return
@@ -543,6 +604,7 @@ export class CanvasController {
   // Measuring
 
   private measure(): void {
+    this.settlePress() // before reading the store: the box then shows what it selected
     const s = designer.getState()
     const doc = this.session.doc
     const o = this.overlay.getBoundingClientRect()

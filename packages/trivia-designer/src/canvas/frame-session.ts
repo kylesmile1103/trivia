@@ -5,17 +5,37 @@
 //   mutation, previews). Coalesced to one call per animation frame.
 // - `settled`: the app finished re-rendering after a source change (HMR). A change is expected
 //   when Vite re-imports a module (`?t=<timestamp>`, visible in the iframe's resource timeline)
-//   or when the designer's own edit returns; it has settled once the rendered DOM (outside
-//   <head>) has changed and gone quiet, or after MAX_WAIT_MS regardless.
+//   or when the designer's own edit returns. It has settled once the rendered DOM (outside
+//   <head>) has changed and gone quiet. An app that animates or ticks never goes quiet, so the
+//   wait is bounded: BUSY_MS after the update's render could begin (for the designer's own edit,
+//   when its hot update arrived; otherwise the trigger), and MAX_WAIT_MS after the trigger in
+//   any case (a no-op edit, or a hot update slower than that).
 
 /** Mutations must pause this long before an update counts as rendered. */
 const QUIET_MS = 120
 /** Resource timing is delivered late: mutations this long before such a trigger still count. */
 const EARLY_MS = 300
-/** Settle anyway after this long (a no-op edit, or an app that mutates constantly). */
+/** Settle this long after the update's render could begin at the latest, quiet or not. */
+const BUSY_MS = 700
+/** Settle this long after the trigger at the latest, whatever happened. */
 const MAX_WAIT_MS = 1500
+/** How long hot updates are remembered, to recognise an edit's own. */
+const HOT_MEMORY_MS = 10_000
 /** Re-measure every frame this long after a CSS transition/animation starts (boxes follow it). */
 const ANIMATION_FOLLOW_MS = 1000
+
+/** An edit whose answer just arrived: the files it wrote, and when it was sent (designer clock). */
+export interface SentEdit {
+  files: readonly string[]
+  sentAt: number
+}
+
+/** A module Vite re-imported: its URL path, and when it was requested and arrived (designer clock). */
+interface HotModule {
+  path: string
+  requestedAt: number
+  arrivedAt: number
+}
 
 export type FrameState = 'loading' | 'attached' | 'blocked'
 
@@ -52,6 +72,12 @@ export class FrameSession {
   private lastMutationAt = -Infinity
   private settleTimer = 0
   private animatingUntil = 0
+  /** No settle before this (designer clock): a module that just arrived is about to render. */
+  private floorAt = 0
+  /** The designer's edit being waited for, if any; its hot update may be reported after its answer. */
+  private edit: SentEdit | null = null
+  /** Recent hot updates, oldest first. */
+  private hot: HotModule[] = []
 
   private readonly iframe: HTMLIFrameElement
   private readonly listener: FrameListener
@@ -79,19 +105,21 @@ export class FrameSession {
   }
 
   /**
-   * A source change is on its way. `seenLate` marks a trigger observed after the fact (Vite's
-   * re-import, from resource timing), whose render may already have happened. Anything else
-   * (the designer's own edit just returned) comes before its HMR: only later mutations are
-   * its render, so an app that happened to change a moment earlier doesn't end the wait.
+   * A source change is on its way: an edit just answered. With the action bus's `edit` (the
+   * files it wrote, when it was sent), its render is what the DOM does after the edit's own hot
+   * update arrived (a re-import of every file it wrote, requested after the edit was sent),
+   * even when that came before the answer; until it arrives the DOM can't show the edit,
+   * however much it changes. Without one (a history read, a write made elsewhere), only
+   * mutations after now count, so an app that happened to change a moment earlier doesn't end
+   * the wait.
    */
-  expectUpdate(seenLate = false): void {
+  expectUpdate(edit: SentEdit | null = null): void {
     const now = performance.now()
-    if (!this.pending || !seenLate) {
-      this.triggeredAt = now
-      this.renderedAfter = seenLate ? now - EARLY_MS : now
-    }
+    this.edit = edit && edit.files.length > 0 ? edit : null
+    this.triggeredAt = now
+    this.renderedAfter = now
     this.pending = true
-    this.armSettle(QUIET_MS)
+    this.armSettle(0)
   }
 
   scheduleLayout(): void {
@@ -161,8 +189,18 @@ export class FrameSession {
     if (doc.body) resizes.observe(doc.body)
     this.resizeObserver = resizes
     this.tracked = []
+    // Resource timing is in the frame's clock; the canvas (and the action bus) use the designer's.
+    const offset = win.performance.timeOrigin - performance.timeOrigin
     const hot = new win.PerformanceObserver((list) => {
-      if (list.getEntries().some((entry) => isHotUpdate(entry.name, win.location.origin))) this.expectUpdate(true)
+      const modules: HotModule[] = []
+      for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
+        const path = hotUpdatePath(entry.name, win.location.origin)
+        if (path !== null) {
+          const arrived = entry.responseEnd || entry.startTime + entry.duration
+          modules.push({ path, requestedAt: entry.startTime + offset, arrivedAt: arrived + offset })
+        }
+      }
+      if (modules.length > 0) this.onHotUpdate(modules)
     })
     hot.observe({ type: 'resource' })
     this.teardown.push(() => {
@@ -182,40 +220,106 @@ export class FrameSession {
     clearTimeout(this.settleTimer)
     this.raf = 0
     this.pending = false
+    this.edit = null
+    this.hot = []
     this.doc = null
     this.tracked = []
     if (this.state === 'attached') this.state = 'loading'
+  }
+
+  /**
+   * Vite re-imported modules: a source change from anywhere (an IDE save, another client), whose
+   * render may already have happened (resource timing is delivered late), or follows shortly.
+   */
+  private onHotUpdate(modules: HotModule[]): void {
+    const now = performance.now()
+    this.hot = [...this.hot.filter((m) => m.arrivedAt > now - HOT_MEMORY_MS), ...modules]
+    if (!this.pending) {
+      this.edit = null
+      this.triggeredAt = now
+      this.renderedAfter = now - EARLY_MS
+      this.pending = true
+    }
+    // React renders a re-imported module a moment after it runs: give that render time to show.
+    this.floorAt = Math.max(this.floorAt, now + QUIET_MS)
+    this.armSettle(0)
+  }
+
+  /**
+   * When the awaited edit's own hot update arrived: a re-import of every file it wrote (Vite
+   * serves `/<project-relative path>`), each requested after the edit was sent. The latest
+   * arrival, or null while any file has none.
+   */
+  private editArrivedAt(): number | null {
+    const edit = this.edit
+    if (!edit || edit.files.length === 0) return null
+    let latest = -Infinity
+    for (const file of edit.files) {
+      let arrived: number | null = null
+      for (const m of this.hot) if (m.requestedAt >= edit.sentAt && m.path === `/${file}`) arrived = m.arrivedAt
+      if (arrived === null) return null
+      latest = Math.max(latest, arrived)
+    }
+    return latest
   }
 
   private onMutations(records: MutationRecord[]): void {
     // Only the document outside <head> renders the app (and carries its locators). Vite can
     // apply a stylesheet's hot update (Tailwind's output) in a batch of its own, before the
     // module that re-renders the DOM, so <head> changes don't count as an update's render.
-    // They still move boxes, hence the layout either way.
-    if (records.some((r) => !this.isOwnMutation(r) && !inHead(r.target))) {
-      this.lastMutationAt = performance.now()
-      if (this.pending) this.armSettle(QUIET_MS)
-    }
+    // They still move boxes, hence the layout either way. The armed check reads the time; a
+    // mutation must not re-arm it, or an app that never stops changing would never settle.
+    if (records.some((r) => !this.isOwnMutation(r) && !inHead(r.target))) this.lastMutationAt = performance.now()
     this.scheduleLayout()
   }
 
   private armSettle(delay: number): void {
     clearTimeout(this.settleTimer)
-    this.settleTimer = window.setTimeout(() => this.checkSettle(), delay)
+    this.settleTimer = window.setTimeout(() => this.checkSettle(), Math.max(0, delay))
   }
 
   private checkSettle(): void {
     if (!this.pending) return
     const now = performance.now()
-    const sinceMutation = now - this.lastMutationAt
-    const rendered = this.lastMutationAt >= this.renderedAfter
-    if ((rendered && sinceMutation >= QUIET_MS) || now - this.triggeredAt >= MAX_WAIT_MS) {
+    const settleAt = this.settleAt()
+    if (now >= settleAt) {
       this.pending = false
+      this.edit = null
       this.listener.settled()
       this.scheduleLayout()
       return
     }
-    this.armSettle(rendered ? Math.max(16, QUIET_MS - sinceMutation) : QUIET_MS)
+    // Look again at least every QUIET_MS: a render (or a hot update) may come at any moment.
+    this.armSettle(Math.min(settleAt, now + QUIET_MS) - now)
+  }
+
+  /**
+   * When the awaited update counts as rendered: once the DOM has changed since its render could
+   * begin and then stayed quiet for QUIET_MS. Its render can begin when the designer's own edit's
+   * hot update arrived (see expectUpdate), otherwise at the trigger. A DOM that never goes quiet
+   * (an app that animates or ticks) settles BUSY_MS after the render could begin; so does one
+   * that doesn't change at all after the edit's hot update (an edit that renders the same).
+   * Never later than MAX_WAIT_MS after the trigger (a hot update that never comes), never before
+   * `floorAt`.
+   */
+  private settleAt(): number {
+    const latest = this.triggeredAt + MAX_WAIT_MS
+    let at: number
+    if (this.edit) {
+      const arrived = this.editArrivedAt()
+      at =
+        arrived === null
+          ? latest
+          : this.lastMutationAt >= arrived
+            ? Math.min(this.lastMutationAt + QUIET_MS, arrived + BUSY_MS)
+            : arrived + BUSY_MS
+    } else {
+      at =
+        this.lastMutationAt >= this.renderedAfter
+          ? Math.min(this.lastMutationAt + QUIET_MS, this.triggeredAt + BUSY_MS)
+          : latest
+    }
+    return Math.max(this.floorAt, Math.min(latest, at))
   }
 }
 
@@ -223,13 +327,21 @@ function inHead(node: Node): boolean {
   return node.ownerDocument?.head?.contains(node) ?? false
 }
 
-/** Vite re-imports hot-updated modules (and CSS) from the app's origin with `t=<timestamp>`. */
-function isHotUpdate(name: string, origin: string): boolean {
+/**
+ * The URL path of a module (or CSS) Vite re-imported for a hot update: same origin as the app,
+ * with `t=<timestamp>`. Null for any other resource.
+ */
+function hotUpdatePath(name: string, origin: string): string | null {
   let url: URL
   try {
     url = new URL(name)
   } catch {
-    return false
+    return null
   }
-  return url.origin === origin && /^\d{10,}$/.test(url.searchParams.get('t') ?? '')
+  if (url.origin !== origin || !/^\d{10,}$/.test(url.searchParams.get('t') ?? '')) return null
+  try {
+    return decodeURIComponent(url.pathname)
+  } catch {
+    return url.pathname
+  }
 }
