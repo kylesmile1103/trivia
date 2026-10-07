@@ -1,0 +1,48 @@
+{
+  "name": "@trivia/contract-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turns an OpenAPI/Swagger contract into hey-api generated TanStack Query code plus a static trivia.manifest.json",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./manifest.schema.json": "./manifest.schema.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "trivia-contract-sync": "./bin/trivia-contract-sync.js"
+  },
+  "files": [
+    "bin",
+    "config",
+    "dist",
+    "manifest.schema.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "js-yaml": "4.2.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.5.3"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.104.1",
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "ajv": "^8.20.0",
+    "react": "^19.2.8",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.3"
+  }
+}

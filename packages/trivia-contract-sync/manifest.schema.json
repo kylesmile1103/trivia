@@ -1,0 +1,1085 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trivia.dev/schemas/manifest.v1.json",
+  "title": "Trivia resource manifest (trivia.manifest.json)",
+  "description": "Static, deterministic index of an API contract's resources and operations, with the exact function names hey-api generated for them. Written by @trivia/contract-sync; read by the Trivia designer and the Rust data binder.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "manifestVersion",
+    "generator",
+    "source",
+    "schemaHash",
+    "modules",
+    "resources"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://trivia.dev/schemas/manifest.v1.json"
+    },
+    "manifestVersion": {
+      "const": 1
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "heyApi",
+        "plugins"
+      ],
+      "properties": {
+        "name": {
+          "const": "@trivia/contract-sync"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "heyApi": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "format",
+        "specVersion",
+        "title",
+        "apiVersion",
+        "style",
+        "excludedOperations"
+      ],
+      "properties": {
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "enum": [
+            "swagger-2.0",
+            "openapi-3.0",
+            "openapi-3.1"
+          ]
+        },
+        "specVersion": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "apiVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "style": {
+          "$ref": "#/$defs/style"
+        },
+        "excludedOperations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]+ /"
+          }
+        }
+      }
+    },
+    "schemaHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outputDir",
+        "queries",
+        "sdk",
+        "types",
+        "client",
+        "index"
+      ],
+      "properties": {
+        "outputDir": {
+          "type": "string"
+        },
+        "queries": {
+          "$ref": "#/$defs/module"
+        },
+        "sdk": {
+          "$ref": "#/$defs/module"
+        },
+        "types": {
+          "$ref": "#/$defs/module"
+        },
+        "client": {
+          "$ref": "#/$defs/module"
+        },
+        "index": {
+          "$ref": "#/$defs/module"
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resource"
+      }
+    }
+  },
+  "$defs": {
+    "style": {
+      "enum": [
+        "rest",
+        "postgrest"
+      ]
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+    },
+    "nullableIdentifier": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/identifier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fieldType": {
+      "enum": [
+        "string",
+        "number",
+        "integer",
+        "boolean",
+        "object",
+        "array",
+        "unknown"
+      ]
+    },
+    "enumValues": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "importPath"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "importPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "fieldItems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "format",
+        "enum",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/fieldType"
+        },
+        "format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enum": {
+          "$ref": "#/$defs/enumValues"
+        },
+        "ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "format",
+        "required",
+        "nullable",
+        "readOnly",
+        "enum",
+        "ref",
+        "items",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "$ref": "#/$defs/fieldType"
+        },
+        "format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "readOnly": {
+          "type": "boolean"
+        },
+        "enum": {
+          "$ref": "#/$defs/enumValues"
+        },
+        "ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fieldItems"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default": true
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaRef",
+        "typeName",
+        "fields"
+      ],
+      "properties": {
+        "schemaRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "typeName": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "in",
+        "required",
+        "type",
+        "format",
+        "enum"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "in": {
+          "enum": [
+            "path",
+            "query",
+            "header",
+            "cookie"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/fieldType"
+        },
+        "format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enum": {
+          "$ref": "#/$defs/enumValues"
+        },
+        "default": true
+      }
+    },
+    "requestBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "contentType",
+        "schemaRef"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schemaRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "contentType",
+        "schemaRef",
+        "isArray"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "pattern": "^(2[0-9][0-9]|2XX)$"
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schemaRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isArray": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "style",
+        "pageParam",
+        "pageSizeParam",
+        "limitParam",
+        "offsetParam",
+        "cursorParam",
+        "totalPath",
+        "nextCursorPath"
+      ],
+      "properties": {
+        "style": {
+          "enum": [
+            "page",
+            "offset",
+            "cursor",
+            "limit"
+          ]
+        },
+        "pageParam": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pageSizeParam": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limitParam": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offsetParam": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cursorParam": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "totalPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nextCursorPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "postgrest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rowFilter",
+        "singleObjectAccept",
+        "returnRepresentation",
+        "filterRequired"
+      ],
+      "properties": {
+        "rowFilter": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "param",
+                "template"
+              ],
+              "properties": {
+                "param": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "template": {
+                  "const": "eq.{value}"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "singleObjectAccept": {
+          "enum": [
+            "application/vnd.pgrst.object+json",
+            null
+          ]
+        },
+        "returnRepresentation": {
+          "enum": [
+            "return=representation",
+            null
+          ]
+        },
+        "filterRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "required": [
+        "kind",
+        "method",
+        "path",
+        "operationId",
+        "summary",
+        "style",
+        "sdkFn",
+        "queryOptionsFn",
+        "queryKeyFn",
+        "infiniteQueryOptionsFn",
+        "infiniteQueryKeyFn",
+        "mutationFn",
+        "parameters",
+        "requestBody",
+        "response"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "custom"
+          ]
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "PUT",
+            "POST",
+            "DELETE",
+            "OPTIONS",
+            "HEAD",
+            "PATCH",
+            "TRACE"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "operationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "style": {
+          "$ref": "#/$defs/style"
+        },
+        "sdkFn": {
+          "$ref": "#/$defs/identifier"
+        },
+        "queryOptionsFn": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "queryKeyFn": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "infiniteQueryOptionsFn": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "infiniteQueryKeyFn": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "mutationFn": {
+          "$ref": "#/$defs/nullableIdentifier"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parameter"
+          }
+        },
+        "requestBody": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/requestBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/response"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "listItemsPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pagination": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/pagination"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idParam": {
+          "type": "string",
+          "minLength": 1
+        },
+        "postgrest": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/postgrest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "list"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "required": [
+              "listItemsPath",
+              "pagination",
+              "postgrest"
+            ],
+            "properties": {
+              "method": {
+                "const": "GET"
+              },
+              "queryOptionsFn": {
+                "type": "string"
+              },
+              "listItemsPath": true,
+              "pagination": true,
+              "postgrest": true
+            },
+            "propertyNames": {
+              "not": {
+                "const": "idParam"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "get",
+                  "update",
+                  "delete"
+                ]
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "required": [
+              "idParam",
+              "postgrest"
+            ],
+            "properties": {
+              "idParam": true,
+              "postgrest": true
+            },
+            "propertyNames": {
+              "not": {
+                "enum": [
+                  "listItemsPath",
+                  "pagination"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "get"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "const": "GET"
+              },
+              "queryOptionsFn": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "create",
+                  "update",
+                  "delete"
+                ]
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "mutationFn": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "create"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "required": [
+              "postgrest"
+            ],
+            "properties": {
+              "method": {
+                "const": "POST"
+              },
+              "postgrest": true
+            },
+            "propertyNames": {
+              "not": {
+                "enum": [
+                  "listItemsPath",
+                  "pagination",
+                  "idParam"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "custom"
+              }
+            }
+          },
+          "then": {
+            "propertyNames": {
+              "not": {
+                "enum": [
+                  "listItemsPath",
+                  "pagination",
+                  "idParam",
+                  "postgrest"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "groupedBy",
+        "tag",
+        "style",
+        "basePath",
+        "itemPath",
+        "primaryKey",
+        "entity",
+        "operations",
+        "customOperations"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "groupedBy": {
+          "enum": [
+            "x-trivia-resource",
+            "tag",
+            "path"
+          ]
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "style": {
+          "$ref": "#/$defs/style"
+        },
+        "basePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "primaryKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/entity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "properties": {
+            "list": {
+              "$ref": "#/$defs/crudSlot",
+              "$comment": "kind must be list"
+            },
+            "get": {
+              "$ref": "#/$defs/crudSlot"
+            },
+            "create": {
+              "$ref": "#/$defs/crudSlot"
+            },
+            "update": {
+              "$ref": "#/$defs/crudSlot"
+            },
+            "delete": {
+              "$ref": "#/$defs/crudSlot"
+            }
+          },
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "list"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "get": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "get"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "create": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "create"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "update": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "update"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "delete": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "delete"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "customOperations": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/operation"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "custom"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "crudSlot": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/operation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}
