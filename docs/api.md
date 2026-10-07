@@ -26,17 +26,21 @@ read or write, is refused with 403 `forbidden` unless all three hold:
   machines when the dev server listens beyond loopback (`vite --host`, Docker): a non-browser
   client sends no `Origin`. The plugin option `allowRemote: true` lifts this check alone. It is
   dangerous: every client that can reach the server can then rewrite source files.
-- **Host** (HTTP/2: `:authority`) names this machine: `localhost`, an IP literal, or an entry of
-  Vite's resolved `server.allowedHosts` (`.example.com` also matches subdomains; `true` matches
-  anything). This stops DNS rebinding, whose same-origin GETs carry no `Origin`. The plugin
-  checks it itself, because Vite skips its own host check under `server.https`.
+- **Host** (HTTP/2: `:authority`) names this machine: `localhost`, `*.localhost`, an IP literal,
+  or an entry of Vite's resolved `server.allowedHosts` (`.example.com` also matches subdomains;
+  `true` matches anything). These are Vite's own rules. This stops DNS rebinding, whose
+  same-origin GETs carry no `Origin`. The plugin checks it itself, because Vite skips its own
+  host check under `server.https`.
 - **Origin**, when present, is `http(s)://` `localhost` / `127.0.0.1` / `[::1]` (any port). The
   opaque origin `null` is refused.
 
 The designer's proxy passes all three: it connects from loopback, rewrites `Host` to the target
-(`changeOrigin`), and its page's `Origin` is localhost. The proxy also hides its own client's
-address, so the plugin cannot protect a designer that listens beyond loopback (`--host`); such a
-proxy has to refuse non-loopback clients itself.
+(`changeOrigin`), and its page's `Origin` is localhost. That hides the proxy's own client from the
+plugin, so the designer makes the same three checks itself before it forwards anything under
+`/@trivia/api/` (`packages/trivia-designer/api-guard.ts`), with the same 403 `forbidden`
+envelope. A designer started with `--host` therefore still serves other machines the user's app,
+but not the API. It also refuses (404) every WebSocket upgrade to `/@trivia/api/`, which has no
+WebSocket endpoint. Any other proxy put in front of the dev server has to do the same.
 
 ## Endpoints
 

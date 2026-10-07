@@ -42,8 +42,9 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 - Malformed requests (wrong method or content type, bad JSON, unknown endpoint) answer
   `400 invalid_op`.
 - Callers that are not on this machine answer `403 forbidden` on every endpoint: a client address
-  that is not loopback (unless `allowRemote`), a `Host` that is not `localhost`, an IP literal or
-  in `server.allowedHosts` (DNS rebinding), or a foreign `Origin`. See `docs/api.md`, Envelope.
+  that is not loopback (unless `allowRemote`), a `Host` that is not `localhost`, `*.localhost`, an
+  IP literal or in `server.allowedHosts` (DNS rebinding), or a foreign `Origin`. See `docs/api.md`,
+  Envelope.
 
 ```sh
 pnpm --filter @trivia/vite-plugin-ast-locator test       # vitest (needs pnpm build:engine)

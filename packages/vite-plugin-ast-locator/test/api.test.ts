@@ -396,6 +396,24 @@ describe('only hosts that name this machine (DNS rebinding)', () => {
     }
   })
 
+  it('accepts *.localhost, as Vite does (the name resolves to loopback, so it cannot be rebound)', async () => {
+    const tls = await startServer(root, {}, { https: {} }) // the plugin's check alone
+    try {
+      for (const server of [socket, tls.socket]) {
+        for (const host of ['app.localhost', 'app.localhost:5173', 'a.b.localhost:5173']) {
+          const r = await get(server, '/health', { host })
+          expect([r.status, r.body.error?.message], host).toEqual([200, undefined])
+        }
+      }
+      // A name that only starts or ends like localhost is still foreign.
+      for (const host of ['localhost.evil.example', 'evillocalhost', 'localhost.', 'app.localhost.evil.example:5173']) {
+        expect((await get(tls.socket, '/health', { host })).status, host).toBe(403)
+      }
+    } finally {
+      await tls.close()
+    }
+  })
+
   it("accepts Vite's resolved server.allowedHosts", async () => {
     const named = await startServer(root, {}, { allowedHosts: ['dev.example', '.corp.example'], https: {} })
     try {

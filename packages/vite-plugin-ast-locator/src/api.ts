@@ -220,8 +220,8 @@ function checkCaller(req: IncomingMessage, allowRemote: boolean, allowedHosts: r
   if (!isAllowedHost(host, allowedHosts)) {
     throw new ApiError(
       'forbidden',
-      `refusing a request for host ${host || '(none)'}: the engine API only answers localhost, IP addresses and ` +
-        'server.allowedHosts (a guard against DNS rebinding)',
+      `refusing a request for host ${host || '(none)'}: the engine API only answers localhost, *.localhost, IP ` +
+        'addresses and server.allowedHosts (a guard against DNS rebinding)',
     )
   }
   const origin = req.headers.origin
@@ -237,14 +237,19 @@ function isLoopback(address: string | undefined): boolean {
   return family !== 0 && LOOPBACK.check(address, family === 4 ? 'ipv4' : 'ipv6')
 }
 
-/** Vite's rules: `localhost`, any IP literal (rebinding needs a name), `server.allowedHosts`. */
+/**
+ * Vite's rules: `localhost` and `*.localhost` (reserved names that resolve to loopback), any
+ * IP literal (rebinding needs a name), `server.allowedHosts`. Vite 8.3.3 has them in
+ * `isHostAllowedInternal` (`vite/dist/node/chunks/node.js:16970-16982`, from
+ * host-validation-middleware 0.1.4).
+ */
 function isAllowedHost(host: string | undefined, allowedHosts: readonly string[] | true): boolean {
   if (allowedHosts === true) return true
   const match = host === undefined ? null : HOST_HEADER.exec(host.trim().toLowerCase())
   if (!match) return false
   const [, ipv6, name = ''] = match
   if (ipv6 !== undefined) return net.isIPv6(ipv6)
-  if (name === 'localhost' || net.isIPv4(name)) return true
+  if (name === 'localhost' || name.endsWith('.localhost') || net.isIPv4(name)) return true
   return allowedHosts.some((entry) => {
     const allowed = entry.toLowerCase()
     return allowed === name || (allowed.startsWith('.') && (allowed.slice(1) === name || name.endsWith(allowed)))
