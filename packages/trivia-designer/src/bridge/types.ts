@@ -99,6 +99,8 @@ export interface ComponentSchema {
   baseElement: string | null
   acceptsChildren: boolean
   props: PropSchema[]
+  /** Parts of the props type the analyzer couldn't expand (source text); absent when none. */
+  unresolvedTypes?: string[]
 }
 
 export type ErrorCode =
