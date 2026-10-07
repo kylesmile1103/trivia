@@ -11,3 +11,6 @@ playwright-report/
 # napi-rs generated loader/types (rebuilt by `pnpm build:engine`)
 crates/trivia_napi/index.js
 crates/trivia_napi/index.d.ts
+
+# Agent worktrees and local Claude state
+.claude/
