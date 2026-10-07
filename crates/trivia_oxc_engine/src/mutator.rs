@@ -2,17 +2,32 @@
 //!
 //! Nothing here re-prints the AST: OXC only tells us where things are. New text is limited
 //! to the inserted fragment (indented to match its surroundings) and the touched import.
+//!
+//! Layout rules, chosen so that every edit has an exact inverse (insert → remove, move → move
+//! back, set → set back all restore the original bytes; see `tests/roundtrip.rs`):
+//! * A node inserted next to a node that sits on its own line gets its own line. Next to
+//!   inline content it is inserted inline, with no added whitespace.
+//! * Into an element with no content: on its own line when the element already spans two
+//!   lines (or the new text is multi-line), else inline (`<div></div>` → `<div><X /></div>`).
+//! * Into a self-closing element: `<X a />` becomes `<X a>` + the child on its own line +
+//!   `</X>`. This is the one edit whose inverse (removing the child) leaves the expanded
+//!   `<X a>` / `</X>` pair rather than `<X a />`.
+//! * Moved text keeps its bytes; only its line indentation changes, and never inside
+//!   multi-line string or template literals.
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Expression, Program, Statement};
+use oxc_ast::ast::{Expression, Program, Statement, StringLiteral, TemplateLiteral};
+use oxc_ast_visit::{Visit, walk};
+use oxc_span::{GetSpan, Span};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::{EngineError, Result};
 use crate::import_manager::{self, ImportSpec};
-use crate::locator::{JsxTable, Locator, NodeKind};
+use crate::locator::{Attr, AttrValue, JsxNode, JsxTable, Locator, NodeKind};
 use crate::parse;
 use crate::text::{self, Edit};
 
@@ -24,6 +39,12 @@ pub enum Placement {
     After,
     FirstChild,
     LastChild,
+}
+
+impl Placement {
+    fn is_sibling(self) -> bool {
+        matches!(self, Placement::Before | Placement::After)
+    }
 }
 
 /// A serializable edit. This is the single action vocabulary shared by the designer, the
@@ -245,15 +266,19 @@ impl Doc<'_, '_> {
         }
     }
 
-    /// The edit that places `text` (whose lines after the first are indented relative to
-    /// `text_indent`) at `anchor`, plus the offset of `text` within the edit's replacement.
-    fn anchor_edit(&self, anchor: Anchor, text: &str, text_indent: &str) -> (Edit, u32) {
+    /// The edit that places `text` at `anchor`, plus the offset of `text` within the edit's
+    /// replacement. `body(indent)` renders `text` with its lines after the first indented
+    /// for a node whose first line is indented by `indent`.
+    fn anchor_edit(&self, anchor: Anchor, text: &str, body: &dyn Fn(&str) -> String) -> Result<(Edit, u32)> {
         let src = self.src;
         let nl = text::newline(src);
         let unit = text::indent_unit(src);
         let node = &self.table.nodes[anchor.node()];
-        let body = |indent: &str| text::reindent(text, text_indent, indent, nl);
-        match anchor {
+        let closing = || {
+            node.closing
+                .ok_or_else(|| EngineError::Internal(format!("{} has no closing tag", self.name(anchor.node()))))
+        };
+        Ok(match anchor {
             Anchor::Before(_) => {
                 let indent = text::line_indent(src, node.span.start);
                 if text::starts_line(src, node.span.start) {
@@ -265,31 +290,34 @@ impl Doc<'_, '_> {
             Anchor::After(_) => {
                 let indent = text::line_indent(src, node.span.start);
                 if text::ends_line(src, node.span.end) && text::starts_line(src, node.span.start) {
+                    // Before the line terminator, so trailing whitespace stays on its line.
+                    let at = text::line_content_end(src, node.span.end);
                     let prefix = format!("{nl}{indent}");
-                    (Edit::insert(node.span.end, format!("{prefix}{}", body(indent))), prefix.len() as u32)
+                    (Edit::insert(at, format!("{prefix}{}", body(indent))), prefix.len() as u32)
                 } else {
                     (Edit::insert(node.span.end, body(indent)), 0)
                 }
             }
             Anchor::AfterOpening(_) => {
-                let first = node.content.first().map(|c| c.span.start).unwrap_or(node.opening.end);
+                let first = node.content.first().map_or(node.opening.end, |c| text::skip_whitespace(src, c.span.start));
                 if text::ends_line(src, node.opening.end) {
                     let indent = if text::starts_line(src, first) {
                         text::line_indent(src, first).to_string()
                     } else {
                         format!("{}{unit}", text::line_indent(src, node.span.start))
                     };
+                    let at = text::line_content_end(src, node.opening.end);
                     let prefix = format!("{nl}{indent}");
-                    (Edit::insert(node.opening.end, format!("{prefix}{}", body(&indent))), prefix.len() as u32)
+                    (Edit::insert(at, format!("{prefix}{}", body(&indent))), prefix.len() as u32)
                 } else {
                     (Edit::insert(node.opening.end, body(text::line_indent(src, node.opening.end))), 0)
                 }
             }
             Anchor::BeforeClosing(_) => {
-                let closing = node.closing.expect("anchor has a closing tag");
+                let closing = closing()?;
                 if text::starts_line(src, closing.start) {
-                    let last = node.content.last().map(|c| c.span.start).unwrap_or(closing.start);
-                    let indent = if text::starts_line(src, last) && last != closing.start {
+                    let last = node.content.last().map_or(closing.start, |c| text::skip_whitespace(src, c.span.start));
+                    let indent = if last < closing.start && text::starts_line(src, last) {
                         text::line_indent(src, last).to_string()
                     } else {
                         format!("{}{unit}", text::line_indent(src, closing.start))
@@ -301,32 +329,59 @@ impl Doc<'_, '_> {
                 }
             }
             Anchor::Empty(_) => {
-                let closing = node.closing.expect("anchor has a closing tag");
-                let outer = text::line_indent(src, node.span.start);
+                let closing = closing()?;
+                let outer = if text::starts_line(src, closing.start) {
+                    text::line_indent(src, closing.start)
+                } else {
+                    text::line_indent(src, node.span.start)
+                };
                 let inner = format!("{outer}{unit}");
-                let prefix = format!("{nl}{inner}");
-                let replacement = format!("{prefix}{}{nl}{outer}", body(&inner));
-                (Edit::replace(node.opening.end, closing.start, replacement), prefix.len() as u32)
+                let interior = &src[node.opening.end as usize..closing.start as usize];
+                if let Some(i) = interior.find('\n') {
+                    // Already two lines: the new node gets its own line, the rest stays as is.
+                    let at = text::line_content_end(src, node.opening.end + i as u32);
+                    let prefix = format!("{nl}{inner}");
+                    (Edit::insert(at, format!("{prefix}{}", body(&inner))), prefix.len() as u32)
+                } else if !text.contains('\n') {
+                    (Edit::insert(node.opening.end, body(outer)), 0)
+                } else {
+                    // Multi-line text into a one-line container: expand it.
+                    let prefix = format!("{nl}{inner}");
+                    let replacement = format!("{prefix}{}{nl}{outer}", body(&inner));
+                    (Edit::replace(node.opening.end, closing.start, replacement), prefix.len() as u32)
+                }
             }
             Anchor::SelfClosing(_) => {
                 let name = node.name.as_deref().unwrap_or_default();
-                let tag_end = node.attributes.last().map_or(node.attr_insert, |a| a.span.end);
+                let slash = self_closing_slash(src, node)?;
+                // `<X a />` → `<X a>`; but a `/>` on its own line becomes a `>` on its own line.
+                let cut = if text::starts_line(src, slash) {
+                    slash
+                } else {
+                    src[..slash as usize].trim_end_matches([' ', '\t']).len() as u32
+                };
                 let outer = text::line_indent(src, node.span.start);
                 let inner = format!("{outer}{unit}");
                 let prefix = format!(">{nl}{inner}");
                 let replacement = format!("{prefix}{}{nl}{outer}</{name}>", body(&inner));
-                (Edit::replace(tag_end, node.opening.end, replacement), prefix.len() as u32)
+                (Edit::replace(cut, node.opening.end, replacement), prefix.len() as u32)
             }
-        }
+        })
     }
 
     fn insert(&self, target: usize, placement: Placement, snippet: &str, imports: &[ImportSpec]) -> Result<Outcome> {
         let snippet = snippet.trim();
-        let refs = snippet_component_refs(snippet)?;
+        let parsed = parse_snippet(snippet)?;
+        import_manager::validate_specs(imports)?;
         let anchor = self.anchor(target, placement)?;
-        let (edit, offset) = self.anchor_edit(anchor, snippet, "");
+        let nl = text::newline(self.src);
+        let (snippet_unit, unit) = (text::indent_unit(snippet), text::indent_unit(self.src));
+        let body = |indent: &str| text::reindent_snippet(snippet, indent, nl, &parsed.frozen, &snippet_unit, &unit);
+        let (edit, offset) = self.anchor_edit(anchor, snippet, &body)?;
+        // Only the imports the snippet actually references: the op touches nothing else.
+        let used: Vec<ImportSpec> = imports.iter().filter(|s| parsed.free.contains(&s.name)).cloned().collect();
         let mut edits = vec![edit];
-        edits.extend(import_manager::ensure_imports(self.src, self.program, imports, &refs)?);
+        edits.extend(import_manager::ensure_imports(self.src, self.program, &used, &parsed.components)?);
         let (code, starts) = text::apply_edits(self.src, &edits)?;
         finish(self.file, self.src, code, Some(starts[0] + offset))
     }
@@ -341,43 +396,128 @@ impl Doc<'_, '_> {
             return Err(EngineError::InvalidOp(format!("`{prop}` is not an editable prop name")));
         }
         let unchanged = || finish(self.file, src, src.to_string(), Some(node.span.start));
-        // JSX lets a later duplicate win, so edit the last occurrence.
-        let existing = node.attributes.iter().rposition(|a| a.name.as_deref() == Some(prop));
-        let edit = match (existing, value) {
+        let occurrences: Vec<usize> =
+            (0..node.attributes.len()).filter(|&i| node.attributes[i].name.as_deref() == Some(prop)).collect();
+        let edits = match (occurrences.last(), value) {
             (None, Value::Null) => return unchanged(),
-            (Some(i), Value::Null) => {
-                let prev_end = if i == 0 { node.attr_insert } else { node.attributes[i - 1].span.end };
-                Edit::delete(prev_end, node.attributes[i].span.end)
-            }
-            (Some(i), value) => {
+            // Remove every occurrence: removing only the last would un-shadow an earlier one.
+            (Some(_), Value::Null) => merge_ranges(occurrences.iter().map(|&i| self.attr_removal(node, i)).collect())
+                .into_iter()
+                .map(|(start, end)| Edit::delete(start, end))
+                .collect(),
+            // JSX lets a later duplicate win, so edit the last occurrence.
+            (Some(&i), value) => {
                 let attr = &node.attributes[i];
-                match &attr.value {
-                    None if *value == Value::Bool(true) => return unchanged(),
-                    None => Edit::insert(attr.name_end, format!("={}", render_value(value))),
-                    Some(v) => {
-                        let span = match v {
-                            crate::locator::AttrValue::String { span, .. }
-                            | crate::locator::AttrValue::Expression { span, .. }
-                            | crate::locator::AttrValue::Element { span } => *span,
-                        };
-                        Edit::replace(span.start, span.end, render_value(value))
-                    }
+                if current_value(attr).is_some_and(|v| same_value(&v, value)) {
+                    return unchanged();
                 }
+                vec![self.value_edit(attr, value)]
             }
             (None, value) => {
-                let rendered = format!("{prop}={}", render_value(value));
-                match node.attributes.last() {
+                let rendered = format!("{prop}={}", self.fresh_value(value));
+                vec![match node.attributes.last() {
                     Some(last) if text::starts_line(src, last.span.start) => {
+                        // Own line, same indent; after a trailing `// comment` that belongs to `last`.
+                        let line_end = text::line_content_end(src, last.span.end);
+                        let rest = src[last.span.end as usize..line_end as usize].trim_start_matches([' ', '\t']);
+                        let at = if rest.is_empty() || rest.starts_with("//") { line_end } else { last.span.end };
                         let indent = text::line_indent(src, last.span.start);
-                        Edit::insert(last.span.end, format!("{}{indent}{rendered}", text::newline(src)))
+                        Edit::insert(at, format!("{}{indent}{rendered}", text::newline(src)))
                     }
                     Some(last) => Edit::insert(last.span.end, format!(" {rendered}")),
                     None => Edit::insert(node.attr_insert, format!(" {rendered}")),
-                }
+                }]
             }
         };
-        let (code, _) = text::apply_edits(src, &[edit])?;
+        let (code, _) = text::apply_edits(src, &edits)?;
         finish(self.file, src, code, Some(node.span.start))
+    }
+
+    /// The byte range that removing attribute `i` deletes: the attribute and the whitespace
+    /// that separates it, never a comment (`size="sm" // compact` leaves the comment on its
+    /// own line; `/* note */ a="1"` keeps the note).
+    fn attr_removal(&self, node: &JsxNode, i: usize) -> (u32, u32) {
+        let src = self.src;
+        let (start, end) = (node.attributes[i].span.start, node.attributes[i].span.end);
+        let prev_end = if i == 0 { node.attr_insert } else { node.attributes[i - 1].span.end };
+        let gap_is_blank = src[prev_end as usize..start as usize].trim().is_empty();
+        let rest = src[end as usize..text::line_content_end(src, end) as usize].trim_start_matches([' ', '\t']);
+        if text::starts_line(src, start) {
+            if rest.is_empty() {
+                // Alone on its line: the whole line goes.
+                let next = text::line_end(src, end);
+                return (text::line_start(src, start), if (next as usize) < src.len() { next + 1 } else { next });
+            }
+            // `  size="sm">`: join the tag end to the previous line, as if it was never there.
+            let ends_tag = rest.starts_with('>') || rest.starts_with("/>");
+            return if ends_tag && gap_is_blank { (prev_end, end) } else { (start, text::skip_spaces(src, end)) };
+        }
+        if gap_is_blank {
+            (prev_end, end)
+        } else {
+            (src[..start as usize].trim_end_matches([' ', '\t']).len() as u32, end)
+        }
+    }
+
+    /// The edit that sets an existing attribute to `value`, keeping the attribute's form:
+    /// a `"…"`/`'…'` string stays a string with the same quote, `{'…'}`/`` {`…`} `` keep
+    /// their literal kind, and other `{…}` values keep their braces (and the spacing inside).
+    fn value_edit(&self, attr: &Attr, value: &Value) -> Edit {
+        let src = self.src;
+        match (&attr.value, value) {
+            (None, value) => Edit::insert(attr.name_end, format!("={}", self.fresh_value(value))),
+            (Some(AttrValue::String { span, .. }), Value::String(s)) => {
+                let quote = src.as_bytes()[span.start as usize] as char;
+                Edit::replace(span.start, span.end, format!("{quote}{}{quote}", jsx_attr_text(s, quote)))
+            }
+            (Some(AttrValue::Expression { span, source, literal }), value) => {
+                let Some(inner) = inner_expression(src, *span, source) else {
+                    return Edit::replace(span.start, span.end, self.fresh_value(value));
+                };
+                let rendered = match value {
+                    Value::String(s) => match (literal, source.chars().next()) {
+                        (Some(Value::String(_)), Some(q @ ('"' | '\''))) => js_string(s, q),
+                        (Some(Value::String(_)), Some('`')) => js_template(s),
+                        _ => return Edit::replace(span.start, span.end, self.fresh_value(value)),
+                    },
+                    other => other.to_string(),
+                };
+                Edit::replace(inner.start, inner.end, rendered)
+            }
+            (Some(AttrValue::String { span, .. } | AttrValue::Element { span }), value) => {
+                Edit::replace(span.start, span.end, self.fresh_value(value))
+            }
+        }
+    }
+
+    /// A new attribute value: `"text"` (in the file's prevailing JSX quote) when the string
+    /// needs no escaping beyond `&amp;`, else a `{…}` expression with a JSON literal.
+    fn fresh_value(&self, value: &Value) -> String {
+        match value {
+            Value::String(s) => {
+                let quote = self.preferred_quote();
+                if s.contains(quote) || s.chars().any(char::is_control) {
+                    format!("{{{value}}}")
+                } else {
+                    format!("{quote}{}{quote}", jsx_attr_text(s, quote))
+                }
+            }
+            other => format!("{{{other}}}"),
+        }
+    }
+
+    /// The quote most JSX string attributes in this file use (`"` on a tie).
+    fn preferred_quote(&self) -> char {
+        let (mut single, mut double) = (0usize, 0usize);
+        for attr in self.table.nodes.iter().flat_map(|n| &n.attributes) {
+            if let Some(AttrValue::String { span, .. }) = &attr.value {
+                match self.src.as_bytes()[span.start as usize] {
+                    b'\'' => single += 1,
+                    _ => double += 1,
+                }
+            }
+        }
+        if single > double { '\'' } else { '"' }
     }
 
     fn removable(&self, idx: usize, verb: &str) -> Result<()> {
@@ -401,22 +541,21 @@ impl Doc<'_, '_> {
     fn remove(&self, target: usize) -> Result<Outcome> {
         self.removable(target, "remove")?;
         let (start, end) = removal_range(self.src, self.table.nodes[target].span);
-        let refs: BTreeSet<String> = self
-            .table
-            .subtree(target)
-            .into_iter()
-            .filter_map(|i| self.table.nodes[i].component_ref().map(str::to_string))
-            .collect();
+        let before = import_manager::import_reference_counts(self.program);
         let (code, _) = text::apply_edits(self.src, &[Edit::delete(start, end)])?;
-        let code = import_manager::prune_unused(&code, self.file, &refs)?;
+        let code = import_manager::prune_dropped(&code, self.file, &before)?;
         finish(self.file, self.src, code, None)
     }
 
     fn move_to(&self, from: usize, target: usize, placement: Placement) -> Result<Outcome> {
         self.removable(from, "move")?;
         let node = &self.table.nodes[from];
-        if target != from && self.table.subtree(from).contains(&target) {
-            return Err(EngineError::Unsupported(format!("cannot move {} into itself", self.name(from))));
+        let into_itself = if target == from { !placement.is_sibling() } else { self.table.subtree(from).contains(&target) };
+        if into_itself {
+            return Err(EngineError::InvalidOp(format!(
+                "cannot move {} into itself or its own children",
+                self.name(from)
+            )));
         }
         let anchor = self.anchor(target, placement)?;
         if anchor.node() == from {
@@ -424,7 +563,10 @@ impl Doc<'_, '_> {
             return finish(self.file, self.src, self.src.to_string(), Some(node.span.start));
         }
         let moved = &self.src[node.span.start as usize..node.span.end as usize];
-        let (insert, offset) = self.anchor_edit(anchor, moved, text::line_indent(self.src, node.span.start));
+        let from_indent = text::line_indent(self.src, node.span.start);
+        let frozen = literal_ranges(self.src, self.program, node.span);
+        let body = |indent: &str| text::reindent_verbatim(moved, from_indent, indent, &frozen);
+        let (insert, offset) = self.anchor_edit(anchor, moved, &body)?;
         let (start, end) = removal_range(self.src, node.span);
         let (code, starts) = text::apply_edits(self.src, &[insert, Edit::delete(start, end)])?;
         finish(self.file, self.src, code, Some(starts[0] + offset))
@@ -466,27 +608,105 @@ pub(crate) fn removal_range(src: &str, span: oxc_span::Span) -> (u32, u32) {
     (span.start, if spaced_before && spaced_after { span.end + 1 } else { span.end })
 }
 
-/// Parse a snippet as a single JSX element/fragment; return the components it references.
-fn snippet_component_refs(snippet: &str) -> Result<Vec<String>> {
+/// Offset of the `/` in a self-closing tag's `/>`.
+fn self_closing_slash(src: &str, node: &JsxNode) -> Result<u32> {
+    let head = &src[node.opening.start as usize..node.opening.end as usize - 1];
+    let trimmed = head.trim_end();
+    if !trimmed.ends_with('/') {
+        return Err(EngineError::Internal(format!("<{}> is not self-closing", node.display_name())));
+    }
+    Ok(node.opening.start + trimmed.len() as u32 - 1)
+}
+
+/// Merge overlapping or touching `[start, end)` ranges.
+fn merge_ranges(mut ranges: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
+    ranges.sort_unstable();
+    let mut out: Vec<(u32, u32)> = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        match out.last_mut() {
+            Some(last) if start <= last.1 => last.1 = last.1.max(end),
+            _ => out.push((start, end)),
+        }
+    }
+    out
+}
+
+/// What a parsed snippet needs from the file it goes into.
+struct SnippetInfo {
+    /// Component names its tags use (`Button`, `Card` in `Card.Header`): each must be bound
+    /// in the file or come with an import.
+    components: Vec<String>,
+    /// Every name it references without binding it (components and `{…}` identifiers):
+    /// the imports worth adding.
+    free: BTreeSet<String>,
+    /// Multi-line string/template literal ranges (relative to the snippet) not to re-indent.
+    frozen: Vec<(u32, u32)>,
+}
+
+/// Parse a snippet as exactly one JSX element/fragment, with nothing else around it (no
+/// comments, no parentheses: those would become JSX text once spliced into children).
+fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
     if snippet.is_empty() {
         return Err(EngineError::InvalidSnippet("empty snippet".into()));
     }
-    let wrapped = format!("(\n{snippet}\n);");
+    const PREFIX: &str = "(\n";
+    let wrapped = format!("{PREFIX}{snippet}\n);");
     let alloc = Allocator::default();
     let program = parse(&alloc, &wrapped, "snippet.tsx").map_err(|e| EngineError::InvalidSnippet(e.to_string()))?;
-    let is_single_jsx = match program.body.as_slice() {
-        [Statement::ExpressionStatement(stmt)] => {
-            matches!(stmt.expression.without_parentheses(), Expression::JSXElement(_) | Expression::JSXFragment(_))
-        }
-        _ => false,
+    let jsx = match program.body.as_slice() {
+        [Statement::ExpressionStatement(stmt)] => match stmt.expression.without_parentheses() {
+            e @ (Expression::JSXElement(_) | Expression::JSXFragment(_)) => Some(e.span()),
+            _ => None,
+        },
+        _ => None,
     };
-    if !is_single_jsx {
-        return Err(EngineError::InvalidSnippet("expected exactly one JSX element".into()));
+    let exact = Span::new(PREFIX.len() as u32, (PREFIX.len() + snippet.len()) as u32);
+    match jsx {
+        Some(span) if span == exact => {}
+        Some(_) => {
+            return Err(EngineError::InvalidSnippet(
+                "expected exactly one JSX element, without surrounding parentheses or comments".into(),
+            ));
+        }
+        None => return Err(EngineError::InvalidSnippet("expected exactly one JSX element".into())),
     }
     let table = JsxTable::build(&program);
-    let refs: BTreeSet<String> =
+    let components: BTreeSet<String> =
         table.nodes.iter().filter_map(|n| n.component_ref().map(str::to_string)).collect();
-    Ok(refs.into_iter().collect())
+    let semantic = oxc_semantic::SemanticBuilder::new().build(&program).semantic;
+    let free = semantic.scoping().root_unresolved_references().keys().map(|name| name.to_string()).collect();
+    let frozen = literal_ranges(&wrapped, &program, exact);
+    Ok(SnippetInfo { components: components.into_iter().collect(), free, frozen })
+}
+
+/// Ranges of multi-line string and template literals inside `within`, relative to
+/// `within.start`. Their line breaks are content, so re-indenting must leave them alone.
+fn literal_ranges(src: &str, program: &Program<'_>, within: Span) -> Vec<(u32, u32)> {
+    struct Literals<'s> {
+        src: &'s str,
+        within: Span,
+        found: Vec<(u32, u32)>,
+    }
+    impl Literals<'_> {
+        fn record(&mut self, span: Span) {
+            let inside = self.within.start <= span.start && span.end <= self.within.end;
+            if inside && self.src[span.start as usize..span.end as usize].contains('\n') {
+                self.found.push((span.start - self.within.start, span.end - self.within.start));
+            }
+        }
+    }
+    impl<'a> Visit<'a> for Literals<'_> {
+        fn visit_string_literal(&mut self, it: &StringLiteral<'a>) {
+            self.record(it.span);
+        }
+        fn visit_template_literal(&mut self, it: &TemplateLiteral<'a>) {
+            self.record(it.span);
+            walk::walk_template_literal(self, it);
+        }
+    }
+    let mut visitor = Literals { src, within, found: Vec::new() };
+    visitor.visit_program(program);
+    visitor.found
 }
 
 fn is_attr_name(s: &str) -> bool {
@@ -495,11 +715,148 @@ fn is_attr_name(s: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '-' | ':'))
 }
 
-/// Render a JSON value as a JSX attribute value.
-pub(crate) fn render_value(value: &Value) -> String {
-    match value {
-        Value::String(s) if !s.contains(['"', '&']) => format!("\"{s}\""),
-        Value::String(s) if !s.contains(['\'', '&']) => format!("'{s}'"),
-        other => format!("{{{other}}}"),
+/// The value an attribute currently has, when it is a literal (shorthand = `true`).
+fn current_value(attr: &Attr) -> Option<Value> {
+    match &attr.value {
+        None => Some(Value::Bool(true)),
+        Some(AttrValue::String { value, .. }) => Some(Value::String(value.clone())),
+        Some(AttrValue::Expression { literal, .. }) => literal.clone(),
+        Some(AttrValue::Element { .. }) => None,
     }
+}
+
+/// JSON equality, except numbers compare by value (`1` == `1.0`).
+fn same_value(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
+        _ => a == b,
+    }
+}
+
+/// The span of the expression inside a `{…}` container whose expression source is `source`
+/// (skipping whitespace and comments after the `{`).
+fn inner_expression(src: &str, container: Span, source: &str) -> Option<Span> {
+    let mut pos = container.start as usize + 1;
+    loop {
+        let rest = &src[pos..container.end as usize];
+        let trimmed = rest.trim_start();
+        pos += rest.len() - trimmed.len();
+        if let Some(after) = trimmed.strip_prefix("/*") {
+            pos += 2 + after.find("*/")? + 2;
+        } else if let Some(after) = trimmed.strip_prefix("//") {
+            pos += 2 + after.find('\n')?;
+        } else {
+            break;
+        }
+    }
+    src[pos..].starts_with(source).then(|| Span::new(pos as u32, (pos + source.len()) as u32))
+}
+
+/// The text between the quotes of a JSX attribute string whose runtime value is `s`.
+///
+/// JSX attribute strings have no backslash escapes, but HTML character references are
+/// decoded. So the quote becomes `&quot;`/`&#39;`, invisible control characters (other than
+/// tab and line breaks) become `&#N;`, and `&` is written as `&amp;` only when leaving it
+/// bare would decode into something else (`a & b` and `?a=1&b=2` stay as they are).
+fn jsx_attr_text(s: &str, quote: char) -> String {
+    let encode = |escape_amp: bool| {
+        let mut out = String::with_capacity(s.len());
+        for c in s.chars() {
+            match c {
+                '&' if escape_amp => out.push_str("&amp;"),
+                '"' if quote == '"' => out.push_str("&quot;"),
+                '\'' if quote == '\'' => out.push_str("&#39;"),
+                c if c.is_control() && !matches!(c, '\t' | '\n' | '\r') => {
+                    let _ = write!(out, "&#{};", c as u32);
+                }
+                c => out.push(c),
+            }
+        }
+        out
+    };
+    let minimal = encode(false);
+    if text::decode_jsx_entities(&minimal) == s { minimal } else { encode(true) }
+}
+
+/// A JS string literal for `s` with the given quote.
+fn js_string(s: &str, quote: char) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push(quote);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
+/// A template literal (no substitutions) for `s`. Line feeds stay literal; carriage returns
+/// are escaped because template literals normalize raw CRLF to LF.
+fn js_template(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('`');
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '`' => out.push_str("\\`"),
+            '$' if chars.peek() == Some(&'{') => out.push_str("\\$"),
+            '\r' => out.push_str("\\r"),
+            c if c.is_control() && !matches!(c, '\n' | '\t') => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('`');
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jsx_attr_text_escapes_minimally_and_round_trips() {
+        for (s, q, expected) in [
+            ("plain", '"', "plain"),
+            ("a & b", '"', "a & b"),
+            ("?a=1&b=2", '"', "?a=1&b=2"),
+            ("&amp;", '"', "&amp;amp;"),
+            ("say \"hi\"", '"', "say &quot;hi&quot;"),
+            ("it's", '\'', "it&#39;s"),
+            ("it's", '"', "it's"),
+            ("tab\tnew\nline", '"', "tab\tnew\nline"),
+            ("bell\u{7}", '"', "bell&#7;"),
+        ] {
+            let encoded = jsx_attr_text(s, q);
+            assert_eq!(encoded, expected, "{s:?}");
+            assert_eq!(text::decode_jsx_entities(&encoded), s, "{s:?} decodes back");
+        }
+    }
+
+    #[test]
+    fn js_literals_escape_what_they_must() {
+        assert_eq!(js_string(r#"a"b'c\d"#, '\''), r#"'a"b\'c\\d'"#);
+        assert_eq!(js_string("x\ny\u{2028}", '"'), "\"x\\ny\\u2028\"");
+        assert_eq!(js_template("a`b${c}\r\nd$e"), "`a\\`b\\${c}\\r\nd$e`");
+    }
+
+    #[test]
+    fn merges_touching_ranges() {
+        assert_eq!(merge_ranges(vec![(5, 9), (0, 3), (3, 4), (8, 12)]), vec![(0, 4), (5, 12)]);
+    }
+
 }

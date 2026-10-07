@@ -3,6 +3,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
 
@@ -27,6 +28,9 @@ pub struct Applied {
     pub before: String,
 }
 
+/// Distinguishes temp files written in the same nanosecond by one process.
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 impl Workspace {
     pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
@@ -38,11 +42,14 @@ impl Workspace {
         &self.root
     }
 
-    /// Resolve a project-relative `.tsx`/`.jsx` path, refusing anything outside the root.
+    /// Resolve a project-relative `.tsx`/`.jsx` path, refusing anything outside the root:
+    /// `..`, absolute paths, and symlinks whose target lies outside. The path must also be
+    /// spelled canonically (`src/App.tsx`: no `./`, empty segments, trailing `/` or `\`),
+    /// because it is the file part of every locator the engine returns.
     pub fn resolve(&self, rel: &str) -> Result<PathBuf> {
         let outside = || EngineError::PathOutsideRoot(rel.to_string());
         let path = Path::new(rel);
-        if rel.is_empty() || !path.components().all(|c| matches!(c, Component::Normal(_))) {
+        if !is_canonical_relative(rel) || !path.components().all(|c| matches!(c, Component::Normal(_))) {
             return Err(outside());
         }
         if !matches!(path.extension().and_then(|e| e.to_str()), Some("tsx" | "jsx")) {
@@ -63,28 +70,28 @@ impl Workspace {
     }
 
     /// Read the target file fresh, apply `op`, and write atomically if anything changed.
+    /// The write is refused (`conflict`) if the file changed while the edit was computed.
     pub fn apply(&self, op: &Op) -> Result<Applied> {
         let file = op.file()?;
         let before = self.read(&file)?;
         let outcome = mutator::apply_op(&before, &file, op)?;
         if outcome.changed {
-            self.write_atomic(&file, &outcome.code)?;
+            self.write(&file, &outcome.code, Some(&before))?;
         }
         Ok(Applied { outcome, before })
     }
 
     /// Replace a file's content only if it still equals `expected` (guarded undo/redo).
+    /// Refuses with `conflict` when it does not, and with `invalid_result` when `content`
+    /// does not parse.
     pub fn restore(&self, rel: &str, expected: &str, content: &str) -> Result<()> {
-        let current = self.read(rel)?;
-        if current != expected {
-            return Err(EngineError::Unsupported(format!(
-                "{rel} changed outside the designer since this edit; undo/redo refused to overwrite it"
-            )));
+        if self.read(rel)? != expected {
+            return Err(conflict(rel));
         }
         // Never write code that doesn't parse.
         let alloc = oxc_allocator::Allocator::default();
         crate::parse(&alloc, content, rel).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
-        self.write_atomic(rel, content)
+        self.write(rel, content, Some(expected))
     }
 
     pub fn inspect(&self, locator: &str) -> Result<NodeDetails> {
@@ -92,10 +99,19 @@ impl Workspace {
         inspect::inspect(&self.read(&file)?, locator)
     }
 
-    /// Analyze every `*.tsx` in `ui_dir` (project-relative). `import_base` is the module
-    /// prefix (shadcn `components.json` → `aliases.ui`, e.g. `@/components/ui`).
+    /// Analyze every `*.tsx` in `ui_dir` (project-relative; a leading `./` and trailing `/`
+    /// are accepted). `import_base` is the module prefix (shadcn `components.json` →
+    /// `aliases.ui`, e.g. `@/components/ui`).
     pub fn components(&self, ui_dir: &str, import_base: &str) -> Result<Vec<ComponentSchema>> {
-        let dir = self.root.join(ui_dir);
+        let mut normalized = ui_dir.trim_end_matches('/');
+        while let Some(rest) = normalized.strip_prefix("./") {
+            normalized = rest;
+        }
+        if !is_canonical_relative(normalized) {
+            return Err(EngineError::PathOutsideRoot(ui_dir.to_string()));
+        }
+        let ui_dir = normalized;
+        let dir = self.resolve_dir(ui_dir)?;
         let entries = fs::read_dir(&dir).map_err(|source| EngineError::Io { path: ui_dir.to_string(), source })?;
         let mut files: Vec<String> = entries
             .filter_map(|e| e.ok())
@@ -105,7 +121,7 @@ impl Workspace {
         files.sort();
         let mut out = Vec::new();
         for name in files {
-            let rel = format!("{}/{name}", ui_dir.trim_end_matches('/'));
+            let rel = format!("{ui_dir}/{name}");
             let stem = name.trim_end_matches(".tsx");
             let source = self.read(&rel)?;
             let import_source = format!("{}/{stem}", import_base.trim_end_matches('/'));
@@ -114,27 +130,71 @@ impl Workspace {
         Ok(out)
     }
 
+    /// A canonical project-relative directory, refusing anything outside the root.
+    fn resolve_dir(&self, rel: &str) -> Result<PathBuf> {
+        let outside = || EngineError::PathOutsideRoot(rel.to_string());
+        let path = Path::new(rel);
+        if !is_canonical_relative(rel) || !path.components().all(|c| matches!(c, Component::Normal(_))) {
+            return Err(outside());
+        }
+        let real = self.root.join(path).canonicalize().map_err(|source| EngineError::Io { path: rel.to_string(), source })?;
+        if !real.starts_with(&self.root) {
+            return Err(outside());
+        }
+        Ok(real)
+    }
+
     /// Write via a temp file in the same directory + rename, so watchers (Vite) see one
-    /// change event and never a half-written file. Keeps the original permissions.
+    /// change event and never a half-written file. Keeps the original permissions (applied
+    /// before any content is written, so a private file never has a readable copy) and
+    /// refuses read-only files. No temp file is left behind, whether the write succeeds or not.
     pub fn write_atomic(&self, rel: &str, content: &str) -> Result<()> {
+        self.write(rel, content, None)
+    }
+
+    /// [`Self::write_atomic`], refusing with `conflict` when `expected` is given and the file
+    /// no longer has that content just before the rename.
+    fn write(&self, rel: &str, content: &str, expected: Option<&str>) -> Result<()> {
         let path = self.resolve(rel)?;
         let io = |source| EngineError::Io { path: rel.to_string(), source };
+        let meta = fs::metadata(&path).map_err(io)?;
+        if meta.permissions().readonly() {
+            return Err(io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "the file is read-only")));
+        }
         let dir = path.parent().ok_or_else(|| EngineError::PathOutsideRoot(rel.to_string()))?;
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-        let tmp = dir.join(format!(".{name}.trivia-{}-{nanos}.tmp", std::process::id()));
+        let unique = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let tmp = dir.join(format!(".{name}.trivia-{}-{nanos}-{unique}.tmp", std::process::id()));
+
+        // `create_new`: never truncate a file we did not create (and never delete one, below).
+        let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(io)?;
         let result = (|| {
-            let mut f = fs::File::create(&tmp)?;
-            f.write_all(content.as_bytes())?;
-            f.sync_all()?;
-            if let Ok(meta) = fs::metadata(&path) {
-                fs::set_permissions(&tmp, meta.permissions())?;
+            fs::set_permissions(&tmp, meta.permissions()).map_err(io)?;
+            f.write_all(content.as_bytes()).map_err(io)?;
+            f.sync_all().map_err(io)?;
+            drop(f);
+            if let Some(expected) = expected
+                && fs::read_to_string(&path).map_err(io)? != expected
+            {
+                return Err(conflict(rel));
             }
-            fs::rename(&tmp, &path)
+            fs::rename(&tmp, &path).map_err(io)
         })();
         if result.is_err() {
             let _ = fs::remove_file(&tmp);
         }
-        result.map_err(io)
+        result
     }
+}
+
+/// `seg/seg/…` with no empty, `.` or `..` segment and no backslash.
+fn is_canonical_relative(rel: &str) -> bool {
+    !rel.is_empty() && rel.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != ".." && !seg.contains('\\'))
+}
+
+fn conflict(rel: &str) -> EngineError {
+    EngineError::Conflict(format!(
+        "{rel} changed on disk (outside the designer) since this edit was computed; nothing was written"
+    ))
 }

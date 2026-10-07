@@ -91,11 +91,12 @@ pub fn inspect(source: &str, locator: &str) -> Result<NodeDetails> {
         })
         .collect();
 
-    // Plain-text content only: one non-whitespace child that is JSX text.
+    // Plain-text content only: one non-whitespace child that is JSX text. Reported as it
+    // renders (JSX whitespace rules, character references decoded).
     let text = match node.content.as_slice() {
         [only] if only.node.is_none() => {
             let raw = slice(only.span);
-            (!raw.trim_start().starts_with('{')).then(|| raw.split_whitespace().collect::<Vec<_>>().join(" "))
+            if raw.trim_start().starts_with('{') { None } else { text::jsx_text_value(&raw) }
         }
         _ => None,
     };
