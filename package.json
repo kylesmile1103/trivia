@@ -5,9 +5,10 @@
   "packageManager": "pnpm@12.9.1",
   "scripts": {
     "build:engine": "pnpm --filter @trivia/engine build",
-    "dev:playground": "pnpm --filter playground dev",
+    "build:plugin": "pnpm --filter @trivia/vite-plugin-ast-locator build",
+    "dev:playground": "pnpm build:engine && pnpm build:plugin && pnpm --filter playground dev",
     "dev:designer": "pnpm --filter @trivia/designer dev",
-    "test": "cargo test --workspace && pnpm -r --if-present test",
+    "test": "cargo test --workspace && pnpm build:engine && pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {
