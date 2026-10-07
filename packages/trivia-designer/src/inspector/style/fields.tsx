@@ -1,12 +1,20 @@
 // Compact building blocks of the style panel: sections, labelled rows, a numeric field with a
 // Figma-style scrub handle, and a slider that previews while dragging and commits on release.
+//
+// A field or slider still holding an uncommitted value when it unmounts commits it if its
+// element is being left (a canvas click unmounts the panel before the blur), and otherwise
+// writes nothing and says so (see inspector/leave.ts).
 
 import { cn } from 'cn'
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { type ReactNode, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatNumber } from '@/lib/tailwind'
+import { commandFor } from '@/toolbar/shortcuts'
+
+import { notApplied, SOURCE_CHANGED } from '../leave'
+import { StyleEditorContext } from './editor'
 
 /**
  * Segmented-control item look. Keyed on ARIA state, not `data-state`: wrapping an item in a
@@ -143,6 +151,18 @@ export function ScrubField(props: ScrubFieldProps) {
     if (active) props.onCancel()
   }
 
+  const left = useLeft()
+  const unmount = useRef(() => {})
+  useLayoutEffect(() => {
+    unmount.current = () => {
+      const typed = draftRef.current
+      if (typed === null && movedRef.current === null) return
+      if (left()) submit()
+      else notApplied(typed === null ? label : `${label} “${typed.trim()}”`, SOURCE_CHANGED)
+    }
+  })
+  useEffect(() => () => unmount.current(), [])
+
   return (
     <div
       className={cn(
@@ -250,23 +270,52 @@ const KEYBOARD_COMMIT_DELAY_MS = 450
 /**
  * Previews while dragging, commits once on release. Radix commits on every arrow key; those
  * commits are coalesced so holding a key writes the file once.
+ *
+ * A key change still settling is an edit in progress, like text typed in a field: undo takes
+ * it back (it was never written, so the engine's undo would undo the previous edit instead),
+ * redo writes it at once (a new edit leaves nothing to redo), and blur or leaving the element
+ * writes it.
  */
 export function ScrubSlider({ label, value, min, max, step, onChange, onCommit, onCancel, className }: ScrubSliderProps) {
   const dragging = useRef(false)
   const committed = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingKey = useRef<number | null>(null)
+  // The settled write runs after renders the timer's render never saw (the source refreshed,
+  // an undo landed): it goes through the latest props, which merge into the latest className.
+  const latest = useRef({ onCommit, onCancel })
+  useLayoutEffect(() => {
+    latest.current = { onCommit, onCancel }
+  })
+  const left = useLeft()
 
-  const flush = () => {
+  const take = (): number | null => {
     if (timer.current !== null) clearTimeout(timer.current)
     timer.current = null
     const v = pendingKey.current
     pendingKey.current = null
-    if (v !== null) onCommit(v)
+    return v
   }
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current)
-  }, [])
+  const flush = () => {
+    const v = take()
+    if (v !== null) latest.current.onCommit(v)
+  }
+  const discard = () => {
+    if (take() !== null) latest.current.onCancel()
+  }
+
+  const unmount = useRef(() => {})
+  useLayoutEffect(() => {
+    unmount.current = () => {
+      if (pendingKey.current === null) return
+      if (left()) flush()
+      else {
+        take()
+        notApplied(label, SOURCE_CHANGED)
+      }
+    }
+  })
+  useEffect(() => () => unmount.current(), [])
 
   return (
     <Slider
@@ -304,9 +353,32 @@ export function ScrubSlider({ label, value, min, max, step, onChange, onCommit, 
         if (timer.current !== null) clearTimeout(timer.current)
         timer.current = setTimeout(flush, KEYBOARD_COMMIT_DELAY_MS)
       }}
+      onKeyDown={(e) => {
+        // Before the global shortcuts (they listen on the window), which then see the key as
+        // handled. Same mapping as theirs, so ⌘Z here means what it means everywhere else.
+        if (pendingKey.current === null) return
+        const command = commandFor(e.nativeEvent)
+        if (command === 'undo') {
+          e.preventDefault()
+          discard()
+        } else if (command === 'redo') {
+          e.preventDefault()
+          flush()
+        }
+      }}
       onBlur={flush}
     />
   )
+}
+
+/** See StyleEditor.left; outside a style panel, unmounting counts as leaving (blur). */
+function useLeft(): () => boolean {
+  const editor = useContext(StyleEditorContext)
+  const ref = useRef(editor)
+  useLayoutEffect(() => {
+    ref.current = editor
+  })
+  return () => ref.current?.left() ?? true
 }
 
 function numberOf(text: string): number | null {

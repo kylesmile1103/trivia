@@ -332,3 +332,109 @@ test('an element removed by an edit shows "Element not found", not a crash', asy
   await alert.getByRole('button', { name: 'Select parent' }).click()
   await expect(inspector.getByRole('heading', { name: 'CardFooter', exact: true })).toBeVisible()
 })
+
+/** Engine writes (apply/batch bodies) the page makes from now on. */
+function recordWrites(page: Page): string[] {
+  const writes: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && /\/@trivia\/api\/(apply|batch)$/.test(new URL(req.url()).pathname)) writes.push(req.postData() ?? '')
+  })
+  return writes
+}
+
+const undoLabel = (page: Page) => page.evaluate(() => (window as TestWindow).__trivia?.state().history.undoLabel ?? null)
+
+test('a value typed and left with a canvas click is written to the element it was typed for; the click still selects', async ({ page }) => {
+  const { frame, inspector, realCanvas } = await openDesigner(page)
+  test.skip(!realCanvas, 'needs the canvas overlay: the click must select on pointerdown, before the field blurs')
+  await clickOnCanvas(page, frame.locator('#name'))
+  await expect(inspector.getByRole('heading', { name: 'Input', exact: true })).toBeVisible()
+
+  // Typed, not submitted; then the user clicks another element on the canvas.
+  await inspector.getByRole('textbox', { name: 'placeholder', exact: true }).fill('your-app')
+  expect(await onDisk()).toBe(original)
+  const save = frame.locator('[data-slot="button"]', { hasText: 'Save changes' })
+  const saveLocator = await save.getAttribute('data-ast-node')
+  await clickOnCanvas(page, save)
+
+  await expect.poll(onDisk).toBe(original.replace('<Input id="name" placeholder="my-app" />', '<Input id="name" placeholder="your-app" />'))
+  await expect(frame.locator('#name')).toHaveAttribute('placeholder', 'your-app') // HMR
+  await expect.poll(() => undoLabel(page)).toBe('Set Input.placeholder')
+  // The write returned after the click: the selection stays where the user put it.
+  expect(await selected(page)).toBe(saveLocator)
+  await expect(inspector.getByRole('heading', { name: 'Button', exact: true })).toBeVisible()
+
+  // The same for a style field, with the panel's history label.
+  const footer = frame.locator('[data-slot="card-footer"]')
+  await clickOnCanvas(page, footer, { x: 12, y: 12 })
+  await expect(inspector.getByRole('heading', { name: 'CardFooter', exact: true })).toBeVisible()
+  await inspector.getByRole('textbox', { name: 'Padding', exact: true }).fill('24')
+  await clickOnCanvas(page, save)
+  await expect.poll(onDisk).toContain('<CardFooter className="justify-end gap-2 p-6">')
+  await expect.poll(() => undoLabel(page)).toBe('Padding p-6')
+  expect(await selected(page)).toBe(saveLocator)
+})
+
+test('class manager keeps a multi-line className’s layout, and an added class survives the component’s cn()', async ({ page }) => {
+  const MULTI = '<CardFooter\n          className="\n            justify-end\n            gap-2 px-2 p-4\n          "\n        >'
+  await writeFile(DASHBOARD, original.replace(FOOTER_OPEN, MULTI))
+  const { frame, inspector } = await openDesigner(page)
+  const footer = frame.locator('[data-slot="card-footer"]')
+  await expect(footer).toHaveClass(/(^|\s)p-4(\s|$)/)
+  const edited = await onDisk()
+
+  await clickOnCanvas(page, footer, { x: 12, y: 12 })
+  await expect(inspector.getByRole('heading', { name: 'CardFooter', exact: true })).toBeVisible()
+  const chips = inspector.getByRole('list', { name: 'Classes' }).getByRole('listitem')
+  await expect(chips).toHaveText(['justify-end', 'gap-2', 'px-2', 'p-4'])
+
+  const input = inspector.getByRole('textbox', { name: 'Add classes' })
+  await input.fill('px-8')
+  await expect(inspector.getByText('Replaces px-2.')).toBeVisible()
+  await input.press('Enter')
+  // Only the touched tokens change; the line breaks and indentation stay. px-8 goes after p-4:
+  // CardFooter runs className through cn() (twMerge, later wins), where "px-8 p-4" would lose px-8.
+  await expect.poll(onDisk).toBe(edited.replace('gap-2 px-2 p-4\n', 'gap-2 p-4 px-8\n'))
+  await expect(footer).toHaveClass(/(^|\s)px-8(\s|$)/)
+
+  await inspector.getByRole('button', { name: 'Remove class gap-2' }).click()
+  await expect.poll(onDisk).toBe(edited.replace('            gap-2 px-2 p-4\n', '            p-4 px-8\n'))
+  await expect(chips).toHaveText(['justify-end', 'p-4', 'px-8'])
+})
+
+test('undo during the slider’s keyboard settle window takes back the slider change, not the previous edit', async ({ page }) => {
+  const { frame, inspector } = await openDesigner(page)
+  const footer = frame.locator('[data-slot="card-footer"]')
+  await clickOnCanvas(page, footer, { x: 12, y: 12 })
+  await expect(inspector.getByRole('heading', { name: 'CardFooter', exact: true })).toBeVisible()
+
+  // The previous edit: one history entry.
+  const input = inspector.getByRole('textbox', { name: 'Add classes' })
+  await input.fill('flex-wrap')
+  await input.press('Enter')
+  const withWrap = original.replace(FOOTER_OPEN, '<CardFooter className="justify-end gap-2 flex-wrap">')
+  await expect.poll(onDisk).toBe(withWrap)
+  await expect.poll(() => undoLabel(page)).toBe('Set CardFooter.className')
+  await expect(footer).toHaveClass(/(^|\s)flex-wrap(\s|$)/)
+
+  // A slider key change, then ⌘Z/Ctrl+Z on the focused thumb, both inside the settle window
+  // (timed in the page, so test-runner round trips can't stretch it).
+  const writes = recordWrites(page)
+  const thumb = inspector.getByRole('slider', { name: 'Padding' })
+  await thumb.focus()
+  const before = await thumb.getAttribute('aria-valuenow')
+  await thumb.evaluate((el) => {
+    const mac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }))
+  })
+  await expect(thumb).toHaveAttribute('aria-valuenow', before ?? '')
+  await page.waitForTimeout(1_000) // well past the 450ms settle window
+  expect(writes, writes.join('\n')).toEqual([])
+  expect(await onDisk()).toBe(withWrap)
+  expect(await undoLabel(page)).toBe('Set CardFooter.className')
+
+  // Nothing pending any more: the next undo is the engine's.
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect.poll(onDisk).toBe(original)
+})

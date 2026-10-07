@@ -9,9 +9,10 @@ import { setCanvasApi } from '@/canvas/api'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { dispatch, redo, undo } from '@/state/actions'
+import { redo, undo } from '@/state/actions'
 import { designer, useDesigner } from '@/state/store'
 
+import { commitProp } from '../../commit'
 import { StylePanel } from '../StylePanel'
 import { createHarnessCanvas, type HarnessCanvas } from './canvas'
 
@@ -102,14 +103,12 @@ export function Harness() {
   const onCommit = useCallback(
     async (next: string, label?: string) => {
       if (!locator || !details) return null
-      // An emptied className removes the attribute instead of leaving className="".
-      const value = next.trim() === '' ? null : next
-      const result = await dispatch(
-        { op: 'updateProp', target: locator, expectedName: details.name, prop: 'className', value },
-        label ?? 'Edit classes',
-      )
-      if (result) await refresh(result.locator ?? locator)
-      return result
+      // An emptied className removes the attribute instead of leaving className="". The
+      // inspector's write path: a field committing as its element is left must not pull the
+      // selection back (inspector/leave.ts).
+      const ok = await commitProp(details, 'className', next.trim() === '' ? null : next, label ?? 'Edit classes')
+      if (ok && designer.getState().selected === locator) await refresh(locator)
+      return ok
     },
     [locator, details, refresh],
   )

@@ -9,7 +9,7 @@ export {
   type SpacingProperty,
   type StyleProperty,
 } from './convert'
-export { mergeClassName, removeUtilities } from './merge'
+export { mergeClassName, removeClasses, removeUtilities } from './merge'
 export {
   common,
   parse,

@@ -17,6 +17,7 @@ import { ClassManager } from './ClassManager'
 import { commitProp, type CommitProp } from './commit'
 import { installDebugHandle } from './debug'
 import { Header } from './Header'
+import { selectionLeft } from './leave'
 import { buildModel, isIntrinsic } from './model'
 import { PropField, ROW, RowHint, SourceCode } from './PropField'
 import { StylePanel } from './style/StylePanel'
@@ -47,22 +48,24 @@ function NodeInspector({ details, refreshing, reload }: { details: NodeDetails; 
   const intrinsic = isIntrinsic(details.name)
 
   const commit = useCallback<CommitProp>(
-    async (prop: string, value: JsonValue) => {
-      const ok = await commitProp(details, prop, value)
+    async (prop: string, value: JsonValue, label?: string) => {
+      const ok = await commitProp(details, prop, value, label)
       // Re-read the source either way: on success to show what was written, on failure because
       // the refusal (stale locator, conflict) usually means the file changed underneath us.
-      reload()
+      // Not after the selection moved on (a field committing as the user left): nothing here
+      // shows this node any more.
+      if (!selectionLeft(details.locator)) reload()
       return ok
     },
     [details, reload],
   )
   const commitClassName = useCallback((value: string | null) => commit('className', value), [commit])
+  // StylePanel contract: return the write's outcome (false drops the panel's optimistic value)
+  // and keep the panel's label ("Padding p-6"). The panel clears its own canvas preview: once
+  // the committed classes render, or at once when the write fails.
   const commitStyle = useCallback(
-    async (next: string) => {
-      await commitClassName(next.trim() === '' ? null : next)
-      canvas.clearPreviews()
-    },
-    [commitClassName],
+    (next: string, label?: string) => commit('className', next.trim() === '' ? null : next, label),
+    [commit],
   )
 
   if (details.isFragment) {
@@ -139,7 +142,7 @@ function NodeInspector({ details, refreshing, reload }: { details: NodeDetails; 
             locator={details.locator}
             className={authored}
             onPreview={(style) => canvas.previewStyle(details.locator, style)}
-            onCommit={(next) => void commitStyle(next)}
+            onCommit={commitStyle}
           />
         )}
 

@@ -1,9 +1,10 @@
 // One prop row: label, setter, reset. Discrete setters (Select, Switch) commit immediately;
 // text setters keep typing local and commit on Enter or blur (Onlook's lesson: write on
-// commit, never per keystroke). Escape reverts a text setter to the source value.
+// commit, never per keystroke) — and when the element is left with a draft, which is a blur
+// React never reports (see ./leave). Escape reverts a text setter to the source value.
 
 import { RotateCcw } from 'lucide-react'
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import type { NodeDetails } from '@/bridge/types'
 import { cn } from '@/lib/utils'
 
 import type { CommitProp } from './commit'
+import { notApplied, selectionLeft, SOURCE_CHANGED } from './leave'
 import { formatValue, type Literal, type PropRow, type ReadonlyReason } from './model'
 
 /** Shared grid so labels, setters and reset buttons line up across rows and sections. Every
@@ -90,6 +92,8 @@ export function PropField({ row, details, commit }: PropFieldProps) {
         setter = (
           <TextSetter
             id={id}
+            name={row.name}
+            left={() => selectionLeft(details.locator)}
             value={typeof current === 'string' ? current : ''}
             placeholder={placeholder || (set ? '' : 'unset')}
             parse={(text) => ({ ok: true, value: text })}
@@ -101,6 +105,8 @@ export function PropField({ row, details, commit }: PropFieldProps) {
         setter = (
           <TextSetter
             id={id}
+            name={row.name}
+            left={() => selectionLeft(details.locator)}
             type="number"
             value={typeof current === 'number' ? String(current) : ''}
             placeholder={placeholder || 'unset'}
@@ -218,16 +224,20 @@ function EnumSetter({ id, options, value, placeholder, onCommit }: EnumSetterPro
   )
 }
 
-type Parsed = { ok: true; value: Literal } | { ok: false }
+type Parsed = { ok: true; value: Literal } | { ok: false; reason: string }
 
 function parseNumber(text: string): Parsed {
   const trimmed = text.trim()
   const value = Number(trimmed)
-  return trimmed !== '' && Number.isFinite(value) ? { ok: true, value } : { ok: false }
+  return trimmed !== '' && Number.isFinite(value) ? { ok: true, value } : { ok: false, reason: 'Not a number.' }
 }
 
 interface TextSetterProps {
   id: string
+  /** The prop, for "not applied" notices. */
+  name: string
+  /** True once the selection has moved off the element (see ./leave). */
+  left(): boolean
   type?: 'text' | 'number'
   /** The source value as text ("" when absent). */
   value: string
@@ -236,7 +246,7 @@ interface TextSetterProps {
   onCommit(value: Literal): Promise<boolean>
 }
 
-function TextSetter({ id, type = 'text', value, placeholder, parse, onCommit }: TextSetterProps) {
+function TextSetter({ id, name, left, type = 'text', value, placeholder, parse, onCommit }: TextSetterProps) {
   const [draft, setDraft] = useState(value)
   const [base, setBase] = useState(value)
   const [invalid, setInvalid] = useState(false)
@@ -265,6 +275,21 @@ function TextSetter({ id, type = 'text', value, placeholder, parse, onCommit }: 
       inFlight.current = false
     })
   }
+
+  // Unmounting with a draft: commit it when the element is being left, as blur would; otherwise
+  // the source changed under the field, and nothing is written over it (see ./leave). Through a
+  // ref, so the cleanup sees the last render's draft.
+  const unmount = useRef(() => {})
+  useLayoutEffect(() => {
+    unmount.current = () => {
+      if (draft === value || inFlight.current) return
+      const parsed = parse(draft)
+      if (!left()) notApplied(`${name} “${draft}”`, SOURCE_CHANGED)
+      else if (parsed.ok) void onCommit(parsed.value)
+      else notApplied(`${name} “${draft}”`, parsed.reason)
+    }
+  })
+  useEffect(() => () => unmount.current(), [])
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {

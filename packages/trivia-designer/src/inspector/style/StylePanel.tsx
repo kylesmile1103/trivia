@@ -37,6 +37,10 @@ export interface StylePanelProps {
    * Commit: the full new className to write via updateProp. `label` names the edit for history
    * ("Padding p-6"). Returning the dispatch promise lets the panel drop its optimistic value
    * when the write fails (the promise resolves to null/false or rejects).
+   *
+   * Also called while the panel unmounts because the selection moved off `locator` (a control
+   * still held a typed or settling value; see inspector/leave.ts). That write is for the element
+   * the panel was showing, and must not select it again (inspector/commit.ts does both).
    */
   onCommit(className: string, label?: string): void | Promise<unknown>
 }
