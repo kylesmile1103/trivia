@@ -16,6 +16,12 @@ export interface CanvasApi {
   previewStyle(locator: string, style: Record<string, string> | null): void
   /** Drop every preview (called on commit and after HMR). */
   clearPreviews(): void
+  /**
+   * The zoom at which the whole canvas frame fits the visible canvas area, for the toolbar's
+   * "Zoom to fit". Optional: a canvas whose frame always fills its area at 100% can omit it
+   * (or return null), and fit then means 100%.
+   */
+  fitZoom?(): number | null
 }
 
 const noop: CanvasApi = {
@@ -32,6 +38,7 @@ export const canvas: CanvasApi = {
   previewClassName: (l, p, n) => current.previewClassName(l, p, n),
   previewStyle: (l, s) => current.previewStyle(l, s),
   clearPreviews: () => current.clearPreviews(),
+  fitZoom: () => current.fitZoom?.() ?? null,
 }
 
 export function setCanvasApi(api: CanvasApi | null): void {
