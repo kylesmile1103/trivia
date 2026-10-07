@@ -28,8 +28,9 @@ export interface StylePanelProps {
   className: string
   /**
    * Live preview during a gesture: CSS declarations (kebab-case), or null to clear. After a
-   * commit the panel sends null once the canvas re-rendered (the store's `revision` moved after
-   * HMR, at most 1.5s later), so the element does not flash back while the write lands.
+   * commit the panel sends null once the canvas element carries the committed classes (checked
+   * on every store `revision` bump, i.e. after HMR; at most 1.5s later), so the element does not
+   * flash back to its old style while the write lands.
    */
   onPreview(style: Record<string, string> | null): void
   /**

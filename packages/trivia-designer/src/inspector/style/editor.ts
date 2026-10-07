@@ -23,7 +23,7 @@ import {
   TailwindConversionError,
   type Utility,
 } from '@/lib/tailwind'
-import { designer, useDesigner } from '@/state/store'
+import { useDesigner } from '@/state/store'
 
 /**
  * Lengths map onto the spacing scale only. Radius and font-size tokens depend on the project's
@@ -91,15 +91,16 @@ export function useStyleEditor({ locator, className, onPreview, onCommit }: Styl
 
   const state = useMemo(() => parse(current, PANEL_THEME), [current])
   const computed = useComputedStyle(locator, current)
-  const { preview, clearAfterRender } = usePreview(onPreview)
+  const { preview, clearAfterRender } = usePreview(locator, onPreview)
 
+  /** Commit `next`; `added` are the classes this edit writes (what the canvas must show). */
   const write = useCallback(
-    (next: string, label: string) => {
+    (next: string, label: string, added: readonly string[]) => {
       if (next === current) {
         preview(null)
         return
       }
-      const settle = clearAfterRender()
+      const settle = clearAfterRender(added)
       const entry: Pending = { base: className, next }
       setPending(entry)
       const result = onCommit(next, label)
@@ -133,14 +134,14 @@ export function useStyleEditor({ locator, className, onPreview, onCommit }: Styl
           toast.error(error.message)
           return false
         }
-        write(mergeClassName(current, classes), `${label} ${classes.join(' ')}`)
+        write(mergeClassName(current, classes), `${label} ${classes.join(' ')}`, classes)
         return true
       },
       commitClasses(classes, label) {
-        write(mergeClassName(current, classes), `${label} ${classes.join(' ')}`)
+        write(mergeClassName(current, classes), `${label} ${classes.join(' ')}`, classes)
       },
       clear(utilities, label) {
-        write(removeUtilities(current, utilities, PANEL_THEME), `Clear ${label.toLowerCase()}`)
+        write(removeUtilities(current, utilities, PANEL_THEME), `Clear ${label.toLowerCase()}`, [])
       },
     }),
     [locator, current, state, computed, preview, write],
@@ -148,15 +149,15 @@ export function useStyleEditor({ locator, className, onPreview, onCommit }: Styl
 }
 
 /**
- * Preview plumbing. A commit clears the preview only once the canvas has re-rendered with it
- * (the store's `revision` moves after HMR), so the element does not flash back to its old
- * style during the write → HMR round trip. Cancelling, a failed commit, a new gesture or
- * PREVIEW_HOLD_MS without a re-render clear it at once.
+ * Preview plumbing. A commit clears the preview only once the canvas renders the committed
+ * classes (checked whenever the store's `revision` moves, i.e. after HMR), so the element does
+ * not flash back to its old style during the write → HMR round trip. Cancelling, a failed
+ * commit, a new gesture or PREVIEW_HOLD_MS without that render clear it at once.
  */
-function usePreview(onPreview: (style: Declarations | null) => void) {
+function usePreview(locator: string, onPreview: (style: Declarations | null) => void) {
   const revision = useDesigner((s) => s.revision)
   const active = useRef(false)
-  const hold = useRef<{ revision: number; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const hold = useRef<{ classes: readonly string[]; timer: ReturnType<typeof setTimeout> } | null>(null)
 
   const preview = useCallback(
     (style: Declarations | null) => {
@@ -168,20 +169,29 @@ function usePreview(onPreview: (style: Declarations | null) => void) {
     [onPreview],
   )
 
-  /** Start holding the current preview; returns "clear it now if still held". */
-  const clearAfterRender = useCallback((): (() => void) => {
-    if (!active.current) return () => {}
-    if (hold.current) clearTimeout(hold.current.timer)
-    const entry = { revision: designer.getState().revision, timer: setTimeout(() => preview(null), PREVIEW_HOLD_MS) }
-    hold.current = entry
-    return () => {
-      if (hold.current === entry) preview(null)
-    }
-  }, [preview])
+  /** Hold the current preview until `classes` render; returns "clear it now if still held". */
+  const clearAfterRender = useCallback(
+    (classes: readonly string[]): (() => void) => {
+      if (!active.current) return () => {}
+      if (hold.current) clearTimeout(hold.current.timer)
+      const entry = { classes, timer: setTimeout(() => preview(null), PREVIEW_HOLD_MS) }
+      hold.current = entry
+      return () => {
+        if (hold.current === entry) preview(null)
+      }
+    },
+    [preview],
+  )
 
   useEffect(() => {
-    if (hold.current && revision > hold.current.revision) preview(null)
-  }, [revision, preview])
+    const held = hold.current
+    if (!held) return
+    // A revision can move for unrelated DOM changes; only the committed classes count.
+    const elements = canvas.elements(locator)
+    if (elements.length > 0 && elements.every((el) => held.classes.every((c) => el.classList.contains(c)))) {
+      preview(null)
+    }
+  }, [revision, locator, preview])
 
   // Unmount (new selection): never leave a preview behind. Through a ref, so an embedder
   // passing a fresh `onPreview` each render does not clear a running gesture.

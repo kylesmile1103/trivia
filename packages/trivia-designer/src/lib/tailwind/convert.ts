@@ -273,6 +273,7 @@ interface SpacingRules {
 
 const NONNEG: SpacingRules = { negative: false, auto: false }
 const MARGIN: SpacingRules = { negative: true, auto: true }
+const SIZE: SpacingRules = { negative: false, auto: true }
 
 function single(v: string, fail: Fail): string {
   if (splitTopLevel(v).length !== 1) fail('expected a single value')
@@ -306,7 +307,7 @@ interface Suffix {
   negative: boolean
 }
 
-/** One spacing value → class suffix: `1.5rem` → `6`, `1px` → `px`, `13px` → `[13px]`, `-0.5rem` → `-`/`2`. */
+/** One spacing value → class suffix: `1.5rem` → `6`, `1px` → `px`, `13px` → `[13px]`, `-0.5rem` → negative `2`. */
 function spacingSuffix(v: string, rules: SpacingRules, theme: TailwindTheme, fail: Fail): Suffix {
   if (v.toLowerCase() === 'auto') {
     if (!rules.auto) fail('auto is not valid here')
@@ -344,7 +345,7 @@ function sizeClass(property: 'width' | 'height', v: string, theme: TailwindTheme
     const fraction = FRACTIONS.find(([pct]) => Math.abs(pct - p) < 0.001)
     if (fraction) return `${prefix}-${fraction[1]}`
   }
-  return spacingClass(prefix, v, { negative: false, auto: true }, theme, fail)
+  return spacingClass(prefix, v, SIZE, theme, fail)
 }
 
 function radiusClass(v: string, theme: TailwindTheme, fail: Fail): string {

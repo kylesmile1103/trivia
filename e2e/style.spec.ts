@@ -83,7 +83,7 @@ test('scrubbing padding previews real CSS without writing; release writes one Ta
   const after = await readFile(DASHBOARD, 'utf8')
   expect(after).toBe(original.replace(TAG, '<div className="grid gap-2 p-6">'))
   expect(after).not.toContain('style=')
-  expect(writes).toHaveLength(1)
+  expect(writes, writes.join('\n')).toHaveLength(1)
   expect(JSON.parse(writes[0]!)).toMatchObject({
     op: { op: 'updateProp', target: LOCATOR, prop: 'className', value: 'grid gap-2 p-6' },
   })
@@ -121,6 +121,26 @@ test('scrubbing the field handle (Figma-style) previews per step and commits onc
   await expect.poll(() => previewCss(frame)).toBe('')
   await expect.poll(() => paddingTop(target)).toBe('32px')
   expect(writes).toHaveLength(1)
+})
+
+test('arrow keys on the slider preview each step and write once per burst', async ({ page }) => {
+  const { target, writes } = await open(page)
+  const thumb = page.getByRole('slider', { name: 'Padding' })
+  await thumb.focus()
+  // One burst, timed in the page (20ms apart, like key repeat) so test-runner round trips on a
+  // loaded machine cannot stretch it past the 450ms settle window — separate bursts are meant
+  // to write separately.
+  await thumb.evaluate(async (el) => {
+    for (let i = 0; i < 3; i++) {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  })
+  await expect.poll(() => paddingTop(target)).toBe('12px')
+  expect(writes).toHaveLength(0) // previewed, not yet written
+  await expect(target).toHaveAttribute('class', 'grid gap-2 p-3')
+  expect(await readFile(DASHBOARD, 'utf8')).toBe(original.replace(TAG, '<div className="grid gap-2 p-3">'))
+  expect(writes, writes.join('\n')).toHaveLength(1)
 })
 
 test('typed values: Escape cancels the preview without writing; Enter writes an arbitrary value', async ({ page }) => {
