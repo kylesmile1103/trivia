@@ -1,14 +1,14 @@
 // What the canvas draws over the app: hover and selection outlines with a name/size label, the
-// drop indicator, and the cursor chip during a move. Pure presentation of a CanvasView; all
+// drop indicator, and the chip that follows the cursor during a drag. Pure presentation of a CanvasView; all
 // positions are overlay pixels. The accent is fixed (not the designer theme) because it sits
 // on top of the user's app, whose own colors are unknown.
 
 import type { CSSProperties, ReactNode } from 'react'
-import { MoveIcon } from 'lucide-react'
+import { ChevronRightIcon, MoveIcon, PlusIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-import type { CanvasView, DropView, Highlight } from './controller'
+import type { CanvasView, CursorChip, DropView, Highlight } from './controller'
 import type { Rect } from './dom'
 
 const ACCENT = 'oklch(0.6 0.19 256)'
@@ -33,16 +33,8 @@ export function OverlayLayer({ view }: { view: CanvasView }) {
       {view.selection && (
         <Outline highlight={view.selection} variant={view.moving ? 'moving' : 'selection'} bounds={view.bounds} />
       )}
-      {view.drop && <DropIndicator drop={view.drop} bounds={view.bounds} />}
-      {view.ghost && (
-        <div
-          className="absolute top-0 left-0 flex items-center gap-1 rounded-md border bg-popover px-1.5 py-0.5 text-xs font-medium text-popover-foreground shadow-md"
-          style={{ transform: `translate(${view.ghost.at.x + 14}px, ${view.ghost.at.y + 14}px)` }}
-        >
-          <MoveIcon className="size-3 text-muted-foreground" />
-          {view.ghost.name}
-        </div>
-      )}
+      {view.drop && <DropIndicator drop={view.drop} />}
+      {view.cursor && <Cursor chip={view.cursor} />}
     </div>
   )
 }
@@ -72,30 +64,14 @@ function Outline({ highlight, variant, bounds }: { highlight: Highlight; variant
   )
 }
 
-function DropIndicator({ drop, bounds }: { drop: DropView; bounds: CanvasView['bounds'] }) {
-  if (drop.kind === 'invalid') {
-    return (
-      <div
-        data-canvas-drop="invalid"
-        className="absolute top-0 left-0 rounded-sm bg-destructive px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap text-white"
-        style={{ transform: `translate(${drop.at.x + 14}px, ${drop.at.y + 14}px)` }}
-      >
-        {drop.label}
-      </div>
-    )
-  }
+function DropIndicator({ drop }: { drop: DropView }) {
   if (drop.kind === 'inside') {
     return (
-      <>
-        <Box
-          rect={drop.rect}
-          data-canvas-drop="inside"
-          className="border-2 border-dashed border-(--canvas-accent) bg-(--canvas-accent)/10"
-        />
-        <Label anchor={drop.rect} bounds={bounds} testId="canvas-drop-label">
-          {drop.label}
-        </Label>
-      </>
+      <Box
+        rect={drop.rect}
+        data-canvas-drop="inside"
+        className="border-2 border-dashed border-(--canvas-accent) bg-(--canvas-accent)/10"
+      />
     )
   }
   const horizontal = drop.from.y === drop.to.y
@@ -112,10 +88,34 @@ function DropIndicator({ drop, bounds }: { drop: DropView; bounds: CanvasView['b
           style={{ transform: `translate(${p.x - 3.5}px, ${p.y - 3.5}px)` }}
         />
       ))}
-      <Label anchor={{ ...line, y: line.y - 2, height: line.height + 4 }} bounds={bounds} testId="canvas-drop-label">
-        {drop.label}
-      </Label>
     </>
+  )
+}
+
+/** Below-right of the pointer, clear of the drag image: "✥ Button › After div". */
+function Cursor({ chip }: { chip: CursorChip }) {
+  const Icon = chip.kind === 'move' ? MoveIcon : PlusIcon
+  return (
+    <div
+      data-testid="canvas-cursor-chip"
+      className="absolute top-0 left-0 flex h-6 items-center gap-1 rounded-md border bg-popover px-1.5 text-xs whitespace-nowrap text-popover-foreground shadow-md"
+      style={{ transform: `translate(${chip.at.x + 14}px, ${chip.at.y + 14}px)` }}
+    >
+      <Icon className="size-3 text-muted-foreground" />
+      <span className="font-medium">{chip.subject}</span>
+      {chip.target && (
+        <>
+          <ChevronRightIcon className="size-3 text-muted-foreground" />
+          <span
+            data-testid="canvas-drop-label"
+            data-canvas-drop={chip.refused ? 'refused' : undefined}
+            className={chip.refused ? 'text-destructive' : 'text-(--canvas-accent)'}
+          >
+            {chip.target}
+          </span>
+        </>
+      )}
+    </div>
   )
 }
 

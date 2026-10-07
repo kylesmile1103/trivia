@@ -139,7 +139,8 @@ test('dragging the Cancel button into CardContent moves it in source; selection 
   // Over the page padding (App.tsx's <main>): another file, refused with a reason.
   const card = await box(app(page).locator('[data-slot="card"]'))
   await page.mouse.move(card.x + card.width / 2, card.y + card.height + 40, { steps: 4 })
-  await expect(page.locator('[data-canvas-drop="invalid"]')).toHaveText('Moving between files is not supported yet')
+  await expect(page.locator('[data-canvas-drop="refused"]')).toHaveText('Moving between files is not supported yet')
+  await expect(page.locator('[data-canvas-drop="inside"], [data-canvas-drop^="line"]')).toHaveCount(0)
   // Over a .map() badge: it can't anchor before/after, so the drop goes inside its container.
   const pro = await box(app(page).getByText('Pro', { exact: true }))
   await page.mouse.move(pro.x + 4, pro.y + 4, { steps: 4 })
@@ -152,11 +153,13 @@ test('dragging the Cancel button into CardContent moves it in source; selection 
   const line = page.locator('[data-canvas-drop="line-x"]')
   await expect(line).toBeVisible()
   await expect(page.getByTestId('canvas-drop-label')).toHaveText('After div')
+  await expect(page.getByTestId('canvas-cursor-chip')).toHaveText(/^Button\s*After div$/)
   const lineBox = await box(line)
   expect(Math.abs(lineBox.y + lineBox.height / 2 - (nameField.y + nameField.height))).toBeLessThan(1.5)
   expect(Math.abs(lineBox.width - nameField.width)).toBeLessThan(1)
 
   await page.mouse.up()
+  await expect(page.getByTestId('canvas-cursor-chip')).toHaveCount(0)
   await expect.poll(dashboard).not.toBe(original)
   const src = dashboard()
   const content = src.slice(src.indexOf('<CardContent'), src.indexOf('</CardContent>'))
@@ -230,6 +233,30 @@ test('wheel over the overlay scrolls the app; boxes stay on their element', asyn
   const scrollY = () => frame!.evaluate(() => window.scrollY)
   await expect.poll(scrollY).toBeGreaterThan(0)
   await expectSameRect(selection, title)
+})
+
+test('zoom scales the app and the overlay math together', async ({ page }) => {
+  await openCanvas(page)
+  const save = app(page).getByRole('button', { name: 'Save changes' })
+  const full = await box(save)
+  await storeCall(page, `designer.getState().setZoom(0.5)`)
+  await expect.poll(async () => (await box(save)).width).toBeCloseTo(full.width / 2, 0)
+
+  const half = await box(save)
+  await page.mouse.move(center(half).x, center(half).y)
+  const hover = page.locator('[data-canvas-box="hover"]')
+  await expectSameRect(hover, save)
+  // Sizes are reported in the app's CSS pixels, whatever the zoom.
+  await expect(page.getByTestId('canvas-hover-label')).toHaveText(`Button${Math.round(full.width)} × ${Math.round(full.height)}`)
+  await page.mouse.click(center(half).x, center(half).y)
+  await expectSameRect(page.locator('[data-canvas-box="selection"]'), save)
+
+  // Pinch (ctrl + wheel) zooms in.
+  await page.keyboard.down('Control')
+  await page.mouse.wheel(0, -50)
+  await page.keyboard.up('Control')
+  await expect.poll(() => storeCall<number>(page, 'return designer.getState().zoom')).toBeGreaterThan(0.5)
+  await expectSameRect(page.locator('[data-canvas-box="selection"]'), save)
 })
 
 test('interact mode passes the pointer to the app', async ({ page }) => {

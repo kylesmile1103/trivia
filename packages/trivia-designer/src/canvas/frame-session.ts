@@ -13,6 +13,8 @@ const QUIET_MS = 120
 const EARLY_MS = 300
 /** Settle anyway after this long (a no-op edit, or an app that mutates constantly). */
 const MAX_WAIT_MS = 1500
+/** Re-measure every frame this long after a CSS transition/animation starts (boxes follow it). */
+const ANIMATION_FOLLOW_MS = 1000
 
 export type FrameState = 'loading' | 'attached' | 'blocked'
 
@@ -46,6 +48,7 @@ export class FrameSession {
   private triggeredAt = 0
   private lastMutationAt = -Infinity
   private settleTimer = 0
+  private animatingUntil = 0
 
   private readonly iframe: HTMLIFrameElement
   private readonly listener: FrameListener
@@ -86,6 +89,8 @@ export class FrameSession {
     this.raf = requestAnimationFrame(() => {
       this.raf = 0
       this.listener.layout()
+      // End events are unreliable (removed elements, infinite animations): follow for a while.
+      if (performance.now() < this.animatingUntil) this.scheduleLayout()
     })
   }
 
@@ -127,8 +132,14 @@ export class FrameSession {
     const layout = () => this.scheduleLayout()
     // Scroll doesn't bubble: capturing on the document also sees nested scroll containers.
     listen(doc, 'scroll', layout, { capture: true, passive: true })
-    listen(doc, 'transitionend', layout, { capture: true, passive: true })
-    listen(doc, 'animationend', layout, { capture: true, passive: true })
+    const animating = () => {
+      this.animatingUntil = performance.now() + ANIMATION_FOLLOW_MS
+      this.scheduleLayout()
+    }
+    for (const type of ['transitionrun', 'animationstart']) listen(doc, type, animating, { capture: true, passive: true })
+    for (const type of ['transitionend', 'transitioncancel', 'animationend', 'animationcancel']) {
+      listen(doc, type, layout, { capture: true, passive: true })
+    }
     listen(win, 'resize', layout, { passive: true })
     listen(win, 'pagehide', () => this.detach(), { once: true })
 

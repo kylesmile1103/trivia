@@ -38,9 +38,19 @@ export interface Highlight {
 }
 
 export type DropView =
-  | { kind: 'line'; from: Point; to: Point; container: Rect | null; label: string }
-  | { kind: 'inside'; rect: Rect; label: string }
-  | { kind: 'invalid'; at: Point; label: string }
+  | { kind: 'line'; from: Point; to: Point; container: Rect | null }
+  | { kind: 'inside'; rect: Rect }
+
+/** The chip that follows the cursor during a drag: what moves, and where it would land. */
+export interface CursorChip {
+  at: Point
+  kind: 'move' | 'insert'
+  /** The dragged node's name, or the template's label. */
+  subject: string
+  /** "After div", or why the drop is refused; null over nothing droppable. */
+  target: string | null
+  refused: boolean
+}
 
 export type CanvasStatus = 'loading' | 'engine' | 'blocked' | 'no-locators' | 'build-error' | 'ready'
 
@@ -52,8 +62,7 @@ export interface CanvasView {
   /** The selection is being dragged to a new place. */
   moving: boolean
   drop: DropView | null
-  /** Chip following the cursor during a node move. */
-  ghost: { at: Point; name: string } | null
+  cursor: CursorChip | null
 }
 
 export const EMPTY_VIEW: CanvasView = {
@@ -63,7 +72,7 @@ export const EMPTY_VIEW: CanvasView = {
   selection: null,
   moving: false,
   drop: null,
-  ghost: null,
+  cursor: null,
 }
 
 interface Gesture {
@@ -143,9 +152,13 @@ export class CanvasController {
       ['keydown', this.onKeyDown],
     ]
     for (const [type, fn, options] of listeners) o.addEventListener(type, fn as EventListener, options)
+    // The designer's own layout can move the canvas without resizing the iframe.
+    const relayout = () => this.session.scheduleLayout()
+    window.addEventListener('resize', relayout)
     this.session.scheduleLayout()
     return () => {
       for (const [type, fn, options] of listeners) o.removeEventListener(type, fn as EventListener, options)
+      window.removeEventListener('resize', relayout)
       unsubscribe()
       stop()
     }
@@ -171,7 +184,7 @@ export class CanvasController {
   }
 
   private onStore(s: DesignerState, prev: DesignerState): void {
-    // An edit returned: its HMR is on the way, so hold reveals until it has rendered.
+    // An edit (or undo/redo) returned: its HMR is on the way.
     if (s.history !== prev.history) {
       this.awaitingEdit = true
       this.session.expectUpdate()
@@ -405,19 +418,24 @@ export class CanvasController {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (isEditable(e.target)) return
     const s = designer.getState()
+    // Handled keys stop here, so a global shortcut layer can't act on them a second time.
+    const handled = () => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     if (e.key === 'Escape') {
       if (this.gesture?.dragging) this.cancelMove()
       else if (s.selected !== null) s.select(null)
       else return
-      e.preventDefault()
+      handled()
       return
     }
     if (s.mode !== 'design' || e.metaKey || e.ctrlKey || e.altKey || !s.selected || this.gesture?.dragging) return
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault()
+      handled()
       void this.removeNode(s.selected)
     } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
+      handled()
       void this.selectParent(s.selected)
     }
   }
@@ -500,29 +518,27 @@ export class CanvasController {
     let drop: DropView | null = null
     const ds = this.dropState
     if (ds?.ok) {
-      const { plan } = ds
-      const verb = plan.placement === 'before' ? 'Before' : plan.placement === 'after' ? 'After' : 'Inside'
-      const label = `${verb} ${plan.name}`
+      const { indicator, container } = ds.plan
       const point = (p: Point): Point => ({ x: t.left - o.left + p.x * t.scale, y: t.top - o.top + p.y * t.scale })
       drop =
-        plan.indicator.kind === 'line'
-          ? {
-              kind: 'line',
-              from: point(plan.indicator.from),
-              to: point(plan.indicator.to),
-              container: plan.container && toOverlay(plan.container),
-              label,
-            }
-          : { kind: 'inside', rect: toOverlay(plan.indicator.rect), label }
-    } else if (ds && this.pointer) {
-      drop = { kind: 'invalid', at: { x: this.pointer.x - o.left, y: this.pointer.y - o.top }, label: ds.reason }
+        indicator.kind === 'line'
+          ? { kind: 'line', from: point(indicator.from), to: point(indicator.to), container: container && toOverlay(container) }
+          : { kind: 'inside', rect: toOverlay(indicator.rect) }
     }
-    const ghost =
-      moving && this.pointer && s.drag?.kind === 'node'
-        ? { at: { x: this.pointer.x - o.left, y: this.pointer.y - o.top }, name: s.drag.name }
-        : null
+    // The cursor chip says what the drop would do, so the indicator itself needs no label
+    // over the app's content. Palette drags only get it when the shell published the template.
+    let cursor: CursorChip | null = null
+    const dragging = this.gesture?.dragging || s.drag?.kind === 'palette' || ds !== null
+    if (dragging && this.pointer) {
+      const at = { x: this.pointer.x - o.left, y: this.pointer.y - o.top }
+      const target = ds?.ok ? `${PLACEMENT_VERB[ds.plan.placement]} ${ds.plan.name}` : (ds?.reason ?? null)
+      cursor =
+        s.drag?.kind === 'node'
+          ? { at, kind: 'move', subject: s.drag.name, target, refused: ds?.ok === false }
+          : { at, kind: 'insert', subject: s.drag?.kind === 'palette' ? s.drag.template.label : 'Component', target, refused: ds?.ok === false }
+    }
 
-    this.publish({ status, bounds, hover, selection, moving, drop, ghost })
+    this.publish({ status, bounds, hover, selection, moving, drop, cursor })
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {
@@ -592,6 +608,8 @@ export class CanvasController {
     }
   }
 }
+
+const PLACEMENT_VERB = { before: 'Before', after: 'After', firstChild: 'Inside', lastChild: 'Inside' } as const
 
 /** Where the drop indicator sits, in client coordinates (store.drop.rect). */
 function indicatorRect(plan: DropPlan, t: FrameTransform): Rect {

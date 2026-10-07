@@ -69,7 +69,7 @@ export function Canvas() {
 }
 
 const notices: Partial<Record<CanvasStatus, { icon: 'spinner' | 'warning' | 'blocked'; title: string; detail?: string }>> = {
-  engine: { icon: 'spinner', title: 'Connecting to the Trivia engine…' },
+  engine: { icon: 'spinner', title: 'Waiting for the Trivia engine…' },
   'no-locators': {
     icon: 'warning',
     title: 'Nothing on this page can be selected',
