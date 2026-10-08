@@ -64,6 +64,13 @@ const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('moveNode'), source: locator, expectedName: guard('source'), parent: locator, expectedParentName: guard('parent'), index: z.number().int().min(0) }).strict(),
   z
     .object({
+      op: z.literal('createFile'),
+      file: z.string().min(1).describe('Project-relative path of a new .tsx/.jsx file, e.g. "src/components/customer-card.tsx"'),
+      content: z.string().min(1).describe('Its full source; it must parse. Never overwrites an existing file'),
+    })
+    .strict(),
+  z
+    .object({
       op: z.literal('bindQuery'),
       target: locator,
       expectedName: guard('target'),
@@ -216,7 +223,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       description:
         'Apply one or more guarded edits to the user\'s source files, byte for byte (formatting and comments are kept), ' +
         'as one entry in the designer\'s undo history. Ops: updateProp (value null removes it), setText, insert, ' +
-        'insertChild, remove, move, moveNode, and bindQuery (a TanStack Query hook feeding the element, docs/data-provider.md). ' +
+        'insertChild, remove, move (also to another file: its imports come along), moveNode, bindQuery (a TanStack Query ' +
+        'hook feeding the element, docs/data-provider.md) and createFile (a new component file; undo deletes it). ' +
         'Each names elements by locator and must carry the tag name you read there ' +
         '(expectedName, and expectedTargetName / expectedParentName for the other element): the edit is refused instead ' +
         'of hitting the wrong element when the file changed. Several ops: each op\'s locators must hold after the ops ' +

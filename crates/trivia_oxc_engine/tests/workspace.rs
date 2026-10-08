@@ -248,3 +248,60 @@ fn inspect_reads_through_the_workspace() {
     assert_eq!(code(ws.inspect("src/App.tsx#App#9")), "node_not_found");
     assert_eq!(code(ws.inspect("garbage")), "invalid_locator");
 }
+
+const FORM: &str = "export function CustomerForm() {\n  return <form />\n}\n";
+
+#[test]
+fn create_makes_a_new_file_and_its_directories_inside_the_root() {
+    let (dir, ws) = project();
+    assert!(!ws.exists("src/components/forms/customer-form.tsx").unwrap());
+    ws.create("src/components/forms/customer-form.tsx", FORM).unwrap();
+    assert_eq!(fs::read_to_string(dir.path().join("src/components/forms/customer-form.tsx")).unwrap(), FORM);
+    assert!(ws.exists("src/components/forms/customer-form.tsx").unwrap());
+    assert_eq!(listing(&dir.path().join("src/components/forms")), ["customer-form.tsx"], "no temp files left");
+}
+
+#[test]
+fn create_never_overwrites_and_refuses_what_apply_would() {
+    let (dir, ws) = project();
+    assert_eq!(code(ws.create("src/App.tsx", FORM)), "conflict");
+    assert_eq!(fs::read_to_string(dir.path().join("src/App.tsx")).unwrap(), APP);
+    assert_eq!(code(ws.create("../outside.tsx", FORM)), "path_outside_root");
+    assert_eq!(code(ws.create("/tmp/abs.tsx", FORM)), "path_outside_root");
+    assert_eq!(code(ws.create("src/./x.tsx", FORM)), "path_outside_root");
+    assert_eq!(code(ws.create("src/notes.md", "# hi")), "path_outside_root");
+    assert_eq!(code(ws.create("src/broken.tsx", "export const A = () => <div>")), "invalid_result");
+    assert!(!dir.path().join("src/broken.tsx").exists());
+}
+
+#[test]
+fn create_refuses_a_directory_symlinked_outside_the_root() {
+    let (dir, ws) = project();
+    let outside = TempDir::new("outside");
+    symlink(outside.path(), dir.path().join("src/escape")).unwrap();
+    assert_eq!(code(ws.create("src/escape/x.tsx", FORM)), "path_outside_root");
+    assert!(listing(outside.path()).is_empty());
+}
+
+#[test]
+fn remove_file_is_guarded_by_its_content() {
+    let (dir, ws) = project();
+    ws.create("src/Form.tsx", FORM).unwrap();
+    assert_eq!(code(ws.remove_file("src/Form.tsx", "something else")), "conflict");
+    assert!(dir.path().join("src/Form.tsx").exists());
+    ws.remove_file("src/Form.tsx", FORM).unwrap();
+    assert!(!dir.path().join("src/Form.tsx").exists());
+    assert_eq!(code(ws.remove_file("src/Form.tsx", FORM)), "io_error");
+}
+
+#[test]
+fn create_file_is_an_op_that_apply_runs() {
+    let (dir, ws) = project();
+    let op: Op = serde_json::from_str(r#"{ "op": "createFile", "file": "src/Form.tsx", "content": "export const F = () => <form />\n" }"#).unwrap();
+    assert_eq!(op.files().unwrap(), ["src/Form.tsx"]);
+    let applied = ws.apply(&op).unwrap();
+    assert!(applied.outcome.changed);
+    assert_eq!(applied.outcome.locator, None);
+    assert_eq!(fs::read_to_string(dir.path().join("src/Form.tsx")).unwrap(), "export const F = () => <form />\n");
+    assert_eq!(code(ws.apply(&op)), "conflict", "a second create finds the file");
+}

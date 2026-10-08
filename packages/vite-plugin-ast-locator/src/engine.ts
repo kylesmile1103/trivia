@@ -18,11 +18,14 @@ export interface OpsResult {
   changes: FileChange[]
 }
 
-/** A guarded write for `restoreFiles`: replace `file` with `content` only if it equals `expected`. */
+/**
+ * A guarded write for `restoreFiles`: replace `file` with `content` only if it equals
+ * `expected`. `expected: null`: the file must not exist (it is created); `content: null`: delete it.
+ */
 export interface GuardedWrite {
   file: string
-  expected: string
-  content: string
+  expected: string | null
+  content: string | null
 }
 
 /** The part of the binding this plugin uses. Everything but `annotate` returns a JSON envelope. */

@@ -158,6 +158,8 @@ function describe(op: Json): string {
       return op['value'] === null ? `Remove ${prop}` : `Set ${prop}`
     case 'setText':
       return `Set text of ${name}`
+    case 'createFile':
+      return `Create ${typeof op['file'] === 'string' ? op['file'] : 'a file'}`
     case 'insert':
     case 'insertChild':
       return 'Insert element'

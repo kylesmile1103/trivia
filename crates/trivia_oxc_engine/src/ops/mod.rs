@@ -153,11 +153,17 @@ pub enum Op {
     /// Bind an element to a TanStack Query: inject `useQuery` into its component and set its
     /// data/loading props (see `bind_query`).
     BindQuery(bind_query::QueryBinding),
+    /// Write a new `.tsx`/`.jsx` file (e.g. a generated form component). Refused when the file
+    /// exists or `content` does not parse; undoing it deletes the file.
+    CreateFile { file: String, content: String },
 }
 
 impl Op {
     /// The file this op edits.
     pub fn file(&self) -> Result<String> {
+        if let Op::CreateFile { file, .. } = self {
+            return Ok(file.clone());
+        }
         let primary = match self {
             Op::Insert { target, .. }
             | Op::UpdateProp { target, .. }
@@ -166,6 +172,7 @@ impl Op {
             Op::InsertChild { parent, .. } => parent,
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
             Op::BindQuery(binding) => &binding.target,
+            Op::CreateFile { .. } => unreachable!("returned above"),
         };
         Ok(Locator::parse(primary)?.file)
     }
@@ -239,7 +246,17 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         }
         // Parses on its own: it edits a function body and imports, not just JSX.
         Op::BindQuery(binding) => bind_query::bind_query(source, file, binding),
+        Op::CreateFile { .. } => Err(EngineError::InvalidOp(
+            "createFile writes a new file: apply it through the workspace (applyOps), not to existing text".into(),
+        )),
     }
+}
+
+/// The outcome of creating `file` with `content`: the content must parse as that file.
+pub fn created(file: &str, content: &str) -> Result<Outcome> {
+    let alloc = Allocator::default();
+    parse(&alloc, content, file).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
+    Ok(Outcome { file: file.to_string(), changed: true, locator: None, code: content.to_string() })
 }
 
 /// Where an insertion lands, after resolving first/last-child placements.

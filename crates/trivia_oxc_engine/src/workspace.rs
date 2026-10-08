@@ -64,6 +64,82 @@ impl Workspace {
         Ok(real)
     }
 
+    /// Whether the project-relative `.tsx`/`.jsx` file exists (path rules as [`Self::resolve`]).
+    pub fn exists(&self, rel: &str) -> Result<bool> {
+        match self.resolve(rel) {
+            Ok(_) => Ok(true),
+            Err(EngineError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+                self.resolve_new(rel)?; // still refuse a path outside the root
+                Ok(false)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Write a new file, creating its directories (inside the root). Refused with `conflict`
+    /// when it exists, `invalid_result` when `content` does not parse, and `path_outside_root`
+    /// for any path [`Self::resolve`] refuses.
+    pub fn create(&self, rel: &str, content: &str) -> Result<()> {
+        let path = self.resolve_new(rel)?;
+        ops::created(rel, content)?;
+        let dir = path.parent().ok_or_else(|| EngineError::PathOutsideRoot(rel.to_string()))?;
+        let io = |source| EngineError::Io { path: rel.to_string(), source };
+        fs::create_dir_all(dir).map_err(io)?;
+        // The directories may have been made by someone else meanwhile: check again.
+        if !dir.canonicalize().map_err(io)?.starts_with(&self.root) {
+            return Err(EngineError::PathOutsideRoot(rel.to_string()));
+        }
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+        let unique = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+        let tmp = dir.join(format!(".{name}.trivia-{}-{nanos}-{unique}.tmp", std::process::id()));
+        let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(io)?;
+        let result = (|| {
+            f.write_all(content.as_bytes()).map_err(io)?;
+            f.sync_all().map_err(io)?;
+            drop(f);
+            // `hard_link` fails when the name exists, so a file created meanwhile is never replaced.
+            fs::hard_link(&tmp, &path).map_err(|e| if e.kind() == std::io::ErrorKind::AlreadyExists { exists(rel) } else { io(e) })
+        })();
+        let _ = fs::remove_file(&tmp);
+        result
+    }
+
+    /// Delete a file only if it still holds `expected` (undoing a `createFile`), else `conflict`.
+    pub fn remove_file(&self, rel: &str, expected: &str) -> Result<()> {
+        if self.read(rel)? != expected {
+            return Err(conflict(rel));
+        }
+        let path = self.resolve(rel)?;
+        fs::remove_file(&path).map_err(|source| EngineError::Io { path: rel.to_string(), source })
+    }
+
+    /// [`Self::resolve`] for a file that doesn't exist yet: the same path rules, and its
+    /// nearest existing directory must lie inside the root (symlinks followed).
+    fn resolve_new(&self, rel: &str) -> Result<PathBuf> {
+        let outside = || EngineError::PathOutsideRoot(rel.to_string());
+        let path = Path::new(rel);
+        if !is_canonical_relative(rel) || !path.components().all(|c| matches!(c, Component::Normal(_))) {
+            return Err(outside());
+        }
+        if !matches!(path.extension().and_then(|e| e.to_str()), Some("tsx" | "jsx")) {
+            return Err(outside());
+        }
+        let full = self.root.join(path);
+        let mut existing = full.parent().ok_or_else(outside)?.to_path_buf();
+        while !existing.exists() {
+            existing = existing.parent().ok_or_else(outside)?.to_path_buf();
+        }
+        let real = existing.canonicalize().map_err(|source| EngineError::Io { path: rel.to_string(), source })?;
+        if !real.starts_with(&self.root) {
+            return Err(outside());
+        }
+        if full.exists() {
+            return Err(exists(rel));
+        }
+        Ok(full)
+    }
+
     pub fn read(&self, rel: &str) -> Result<String> {
         let path = self.resolve(rel)?;
         fs::read_to_string(&path).map_err(|source| EngineError::Io { path: rel.to_string(), source })
@@ -71,7 +147,12 @@ impl Workspace {
 
     /// Read the target file fresh, apply `op`, and write atomically if anything changed.
     /// The write is refused (`conflict`) if the file changed while the edit was computed.
+    /// `createFile` writes its new file (`before` is then empty).
     pub fn apply(&self, op: &Op) -> Result<Applied> {
+        if let Op::CreateFile { file, content } = op {
+            self.create(file, content)?;
+            return Ok(Applied { outcome: ops::created(file, content)?, before: String::new() });
+        }
         let file = op.file()?;
         let before = self.read(&file)?;
         let outcome = ops::apply_op(&before, &file, op)?;
@@ -196,6 +277,10 @@ impl Workspace {
 /// `seg/seg/…` with no empty, `.` or `..` segment and no backslash.
 fn is_canonical_relative(rel: &str) -> bool {
     !rel.is_empty() && rel.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != ".." && !seg.contains('\\'))
+}
+
+fn exists(rel: &str) -> EngineError {
+    EngineError::Conflict(format!("{rel} already exists; createFile never overwrites a file"))
 }
 
 fn conflict(rel: &str) -> EngineError {

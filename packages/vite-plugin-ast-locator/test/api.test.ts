@@ -216,6 +216,49 @@ describe('a move between files', () => {
   })
 })
 
+describe('createFile', () => {
+  const FORM = 'src/components/forms/customer-form.tsx'
+  const form = 'export function CustomerForm() {\n  return <form />\n}\n'
+  const exists = () => fs.existsSync(path.join(root, FORM))
+
+  it('creates a file and uses it in one undo entry; undo deletes it, redo brings it back', async () => {
+    const r = await post(socket, '/batch', {
+      label: 'Add a form',
+      ops: [
+        { op: 'createFile', file: FORM, content: form },
+        { op: 'insert', target: CANCEL, expectedName: 'Button', placement: 'before', snippet: '<CustomerForm />', imports: [{ name: 'CustomerForm', source: '@/components/forms/customer-form' }] },
+      ],
+    })
+    expect(r.status).toBe(200)
+    expect(read(FORM)).toBe(form)
+    expect(read()).toContain('import { CustomerForm } from "@/components/forms/customer-form"')
+
+    await post(socket, '/undo')
+    expect(exists()).toBe(false)
+    expect(read()).toBe(original)
+    await post(socket, '/redo')
+    expect(read(FORM)).toBe(form)
+    expect(read()).toContain('<CustomerForm />')
+  })
+
+  it('never overwrites a file, and refuses code that does not parse', async () => {
+    const taken = await post(socket, '/apply', { op: { op: 'createFile', file: DASHBOARD, content: form } })
+    expect([taken.status, taken.body.error.code]).toEqual([409, 'conflict'])
+    expect(read()).toBe(original)
+    const broken = await post(socket, '/apply', { op: { op: 'createFile', file: FORM, content: 'export const A = () => <form>' } })
+    expect([broken.status, broken.body.error.code]).toEqual([422, 'invalid_result'])
+    expect(exists()).toBe(false)
+  })
+
+  it('undo leaves a created file the user has edited since', async () => {
+    await post(socket, '/apply', { op: { op: 'createFile', file: FORM, content: form } })
+    write(`${form}// mine\n`, FORM)
+    const r = await post(socket, '/undo')
+    expect([r.status, r.body.error.code]).toEqual([409, 'conflict'])
+    expect(read(FORM)).toBe(`${form}// mine\n`)
+  })
+})
+
 describe('batch', () => {
   it('is one history entry, even across files', async () => {
     const appBefore = read('src/App.tsx')

@@ -94,6 +94,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   "optionsArgs": "{ query: { page: 1, pageSize: 20 } }", "resource": "Customer",
   "itemsPath": "items", "dataProp": "data", "loadingProp": "isLoading" }
 { "op": "setText", "target": "<loc>", "expectedName": "Button", "text": "Save changes" }
+{ "op": "createFile", "file": "src/components/forms/customer-form.tsx", "content": "export function CustomerForm() {…}" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -110,6 +111,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `unsupported`: elements, `{…}` expressions, comments), void HTML elements (422), a line
   break in `text`, and text that would render differently where it goes, such as spaces next
   to a line break (400 `invalid_op`). The text it already has is a no-op (`changed: false`).
+- `createFile` writes a new `.tsx`/`.jsx` file inside the root, making its directories. It
+  is refused when the file exists (409 `conflict`; it never overwrites) and when `content`
+  doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
+  undo deletes it (only if it still holds what was written) and redo writes it again. The
+  binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).
 - `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
   references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
   `attributes[].source` is the text as written.

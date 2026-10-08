@@ -50,9 +50,9 @@ export interface HistoryResult {
   history: HistoryState
 }
 
-/** One file's net change; history entries are lists of these. */
+/** One file's net change; history entries are lists of these. `null`: the file didn't (or no longer does) exist. */
 export interface FileChange {
   file: string
-  before: string
-  after: string
+  before: string | null
+  after: string | null
 }

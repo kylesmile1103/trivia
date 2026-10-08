@@ -105,6 +105,7 @@ function followSelection(result: ApplyResult, last: Op | undefined, selectedBefo
 function subjectOf(op: Op): string | null {
   switch (op.op) {
     case 'updateProp':
+    case 'setText':
     case 'remove':
     case 'bindQuery':
       return op.target
@@ -120,6 +121,10 @@ function subjectOf(op: Op): string | null {
 function filesOf(resultFile: string, ops: readonly Op[]): string[] {
   const files = new Set([resultFile])
   for (const op of ops) {
+    if (op.op === 'createFile') {
+      files.add(op.file)
+      continue
+    }
     const locators =
       op.op === 'insertChild' ? [op.parent] : op.op === 'move' ? [op.source, op.target] : op.op === 'moveNode' ? [op.source, op.parent] : [op.target]
     for (const locator of locators) {

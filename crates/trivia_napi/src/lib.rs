@@ -123,19 +123,19 @@ pub fn apply_op(root: String, op_json: String) -> String {
     })
 }
 
-/// A file's text across a transaction.
+/// A file's text across a transaction (`None`: the file doesn't exist).
 struct Working {
     file: String,
-    before: String,
-    current: String,
+    before: Option<String>,
+    current: Option<String>,
 }
 
-/// One file's net change, for the undo history.
+/// One file's net change, for the undo history: `before: null` for a file the batch created.
 #[derive(Serialize)]
 struct Change {
     file: String,
-    before: String,
-    after: String,
+    before: Option<String>,
+    after: Option<String>,
 }
 
 /// Apply `ops_json` (a JSON array of `Op`) as one transaction. The ops run in order on the
@@ -167,33 +167,44 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                 f
             };
             let op: Op = serde_json::from_value(raw).map_err(|e| step(EngineError::InvalidOp(e.to_string())))?;
+            let creates = matches!(op, Op::CreateFile { .. });
             let mut slots = Vec::new();
             for file in op.files().map_err(step)? {
                 let slot = match files.iter().position(|w| w.file == file) {
                     Some(slot) => slot,
                     None => {
-                        let text = ws.read(&file).map_err(step)?;
+                        // Only a createFile may name a file that doesn't exist yet.
+                        let text = if creates && !ws.exists(&file).map_err(step)? { None } else { Some(ws.read(&file).map_err(step)?) };
                         files.push(Working { file: file.clone(), before: text.clone(), current: text });
                         files.len() - 1
                     }
                 };
                 slots.push(slot);
             }
-            let outcome = match slots[..] {
-                [slot] => {
-                    let mut outcome = engine::apply_op(&files[slot].current, &files[slot].file, &op).map_err(step)?;
+            let text = |slot: usize| files[slot].current.clone().ok_or_else(|| step(EngineError::Internal(format!("{} is missing", files[slot].file))));
+            let outcome = match (&op, &slots[..]) {
+                (Op::CreateFile { file, content }, [slot]) => {
+                    if files[*slot].current.is_some() {
+                        return Err(step(EngineError::Conflict(format!("{file} already exists; createFile never overwrites a file"))));
+                    }
+                    let mut outcome = engine::ops::created(file, content).map_err(step)?;
+                    files[*slot].current = Some(std::mem::take(&mut outcome.code));
+                    outcome
+                }
+                (_, [slot]) => {
+                    let mut outcome = engine::apply_op(&text(*slot)?, &files[*slot].file, &op).map_err(step)?;
                     if outcome.changed {
-                        files[slot].current = std::mem::take(&mut outcome.code);
+                        files[*slot].current = Some(std::mem::take(&mut outcome.code));
                     }
                     outcome
                 }
                 // A move to another file edits both (`apply_across`).
-                [from, to] => {
-                    let across = engine::apply_across(&files[from].current, &files[from].file, &files[to].current, &files[to].file, &op)
+                (_, [from, to]) => {
+                    let across = engine::apply_across(&text(*from)?, &files[*from].file, &text(*to)?, &files[*to].file, &op)
                         .map_err(step)?;
-                    files[from].current = across.from;
+                    files[*from].current = Some(across.from);
                     let mut outcome = across.to;
-                    files[to].current = std::mem::take(&mut outcome.code);
+                    files[*to].current = Some(std::mem::take(&mut outcome.code));
                     outcome
                 }
                 _ => unreachable!("an op edits one or two files"),
@@ -246,31 +257,33 @@ pub fn components(root: String, ui_dir: String, import_base: String) -> String {
 }
 
 /// One guarded write: replace `file` with `content` only if it still equals `expected`.
+/// `expected: null` means the file must not exist (it is created); `content: null` deletes it.
 #[derive(Deserialize)]
 struct Write {
     file: String,
-    expected: String,
-    content: String,
+    expected: Option<String>,
+    content: Option<String>,
 }
 
 /// Write every file or none. All guards are checked before the first write; if a write still
 /// fails, the files already written get their previous text back.
 fn commit(ws: &Workspace, writes: &[Write]) -> Result<(), Failure> {
     for w in writes {
-        if ws.read(&w.file)? != w.expected {
+        let now = if ws.exists(&w.file)? { Some(ws.read(&w.file)?) } else { None };
+        if now != w.expected {
             return Err(Failure::conflict(&w.file));
         }
     }
     for (i, w) in writes.iter().enumerate() {
-        if let Err(e) = ws.restore(&w.file, &w.expected, &w.content) {
-            // `Workspace::restore` reports a failed guard as `Unsupported`: the file changed
-            // between the check above and this write.
+        if let Err(e) = put(ws, &w.file, w.expected.as_deref(), w.content.as_deref()) {
+            // A guard that fails only now means the file changed between the check above and
+            // this write.
             let mut failure = match e {
-                EngineError::Unsupported(_) => Failure::conflict(&w.file),
+                EngineError::Unsupported(_) | EngineError::Conflict(_) => Failure::conflict(&w.file),
                 e => Failure::from(e),
             };
             for done in writes[..i].iter().rev() {
-                if let Err(e) = ws.restore(&done.file, &done.content, &done.expected) {
+                if let Err(e) = put(ws, &done.file, done.content.as_deref(), done.expected.as_deref()) {
                     failure.message.push_str(&format!(
                         "; rolling back {} also failed ({e}), so it keeps the new content",
                         done.file
@@ -283,6 +296,16 @@ fn commit(ws: &Workspace, writes: &[Write]) -> Result<(), Failure> {
     Ok(())
 }
 
+/// Take `file` from `from` to `to` (`None`: absent), guarded by `from`.
+fn put(ws: &Workspace, file: &str, from: Option<&str>, to: Option<&str>) -> Result<(), EngineError> {
+    match (from, to) {
+        (Some(from), Some(to)) => ws.restore(file, from, to),
+        (None, Some(to)) => ws.create(file, to),
+        (Some(from), None) => ws.remove_file(file, from),
+        (None, None) => Ok(()),
+    }
+}
+
 /// Guarded undo/redo write: replace `file` with `content` only if it still equals `expected`,
 /// else fail with `conflict` and write nothing.
 #[napi]
@@ -290,7 +313,7 @@ pub fn restore(root: String, file: String, expected: String, content: String) ->
     engine_call(move || {
         Workspace::new(&root)
             .map_err(Failure::from)
-            .and_then(|ws| commit(&ws, &[Write { file, expected, content }]))
+            .and_then(|ws| commit(&ws, &[Write { file, expected: Some(expected), content: Some(content) }]))
             .map(|()| Value::Null)
     })
 }
