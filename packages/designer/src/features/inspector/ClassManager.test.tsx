@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NodeDetails } from '@/shared/engine/types'
 
 import { ClassManager } from './ClassManager'
-import { find, type Mounted, mount, press, settle, typeInto } from './test-utils'
+import { find, type Mounted, mount, press, settle, typeInto } from '@/shared/lib/test-utils'
 
 const MULTI_LINE = '\n        flex items-center\n        gap-2 px-2 p-4\n      '
 

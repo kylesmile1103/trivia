@@ -1,4 +1,4 @@
-// jsdom helpers for the inspector's component tests (test files that start with
+// jsdom helpers for component tests (test files that start with
 // `// @vitest-environment jsdom`). Only tests import this module; the app never does.
 
 import { act, type ReactNode } from 'react'

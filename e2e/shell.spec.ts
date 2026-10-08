@@ -330,3 +330,30 @@ test('zoom to fit shows the whole page without scrolling, and never zooms past 1
   await page.keyboard.press('Shift+Digit1')
   await expect(level).toHaveText('100%')
 })
+
+test('the layers tab shows the canvas as a tree: rows select, the canvas selection marks its row', async ({ page }) => {
+  await open(page)
+  await page.getByRole('tab', { name: 'Layers' }).click()
+  const tree = page.getByRole('tree', { name: 'Layers' })
+  const cancel = tree.getByRole('treeitem', { name: 'Button Cancel' })
+  await expect(cancel).toBeVisible()
+  await expect(tree.getByRole('treeitem', { name: 'CardFooter' })).toBeVisible()
+  // The badges come from plans.map(): one layer, three elements.
+  await expect(tree.getByRole('treeitem', { name: 'Badge Hobby ×3' })).toBeVisible()
+
+  await cancel.click()
+  await expect(cancel).toHaveAttribute('aria-selected', 'true')
+  const cancelLocator = await page.frameLocator('iframe[title="App canvas"]').getByRole('button', { name: 'Cancel' }).getAttribute('data-ast-node')
+  await expect(cancel).toHaveAttribute('data-layer', cancelLocator!)
+
+  // Selecting on the canvas marks the row.
+  const save = page.frameLocator('iframe[title="App canvas"]').getByRole('button', { name: 'Save changes' })
+  const b = (await save.boundingBox())!
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
+  await expect(tree.getByRole('treeitem', { name: 'Button Save changes' })).toHaveAttribute('aria-selected', 'true')
+
+  // `/` brings the component search back from the Layers tab.
+  await page.getByTestId('canvas-overlay').focus()
+  await page.keyboard.press('/')
+  await expect(page.getByRole('searchbox', { name: 'Search components' })).toBeFocused()
+})

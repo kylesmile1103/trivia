@@ -70,6 +70,7 @@ export function createHarnessCanvas(frame: HTMLIFrameElement): HarnessCanvas {
 
   return {
     elements,
+    layers: () => [], // the harness has no layers panel
 
     previewClassName(locator, previous, next) {
       for (const el of elements(locator)) {

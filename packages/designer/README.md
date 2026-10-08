@@ -19,17 +19,18 @@ Feature slices (see `docs/architecture.md`). Imports point down this list only:
 ```
 server/              the designer's own dev-server code (Node): the engine API guard
 src/
-  app/               composition root: main.tsx, the shell (App.tsx), the connect screen
+  app/               composition root: main.tsx, the shell (App.tsx), the left panel's tabs, the connect screen
   features/          vertical slices; each exposes its public API from index.ts
     canvas/          iframe, overlay, hit-testing, selection, drag-move, drop zones, previews
     inspector/       props, class manager, style panel (style/), CSS→Tailwind (tailwind/)
+    layers/          the rendered app's element tree (Layers tab)
     palette/         the user's components as insertable templates
     toolbar/         history, zoom, mode, theme, connection status
   shared/            used by any feature, knowing none
     engine/          the engine API client, its types, and the session that syncs them
     state/           the zustand store and the action bus (every edit goes through it)
     commands/        global commands and keyboard shortcuts
-    canvas.ts        the canvas API contract (installed by features/canvas)
+    canvas.ts        the canvas API contract (installed by features/canvas): previews, fit zoom, layers
     template.ts      the palette → canvas drag contract
     components/      the designer's own shared components
     ui/              shadcn/ui (components.json points `npx shadcn add` here)

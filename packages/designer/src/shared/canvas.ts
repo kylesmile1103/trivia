@@ -8,6 +8,18 @@
 // *new* utility values must use real CSS (`previewStyle`); `previewClassName` is exact only
 // for classes that already exist in the app's CSS.
 
+/** One element of the canvas as the user wrote it (a usage site), for the layers panel. */
+export interface Layer {
+  locator: string
+  /** Tag name: the engine's when the canvas has looked it up, else the DOM's best guess. */
+  name: string
+  /** Elements rendered for it: several inside `.map()`. */
+  count: number
+  /** Its text when it holds nothing but text (a label), shortened; else null. */
+  text: string | null
+  children: Layer[]
+}
+
 export interface CanvasApi {
   /** Iframe DOM elements currently carrying `locator` (several when rendered by .map()). */
   elements(locator: string): HTMLElement[]
@@ -17,6 +29,8 @@ export interface CanvasApi {
   previewStyle(locator: string, style: Record<string, string> | null): void
   /** Drop every preview (called on commit and after HMR). */
   clearPreviews(): void
+  /** The rendered app's element tree, as selection sees it (usage sites, nested as rendered). */
+  layers(): Layer[]
   /**
    * The zoom at which the whole canvas frame fits the visible canvas area, for the toolbar's
    * "Zoom to fit". Optional: a canvas whose frame always fills its area at 100% can omit it
@@ -30,6 +44,7 @@ const noop: CanvasApi = {
   previewClassName: () => {},
   previewStyle: () => {},
   clearPreviews: () => {},
+  layers: () => [],
 }
 
 let current: CanvasApi = noop
@@ -39,6 +54,7 @@ export const canvas: CanvasApi = {
   previewClassName: (l, p, n) => current.previewClassName(l, p, n),
   previewStyle: (l, s) => current.previewStyle(l, s),
   clearPreviews: () => current.clearPreviews(),
+  layers: () => current.layers(),
   fitZoom: () => current.fitZoom?.() ?? null,
 }
 

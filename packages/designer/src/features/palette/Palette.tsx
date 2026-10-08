@@ -35,13 +35,9 @@ export function Palette() {
     })
 
   return (
-    <aside aria-label="Components" className="flex w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex h-9 shrink-0 items-center justify-between px-3">
-        <h2 className="text-xs font-medium">Components</h2>
-        {total > 0 && <span className="text-xs text-muted-foreground tabular-nums">{total}</span>}
-      </div>
-      <div className="shrink-0 px-2 pb-2">
-        <SearchField value={query} onChange={setQuery} />
+    <aside aria-label="Components" className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-2 pt-2 pb-2">
+        <SearchField value={query} total={total} onChange={setQuery} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-width:thin]" onKeyDown={onListKeyDown}>
         <PaletteBody
@@ -72,7 +68,7 @@ export function Palette() {
   )
 }
 
-function SearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function SearchField({ value, total, onChange }: { value: string; total: number; onChange: (value: string) => void }) {
   return (
     <div className="relative">
       <SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -96,7 +92,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
             }
           }
         }}
-        placeholder="Search components"
+        placeholder={total > 0 ? `Search ${total} components` : 'Search components'}
         aria-label="Search components"
         autoComplete="off"
         spellCheck={false}

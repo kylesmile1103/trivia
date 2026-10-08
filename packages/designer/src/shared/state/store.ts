@@ -5,6 +5,8 @@ import { create } from 'zustand'
 import type { ComponentSchema, Health, HistoryState, NodeDetails, Placement } from '@/shared/engine/types'
 import type { Template } from '@/shared/template'
 
+export type LeftPanel = 'components' | 'layers'
+
 export type DragSource =
   | { kind: 'palette'; template: Template }
   | { kind: 'node'; locator: string; name: string }
@@ -45,6 +47,8 @@ export interface DesignerState {
   lastEdit: EditReceipt | null
   /** design: overlay captures pointer events; interact: events pass through to the app. */
   mode: 'design' | 'interact'
+  /** The left column's tab. */
+  panel: LeftPanel
   zoom: number
   drag: DragSource | null
   drop: DropTarget | null
@@ -65,6 +69,7 @@ export interface DesignerState {
   setDetails(details: NodeDetails | null): void
   setHistory(history: HistoryState, edit?: EditReceipt): void
   setMode(mode: 'design' | 'interact'): void
+  setPanel(panel: LeftPanel): void
   setZoom(zoom: number): void
   setDrag(drag: DragSource | null): void
   setDrop(drop: DropTarget | null): void
@@ -83,6 +88,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
   history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
   lastEdit: null,
   mode: 'design',
+  panel: 'components',
   zoom: 1,
   drag: null,
   drop: null,
@@ -109,6 +115,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
     }),
   setHistory: (history, edit) => set({ history, lastEdit: edit ?? null }),
   setMode: (mode) => set({ mode, hovered: null }),
+  setPanel: (panel) => set({ panel }),
   setZoom: (zoom) => set({ zoom: Math.min(2, Math.max(0.25, zoom)) }),
   setDrag: (drag) => set({ drag, drop: drag ? null : null }),
   setDrop: (drop) => set({ drop }),

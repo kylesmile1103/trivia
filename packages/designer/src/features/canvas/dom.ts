@@ -1,6 +1,8 @@
 // Read-only queries against the user's document inside the canvas iframe. Nothing here writes
 // to that DOM or attaches listeners to its elements.
 
+import type { Layer } from '@/shared/canvas'
+
 import { isLibraryLocator } from './locator'
 
 export const LOCATOR_ATTR = 'data-ast-node'
@@ -130,3 +132,41 @@ export function scrollTargetAt(doc: Document, point: Point, dx: number, dy: numb
   }
   return root
 }
+
+/** How much of a text-only element's text a layer shows. */
+const LAYER_TEXT_MAX = 40
+
+/**
+ * The element tree of `doc` as selection sees it: usage-site elements (outside `uiDir`),
+ * each under its nearest usage-site ancestor, in document order. Elements that share a
+ * locator (`.map()` copies) are one layer with a count; the first copy's subtree stands for
+ * all of them.
+ */
+export function layerTree(doc: Document, uiDir: string, nameOf: (locator: string, el: Element) => string): Layer[] {
+  const byLocator = new Map<string, Layer>()
+  const roots: Layer[] = []
+  for (const el of Array.from(doc.querySelectorAll(SELECTOR))) {
+    const locator = locatorOf(el)
+    if (locator === null || isLibraryLocator(locator, uiDir)) continue
+    const known = byLocator.get(locator)
+    if (known) {
+      known.count++
+      continue
+    }
+    const layer: Layer = { locator, name: nameOf(locator, el), count: 1, text: ownText(el), children: [] }
+    byLocator.set(locator, layer)
+    const parent = usageParent(el, uiDir)
+    const parentLocator = parent ? locatorOf(parent) : null
+    const into = parentLocator ? byLocator.get(parentLocator) : undefined
+    ;(into ? into.children : roots).push(layer)
+  }
+  return roots
+}
+
+function ownText(el: Element): string | null {
+  if (Array.from(el.childNodes).some((n) => n.nodeType !== 3)) return null // not only text
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  return text.length > LAYER_TEXT_MAX ? `${text.slice(0, LAYER_TEXT_MAX - 1)}…` : text
+}
+

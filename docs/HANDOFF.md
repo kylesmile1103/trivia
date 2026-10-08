@@ -203,10 +203,8 @@ writes `useQuery` hooks against it.
      `nullable`. Forms are generated as their own file plus one inserted `<XForm />`;
    - a `git status --porcelain` guard before any multi-file generation (refuse and list the
      dirty files; never auto-stash).
-4. MCP follow-ups: an outline tool and a screenshot tool ("agent builds, you watch"),
-   `trivia_sync_openapi`, and `bindQuery` through MCP.
-5. Engine: a cross-file move; `canvas.fitZoom`; a layers panel; a pinned regression fixture
-   for the user's CustomerCard case (JSDoc, `{/* TODO */}`, Prettier multi-line props).
+4. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
+5. Engine: a cross-file move.
 6. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
    designer's localhost URL and stay same-origin, so no bridge is needed.
 

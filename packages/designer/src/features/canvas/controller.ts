@@ -23,6 +23,7 @@ import {
   elementsFor,
   guessName,
   hitTest,
+  layerTree,
   locatorOf,
   scrollTargetAt,
   usageParent,
@@ -173,6 +174,11 @@ export class CanvasController {
     previewStyle: (locator, style) => this.previews.style(locator, style),
     clearPreviews: () => this.previews.clear(),
     fitZoom: () => this.fitZoom(),
+    layers: () => {
+      const doc = this.session.doc
+      const uiDir = designer.getState().health?.uiDir
+      return doc && uiDir ? layerTree(doc, uiDir, (locator, el) => this.nameFor(locator, el)) : []
+    },
   }
 
   private readonly iframe: HTMLIFrameElement

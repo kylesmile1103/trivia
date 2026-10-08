@@ -9,7 +9,7 @@ import { useGlobalShortcuts } from '@/shared/commands/shortcuts'
 import { isMac } from '@/shared/lib/env'
 import { designer } from '@/shared/state/store'
 
-import { find, type Mounted, mount, press, settle, typeInto } from '../test-utils'
+import { find, type Mounted, mount, press, settle, typeInto } from '@/shared/lib/test-utils'
 import { StylePanel } from './StylePanel'
 
 const engine = vi.hoisted(() => ({ undo: vi.fn(), redo: vi.fn() }))

@@ -5,6 +5,7 @@
 import { useEffect } from 'react'
 
 import { hasPrimaryModifier, isTypingTarget, watchFrameWindows } from '@/shared/lib/keyboard'
+import { designer } from '@/shared/state/store'
 
 import { type CommandId, commands } from './commands'
 import { PALETTE_SEARCH_ID } from './search'
@@ -35,14 +36,22 @@ function onKeyDown(event: KeyboardEvent): void {
   if (command === null) return
   event.preventDefault()
   if (command === 'search') {
-    const input = document.getElementById(PALETTE_SEARCH_ID)
-    if (input instanceof HTMLInputElement) {
-      input.focus()
-      input.select()
-    }
+    // The search lives on the Components tab: show it first, then focus it once rendered.
+    designer.getState().setPanel('components')
+    focusSearch(3)
     return
   }
   commands[command].run()
+}
+
+function focusSearch(tries: number): void {
+  const input = document.getElementById(PALETTE_SEARCH_ID)
+  if (input instanceof HTMLInputElement) {
+    input.focus()
+    input.select()
+  } else if (tries > 0) {
+    requestAnimationFrame(() => focusSearch(tries - 1))
+  }
 }
 
 export function useGlobalShortcuts(): void {

@@ -10,7 +10,7 @@ import type { NodeDetails, Op } from '@/shared/engine/types'
 import { designer } from '@/shared/state/store'
 
 import { Inspector } from './Inspector'
-import { find, type Mounted, mount, press, settle, typeInto } from './test-utils'
+import { find, type Mounted, mount, press, settle, typeInto } from '@/shared/lib/test-utils'
 
 const world = vi.hoisted(() => ({
   nodes: new Map<string, NodeDetails>(),
