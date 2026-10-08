@@ -67,8 +67,9 @@ export function humanize(name: string): string {
     .join(' ')
 }
 
-/** `not_started` → `Not started`. */
-function optionLabel(value: string): string {
+/** `not_started` → `Not started`; a code without lowercase letters (`EUR`, `GB`) stays as it is. */
+export function optionLabel(value: string): string {
+  if (!/[a-z]/.test(value)) return value
   const spaced = value.replace(/[_-]+/g, ' ').replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase()
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
@@ -84,7 +85,8 @@ export function columnFor(field: ColumnField, context: ColumnContext, label = hu
   const imports = new Map<string, ImportSpec>()
   const use = (name: string, source: string) => imports.set(name, { name, source })
   const key = field.name
-  const sortable = shape === 'text' || shape === 'number' || shape === 'date' || shape === 'dateTime'
+  // Every scalar sorts (an enum column too: a rebuilt Status column once lost the sorting it had).
+  const sortable = shape !== 'list' && shape !== 'other'
   const lines: string[] = ['{', `  id: ${str(key)},`, `  accessorKey: ${str(key)},`]
 
   // The header: a label, a sorter, and a filter for the field's type (refine-ui's data table).

@@ -92,6 +92,8 @@ describe('column plans', () => {
     expect(added).toContain('<DataTableFilterCombobox')
     expect(added).toContain('{ label: "Not started", value: "not_started" },')
     expect(added).toContain('<Badge variant="secondary">{getValue<string>()}</Badge>')
+    expect(added).toContain('<DataTableSorter column={column} />')
+    expect(added).not.toContain('enableSorting: false')
     expect(added).toMatch(/^      \{\n        id: "kycStatus",\n        accessorKey: "kycStatus",\n        header: \(\{ column \}\) => \(\n/)
     expect((await page()).columns.map((c: any) => c.key)).toEqual(['fullName', 'email', 'status', 'kycStatus', 'createdAt', 'actions'])
   })

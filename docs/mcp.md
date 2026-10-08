@@ -151,6 +151,20 @@ selected by a click. Each prompt was a fresh session:
 | "Below the settings card, add a table listing our customers from the API." | read the manifest, then one transaction: `createFile` (a table component), `insert`, `bindQuery`; checked it with a screenshot |
 | "The backend team changed the customers API. Regenerate our API client." | sync; it used to report the regeneration as an update. Now `contractChanged: false` lets it say the spec hasn't changed |
 
+### The Refine tools, with a real session (2026-10-09)
+
+The same setup on `examples/refine-admin`, with the designer open on the customers list:
+
+| Prompt | What the agent did |
+| --- | --- |
+| "In the customers table, also show the KYC status, right after Status." | get_page → `trivia_edit_columns` add `kycStatus` at index 3 (badge + multi-select filter), 2 calls |
+| "Our create customer form should also ask for a phone number." | get_page → `trivia_edit_fields` add `phone` after Email |
+| "Accounts need create, edit and detail pages." | `trivia_add_pages` (create, edit, show); then it read the new form and **relabelled the currency options**: the generator had written "Eur", "Usd", "Gbp". Fixed: codes keep their case |
+| "The backend team just updated the bank API spec. Bring the app in line with it." | drift → `trivia_sync_openapi` → drift → removed the Email column, rebuilt Status (column and edit field), added `nationality` to the create form, and checked drift was empty. It then **repaired two side effects by hand**: "Gb / Us / Vn" labels (same fix), and a rebuilt Status column that **lost its sorting**, because generated enum columns weren't sortable. Fixed: every scalar column sorts |
+
+The second fix shows a rebuild's cost: it replaces the column with the generated shape. A
+narrower fix for `enum_changed`, updating only the options, would keep customisations.
+
 Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
 `packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
 loop in a browser, and a screenshot taken by the real designer).

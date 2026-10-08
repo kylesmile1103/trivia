@@ -5,7 +5,7 @@
 
 import type { ManifestField } from '@trivia/contract-sync'
 
-import { type ImportSpec, escapeJsxText, fieldShape, humanize } from './columns.js'
+import { type ImportSpec, escapeJsxText, fieldShape, humanize, optionLabel } from './columns.js'
 
 export type FormField = Pick<ManifestField, 'name' | 'type' | 'format' | 'enum' | 'required' | 'nullable'> & { default?: unknown }
 
@@ -33,11 +33,6 @@ export const kebab = (s: string) =>
     .replace(/[^A-Za-z\d]+/g, '-')
     .toLowerCase()
 
-/** `not_started` → `Not started`. */
-function optionLabel(value: string): string {
-  const spaced = value.replace(/[_-]+/g, ' ').replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase()
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
-}
 
 function rule(field: FormField): string {
   const shape = fieldShape(field)

@@ -254,6 +254,9 @@ The order is the product's (`docs/product.md`, Slices):
    - Next.js;
    - selection that follows JSX renumbered by a value op.
 2. Review the ⚑ decisions in `docs/product.md`.
+3. A narrower drift fix for changed enum options: update the options in place instead of
+   rebuilding the column or field. A real agent showed that a rebuild drops customisations
+   (`docs/mcp.md`, the Refine session).
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).

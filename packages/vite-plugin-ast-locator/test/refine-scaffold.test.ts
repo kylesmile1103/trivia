@@ -64,6 +64,9 @@ describe('resource pages', () => {
     expect(code).toContain('import { AccountCreate } from "@/pages/accounts/create";')
     const create = read('src/pages/accounts/create.tsx')
     expect(create).toContain('currency: z.enum(["EUR", "USD", "GBP"]),')
+    // Codes keep their case in labels (a real agent caught "Eur").
+    expect(create).toContain('<SelectItem value="EUR">EUR</SelectItem>')
+    expect(create).toContain('<SelectItem value="checking">Checking</SelectItem>')
     expect(create).toContain('action: "create",')
     expect(read('src/pages/accounts/show.tsx')).toContain('const { result: record } = useShow<AccountDto>({')
     typecheck()
