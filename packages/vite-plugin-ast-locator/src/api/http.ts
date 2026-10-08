@@ -39,34 +39,44 @@ export interface ApiOptions extends CallerRules {
 
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void
 
-interface Route {
-  method: 'GET' | 'POST'
-  handle(url: URL, body: Json): unknown
-}
+type Method = 'GET' | 'POST'
+type Route = Partial<Record<Method, (url: URL, body: Json) => unknown>>
 
 export function createApiMiddleware(options: ApiOptions): Middleware {
   const { service } = options
 
   const routes = new Map<string, Route>([
-    ['/health', { method: 'GET', handle: (): Health => service.health() }],
-    ['/components', { method: 'GET', handle: () => service.components() }],
+    ['/health', { GET: (): Health => service.health() }],
+    ['/components', { GET: () => service.components() }],
     [
       '/inspect',
       {
-        method: 'GET',
-        handle: (url) => {
+        GET: (url) => {
           const locator = url.searchParams.get('locator')
           if (!locator) throw new ApiError('invalid_locator', 'missing ?locator=<file>#<component>#<i.j.k>')
           return service.inspect(locator)
         },
       },
     ],
-    ['/history', { method: 'GET', handle: (): HistoryState => service.history() }],
+    ['/history', { GET: (): HistoryState => service.history() }],
+    [
+      '/selection',
+      {
+        GET: () => service.selection(),
+        POST: (_url, body) => {
+          const { locator, name } = body
+          if (locator === null) return service.select(null)
+          if (typeof locator !== 'string' || typeof name !== 'string' || name === '') {
+            throw new ApiError('invalid_op', 'body must be { locator: string, name: string } or { locator: null }')
+          }
+          return service.select({ locator, name })
+        },
+      },
+    ],
     [
       '/apply',
       {
-        method: 'POST',
-        handle: (_url, body) => {
+        POST: (_url, body) => {
           const op = body['op']
           if (!isObject(op)) throw new ApiError('invalid_op', 'body must be { op: Op, label?: string }')
           return service.apply(op, labelOf(body))
@@ -76,8 +86,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     [
       '/batch',
       {
-        method: 'POST',
-        handle: (_url, body) => {
+        POST: (_url, body) => {
           const ops = body['ops']
           if (!Array.isArray(ops) || ops.length === 0 || !ops.every(isObject)) {
             throw new ApiError('invalid_op', 'body must be { ops: Op[] (non-empty), label?: string }')
@@ -86,8 +95,8 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         },
       },
     ],
-    ['/undo', { method: 'POST', handle: () => service.undo() }],
-    ['/redo', { method: 'POST', handle: () => service.redo() }],
+    ['/undo', { POST: () => service.undo() }],
+    ['/redo', { POST: () => service.redo() }],
   ])
 
   const dispatch = async (req: IncomingMessage, url: URL): Promise<unknown> => {
@@ -95,14 +104,17 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     const name = url.pathname.slice(API_BASE.length)
     const route = routes.get(name)
     if (!route) throw new ApiError('invalid_op', `unknown endpoint ${url.pathname} (see docs/api.md)`)
-    if (req.method !== route.method) {
-      throw new ApiError('invalid_op', `${url.pathname} takes ${route.method}, not ${req.method ?? 'an unknown method'}`)
+    const method = req.method === 'GET' || req.method === 'POST' ? req.method : null
+    const handle = method === null ? undefined : route[method]
+    if (!handle) {
+      const allowed = Object.keys(route).join(' or ')
+      throw new ApiError('invalid_op', `${url.pathname} takes ${allowed}, not ${req.method ?? 'an unknown method'}`)
     }
-    if (route.method === 'GET') return route.handle(url, {})
+    if (method === 'GET') return handle(url, {})
     if (!isJsonContentType(req.headers['content-type'])) {
       throw new ApiError('invalid_op', `${url.pathname} requires content-type: application/json`)
     }
-    return route.handle(url, await readBody(req))
+    return handle(url, await readBody(req))
   }
 
   const respond = async (req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> => {

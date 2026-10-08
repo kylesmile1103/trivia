@@ -299,16 +299,45 @@ describe('request rules', () => {
   })
 })
 
+describe('selection', () => {
+  it('starts empty, and keeps what the designer last posted', async () => {
+    expect((await get(socket, '/selection')).body.data).toEqual({ selection: null, version: 0, by: null })
+    const r = await post(socket, '/selection', { locator: SAVE, name: 'Button' })
+    expect(r.status).toBe(200)
+    expect(r.body.data).toEqual({ selection: { locator: SAVE, name: 'Button' }, version: 1, by: 'designer' })
+    expect((await get(socket, '/selection')).body.data).toEqual(r.body.data)
+    const cleared = await post(socket, '/selection', { locator: null })
+    expect(cleared.body.data).toEqual({ selection: null, version: 2, by: 'designer' })
+  })
+
+  it('needs a locator string and its tag name, or null', async () => {
+    for (const body of [{}, { locator: 3 }, { locator: SAVE }, { locator: SAVE, name: '' }]) {
+      const r = await post(socket, '/selection', body)
+      expect([r.status, r.body.error?.code], JSON.stringify(body)).toEqual([400, 'invalid_op'])
+    }
+    const garbage = await post(socket, '/selection', { locator: 'nope', name: 'Button' })
+    expect([garbage.status, garbage.body.error?.code]).toEqual([400, 'invalid_locator'])
+    expect((await get(socket, '/selection')).body.data.version).toBe(0)
+  })
+
+  it('is not moved by the designer’s own edits: the designer posts its selection itself', async () => {
+    await post(socket, '/selection', { locator: CANCEL, name: 'Button' })
+    await post(socket, '/apply', { op: { op: 'remove', target: CANCEL, expectedName: 'Button' } })
+    expect((await get(socket, '/selection')).body.data).toMatchObject({ selection: { locator: CANCEL }, version: 1 })
+  })
+})
+
 describe('only this machine may call the API', () => {
   const LAN = '192.168.1.66'
   // Script in a text node: written to source, it runs in the user's browser.
   const attack = { op: 'insert', target: APP_MAIN, placement: 'lastChild', snippet: '<p>{(() => "pwned")()}</p>' }
-  const READS = ['/health', '/components', `/inspect?locator=${encodeURIComponent(SAVE)}`, '/history', '/nope']
+  const READS = ['/health', '/components', `/inspect?locator=${encodeURIComponent(SAVE)}`, '/history', '/selection', '/nope']
   const WRITES: [string, unknown][] = [
     ['/apply', { op: attack }],
     ['/batch', { ops: [attack] }],
     ['/undo', {}],
     ['/redo', {}],
+    ['/selection', { locator: null }],
   ]
 
   it('refuses a write from another machine that sends no Origin (vite --host)', async () => {
