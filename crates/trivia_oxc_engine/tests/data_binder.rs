@@ -732,6 +732,24 @@ export function Customers() {
     assert_eq!(err_code(src, FILE, &customers(src, FILE)), "unsupported");
 }
 
+/// The factory's module imported through another spelling (relative, with its extension) is
+/// the same module: its binding is reused. Another module still is not.
+#[test]
+fn the_factory_imported_through_another_spelling_of_its_module_is_reused() {
+    let header = "import { listCustomersOptions } from \"../api/generated/@tanstack/react-query.gen.ts\"\nimport { DataTable } from \"@/components/data-table\"\n";
+    let src = format!("{header}\nexport function Customers() {{\n  return <DataTable />\n}}\n");
+    let out = bind_idempotent(&src, FILE, &customers(&src, FILE));
+    let expected = format!(
+        "{header}import {{ useQuery }} from \"@tanstack/react-query\"\n\nexport function Customers() {{\n  {HOOK}\n\n  return <DataTable {PROPS} />\n}}\n"
+    );
+    assert_eq!(out.code, expected);
+
+    let src = src.replace("../api/generated/", "../api/legacy/");
+    let err = bind_query(&src, FILE, &customers(&src, FILE)).unwrap_err();
+    assert_eq!(err.code(), "unsupported", "{err}");
+    assert!(err.to_string().contains("`listCustomersOptions`"), "{err}");
+}
+
 #[test]
 fn fragments_cannot_be_bound() {
     let src = "export function Customers() {\n  return <></>\n}\n";
@@ -993,6 +1011,99 @@ export function CustomerPage() {
 }
 "#;
     refused(src, &orders(src, "{ path: { id } }"), &["`id`", "<DataTable>"]);
+}
+
+/// The hook goes right after the declaration, so it reads the value the local has there. A
+/// local that is assigned again later (directly, in a block, in a callback, through
+/// destructuring, or a parameter that is reassigned) would silently feed the hook its first
+/// value: refused rather than guessed.
+#[test]
+fn args_reading_a_local_that_is_assigned_again_are_refused() {
+    let component = |params: &str, body: &str| {
+        format!(
+            "import {{ useParams }} from \"react-router\"\nimport {{ DataTable }} from \"@/components/data-table\"\n\nexport function CustomerPage({params}) {{\n{body}  return <DataTable rows={{[]}} />\n}}\n"
+        )
+    };
+    let again = "assigned again on";
+    // The review's case: the hook would always get `{ path: { id: "" } }`.
+    let in_try = "  let id = \"\"\n  try { id = useParams().id ?? \"\" } catch {}\n";
+    let in_callback = "  let page = 1\n  const next = () => {\n    page++\n  }\n";
+    for (params, body, args, name, at) in [
+        ("", in_try, "{ path: { id } }", "`id`", (again, 6)),
+        ("", "  let page = 1\n  page += 1\n", "{ query: { page } }", "`page`", (again, 6)),
+        ("", in_callback, "{ query: { page, next } }", "`page`", (again, 7)),
+        ("", "  let [id] = [\"\"]\n  ;[id] = [useParams().id]\n", "{ path: { id } }", "`id`", (again, 6)),
+        ("", "  var id = useParams().id\n  var id = \"x\"\n", "{ path: { id } }", "`id`", ("declared again on", 6)),
+        ("{ id }: { id?: string }", "  if (!id) id = \"new\"\n", "{ path: { id } }", "`id`", (again, 5)),
+    ] {
+        let src = component(params, body);
+        let (what, line) = at;
+        refused(&src, &orders(&src, args), &[name, &format!("{what} line {line};")]);
+    }
+    // A `let` that is never assigned again is just a declaration.
+    let src = component("", "  let { id } = useParams()\n");
+    let out = bind_idempotent(&src, FILE, &orders(&src, "{ path: { id } }"));
+    assert!(out.code.contains("  let { id } = useParams()\n  const { data: orderData"), "{}", out.code);
+}
+
+/// Only names that resolve to the component's own bindings constrain the hook. A global the
+/// args read stays a global at the component's top level, even when some unrelated nested
+/// scope declares the same name.
+#[test]
+fn args_reading_a_global_shadowed_only_elsewhere_keep_the_hook_first() {
+    let src = r#"import { DataTable } from "@/components/data-table"
+
+export function Customers() {
+  const xs = [1].map((navigator) => navigator)
+  return <DataTable data={xs} />
+}
+"#;
+    let mut binding = customers(src, FILE);
+    binding.options_args = Some("{ query: { lang: navigator.language } }".into());
+    let out = bind_idempotent(src, FILE, &binding);
+    assert!(
+        out.code.contains("export function Customers() {\n  const { data: customerData, isLoading: isCustomerLoading } = useQuery({ ...listCustomersOptions({ query: { lang: navigator.language } }) })\n\n  const xs"),
+        "{}",
+        out.code
+    );
+
+    // Likewise a name declared only in a block the element is not in: where the element is,
+    // it is the global of that name, and so it is where the hook goes.
+    let src = r#"import { DataTable } from "@/components/data-table"
+
+export function Customers() {
+  if (Math.random() > 1) {
+    const region = "eu"
+    console.log(region)
+  }
+  return <DataTable data={[]} />
+}
+"#;
+    let mut binding = customers(src, FILE);
+    binding.options_args = Some("{ query: { region } }".into());
+    let out = bind_idempotent(src, FILE, &binding);
+    assert!(out.code.contains("export function Customers() {\n  const { data: customerData"), "{}", out.code);
+}
+
+/// Where the element is, the name means a binding of a nested callback; at the component's
+/// top level it would mean another one. Refused, naming both.
+#[test]
+fn args_reading_a_name_the_element_sees_as_another_binding_are_refused() {
+    let src = r#"import { useParams } from "react-router"
+import { DataTable } from "@/components/data-table"
+
+export function CustomerPage({ ids }: { ids: string[] }) {
+  const { id } = useParams()
+  return (
+    <div title={id}>
+      {ids.map((id) => (
+        <DataTable key={id} rows={[]} />
+      ))}
+    </div>
+  )
+}
+"#;
+    refused(src, &orders(src, "{ path: { id } }"), &["`id`", "line 8", "line 5", "nested"]);
 }
 
 #[test]

@@ -370,6 +370,23 @@ pub fn jsx_text_renders(raw: &str) -> bool {
     !spans_lines && !raw.is_empty()
 }
 
+/// Most tags and brackets (`<`, `(`, `[` and `{` bytes, wherever they are) that untrusted
+/// source text — an insert's snippet, bindQuery's `optionsArgs` — may contain.
+///
+/// The nesting estimates ([`nesting_depth`], and the one for `optionsArgs`) can be misled:
+/// `x.in/((((…` reads as the start of a regex to them, `[/[//]/, ((((…` as a comment. This
+/// count cannot, and every bracket level starts at one of these bytes, so it bounds what any
+/// spelling can nest with brackets. A bracket level costs the parser up to about 3.6 KB of
+/// stack in a debug build (`{a:` objects; about 0.5 KB in release), so 1024 of them stay
+/// under 4 MB of the 8 MiB a main thread has, leaving room for the operator chains the byte
+/// limits allow (see `mutator::MAX_SNIPPET_BYTES`).
+pub const MAX_TAGS_AND_BRACKETS: usize = 1024;
+
+/// The number of `<`, `(`, `[` and `{` bytes in `src` (see [`MAX_TAGS_AND_BRACKETS`]).
+pub fn tags_and_brackets(src: &str) -> usize {
+    src.bytes().filter(|b| matches!(b, b'<' | b'(' | b'[' | b'{')).count()
+}
+
 /// Nesting depth of JSX/TSX source text such as a snippet: elements and fragments, `{…}`
 /// containers, `(…)`, `[…]`, `{…}` and template substitutions, from one pass over the bytes,
 /// so a deep input can be refused before the (recursive) parser sees it.

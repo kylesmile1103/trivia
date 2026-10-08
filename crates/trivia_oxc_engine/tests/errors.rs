@@ -340,11 +340,13 @@ fn deeply_nested_snippets_are_refused_before_parsing() {
             };
             let nested = |open: &str, inner: &str, close: &str, n: usize| format!("{}{inner}{}", open.repeat(n), close.repeat(n));
 
-            // The report's payload, and the documented limit (256 levels).
+            // The report's payload (140 KB) is refused on its size alone; and the documented
+            // depth limit (256 levels).
             let err = insert(nested("<a>", "", "</a>", 20_000)).expect_err("20k levels");
-            assert!(err.contains("256"), "{err}");
+            assert!(err.contains("4096"), "{err}");
             assert!(insert(nested("<a>", "", "</a>", 255)).is_ok());
-            assert!(insert(nested("<a>", "", "</a>", 257)).is_err());
+            let err = insert(nested("<a>", "", "</a>", 257)).expect_err("257 levels");
+            assert!(err.contains("257 levels") && err.contains("256"), "{err}");
             // Brackets, `{…}` and attribute values count too.
             assert!(insert(format!("<a>{{{}}}</a>", nested("(", "x", ")", 300))).is_err());
             assert!(insert(format!("<a>{{{}}}</a>", nested("[", "x", "]", 300))).is_err());
@@ -354,18 +356,21 @@ fn deeply_nested_snippets_are_refused_before_parsing() {
 
             // Width is not depth: many siblings, and brackets inside text, strings, comments
             // and templates, are fine.
-            assert!(insert(format!("<ul>{}</ul>", "<li>(x) [y] {'{'}</li>".repeat(300))).is_ok());
+            assert!(insert(format!("<ul>{}</ul>", "<li>(x) [y] {'{'}</li>".repeat(150))).is_ok());
             assert!(insert(format!("<p title=\"{}\">{}</p>", "(<[{".repeat(100), "(".repeat(300))).is_ok());
             assert!(insert(format!("<p>{{/* {} */ `{}` + \"{}\"}}</p>", "(".repeat(300), "[".repeat(300), "{".repeat(300))).is_ok());
 
-            // Text that only looks like closing tags does not hide real nesting.
-            assert!(insert(nested("<a t=\"/></a>\">", "", "</a>", 20_000)).is_err());
-            assert!(insert(nested("<a>{\"</a>\"}", "", "</a>", 20_000)).is_err());
-            assert!(insert(nested("<a>{/[</a>]/}", "", "</a>", 20_000)).is_err());
-            // And whatever the depth estimate says, a snippet with more than 2048 tags and
+            // Text that only looks like closing tags does not hide real nesting from the
+            // estimate. (Snippets that deep are also over the size limit.)
+            for (open, close) in [("<a t=\"/></a>\">", "</a>"), ("<a>{\"</a>\"}", "</a>"), ("<a>{/[</a>]/}", "</a>")] {
+                let deep = nested(open, "", close, 20_000);
+                assert!(trivia_oxc_engine::text::nesting_depth(&deep) >= 20_000, "{open}");
+                assert!(insert(deep).is_err(), "{open}");
+            }
+            // And whatever the depth estimate says, a snippet with more than 1024 tags and
             // brackets in total is refused, so no spelling can get a deeper one to the parser.
-            let err = insert(format!("<ul>{}</ul>", "<li />".repeat(2100))).expect_err("2100 tags");
-            assert!(err.contains("2048"), "{err}");
+            let err = insert(format!("<p>{}</p>", "(".repeat(1100))).expect_err("1100 brackets");
+            assert!(err.contains("1024"), "{err}");
         })
         .unwrap()
         .join()

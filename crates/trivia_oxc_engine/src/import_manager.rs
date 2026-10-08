@@ -5,7 +5,8 @@
 //! removed subtree held that name's last reference. Unrelated unused imports are never pruned.
 //!
 //! Style follows the file: new specifiers go into an existing value import from the same
-//! module (alphabetically when its list is sorted, case-insensitively or not, else appended;
+//! module, however the file spells it ([`same_module`]), alphabetically when its list is
+//! sorted (case-insensitively or not, else appended;
 //! one per line in multi-line lists, keeping trailing commas). New declarations copy the last
 //! import's quotes and semicolon and go on their own line after it.
 
@@ -63,17 +64,89 @@ pub(crate) fn validate_specs(specs: &[ImportSpec]) -> Result<()> {
     Ok(())
 }
 
+/// Whether the module specifiers `a` and `b`, both written in the file at `importer` (its
+/// project-relative path, as in locators), name the same module.
+///
+/// No module is resolved and nothing is read from disk: two specifiers are the same module
+/// when they are equal, or when both name a path inside the project and the paths match
+/// after normalization (see [`module_path`]): `../components/ui/button` written in
+/// `src/pages/Page.tsx`, `@/components/ui/button.tsx` and `./components/ui/button/index`
+/// written in `src/App.tsx` all name `src/components/ui/button`. Bare package specifiers
+/// (`@mui/material`, `react`) match only when they are spelled exactly the same.
+pub fn same_module(importer: &str, a: &str, b: &str) -> bool {
+    a == b || module_path(importer, a).is_some_and(|path| module_path(importer, b) == Some(path))
+}
+
+/// The extensions an import may name its module by (TypeScript resolves `./x.js` to `x.ts`).
+const MODULE_EXTENSIONS: [&str; 5] = [".tsx", ".ts", ".jsx", ".js", ".mjs"];
+
+/// The project path a specifier written in the file at `importer` names, without its
+/// extension or a trailing `/index`: a relative specifier (`./`, `../`, `.`, `..`) resolved
+/// against the importing file's directory, or `@/…` and `~/…`, which name `src/…`. That alias
+/// is the convention of shadcn's `components.json` (`"@/components"` with tsconfig paths
+/// `"@/*": ["./src/*"]`); a project that maps it elsewhere can only lose reuse (its other
+/// spellings are refused as different modules), never get a wrong match against a real
+/// `src/` path. `None` for bare specifiers (packages, `src/…` via `baseUrl`, absolute paths)
+/// and for paths that climb out of the project.
+fn module_path(importer: &str, source: &str) -> Option<String> {
+    let (mut path, rest) = if let Some(rest) = source.strip_prefix("@/").or_else(|| source.strip_prefix("~/")) {
+        (vec!["src"], rest)
+    } else if matches!(source, "." | "..") || source.starts_with("./") || source.starts_with("../") {
+        let mut dir = Vec::new();
+        push_segments(&mut dir, importer)?;
+        dir.pop(); // the importing file itself
+        (dir, source)
+    } else {
+        return None;
+    };
+    push_segments(&mut path, rest)?;
+    if let Some(last) = path.last_mut()
+        && let Some(stem) = MODULE_EXTENSIONS.iter().find_map(|ext| last.strip_suffix(ext)).filter(|s| !s.is_empty())
+    {
+        *last = stem;
+    }
+    if path.last() == Some(&"index") {
+        path.pop();
+    }
+    Some(path.join("/"))
+}
+
+/// Append the `/`-separated segments of `path` to `out`, applying `.` and `..` (and skipping
+/// empty segments). `None` when a `..` would climb above the start.
+fn push_segments<'s>(out: &mut Vec<&'s str>, path: &'s str) -> Option<()> {
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                out.pop()?;
+            }
+            segment => out.push(segment),
+        }
+    }
+    Some(())
+}
+
 /// Edits that make every name in `needed` resolvable, using `specs` for the missing ones.
+/// `file` is the project-relative path of the file `src` is (relative import specifiers are
+/// read against it).
 ///
 /// A spec whose name is already bound at module level adds nothing, but only when that
 /// binding is the import the spec asks for (a value import of the same name, or the default
-/// export, from the same module): otherwise the code would silently use some other component
-/// (`import { Button } from "@mui/material"`, a local `function Button`), so it is refused
-/// (`unsupported`). The engine resolves no modules, so the same module spelled another way
-/// (`../components/ui/button`) is refused too; leave its spec out to use the binding as it
-/// is. A name bound only as a type (`import type { X }`, `type X = …`) cannot be rendered or
-/// passed as a value, and the engine will not rewrite that declaration, so it is refused.
-pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], needed: &[String]) -> Result<Vec<Edit>> {
+/// export, from the same module — however that module is spelled, see [`same_module`]):
+/// otherwise the code would silently use some other component (`import { Button } from
+/// "@mui/material"`, a local `function Button`), so it is refused (`unsupported`). A name
+/// bound only as a type (`import type { X }`, `type X = …`) cannot be rendered or passed as a
+/// value, and the engine will not rewrite that declaration, so it is refused.
+///
+/// Missing specifiers join the file's value import of the same module (keeping the file's
+/// spelling of it), or a new declaration per module.
+pub fn ensure_imports(
+    src: &str,
+    file: &str,
+    program: &Program<'_>,
+    specs: &[ImportSpec],
+    needed: &[String],
+) -> Result<Vec<Edit>> {
     validate_specs(specs)?;
     let semantic = SemanticBuilder::new().build(program).semantic;
     let scoping = semantic.scoping();
@@ -108,18 +181,19 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
     for spec in specs {
         if let Some(id) = scoping.get_root_binding(spec.name.as_str().into()) {
             let line = text::line_col(src, scoping.symbol_span(id).start).0;
-            check_bound_as(&imports, spec, line)?;
+            check_bound_as(file, &imports, spec, line)?;
         }
     }
 
-    // Group the specifiers that are actually missing by source, keeping first-seen order.
+    // Group the specifiers that are actually missing by module, keeping first-seen order
+    // (and the first spelling).
     let mut groups: Vec<Group<'_>> = Vec::new();
     let mut seen = BTreeSet::new();
     for spec in specs.iter().filter(|s| !bound(&s.name)) {
         if !seen.insert(spec.name.as_str()) {
             continue;
         }
-        let index = match groups.iter().position(|g| g.source == spec.source) {
+        let index = match groups.iter().position(|g| same_module(file, g.source, &spec.source)) {
             Some(i) => i,
             None => {
                 groups.push(Group { source: &spec.source, default: None, named: Vec::new() });
@@ -143,7 +217,11 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
     let mut edits = Vec::new();
     let mut new_decls: Vec<Group<'_>> = Vec::new();
     for group in groups {
-        let target = imports.iter().find(|d| d.source.value.as_str() == group.source && d.import_kind.is_value());
+        // The declaration spelled exactly like the spec first, else any of the same module.
+        let values = || imports.iter().filter(|d| d.import_kind.is_value());
+        let target = values()
+            .find(|d| d.source.value.as_str() == group.source)
+            .or_else(|| values().find(|d| same_module(file, d.source.value.as_str(), group.source)));
         let Some(decl) = target else {
             new_decls.push(group);
             continue;
@@ -172,9 +250,9 @@ pub fn ensure_imports(src: &str, program: &Program<'_>, specs: &[ImportSpec], ne
     Ok(edits)
 }
 
-/// Accept a spec whose name the file already binds (declared on `line`) only when that
-/// binding is the declaration the spec asks for.
-fn check_bound_as(imports: &[&ImportDeclaration<'_>], spec: &ImportSpec, line: u32) -> Result<()> {
+/// Accept a spec whose name the file at `file` already binds (declared on `line`) only when
+/// that binding is the declaration the spec asks for.
+fn check_bound_as(file: &str, imports: &[&ImportDeclaration<'_>], spec: &ImportSpec, line: u32) -> Result<()> {
     let name = spec.name.as_str();
     let found = imports.iter().find_map(|decl| {
         decl.specifiers.iter().flatten().find(|s| s.name().as_str() == name).map(|s| (decl, s))
@@ -202,7 +280,7 @@ fn check_bound_as(imports: &[&ImportDeclaration<'_>], spec: &ImportSpec, line: u
             (false, format!("import * as {name} from \"{source}\""))
         }
     };
-    if matches && source == spec.source && decl.import_kind.is_value() {
+    if matches && same_module(file, source, &spec.source) && decl.import_kind.is_value() {
         return Ok(());
     }
     Err(EngineError::Unsupported(format!(
@@ -683,5 +761,57 @@ mod tests {
         assert_eq!(SortOrder::of(["B", "a"].into_iter()), Some(SortOrder::CaseSensitive));
         assert_eq!(SortOrder::of(["ChevronDownIcon", "CheckIcon", "ChevronUpIcon"].into_iter()), None);
         assert_eq!(SortOrder::of(["Only"].into_iter()), Some(SortOrder::CaseInsensitive));
+    }
+
+    #[test]
+    fn module_paths_normalize_relative_alias_extension_and_index_spellings() {
+        let page = "src/pages/Page.tsx";
+        for spelling in [
+            "@/components/ui/button",
+            "~/components/ui/button",
+            "@/components/ui/button.tsx",
+            "@/components/ui/button/index",
+            "@/components/ui/button/index.js",
+            "@/components/ui/button/",
+            "../components/ui/button",
+            "../components/ui/button.ts",
+            "../components/ui/button.jsx",
+            "../components/ui/button.mjs",
+            "./../components//ui/./button",
+            "../../src/components/ui/button",
+        ] {
+            assert_eq!(module_path(page, spelling).as_deref(), Some("src/components/ui/button"), "{spelling}");
+        }
+        let app = |spelling| module_path("src/App.tsx", spelling);
+        assert_eq!(app("./components/ui/button/index").as_deref(), Some("src/components/ui/button"));
+        assert_eq!(app(".").as_deref(), Some("src"));
+        assert_eq!(app("./index.tsx").as_deref(), Some("src"));
+        assert_eq!(app("..").as_deref(), Some(""));
+        assert_eq!(app("@/").as_deref(), Some("src"));
+        // Only the known extensions go; `react-query.gen` is a name, not an extension.
+        assert_eq!(module_path(page, "@/api/react-query.gen").as_deref(), Some("src/api/react-query.gen"));
+        assert_eq!(module_path(page, "../api/react-query.gen.ts").as_deref(), Some("src/api/react-query.gen"));
+        assert_eq!(module_path(page, "@/x.css").as_deref(), Some("src/x.css"));
+        assert_eq!(module_path(page, "@/x.d.ts").as_deref(), Some("src/x.d"));
+        assert_eq!(module_path(page, "@/.ts").as_deref(), Some("src/.ts"));
+        // Bare specifiers and paths that leave the project have none.
+        let bare = ["react", "@mui/material", "@components/ui/button", "components/ui/button", "/src/x", "~", "@"];
+        for bare in bare.into_iter().chain(["../../../x"]) {
+            assert_eq!(module_path(page, bare), None, "{bare}");
+        }
+    }
+
+    #[test]
+    fn same_module_compares_paths_and_bare_names_exactly() {
+        let page = "src/pages/Page.tsx";
+        assert!(same_module(page, "@/components/ui/button", "../components/ui/button/index.tsx"));
+        assert!(same_module(page, "@mui/material", "@mui/material"));
+        assert!(same_module(page, "../../../x", "../../../x"), "the same text is the same module");
+        assert!(!same_module(page, "@mui/material", "@mui/material/index"));
+        assert!(!same_module(page, "@/components/ui/button", "./components/ui/button"));
+        assert!(!same_module(page, "@/components/ui/button", "components/ui/button"));
+        assert!(!same_module(page, "@/components/ui/button", "@/components/ui/Button"));
+        assert!(!same_module(page, "../../../x", "../../../x/index"), "outside the project: text only");
+        assert!(!same_module("src/a/b.tsx", "./x", "../x"));
     }
 }
