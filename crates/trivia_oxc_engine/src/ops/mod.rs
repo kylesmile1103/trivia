@@ -154,8 +154,14 @@ pub enum Op {
     /// data/loading props (see `bind_query`).
     BindQuery(bind_query::QueryBinding),
     /// Write a new `.tsx`/`.jsx` file (e.g. a generated form component). Refused when the file
-    /// exists or `content` does not parse; undoing it deletes the file.
-    CreateFile { file: String, content: String },
+    /// exists (a no-op instead with `ifMissing`, which keeps the file as it is) or `content` does
+    /// not parse; undoing it deletes the file.
+    CreateFile {
+        file: String,
+        content: String,
+        #[serde(default)]
+        if_missing: bool,
+    },
 }
 
 impl Op {

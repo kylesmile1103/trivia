@@ -118,7 +118,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   break in `text`, and text that would render differently where it goes, such as spaces next
   to a line break (400 `invalid_op`). The text it already has is a no-op (`changed: false`).
 - `createFile` writes a new `.tsx`/`.jsx` file inside the root, making its directories. It
-  is refused when the file exists (409 `conflict`; it never overwrites) and when `content`
+  is refused when the file exists (409 `conflict`; it never overwrites; with `"ifMissing": true`
+  an existing file is kept as it is and the op is a no-op) and when `content`
   doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
   undo deletes it (only if it still holds what was written) and redo writes it again. The
   binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).

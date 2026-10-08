@@ -250,6 +250,18 @@ describe('createFile', () => {
     expect(exists()).toBe(false)
   })
 
+  it('with ifMissing, keeps a file that exists (a no-op) and creates one that doesn\'t', async () => {
+    fs.mkdirSync(path.join(root, path.dirname(FORM)), { recursive: true })
+    write(`${form}// mine\n`, FORM)
+    const kept = await post(socket, '/apply', { op: { op: 'createFile', file: FORM, content: form, ifMissing: true } })
+    expect([kept.status, kept.body.data.changed]).toEqual([200, false])
+    expect(read(FORM)).toBe(`${form}// mine\n`)
+    fs.rmSync(path.join(root, FORM))
+    const made = await post(socket, '/apply', { op: { op: 'createFile', file: FORM, content: form, ifMissing: true } })
+    expect(made.body.data.changed).toBe(true)
+    expect(read(FORM)).toBe(form)
+  })
+
   it('undo leaves a created file the user has edited since', async () => {
     await post(socket, '/apply', { op: { op: 'createFile', file: FORM, content: form } })
     write(`${form}// mine\n`, FORM)

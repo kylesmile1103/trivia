@@ -149,7 +149,12 @@ impl Workspace {
     /// The write is refused (`conflict`) if the file changed while the edit was computed.
     /// `createFile` writes its new file (`before` is then empty).
     pub fn apply(&self, op: &Op) -> Result<Applied> {
-        if let Op::CreateFile { file, content } = op {
+        if let Op::CreateFile { file, content, if_missing } = op {
+            if *if_missing && self.exists(file)? {
+                let before = self.read(file)?;
+                let outcome = ops::Outcome { file: file.clone(), changed: false, locator: None, code: before.clone() };
+                return Ok(Applied { outcome, before });
+            }
             self.create(file, content)?;
             return Ok(Applied { outcome: ops::created(file, content)?, before: String::new() });
         }

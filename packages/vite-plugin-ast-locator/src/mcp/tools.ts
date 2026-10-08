@@ -67,6 +67,7 @@ const op = z.discriminatedUnion('op', [
       op: z.literal('createFile'),
       file: z.string().min(1).describe('Project-relative path of a new .tsx/.jsx file, e.g. "src/components/customer-card.tsx"'),
       content: z.string().min(1).describe('Its full source; it must parse. Never overwrites an existing file'),
+      ifMissing: z.boolean().optional().describe('true: an existing file is kept as it is (a no-op) instead of refused'),
     })
     .strict(),
   z

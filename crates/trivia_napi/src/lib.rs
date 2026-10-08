@@ -183,7 +183,12 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
             }
             let text = |slot: usize| files[slot].current.clone().ok_or_else(|| step(EngineError::Internal(format!("{} is missing", files[slot].file))));
             let outcome = match (&op, &slots[..]) {
-                (Op::CreateFile { file, content }, [slot]) => {
+                (Op::CreateFile { file, content, if_missing }, [slot]) => {
+                    if *if_missing && let Some(existing) = &files[*slot].current {
+                        engine::ops::created(file, content).map_err(step)?;
+                        last = Some(engine::Outcome { file: file.clone(), changed: false, locator: None, code: existing.clone() });
+                        continue;
+                    }
                     if files[*slot].current.is_some() {
                         return Err(step(EngineError::Conflict(format!("{file} already exists; createFile never overwrites a file"))));
                     }

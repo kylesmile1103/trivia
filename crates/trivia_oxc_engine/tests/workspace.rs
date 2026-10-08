@@ -305,3 +305,16 @@ fn create_file_is_an_op_that_apply_runs() {
     assert_eq!(fs::read_to_string(dir.path().join("src/Form.tsx")).unwrap(), "export const F = () => <form />\n");
     assert_eq!(code(ws.apply(&op)), "conflict", "a second create finds the file");
 }
+
+#[test]
+fn create_file_if_missing_keeps_an_existing_file() {
+    let (dir, ws) = project();
+    let op: Op = serde_json::from_str(r#"{ "op": "createFile", "file": "src/App.tsx", "content": "export const X = () => <i />\n", "ifMissing": true }"#).unwrap();
+    let applied = ws.apply(&op).unwrap();
+    assert!(!applied.outcome.changed);
+    assert_eq!(fs::read_to_string(dir.path().join("src/App.tsx")).unwrap(), APP);
+    let fresh: Op = serde_json::from_str(r#"{ "op": "createFile", "file": "src/New.tsx", "content": "export const X = () => <i />\n", "ifMissing": true }"#).unwrap();
+    assert!(ws.apply(&fresh).unwrap().outcome.changed);
+    assert!(dir.path().join("src/New.tsx").exists());
+}
+
