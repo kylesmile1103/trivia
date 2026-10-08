@@ -4,11 +4,12 @@
 import { toast } from 'sonner'
 
 import { ApiError, engine } from '@/bridge/client'
-import type { ApplyResult, Op } from '@/bridge/types'
+import type { ApplyResult, HistoryResult, Op } from '@/bridge/types'
 import { designer } from '@/state/store'
 
 /** Edits sent to the engine (apply, batch, undo, redo) that haven't answered yet. */
 let inFlight = 0
+const idleListeners = new Set<() => void>()
 
 /**
  * True while an edit is on its way to disk. Its file may already be written, so a locator read
@@ -19,38 +20,105 @@ export function isApplying(): boolean {
   return inFlight > 0
 }
 
+/**
+ * Call `listener` whenever the last edit in flight has answered (applied, unchanged, refused or
+ * failed), after the store has taken its result. Returns the unsubscribe function.
+ */
+export function onIdle(listener: () => void): () => void {
+  idleListeners.add(listener)
+  return () => idleListeners.delete(listener)
+}
+
+function answered(): void {
+  inFlight--
+  if (inFlight === 0) for (const listener of [...idleListeners]) listener()
+}
+
 function report(error: unknown): void {
   const message = error instanceof ApiError ? error.message : String(error)
   toast.error(message)
 }
 
-/** Apply one op (one undo entry). Selects the affected node afterwards. */
+/** Apply one op (one undo entry). Selects the affected node afterwards, unless the user moved on (`followSelection`). */
 export async function dispatch(op: Op, label: string): Promise<ApplyResult | null> {
-  return run(() => engine.apply(op, label), op)
+  return run(() => engine.apply(op, label), [op])
 }
 
 /** Apply several ops as one transaction (one undo entry), e.g. a gesture. */
 export async function dispatchBatch(ops: Op[], label: string): Promise<ApplyResult | null> {
-  return run(() => engine.batch(ops, label), ops[ops.length - 1])
+  return run(() => engine.batch(ops, label), ops)
 }
 
-async function run(call: () => Promise<ApplyResult>, last: Op | undefined): Promise<ApplyResult | null> {
+async function run(call: () => Promise<ApplyResult>, ops: readonly Op[]): Promise<ApplyResult | null> {
+  const sentAt = performance.now()
+  const selectedBefore = designer.getState().selected
   inFlight++
   try {
     const result = await call()
-    const s = designer.getState()
     // A new `history` tells the canvas an HMR is on its way; an unchanged result writes
     // nothing and adds no entry (docs/api.md), so there is nothing to wait for.
-    if (result.changed) s.setHistory(result.history)
-    if (result.locator) s.select(result.locator)
-    else if (last?.op === 'remove') s.select(null)
+    if (result.changed) designer.getState().setHistory(result.history, { files: filesOf(result.file, ops), sentAt })
+    followSelection(result, ops.at(-1), selectedBefore)
     return result
   } catch (error) {
     report(error)
     return null
   } finally {
-    inFlight--
+    answered()
   }
+}
+
+/**
+ * Select what the edit produced, unless the user has moved on while it was on its way: an
+ * answer that pulled the selection back would undo their click. So the result is followed only
+ * when the selection is unchanged since the edit was sent, or is the node the edit was about
+ * (re-selected meanwhile), and no canvas press is waiting to select. A removal still lets go of
+ * its node when that is what is selected; a waiting press keeps waiting.
+ */
+function followSelection(result: ApplyResult, last: Op | undefined, selectedBefore: string | null): void {
+  const s = designer.getState()
+  const subject = last ? subjectOf(last) : null
+  if (s.selected !== selectedBefore && (subject === null || s.selected !== subject)) return
+  if (result.locator) {
+    if (!s.pressPending) s.select(result.locator)
+  } else if (last?.op === 'remove') {
+    const waiting = s.pressPending
+    s.select(null)
+    if (waiting) s.setPressPending(true)
+  }
+}
+
+/** The node an op edits in place or moves (its result locator is that node's new one). */
+function subjectOf(op: Op): string | null {
+  switch (op.op) {
+    case 'updateProp':
+    case 'remove':
+    case 'bindQuery':
+      return op.target
+    case 'move':
+    case 'moveNode':
+      return op.source
+    default:
+      return null
+  }
+}
+
+/** Every file the ops write: an op edits the file its locators name (moves never cross files). */
+function filesOf(resultFile: string, ops: readonly Op[]): string[] {
+  const files = new Set([resultFile])
+  for (const op of ops) {
+    const locator = op.op === 'insertChild' ? op.parent : op.op === 'move' || op.op === 'moveNode' ? op.source : op.target
+    const file = locatorFile(locator)
+    if (file) files.add(file)
+  }
+  return [...files]
+}
+
+/** `<file>#<component>#<path>`: the file part, split from the right (file paths may contain `#`). */
+function locatorFile(locator: string): string {
+  const last = locator.lastIndexOf('#')
+  const mid = last > 0 ? locator.lastIndexOf('#', last - 1) : -1
+  return mid > 0 ? locator.slice(0, mid) : ''
 }
 
 /** Remember what is selected so a history jump can't silently retarget the selection. */
@@ -60,28 +128,24 @@ function guardSelection(): void {
   if (name !== null) s.expectSelectedName(name)
 }
 
-export async function undo(): Promise<void> {
+async function jump(call: () => Promise<HistoryResult>): Promise<void> {
   guardSelection()
+  const sentAt = performance.now()
   inFlight++
   try {
-    const r = await engine.undo()
-    designer.getState().setHistory(r.history)
+    const r = await call()
+    designer.getState().setHistory(r.history, { files: r.files, sentAt })
   } catch (error) {
     report(error)
   } finally {
-    inFlight--
+    answered()
   }
 }
 
+export async function undo(): Promise<void> {
+  return jump(() => engine.undo())
+}
+
 export async function redo(): Promise<void> {
-  guardSelection()
-  inFlight++
-  try {
-    const r = await engine.redo()
-    designer.getState().setHistory(r.history)
-  } catch (error) {
-    report(error)
-  } finally {
-    inFlight--
-  }
+  return jump(() => engine.redo())
 }

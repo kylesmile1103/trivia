@@ -49,6 +49,8 @@ class FakeEngine {
   readonly ops: Op[] = []
   /** While set, applies wait for it: the edit is on its way to disk. */
   hold: Promise<void> | null = null
+  /** While set, an apply is written at once but its reply waits for it (a slow answer). */
+  delayReply: Promise<void> | null = null
   private entries = 0
 
   private indexOf(locator: string): number {
@@ -136,7 +138,9 @@ function serve(engine: FakeEngine): typeof fetch {
       if (path === '/apply') {
         const { op, label } = JSON.parse(String(init?.body)) as { op: Op; label: string }
         await engine.hold
-        return reply({ ok: true, data: engine.apply(op, label) })
+        const result = engine.apply(op, label)
+        await engine.delayReply
+        return reply({ ok: true, data: result })
       }
     } catch (error) {
       if (error instanceof EngineError) return reply({ ok: false, error: { code: error.code, message: error.message } }, error.status)
@@ -153,6 +157,8 @@ type FrameWindow = Window & typeof globalThis
 interface AppDocument {
   win: FrameWindow
   doc: Document
+  /** The canvas's resource-timing observers on this document (FrameSession watches for hot updates). */
+  resources: Array<(list: { getEntries(): Array<{ name: string; startTime: number; responseEnd: number }> }) => void>
 }
 
 const ROW = 30
@@ -170,6 +176,7 @@ function appDocument(): AppDocument {
   document.body.append(host)
   const win = host.contentWindow as FrameWindow
   const doc = host.contentDocument!
+  const resources: AppDocument['resources'] = []
   Object.assign(win, {
     ResizeObserver: class {
       observe() {}
@@ -177,8 +184,16 @@ function appDocument(): AppDocument {
       disconnect() {}
     },
     PerformanceObserver: class {
-      observe() {}
-      disconnect() {}
+      private readonly callback: AppDocument['resources'][number]
+      constructor(callback: AppDocument['resources'][number]) {
+        this.callback = callback
+      }
+      observe() {
+        resources.push(this.callback)
+      }
+      disconnect() {
+        resources.splice(resources.indexOf(this.callback) >>> 0, 1)
+      }
     },
   })
   win.Element.prototype.getBoundingClientRect = function (this: Element) {
@@ -190,7 +205,7 @@ function appDocument(): AppDocument {
     return x >= r.left && x < r.right && y >= r.top && y < r.bottom
   }
   doc.elementsFromPoint = (x: number, y: number) => [...doc.querySelectorAll('[data-rect]')].filter((el) => inside(el, x, y)).reverse()
-  return { win, doc }
+  return { win, doc, resources }
 }
 
 /** What the locator plugin and React would render for `children`. */
@@ -268,8 +283,21 @@ function mountCanvas(engine: FakeEngine) {
   return {
     view: (): CanvasView => views.at(-1) ?? EMPTY_VIEW,
     doc: () => app.doc,
-    /** HMR: React re-renders the app from the source as it is now. */
-    hmr: () => render(app, engine.children),
+    /** HMR: Vite re-imports the page's module, and React re-renders the app from the source as it is now. */
+    hmr() {
+      this.hotUpdate(FILE)
+      render(app, engine.children)
+    },
+    /**
+     * Vite re-imported `file` (`?t=`), as the app's resource timeline reports it: fetched just now,
+     * requested `requestedAgo` ms earlier. Times are in the app document's own clock. jsdom's
+     * frame has origin "null", which file: URLs share, so the entry is same-origin as Vite's are.
+     */
+    hotUpdate(file: string, requestedAgo = 10) {
+      const now = app.win.performance.now()
+      const entry = { name: `file:///${file}?t=${Date.now()}`, startTime: now - requestedAgo, responseEnd: now }
+      for (const observer of [...app.resources]) observer({ getEntries: () => [entry] })
+    },
     /** Vite reloads the page instead: a new document renders the source as it is now. */
     reload: () => {
       app.win.dispatchEvent(new Event('pagehide'))
@@ -342,7 +370,9 @@ beforeEach(() => {
     mode: 'design',
     zoom: 1,
     expectedSelectedName: null,
+    pressPending: false,
     history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
+    lastEdit: null,
   })
 })
 
@@ -509,6 +539,209 @@ describe('palette drops', () => {
     expect(c.view().cursor).toMatchObject({ refused: true, target: expect.stringMatching(/updat/i) })
     await c.dropTemplate(pointOf(0, 'top'), BADGE)
     expect(engine.ops).toHaveLength(1)
+  })
+})
+
+/** Milliseconds from now until the canvas stops showing itself busy; Infinity if it hasn't within `limit`. */
+async function untilSettled(c: ReturnType<typeof mountCanvas>, limit: number): Promise<number> {
+  const start = performance.now()
+  while (performance.now() - start < limit) {
+    if (!c.view().updating) return performance.now() - start
+    await tick(10)
+  }
+  return Infinity
+}
+
+describe('a click while the app updates is deferred, not dropped', () => {
+  it('selects what is under the pointer once the edit has rendered', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete') // the <p>: the <h2> above it keeps its place
+    expect(engine.children).toEqual(['h2', 'button'])
+    expect(c.view().updating).toBe(true)
+
+    await c.click(pointOf(0)) // the <h2>, before HMR has rendered
+    expect(designer.getState().selected).toBeNull() // not from the old render
+    expect(designer.getState().pressPending).toBe(true)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.0'))
+    expect(c.view().selection).toMatchObject({ locator: at('0.0'), boxes: [{ y: 10 }] })
+    expect(designer.getState().pressPending).toBe(false)
+    expect(engine.ops).toHaveLength(1) // a selection, never an edit
+  })
+
+  it('waits for an edit that is still on its way, then for its render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.hold = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    expect(designer.getState().selected).toBe(at('0.2'))
+    release()
+    engine.hold = null
+    await idle()
+    expect(designer.getState().selected).toBeNull() // the removal's own follow-up: its node is gone…
+    expect(designer.getState().pressPending).toBe(true) // …and the click still waits
+    expect(c.view().updating).toBe(true)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.0'))
+  })
+
+  it('selects as soon as the edit it waited for is refused (nothing to render)', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.hold = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await c.click(pointOf(1))
+    engine.children = ['h2', 'button', 'div'] // another writer got there first: the engine answers 409
+    release()
+    engine.hold = null
+    await idle()
+    expect(toasts.some((t) => /expected <p>/.test(t))).toBe(true)
+    expect(c.view().updating).toBe(false)
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+
+  it('gives way to a selection made meanwhile', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    designer.getState().select(at('0.1')) // e.g. the inspector's breadcrumbs
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+
+  it('is dropped by Escape', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    await c.press('Escape')
+    expect(designer.getState().pressPending).toBe(false)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBeNull()
+  })
+
+  it('a later click replaces it', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    await c.click(pointOf(1))
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+})
+
+describe('the canvas is busy for a bounded time after an edit', () => {
+  it('settles at a deadline when the app never stops changing its DOM', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    // A ticker: the app changes its DOM every 20 ms (an animation library, a clock).
+    const ticker = setInterval(() => c.doc().body.setAttribute('data-tick', String(performance.now())), 20)
+    try {
+      await c.click(pointOf(2))
+      await c.press('Delete')
+      const answered = performance.now()
+      c.hmr()
+      await tick(300)
+      expect(c.view().updating).toBe(true) // never quiet: only the deadline ends it
+      await c.click(pointOf(0))
+      expect(await untilSettled(c, 3000)).toBeLessThan(Infinity)
+      expect(performance.now() - answered).toBeLessThan(1000)
+      await idle()
+      expect(designer.getState().selected).toBe(at('0.0'))
+    } finally {
+      clearInterval(ticker)
+    }
+  })
+
+  it('does not settle before the edit’s own hot update has arrived, however much the app changes', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    const ticker = setInterval(() => c.doc().body.setAttribute('data-tick', String(performance.now())), 20)
+    try {
+      await c.click(pointOf(2))
+      await c.press('Delete')
+      await tick(900) // Vite is slow to re-import (it took over a second in a real run)
+      expect(c.view().updating).toBe(true) // the DOM can't show the edit yet
+      const hot = performance.now()
+      c.hmr()
+      expect(await untilSettled(c, 3000)).toBeLessThan(Infinity)
+      expect(performance.now() - hot).toBeLessThan(1000)
+    } finally {
+      clearInterval(ticker)
+    }
+  })
+
+  it('does not take an app change between the answer and the hot update for the edit’s render', async () => {
+    const c = await open(['li#a', 'li#b', 'li#c'])
+    await c.click(pointOf(0))
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    c.doc().body.setAttribute('data-clock', '12:01') // the app ticks once, then is quiet
+    await quiet()
+    await c.click(pointOf(1)) // li#b on the canvas, stamped #0.1: li#c on disk, same name
+    await c.press('Delete')
+    expect(engine.ops).toHaveLength(1)
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1')) // the click, on what the canvas shows now
+  })
+
+  it('settles right after the answer when the hot update rendered before it arrived', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete') // written; the answer is slow
+    c.hotUpdate('src/Page.tsx') // Vite re-imported the module…
+    c.hmr() // …and React rendered it, before the designer heard back
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick()
+    expect(await untilSettled(c, 3000)).toBeLessThan(300)
+  })
+
+  it('does not take another file’s hot update for the edit’s render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    c.hotUpdate('src/Other.tsx')
+    c.doc().body.setAttribute('data-other', 'rendered') // that other module's render
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick(400)
+    expect(c.view().updating).toBe(true)
+    c.hmr()
+    expect(await untilSettled(c, 3000)).toBeLessThan(400)
+  })
+
+  it('does not take a hot update requested before the edit was sent for its render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await tick(60)
+    c.hotUpdate('src/Page.tsx', 1000) // asked for before the edit went out: an earlier change
+    c.doc().body.setAttribute('data-earlier', 'rendered')
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick(400)
+    expect(c.view().updating).toBe(true)
   })
 })
 
