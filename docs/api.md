@@ -91,8 +91,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   the manifest has uncommitted changes (`git status --porcelain`, untracked files included),
   it is refused with 409 `conflict` naming them, unless `force: true`. Outside a git work tree
   nothing is guarded. Regeneration is not an undo entry; git is its undo.
-  `SyncResult = { source, outputDir, files, schemaHash, resources: string[], git }`, where `git`
-  says what the guard found: `"clean"`, `"forced: replaced uncommitted changes in …"` or
+  `SyncResult = { source, outputDir, files, schemaHash, contractChanged, resources: string[], git }`:
+  `contractChanged` is false when the spec's `schemaHash` is the one the manifest already had,
+  and `git` says what the guard found: `"clean"`, `"forced: replaced uncommitted changes in …"` or
   `"not a git work tree: nothing was guarded"`. A contract-sync failure is 422 `unsupported`.
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on

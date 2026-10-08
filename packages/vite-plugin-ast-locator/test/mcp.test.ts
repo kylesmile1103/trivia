@@ -91,7 +91,8 @@ describe('trivia_get_selection', () => {
   it('says nothing is selected, and what to ask the user', async () => {
     const r = await call('trivia_get_selection')
     expect(r.isError).toBeFalsy()
-    expect(r.structuredContent).toEqual({ selection: null })
+    // The hint is in the data too: Claude Code shows the agent structuredContent, not the text.
+    expect(r.structuredContent).toMatchObject({ selection: null, hint: expect.stringContaining('Ask the user to select') })
     expect(text(r)).toContain('Ask the user to select')
   })
 
@@ -111,6 +112,9 @@ describe('trivia_get_selection', () => {
     const r = await call('trivia_get_selection')
     expect(r.isError).toBe(true)
     expect(text(r)).toMatch(/^stale_locator: .*<Badge>.*<Button>/s)
+    // Reading the selection again won't help: the advice is to ask the user, not to retry.
+    expect(text(r)).toContain('Ask the user to select the element again')
+    expect(text(r)).not.toContain('call trivia_get_selection')
   })
 })
 
@@ -223,10 +227,22 @@ describe('trivia_undo', () => {
     const wrong = await call('trivia_undo', { label: 'Agent: Something else' })
     expect(wrong.isError).toBe(true)
     expect(text(wrong)).toContain('Agent: Make it outline')
+    expect(text(wrong)).toContain('tell the user rather than undoing it')
     expect(read()).toBe(edited)
     const r = await call('trivia_undo', { label: 'Agent: Make it outline' })
     expect(r.isError).toBeFalsy()
     expect(r.structuredContent).toMatchObject({ files: [DASHBOARD], history: { canUndo: false, redoLabel: 'Agent: Make it outline' } })
+    expect(read()).toBe(original)
+  })
+
+  it('works from a fresh session: the selection read says what undo would undo', async () => {
+    await call('trivia_apply', {
+      label: 'Make it outline',
+      ops: [{ op: 'updateProp', target: SAVE, expectedName: 'Button', prop: 'variant', value: 'outline' }],
+    })
+    const { history } = (await call('trivia_get_selection')).structuredContent
+    expect(history).toMatchObject({ canUndo: true, undoLabel: 'Agent: Make it outline' })
+    expect((await call('trivia_undo', { label: history.undoLabel })).isError).toBeFalsy()
     expect(read()).toBe(original)
   })
 })
@@ -307,6 +323,8 @@ describe('trivia_sync_openapi', () => {
     const r = await call('trivia_sync_openapi')
     expect(r.isError).toBeFalsy()
     expect(r.structuredContent).toMatchObject({ source: 'openapi/customers.openapi.json', outputDir: 'src/api/generated', resources: ['Customer', 'Health'] })
+    expect(r.structuredContent).toMatchObject({ contractChanged: true })
+    expect(r.structuredContent.note).toBeUndefined()
     expect(r.structuredContent.git).toContain('not a git work tree')
     expect((await get(server.socket, '/manifest')).body.data.drift.status).toBe('current')
     expect(fs.existsSync(path.join(root, 'src/api/generated/zod.gen.ts'))).toBe(true) // the manifest had zod
@@ -322,10 +340,14 @@ describe('trivia_sync_openapi', () => {
     const refused = await call('trivia_sync_openapi')
     expect(refused.isError).toBe(true)
     expect(text(refused)).toMatch(/^conflict: regenerating would replace uncommitted changes in src\/api\/generated\/index\.ts/)
+    expect(text(refused)).toContain('Ask the user to commit those files first')
+    expect(text(refused)).not.toContain('changed on disk')
     expect(fs.readFileSync(index, 'utf8')).toContain('// hand edit')
     const forced = await call('trivia_sync_openapi', { force: true })
     expect(forced.isError).toBeFalsy()
     expect(forced.structuredContent.git).toBe('forced: replaced uncommitted changes in src/api/generated/index.ts')
+    // The spec itself is as it was: say so, rather than let the agent report an API change.
+    expect(forced.structuredContent).toMatchObject({ contractChanged: false, note: expect.stringContaining('has not changed') })
     expect(fs.readFileSync(index, 'utf8')).not.toContain('// hand edit')
   }, 60_000)
 })

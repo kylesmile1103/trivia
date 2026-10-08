@@ -89,6 +89,14 @@ const op = z.discriminatedUnion('op', [
 // ---------------------------------------------------------------------------------------------
 
 /** What to do next after each kind of refusal, for the agent. */
+/** A stale selection: reading it again changes nothing until the user selects again. */
+const RESELECT: Partial<Record<ErrorCode, string>> = {
+  stale_locator:
+    'The file was edited since the user selected this, so the selection is out of date. Ask the user to select the ' +
+    'element again; trivia_get_selection keeps failing until they do.',
+  node_not_found: 'The selected element is gone from the file. Ask the user to select the element again.',
+}
+
 const NEXT: Partial<Record<ErrorCode, string>> = {
   stale_locator: 'The file changed since you read it: call trivia_get_selection (or trivia_inspect) again and retry with what it returns.',
   node_not_found: 'The file changed since you read it: call trivia_get_selection (or trivia_inspect) again and retry with what it returns.',
@@ -99,15 +107,21 @@ const NEXT: Partial<Record<ErrorCode, string>> = {
 }
 
 export function registerTools(server: McpServer, service: EngineService, log: (message: string) => void): void {
-  /** Run a tool body; engine refusals become tool errors the agent can act on. */
-  const run = async (body: () => Promise<{ data: Record<string, unknown>; summary: string }>): Promise<CallToolResult> => {
+  /**
+   * Run a tool body; engine refusals become tool errors the agent can act on. `next` replaces
+   * NEXT's advice for codes that mean something else from this tool.
+   */
+  const run = async (
+    body: () => Promise<{ data: Record<string, unknown>; summary: string }>,
+    next: Partial<Record<ErrorCode, string>> = {},
+  ): Promise<CallToolResult> => {
     try {
       const { data, summary } = await body()
       return { content: [{ type: 'text', text: `${summary}\n${JSON.stringify(data, null, 2)}` }], structuredContent: data }
     } catch (error) {
       if (error instanceof ApiError) {
-        const next = NEXT[error.code]
-        return { isError: true, content: [{ type: 'text', text: `${error.code}: ${error.message}${next ? `\n${next}` : ''}` }] }
+        const advice = next[error.code] ?? NEXT[error.code]
+        return { isError: true, content: [{ type: 'text', text: `${error.code}: ${error.message}${advice ? `\n${advice}` : ''}` }] }
       }
       const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
       log(`[trivia] MCP tool failed: ${detail}`)
@@ -133,17 +147,18 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       description:
         'What the user has selected on the Trivia canvas: the element\'s locator, tag name, file and line, attributes, ' +
         'text, parent and children, and, for components from the user\'s library, the props it takes (with enum options). ' +
-        'Call this first when the user says "this", "the selected …" or "here". Pass its locator and name to trivia_apply.',
+        'Call this first when the user says "this", "the selected …" or "here". Pass its locator and name to trivia_apply. ' +
+        'Also returns the shared undo history (history.undoLabel is what trivia_undo would undo next).',
       annotations: reads,
     },
     () =>
       run(async () => {
         const { selection } = service.selection()
+        const history = service.history()
         if (selection === null) {
-          return {
-            data: { selection: null },
-            summary: 'Nothing is selected in the Trivia designer. Ask the user to select an element on the canvas.',
-          }
+          // Clients such as Claude Code show the agent structuredContent, not the summary.
+          const hint = 'Nothing is selected in the Trivia designer. Ask the user to select an element on the canvas.'
+          return { data: { selection: null, hint, history }, summary: hint }
         }
         const node = describeNode(selection.locator)
         if (node.name !== selection.name) {
@@ -152,8 +167,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
             `the selection was <${selection.name}> but ${selection.locator} now holds <${node.name}>; ask the user to select it again`,
           )
         }
-        return { data: { selection: node }, summary: `Selected: <${node.name}> at ${node.locator}` }
-      }),
+        return { data: { selection: node, history }, summary: `Selected: <${node.name}> at ${node.locator}` }
+      }, RESELECT),
   )
 
   server.registerTool(
@@ -298,10 +313,16 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
           ...(zod !== undefined ? { zod } : {}),
           ...(force !== undefined ? { force } : {}),
         })
+        const note = result.contractChanged
+          ? null
+          : `The contract is the same as at the last sync: ${result.source} has not changed, so neither did the generated ` +
+            'code. If the backend changed its API, that spec has not been updated yet.'
         return {
-          data: { ...result },
-          summary: `Regenerated ${result.files} files in ${result.outputDir} from ${result.source}: ${result.resources.join(', ')}.`,
+          data: { ...result, ...(note ? { note } : {}) },
+          summary: `Regenerated ${result.files} files in ${result.outputDir} from ${result.source}: ${result.resources.join(', ')}.${note ? ` ${note}` : ''}`,
         }
+      }, {
+        conflict: 'Ask the user to commit those files first, or whether to replace their changes (force: true).',
       }),
   )
 
@@ -311,8 +332,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       title: 'Undo an edit',
       description:
         'Undo the most recent entry of the undo history the designer shares, which may be the user\'s. Pass the label you ' +
-        'expect to undo (history.undoLabel from your last trivia_apply result): the undo is refused when the next entry is ' +
-        'another one.',
+        'expect to undo (history.undoLabel from your last trivia_apply result, or from trivia_get_selection): the undo is ' +
+        'refused when the next entry is another one. Agents\' entries are labelled "Agent: …"; the others are the user\'s.',
       inputSchema: { label: z.string().min(1).describe('The undoLabel to undo, e.g. "Agent: Make Save outline"') },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
@@ -324,6 +345,10 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         }
         const result = await service.undo()
         return { data: { ...result }, summary: `Undid "${label}".` }
+      }, {
+        conflict:
+          'Nothing was undone. If another entry is next, it may be the user\'s own edit: tell the user rather than undoing ' +
+          'it. If the file was edited since, Trivia can no longer undo that entry: tell the user.',
       }),
   )
 }

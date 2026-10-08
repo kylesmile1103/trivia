@@ -72,16 +72,20 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   uncommitted generated code unless `force`) and `trivia_screenshot`: the open designer
   captures its canvas with `html-to-image` over a long poll. A closed designer tab's
   long-poll used to take requests and never answer; dropped on hang-up, with a test.
+- **Point and ask, tried with a real Claude Code session** (`claude -p`, only the Trivia
+  server; `docs/mcp.md` has the prompts and what the agent did). Fixed what it tripped on:
+  Claude Code shows the model `structuredContent`, not the text summary, so hints are now
+  data fields; `trivia_get_selection` returns the undo history (a fresh session couldn't
+  undo); error advice is per tool; sync says whether the contract changed.
 
 **Gate on `main` (all green):**
 - `cargo test --workspace` 262 passed; clippy `-D warnings` clean.
-- Vitest: plugin 112, designer 444 (including 6 architecture rules), contract-sync 79.
+- Vitest: plugin 113, designer 444 (including 6 architecture rules), contract-sync 79.
 - napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
 - Playwright 44/44, twice in a row.
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
-  and Playwright covers the same flows. No real Claude Code session has used the MCP endpoint
-  yet: the SDK client in the tests stands in for it.
+  and Playwright covers the same flows.
 
 **Brief acceptance:** Steps 1–3 were met in session 1 (validated by hand in Chrome; GIFs in
 the user's `~/Downloads/trivia-*.gif`).
@@ -199,15 +203,15 @@ writes `useQuery` hooks against it.
   `pre-push` enforce this (case-insensitive). Never use `--no-verify`.
 - **Selecting a Chrome browser:** if clicks don't register, run `/chrome` to pick the right browser (a backgrounded or other browser drops presses). After HMR, `import()`-ing a module in the page gives a fresh copy, so trust screenshots.
 - **Probing agents write to live servers.** Stop your dev servers, or keep them on ports no agent knows, while review or verify agents run, and check `git status` afterwards.
+- **The plugin's vitest copies `examples/playground` as it is on disk.** Leftover edits from a
+  manual or agent session there fail ten unrelated-looking MCP tests. `git checkout -- examples/`
+  (and delete new files) first.
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
   per `Op` variant.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. **Try point and ask in a real Claude Code session**
-   (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
-   real agent trips on (tool descriptions, error hints).
-2. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
+1. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
    designer's localhost URL and stay same-origin, so no bridge is needed.
 
 ## 8. Repo map

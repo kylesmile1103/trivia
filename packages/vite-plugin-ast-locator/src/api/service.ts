@@ -45,6 +45,8 @@ export interface SyncResult {
   outputDir: string
   files: number
   schemaHash: string
+  /** False when the spec's schemaHash is the one the manifest already had: nothing in the contract changed. */
+  contractChanged: boolean
   resources: string[]
   /** What the git guard found: "clean", what `force` replaced, or that the project isn't a git work tree. */
   git: string
@@ -121,7 +123,11 @@ export class EngineService {
     return this.#queue.run(async () => {
       const root = this.#options.root
       const { manifest } = await this.manifest()
-      const current = manifest as { source?: { location?: string }; modules?: { outputDir?: string; zod?: unknown } } | null
+      const current = manifest as {
+        schemaHash?: unknown
+        source?: { location?: string }
+        modules?: { outputDir?: string; zod?: unknown }
+      } | null
       const input = options.input ?? current?.source?.location
       if (!input) {
         throw new ApiError('invalid_op', 'no spec to generate from: pass input (a spec path or URL); this project has no trivia.manifest.json to take it from')
@@ -156,6 +162,7 @@ export class EngineService {
         outputDir,
         files: result.files.length,
         schemaHash: result.manifest.schemaHash,
+        contractChanged: current?.schemaHash !== result.manifest.schemaHash,
         resources: result.manifest.resources.map((r) => r.name),
         git:
           dirty === null
