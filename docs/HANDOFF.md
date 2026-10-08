@@ -87,7 +87,9 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   - `examples/refine-admin` with its own e2e project.
 
   **Slice 2 (form fields) is done too:** a create/edit form's zod rule, default and
-  Controller are kept in step, from the request body.
+  Controller are kept in step, from the request body. **Slice 3 (contract drift):** after a spec
+  change, the Data tab (and `trivia_contract_drift`) lists each page's broken references, with a
+  fix each, and offers Sync.
 
   The user was away for the slice-1/2 design calls; they are marked ⚑ in `product.md` for
   review.
@@ -99,10 +101,10 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
 
 **Gate on `main` (all green):**
 - `cargo test --workspace` 273 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
-- Vitest: plugin 129, designer 444 (including 6 architecture rules), contract-sync 79.
+- Vitest: plugin 131, designer 444 (including 6 architecture rules), contract-sync 79.
 - napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 50/50 (playground and refine projects), twice in a row.
+- Playwright 51/51 (playground and refine projects), twice in a row.
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -231,17 +233,22 @@ writes `useQuery` hooks against it.
 - **The plugin's vitest copies `examples/playground` and `examples/refine-admin` as they are on disk.** Leftover edits from a
   manual or agent session there fail ten unrelated-looking MCP tests. `git checkout -- examples/`
   (and delete new files) first.
+- **Positions in a payload go stale; keys don't.** A drift fix that carried an index ("rebuild
+  = remove + add at 2") was applied after another fix had shifted the columns, whenever a click
+  beat the list's refresh: a flaky e2e found it. Fixes now name keys, and `rebuild` is resolved
+  when planned. Anything the designer holds while the source changes must work the same way.
+- **The examples run the *built* plugin.** After changing `packages/vite-plugin-ast-locator`,
+  run `pnpm build:plugin` before Playwright, or the dev servers serve the old routes (an e2e run
+  saw `unknown endpoint /refine/drift`).
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
   per `Op` variant.
 
 ## 7. Backlog / next steps (in priority order)
 
 The order is the product's (`docs/product.md`, Slices):
-1. **Slice 3, contract drift:** after a spec change, each page's broken references, with
-   fixes.
-2. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
+1. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
    routes.
-3. Have the user try it on one of their real internal tools.
+2. Have the user try it on one of their real internal tools.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).

@@ -10,10 +10,12 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { ApiError } from '../engine.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
+import { type PageDrift, pageDrift } from './drift.js'
 import { formFieldFor, kebab } from './fields.js'
 import { type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
-import { type ListPage, type ScopeValues, contractResource, listPages } from './page.js'
+import { type ListPage, type ScopeValues, contractResource, fieldInfo, listPages } from './page.js'
 
+export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
 export type { FormFieldInfo, FormPage } from './form.js'
 export type { ColumnInfo, FieldInfo, ListPage } from './page.js'
 
@@ -25,13 +27,15 @@ export type FieldChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; field: string }
   | { action: 'move'; field: string; index: number }
+  /** Re-generate a field from the contract where it is now, keeping its label (drift fixes). */
+  | { action: 'rebuild'; field: string }
 
 /** `changes` for a form from a request body, checked. */
 export function parseFieldChanges(value: unknown): FieldChange[] {
   const bad = () =>
     new ApiError(
       'invalid_op',
-      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", field } or { action: "move", field, index }',
+      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", field }, { action: "move", field, index } or { action: "rebuild", field }',
     )
   if (!Array.isArray(value) || value.length === 0) throw bad()
   return value.map((c: unknown) => {
@@ -42,7 +46,7 @@ export function parseFieldChanges(value: unknown): FieldChange[] {
     if (action === 'add' && (index === undefined || isIndex(index)) && (label === undefined || typeof label === 'string')) {
       return { action, field, ...(index !== undefined ? { index: index as number } : {}), ...(label !== undefined ? { label: label as string } : {}) }
     }
-    if (action === 'remove') return { action, field }
+    if (action === 'remove' || action === 'rebuild') return { action, field }
     if (action === 'move' && isIndex(index)) return { action, field, index: index as number }
     throw bad()
   })
@@ -53,13 +57,15 @@ export type ColumnChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; column: string }
   | { action: 'move'; column: string; index: number }
+  /** Re-generate a column from the contract where it is now, keeping its label (drift fixes). */
+  | { action: 'rebuild'; column: string }
 
 /** `changes` from a request body, checked. */
 export function parseColumnChanges(value: unknown): ColumnChange[] {
   const bad = () =>
     new ApiError(
       'invalid_op',
-      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", column } or { action: "move", column, index }',
+      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", column }, { action: "move", column, index } or { action: "rebuild", column }',
     )
   if (!Array.isArray(value) || value.length === 0) throw bad()
   return value.map((c: unknown) => {
@@ -69,7 +75,7 @@ export function parseColumnChanges(value: unknown): ColumnChange[] {
     if (action === 'add' && typeof field === 'string' && (index === undefined || isIndex(index)) && (label === undefined || typeof label === 'string')) {
       return { action, field, ...(index !== undefined ? { index: index as number } : {}), ...(label !== undefined ? { label: label as string } : {}) }
     }
-    if (action === 'remove' && typeof column === 'string') return { action, column }
+    if ((action === 'remove' || action === 'rebuild') && typeof column === 'string') return { action, column }
     if (action === 'move' && typeof column === 'string' && isIndex(index)) return { action, column, index: index as number }
     throw bad()
   })
@@ -87,7 +93,7 @@ export interface RefineHost {
   uiDir: string
   importBase: string
   describeValues(file: string): unknown
-  manifest(): Promise<{ manifest: unknown }>
+  manifest(): Promise<{ manifest: unknown; drift?: unknown }>
   /** The JSX trees of a file (engine outline). */
   outline(file: string): unknown[]
   /** An element's details (engine inspect): its attributes are what the adapter reads. */
@@ -123,6 +129,34 @@ export class RefineAdapter {
       }
     }
     return out
+  }
+
+  /**
+   * Where the pages are out of step with the contract (docs/product.md, slice 3), with fixes,
+   * and whether the spec itself changed since the last sync (`spec`: then sync first).
+   */
+  async drift(): Promise<{ spec: unknown; pages: PageDrift[] }> {
+    const state = await this.#host.manifest().catch(() => ({ manifest: null, drift: null }))
+    const manifest = (state.manifest as TriviaManifest | null) ?? null
+    const out: PageDrift[] = []
+    for (const page of await this.pages()) {
+      const resource = page.contract ? contractResource(manifest, page.contract.resource, null) : null
+      let fields = null
+      let required: string[] = []
+      const sources = new Map<string, string>()
+      if (page.kind === 'list') {
+        fields = resource?.entity?.fields.map(fieldInfo) ?? null
+        for (const c of page.columns) if (c.key && c.headerSource) sources.set(c.key, c.headerSource)
+      } else if (resource && page.contract) {
+        const body = bodyFields(resource, page.contract.operation)
+        fields = body?.map(fieldInfo) ?? null
+        required = (body ?? []).filter((f) => f.required).map((f) => f.name)
+        for (const f of page.fields) if (f.renderSource) sources.set(f.name, f.renderSource)
+      }
+      const drift = pageDrift(page, { fields, required }, sources)
+      if (drift.issues.length > 0) out.push(drift)
+    }
+    return { spec: state.drift ?? null, pages: out }
   }
 
   #pagesOf(file: string, manifest: TriviaManifest | null): Page[] {
@@ -172,8 +206,19 @@ export class RefineAdapter {
     const defaults = new Set(page.fields.filter((f) => f.hasDefault).map((f) => f.name))
     const ops: Plan['ops'] = []
     const labels: string[] = []
-    for (const change of changes) {
+    const step = (change: FieldChange): void => {
       switch (change.action) {
+        case 'rebuild': {
+          // Resolved here, against the form as it now is: a fix computed earlier may hold an
+          // index that edits since have made stale.
+          const index = controls.findIndex((c) => c.name === change.field)
+          if (index < 0) throw new ApiError('node_not_found', `${page.component} renders no \`${change.field}\` field to rebuild`)
+          const label = page.fields.find((f) => f.name === change.field)?.label ?? undefined
+          step({ action: 'remove', field: change.field })
+          step({ action: 'add', field: change.field, index, ...(label ? { label } : {}) })
+          labels.splice(-2, 2, `Rebuild field ${label ?? humanize(change.field)}`)
+          break
+        }
         case 'add': {
           const field = body?.find((f) => f.name === change.field)
           if (!field) {
@@ -249,9 +294,10 @@ export class RefineAdapter {
           break
         }
         default:
-          throw new ApiError('invalid_op', `unknown field change ${JSON.stringify(change)} (add, remove or move)`)
+          throw new ApiError('invalid_op', `unknown field change ${JSON.stringify(change)} (add, remove, move or rebuild)`)
       }
     }
+    for (const change of changes) step(change)
     return { ops, label: labels.join('; ') }
   }
 
@@ -297,8 +343,19 @@ export class RefineAdapter {
       return column
     }
     const shown = (name: string) => columns.some((c) => c.keys.includes(name))
-    for (const change of changes) {
+    const step = (change: ColumnChange): void => {
       switch (change.action) {
+        case 'rebuild': {
+          // Resolved here, against the page as it now is (see planFields).
+          const column = find(change.column)
+          const index = columns.indexOf(column)
+          const field = page.columns.find((c) => c.path === column.path)?.accessorKey ?? change.column
+          const label = column.label
+          step({ action: 'remove', column: change.column })
+          step({ action: 'add', field, index, label })
+          labels.splice(-2, 2, `Rebuild column ${label}`)
+          break
+        }
         case 'add': {
           const field = resource?.entity?.fields.find((f) => f.name === change.field)
           if (!field) {
@@ -339,9 +396,10 @@ export class RefineAdapter {
           break
         }
         default:
-          throw new ApiError('invalid_op', `unknown column change ${JSON.stringify(change)} (add, remove or move)`)
+          throw new ApiError('invalid_op', `unknown column change ${JSON.stringify(change)} (add, remove, move or rebuild)`)
       }
     }
+    for (const change of changes) step(change)
     return { ops, label: labels.join('; ') }
   }
 

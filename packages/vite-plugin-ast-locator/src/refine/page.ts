@@ -36,6 +36,8 @@ export interface ColumnInfo {
   sortable: boolean
   /** The refine-ui filter its header uses (`DataTableFilterCombobox`), if any. */
   filter: string | null
+  /** Its header's source, when it is a function (an excerpt: long ones end with `…`). */
+  headerSource: string | null
   hasCell: boolean
   /** The contract field it shows, matched by accessorKey. */
   field: FieldInfo | null
@@ -200,6 +202,7 @@ function columnInfo(el: ValueDesc, index: number, columnsPath: string, fields: F
     line: el.line,
     sortable: !(sorting?.kind === 'boolean' && !sorting.value),
     filter: source.match(/<(DataTableFilter\w+)/)?.[1] ?? null,
+    headerSource: source || null,
     hasCell: prop(el, 'cell') !== undefined,
     field: fields.find((f) => f.name === fieldName) ?? null,
   }

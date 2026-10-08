@@ -139,7 +139,14 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
   - Tests: plugin tests, including `tsc` with every body field added to both forms, and
     `e2e/refine/fields.spec.ts`.
   - New columns now go after the last data column, before row actions.
-- Known limits of slices 1–2:
+- **Slice 3, contract drift: done (2026-10-09).**
+  - Plugin: `src/refine/drift.ts` (missing fields, changed enums and types, newly required
+    fields, each with a fix), `/refine/drift` and MCP `trivia_contract_drift`.
+  - Designer: an "Out of step with the contract" list in the Data tab with a button per fix,
+    and **Sync** next to "Spec changed".
+  - Tests: a plugin test that changes the spec, syncs, applies every fix and type-checks the
+    result; `e2e/refine/drift.spec.ts`.
+- Known limits of slices 1–3:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
@@ -149,6 +156,9 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
     built with `register()` or another resolver are not read.
   - Moving a field moves its Controller only; the schema's and defaults' key order stay as
     written (order there doesn't show).
+  - Drift reads enum options from a column header's source excerpt (600 bytes). A longer header
+    gets no enum verdict rather than a wrong one. A rebuilt column or field takes the generated
+    shape: custom cells, widgets or messages in it are replaced.
 
 ## Decisions to review (⚑)
 

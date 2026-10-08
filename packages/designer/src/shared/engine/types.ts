@@ -328,15 +328,37 @@ export type FieldChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; field: string }
   | { action: 'move'; field: string; index: number }
+  | { action: 'rebuild'; field: string }
 
 export type ColumnChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; column: string }
   | { action: 'move'; column: string; index: number }
+  | { action: 'rebuild'; column: string }
 
 /** Ops for a page change (columns or fields), with its undo label. */
 export interface ColumnPlan {
   ops: Op[]
   label: string
+}
+
+export interface DriftIssue {
+  code: 'missing_field' | 'enum_changed' | 'type_changed' | 'required_missing'
+  name: string
+  message: string
+  line: number | null
+  fix: { label: string; changes: Array<ColumnChange | FieldChange> } | null
+}
+
+export interface PageDrift {
+  file: string
+  component: string
+  kind: 'list' | 'form'
+  issues: DriftIssue[]
+}
+
+export interface ContractDrift {
+  spec: Drift | null
+  pages: PageDrift[]
 }
 

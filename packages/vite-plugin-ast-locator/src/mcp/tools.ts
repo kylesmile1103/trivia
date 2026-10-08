@@ -110,6 +110,7 @@ const fieldChange = z.discriminatedUnion('action', [
     .strict(),
   z.object({ action: z.literal('remove'), field: z.string().min(1) }).strict(),
   z.object({ action: z.literal('move'), field: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
+  z.object({ action: z.literal('rebuild'), field: z.string().min(1).describe('Re-generate it from the contract where it is (trivia_contract_drift fixes)') }).strict(),
 ])
 
 const columnChange = z.discriminatedUnion('action', [
@@ -123,6 +124,7 @@ const columnChange = z.discriminatedUnion('action', [
     .strict(),
   z.object({ action: z.literal('remove'), column: z.string().min(1).describe('The column key (trivia_get_page: columns[].key)') }).strict(),
   z.object({ action: z.literal('move'), column: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
+  z.object({ action: z.literal('rebuild'), column: z.string().min(1).describe('Re-generate it from the contract where it is (trivia_contract_drift fixes)') }).strict(),
 ])
 
 // ---------------------------------------------------------------------------------------------
@@ -340,6 +342,35 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
                   : `${p.component} (${p.file}), ${p.action ?? ''} form: ${p.fields.map((f) => f.name).join(', ')}`,
               )
               .join('\n'),
+        }
+      }),
+  )
+
+  server.registerTool(
+    'trivia_contract_drift',
+    {
+      title: 'Check pages against the contract',
+      description:
+        'Where the Refine pages no longer match the OpenAPI contract (trivia.manifest.json): a column or field for a ' +
+        'field the contract dropped, enum values or a type that changed, a field a create body now requires. Each ' +
+        'issue has a fix: pass fix.changes to trivia_edit_columns (list pages) or trivia_edit_fields (forms), one ' +
+        'issue at a time, reading this again in between. spec.status "changed" means the spec file changed since the ' +
+        'last sync: run trivia_sync_openapi first.',
+      annotations: reads,
+    },
+    () =>
+      run(async () => {
+        const d = await service.refine.drift()
+        const count = d.pages.reduce((n, p) => n + p.issues.length, 0)
+        const specChanged = (d.spec as { status?: string } | null)?.status === 'changed'
+        const note = specChanged ? 'The spec changed since the last sync: run trivia_sync_openapi first.' : null
+        return {
+          data: { ...d, ...(note ? { note } : {}) },
+          summary:
+            (note ? `${note}\n` : '') +
+            (count === 0
+              ? 'Every Refine page matches the contract.'
+              : d.pages.map((p) => `${p.component} (${p.file}): ${p.issues.map((i) => i.message).join('; ')}`).join('\n')),
         }
       }),
   )

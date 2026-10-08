@@ -48,6 +48,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_get_page` (read-only) | `{ file? }` | `{ file, pages: ListPage[], hint? }` |
 | `trivia_edit_columns` | `{ file, component?, changes: ColumnChange[] (1+), label }` | `ApplyResult & { page: ListPage, selection }` |
 | `trivia_edit_fields` | `{ file, component?, changes: FieldChange[] (1+), label }` | `ApplyResult & { page: FormPage, selection }` |
+| `trivia_contract_drift` (read-only) | — | `{ spec, pages: PageDrift[], note? }` |
 | `trivia_screenshot` (read-only) | — | an image block: the canvas as a PNG (no structured result) |
 | `trivia_sync_openapi` | `{ input?, zod?, force? }` | `SyncResult & { note? }` |
 | `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
@@ -76,6 +77,11 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   key, in order, as one `Agent: …` undo entry, and returns the page as it now reads.
   `trivia_edit_fields` does the same for a form page's fields (rule, default and Controller
   together), against the create or update request body.
+  `trivia_contract_drift` lists where pages no longer match the contract (`docs/api.md`
+  `refine/drift`). Each issue's `fix.changes` go to `trivia_edit_columns` or
+  `trivia_edit_fields`; a `note` says to sync first when the spec file changed.
+  Fixes name columns and fields by key (a `rebuild` finds the position when it is planned), so a
+  list read before another fix ran still applies correctly.
   `trivia_apply` also takes the value ops (`insertElement`, `removeElement`, `moveElement`,
   `setProperty`, `removeProperty`) for edits the adapter doesn't plan, such as renaming a header.
 - `trivia_screenshot` returns what the user sees on the Trivia canvas, so the agent can check

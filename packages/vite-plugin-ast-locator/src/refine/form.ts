@@ -13,6 +13,8 @@ export interface FormFieldInfo {
   label: string | null
   /** The input it renders (`Input`, `Select`, `Checkbox`…). */
   widget: string | null
+  /** Its Controller's `render` source. */
+  renderSource: string | null
   /** Its Controller element, when the JSX has one. */
   control: { locator: string; line: number } | null
   /** Its zod rule as written, when the schema has the key. */
@@ -104,6 +106,7 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
       const render = attrs.find((a) => a.name === 'render')?.source ?? ''
       return {
         name: typeof name === 'string' ? name : null,
+        render: render || null,
         label: render.match(/<FieldLabel[^>]*>([^<{]+)<\/FieldLabel>/)?.[1]?.trim() ?? null,
         widget: render.match(/<(Input|Select|Checkbox|Switch|Textarea|RadioGroup|Combobox|Calendar)\b/)?.[1] ?? null,
         control: { locator: c.locator, line: c.line },
@@ -121,6 +124,7 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
         name,
         label: control?.label ?? null,
         widget: control?.widget ?? null,
+        renderSource: control?.render ?? null,
         control: control?.control ?? null,
         rule: rule ? sourceOf(rule) : null,
         hasDefault: defaultKeys.has(name),

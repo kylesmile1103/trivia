@@ -95,6 +95,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         },
       },
     ],
+    ['/refine/drift', { GET: () => service.refine.drift() }],
     [
       '/refine/fields/plan',
       {

@@ -63,6 +63,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/refine/page` | `?file=` | `(ListPage \| FormPage)[]` (that file's) |
 | POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
 | POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label }` |
+| GET | `/@trivia/api/refine/drift` | — | `{ spec: Drift \| null, pages: PageDrift[] }` |
 | GET | `/@trivia/api/screenshot/next` | — | `{ id: string \| null }` (long poll) |
 | POST | `/@trivia/api/screenshot` | `{ id, png, width, height }` or `{ id, error }` | `null` |
 
@@ -114,7 +115,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     tag).
 
   `ColumnChange = { action: "add", field, index?, label? } | { action: "remove", column } |
-  { action: "move", column, index }`. Changes apply in order, so a later one may name a column
+  { action: "move", column, index } | { action: "rebuild", column }`. Changes apply in order, so a later one may name a column
   an earlier one added. The plan is value ops (`insertElement`, `removeElement`,
   `moveElement`) for the caller to apply as one entry (`/batch`). An added column follows
   Refine's shadcn examples:
@@ -146,7 +147,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `available` lists the body's writable fields the form lacks.
 
   `FieldChange = { action: "add", field, index?, label? } | { action: "remove", field } |
-  { action: "move", field, index }`. The changes in one plan are tracked: each Controller insert,
+  { action: "move", field, index } | { action: "rebuild", field }`. The changes in one plan are tracked: each Controller insert,
   removal or move renumbers its later siblings' locators. An added field is:
   - `setProperty` on the schema with its rule: `z.enum([…])`, `z.number()` (`.int()` for
     integers), `z.boolean()`, `z.iso.date()`, `z.email()`, `z.string().min(1, "Required.")`, …,
@@ -158,6 +159,23 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     input whose empty value is absent when the field is optional.
 
   A removal drops all three (and imports only it used). A move moves the Controller.
+- `refine/drift` is contract drift (`docs/product.md`, slice 3): where the Refine pages no longer
+  match the manifest. `spec` is the `/manifest` drift: when it says `changed`, sync first.
+  `PageDrift = { file, component, kind, issues }`, each issue `{ code, name, message, line, fix }`:
+  - `missing_field`: a column with an accessor, or a form field, names a field the entity or
+    request body no longer has. Fix: remove it.
+  - `enum_changed`: a column's `DataTableFilterCombobox` options, or a form field's
+    `z.enum([…])` or `<SelectItem>` values, differ from the contract's. Fix: rebuild it in
+    place.
+  - `type_changed`: a column's filter, or a field's zod rule, belongs to another type than the
+    field now has. Fix: rebuild it in place.
+  - `required_missing`: a create form lacks a field its body now requires. Fix: add it.
+
+  `fix = { label, changes }` takes column changes (list) or field changes (form) for the plan
+  routes above. A rebuild (`{ action: "rebuild", column | field }`) is resolved where the item is
+  when it is planned, as a remove plus an add at that index with the same label. So a fix read
+  before another fix ran still lands in the right place: a removal names its key, and an added
+  field appends.
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
   `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with

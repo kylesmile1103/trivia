@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRightIcon, FileWarningIcon, FormInputIcon, RefreshCwIcon, TableIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { engine } from '@/shared/engine/client'
 import type { ManifestResource, ManifestState } from '@/shared/engine/types'
@@ -17,6 +18,7 @@ import { Button } from '@/shared/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 import { type CodegenContext, formTemplate, tableTemplate } from './codegen'
+import { DriftList } from './DriftList'
 import { ThisPage } from './ThisPage'
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; state: ManifestState }
@@ -27,8 +29,12 @@ export function DataPanel() {
   const health = useDesigner((s) => s.health)
   const components = useDesigner((s) => s.componentsByName)
   const [load, setLoad] = useState<Load>({ status: 'loading' })
+  /** Bumped on every reload, so the drift list re-reads with the manifest. */
+  const [reload, setReload] = useState(0)
+  const [syncing, setSyncing] = useState(false)
 
   const refresh = useCallback(async () => {
+    setReload((n) => n + 1)
     setLoad({ status: 'loading' })
     try {
       setLoad({ status: 'ready', state: await engine.manifest() })
@@ -38,6 +44,21 @@ export function DataPanel() {
   }, [])
   useEffect(() => void refresh(), [refresh])
 
+  // Regenerate the client and manifest from the spec (POST /sync): refused, with the reason,
+  // when the generated code has uncommitted changes.
+  const sync = useCallback(async () => {
+    setSyncing(true)
+    try {
+      const result = await engine.sync()
+      toast.success(result.contractChanged ? `Synced ${result.files} files from the spec.` : 'The spec is unchanged since the last sync.')
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSyncing(false)
+    }
+  }, [refresh])
+
   const ctx = useMemo<CodegenContext | null>(() => {
     if (load.status !== 'ready' || load.state.manifest === null || health === null) return null
     return { manifest: load.state.manifest, components, componentsDir: parent(health.uiDir), componentsImport: parent(health.importBase) }
@@ -46,12 +67,13 @@ export function DataPanel() {
   return (
     <div className="flex min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-3">
-        <Source load={load} />
+        <Source load={load} onSync={() => void sync()} syncing={syncing} />
         <Button variant="ghost" size="icon-sm" aria-label="Reload the manifest" onClick={() => void refresh()}>
           <RefreshCwIcon className={cn(load.status === 'loading' && 'animate-spin')} />
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-width:thin]">
+        <DriftList reload={reload} />
         <ThisPage />
         {load.status === 'error' && <p className="px-1 text-xs text-destructive">Couldn’t read the manifest: {load.message}</p>}
         {load.status === 'ready' && load.state.manifest === null && (
@@ -75,7 +97,7 @@ export function DataPanel() {
   )
 }
 
-function Source({ load }: { load: Load }) {
+function Source({ load, onSync, syncing }: { load: Load; onSync: () => void; syncing: boolean }) {
   if (load.status !== 'ready' || load.state.manifest === null) return <span className="text-xs text-muted-foreground">Data</span>
   const { manifest, drift } = load.state
   return (
@@ -91,9 +113,15 @@ function Source({ load }: { load: Load }) {
             </Badge>
           </TooltipTrigger>
           <TooltipContent className="max-w-64">
-            {drift.source} changed since the code was generated. Re-run trivia-contract-sync so the generated client matches it.
+            {drift.source} changed since the code was generated. Sync to regenerate the client and the manifest from it.
           </TooltipContent>
         </Tooltip>
+      )}
+      {drift?.status === 'changed' && (
+        <Button variant="outline" size="xs" disabled={syncing} onClick={onSync}>
+          <RefreshCwIcon className={cn(syncing && 'animate-spin')} />
+          Sync
+        </Button>
       )}
     </div>
   )

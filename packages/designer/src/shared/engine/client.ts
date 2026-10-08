@@ -6,6 +6,7 @@ import type {
   ApplyResult,
   ColumnChange,
   ColumnPlan,
+  ContractDrift,
   FieldChange,
   ComponentSchema,
   Envelope,
@@ -82,4 +83,6 @@ export const engine = {
     post<ColumnPlan>('/refine/columns/plan', { file, component, changes }),
   planFields: (file: string, component: string, changes: FieldChange[]) =>
     post<ColumnPlan>('/refine/fields/plan', { file, component, changes }),
+  contractDrift: () => request<ContractDrift>('/refine/drift'),
+  sync: () => post<{ files: number; contractChanged: boolean; git: string }>('/sync', {}),
 }
