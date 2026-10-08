@@ -1,0 +1,89 @@
+# MCP endpoint (point and ask)
+
+Agents (Claude Code, Cursor, or any MCP client) edit the user's code through Trivia the way
+the designer does: guarded, byte-preserving ops that land in the designer's undo history.
+The first workflow is **point and ask**: the user selects an element on the Trivia canvas and
+tells the agent what to change ("make this an outline button", "put a New badge before
+this"). The agent reads the selection and applies ops to it, and the designer shows each
+edit at once.
+
+`@trivia/vite-plugin-ast-locator` serves it on the **user's dev server** at `/@trivia/mcp`,
+next to the engine API (`docs/api.md`). It needs no extra process or install, and it is
+always the version of the engine it runs on.
+
+## Connect
+
+With the user's app running (`vite`, port 5173 here):
+
+```sh
+claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp
+```
+
+Or commit it for the project, in `.mcp.json`:
+
+```json
+{ "mcpServers": { "trivia": { "type": "http", "url": "http://localhost:5173/@trivia/mcp" } } }
+```
+
+Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
+
+## Transport and security
+
+- Streamable HTTP, **stateless**: every POST gets a fresh server, and responses are JSON (no
+  SSE stream; GET answers 405). Built on the official SDK (`@modelcontextprotocol/sdk`
+  1.30.1, pinned).
+- The same caller guard as the engine API (`docs/api.md`, Envelope): loopback clients only
+  (unless `allowRemote`), a Host that names this machine, no foreign Origin. A refused caller
+  gets 403 before any MCP message is read. The designer's proxy applies the same checks to
+  `/@trivia/mcp` (`packages/designer/server/api-guard.ts`).
+
+## Tools
+
+| Tool | Input | Structured result |
+| --- | --- | --- |
+| `trivia_get_selection` (read-only) | — | `{ selection: NodeDetails & { component } \| null }` |
+| `trivia_inspect` (read-only) | `{ locator }` | `{ node: NodeDetails & { component } }` |
+| `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
+| `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
+| `trivia_undo` | `{ label }` | `HistoryResult` |
+
+- `component` is the selected element's `ComponentSchema` when it comes from the user's
+  library (its props with enum options and defaults), else null. With nothing selected,
+  `selection` is null and the text says to ask the user to select an element. A selection the
+  source no longer matches (another tag at its locator) is a `stale_locator` error.
+- `trivia_apply` takes the ops of `docs/api.md` except `bindQuery`: `updateProp`, `setText`,
+  `insert`, `insertChild`, `remove`, `move`, `moveNode`. **Every stale-locator guard is
+  required** (`expectedName`, plus `expectedTargetName` / `expectedParentName`), so an agent
+  working from a stale read is refused instead of editing the wrong element. One call is one
+  undo entry, labelled `Agent: <label>`. With several ops, each op's locators must hold after
+  the ops before it.
+- `trivia_undo` undoes the newest entry of the shared history only if its label is the one
+  given (the agent passes `history.undoLabel` from its last result). The user's own edits are
+  never undone by mistake.
+- Refusals come back as tool errors (`isError`): `<code>: <message>` and, for the codes an
+  agent can act on, what to do next (`stale_locator`: read the selection again and retry).
+
+## The selection
+
+- The designer posts its selection (`POST /@trivia/api/selection`) whenever the user selects
+  something, once the inspector has named it. The plugin keeps the latest, in memory.
+- An agent's edit moves the selection along with its element. Locators are positions, and
+  each op adds, removes or moves exactly one element, so the new locator is index arithmetic
+  (`packages/vite-plugin-ast-locator/src/api/selection.ts`, `rebase`). It is kept only if the
+  tag there is still the selected one; otherwise the selection is dropped, never retargeted.
+  After a batch of several ops the locator is only re-checked, not moved.
+- The designer adopts an agent's change on its next history sync (every 2 s, and after every
+  re-render).
+- After every re-render the designer also re-checks the selected element's tag, so an edit
+  from elsewhere (the user's IDE) that put another element at the selected locator drops the
+  selection. Such a drop is not posted, so it cannot erase a better answer from the plugin.
+
+Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
+`packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
+loop in a browser).
+
+## Not yet
+
+- The "agent builds, you watch" workflow (a file outline tool), a screenshot tool so the
+  agent can see the result, and `trivia_sync_openapi` for contract sync.
+- `bindQuery` through MCP (data binding comes with the Data Explorer).

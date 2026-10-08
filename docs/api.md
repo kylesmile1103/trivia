@@ -54,6 +54,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | POST | `/@trivia/api/undo` | `{}` | `HistoryResult` |
 | POST | `/@trivia/api/redo` | `{}` | `HistoryResult` |
 | GET | `/@trivia/api/history` | — | `HistoryState` |
+| GET | `/@trivia/api/selection` | — | `SelectionState` |
+| POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
 
 - `apply` and `batch` each create **one** history entry (a batch is a transaction: if any op
   fails, files already changed by earlier ops in the batch are restored and the error returned).
@@ -65,6 +67,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null }`.
+- `SelectionState = { selection: { locator, name } | null, version, by: "designer" | "agent" | null }`:
+  what the designer has selected, for agents (`docs/mcp.md`). The designer posts every change
+  (`name` is the tag name it saw there). Repeating the current selection changes nothing;
+  every change bumps `version`. Edits through this API never move it; an agent's edit through
+  the MCP endpoint does (`by: "agent"`).
 
 ## Ops (`Op`, tagged by `op`)
 

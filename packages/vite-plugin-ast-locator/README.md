@@ -1,6 +1,6 @@
 # @trivia/vite-plugin-ast-locator
 
-Dev-only Vite plugin that connects the user's app to the Trivia engine. It does two jobs:
+Dev-only Vite plugin that connects the user's app to the Trivia engine. It does three jobs:
 
 1. **Locators.** During `vite serve`, every JSX opening element in every `.tsx`/`.jsx` module of the
    project gets `data-ast-node="<file>#<component>#<i.j.k>"` as its first attribute, with a source
@@ -8,6 +8,8 @@ Dev-only Vite plugin that connects the user's app to the Trivia engine. It does 
    The component library is annotated too; its definition-site locators are overridden by
    usage-site ones wherever the component spreads `{...props}`.
 2. **Engine API.** It serves `docs/api.md` at `/@trivia/api/*` from the same dev server.
+3. **MCP endpoint.** It serves `docs/mcp.md` at `/@trivia/mcp`, so an agent can edit what the
+   user selected in the designer: `claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`.
 
 ```ts
 // vite.config.ts — astLocator must come first, before react()
@@ -25,7 +27,8 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 | --- | --- |
 | `uiDir` | `components.json` `aliases.ui` mapped through `resolve.alias` (`@/components/ui` → `src/components/ui`); without a matching alias, `@/x` → `src/x`; else `src/components/ui` |
 | `importBase` | `components.json` `aliases.ui`, else `@/components/ui` |
-| `api` | `true`; `false` serves no API (locators only) |
+| `api` | `true`; `false` serves no API and no MCP endpoint (locators only) |
+| `mcp` | `true`: the MCP endpoint at `/@trivia/mcp` (with `api`); `false` turns it off |
 | `allowRemote` | `false`: the API answers loopback clients only. **`true` is dangerous**: with `vite --host` or Docker, anyone who can reach the dev server can rewrite your source files |
 
 ## Behaviour worth knowing
@@ -41,10 +44,13 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
   undo or redo they answer `{ files: [] }`.
 - Malformed requests (wrong method or content type, bad JSON, unknown endpoint) answer
   `400 invalid_op`.
+- The source is laid out as `transform.ts` (locators), `api/` (the HTTP routes, `service.ts`
+  with the edit queue, undo history and selection, `guard.ts` with the caller checks) and
+  `mcp/` (the endpoint and its tools, over the same service).
 - Callers that are not on this machine answer `403 forbidden` on every endpoint: a client address
   that is not loopback (unless `allowRemote`), a `Host` that is not `localhost`, `*.localhost`, an
   IP literal or in `server.allowedHosts` (DNS rebinding), or a foreign `Origin`. See `docs/api.md`,
-  Envelope.
+  Envelope. The MCP endpoint applies the same checks.
 
 ```sh
 pnpm --filter @trivia/vite-plugin-ast-locator test       # vitest (needs pnpm build:engine)

@@ -79,17 +79,20 @@ crates/trivia_oxc_engine/src/
     remove.rs      remove
     move_node.rs   move, moveNode (and the scope check)
     bind_query.rs  bindQuery
+    set_text.rs    setText
 ```
 
-A new op (editing JSX text, a cross-file move) is a new `ops/<op>.rs` plus its `Op` variant
+A new op (a cross-file move, say) is a new `ops/<op>.rs` plus its `Op` variant
 and a `docs/api.md` example: `tests/errors.rs` pins one example per variant. Integration tests
 stay in `tests/` (Cargo's convention); unit tests stay in their module.
 
 ## Node packages
 
-- **vite-plugin-ast-locator** stays flat (`index.ts` composes `transform.ts`, the locator
-  stamping, with `api.ts` + `history.ts` + `queue.ts`, the HTTP API). Split it into folders
-  when a slice grows past a few files.
+- **vite-plugin-ast-locator**: `index.ts` composes `transform.ts` (the locator stamping),
+  `api/` (the HTTP routes over `service.ts`, which owns the edit queue, undo history and
+  selection, and `guard.ts`, the caller checks) and `mcp/` (the MCP endpoint and its tools,
+  over the same service, behind the same guard). Anything that edits code goes through
+  `EngineService`, so every client shares one queue and one history.
 - **contract-sync** follows its pipeline (`sync.ts`): `adapters/` (where a spec comes from) →
   `spec/` (the raw contract) → `codegen/` (hey-api, and reading back what it wrote) →
   `manifest/` (classification, naming, the generator and the manifest types).

@@ -19,7 +19,8 @@ the sections below record what was verified against the reference code on 2026-1
 - `crates/trivia_oxc_engine` — the engine (pure Rust, no I/O except `workspace.rs`).
 - `crates/trivia_napi` — napi-rs binding, npm package `@trivia/engine` (JSON envelope API).
 - `packages/vite-plugin-ast-locator` — dev-only Vite plugin: injects `data-ast-node` and serves
-  the engine HTTP API at `/@trivia/api` (contract: `docs/api.md`).
+  the engine HTTP API at `/@trivia/api` (contract: `docs/api.md`) and the MCP endpoint for
+  agents at `/@trivia/mcp` (`docs/mcp.md`, point and ask).
 - `packages/designer` — React designer (`@trivia/designer`), served at
   `http://localhost:4400/__trivia/`; proxies everything else to the user's dev server.
 - `packages/contract-sync` — OpenAPI → hey-api TanStack Query code + `trivia.manifest.json`

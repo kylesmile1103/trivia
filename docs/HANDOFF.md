@@ -9,15 +9,17 @@ Briefs and contracts:
 - `docs/briefs/spec.md`: the original brief.
 - `docs/briefs/data-provider.md`: the data-provider brief, with verified corrections at its top.
 - `docs/api.md`: the engine HTTP contract.
+- `docs/mcp.md`: the MCP endpoint for agents (point and ask).
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
 <!-- STATUS:BEGIN -->
 ## 1. Status (2026-10-08, end of session 2)
 
-`main` is pushed to `origin` (github.com/kylesmile1103/trivia); session 2 is
-`git log 3d5253b..93de3cf`. Every commit email is `kylesmile1103@gmail.com`;
+Pushed to `origin` (github.com/kylesmile1103/trivia) up to `93de3cf`. Everything after it is
+committed on `main` but **not pushed**: the setText op, the MCP endpoint, the designer's
+selection sync and their docs. Every commit email is `kylesmile1103@gmail.com`;
 `.git/hooks/pre-commit` and `pre-push` refuse the work email. Session 1's leftover `swarm/*`
-and `worktree-wf_*` branches were deleted. Each tip's tree was in `origin/main`'s history.
+and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'s history.
 
 **Session 2:**
 - **Round-2 residuals fixed**, each with a regression test that failed first:
@@ -36,26 +38,44 @@ and `worktree-wf_*` branches were deleted. Each tip's tree was in `origin/main`'
   - the designer is `app/` → `features/{canvas,inspector,palette,toolbar}/` → `shared/`,
     enforced by `src/architecture.test.ts`;
   - engine write ops are one module each in `src/ops/`;
-  - contract-sync is grouped by pipeline stage;
+  - contract-sync is grouped by pipeline stage, the plugin into `api/` and `mcp/`;
   - briefs are in `docs/briefs/`.
 
   Git recorded the moves as renames: `git log --follow` works.
+- **Milestone: agents can build with Trivia** (`docs/mcp.md`). The user chose point and ask:
+  - the plugin serves MCP at `/@trivia/mcp` (Streamable HTTP, stateless, the official SDK
+    pinned at 1.30.1);
+  - five tools: get_selection, inspect, list_components, apply (every guard required, one
+    `Agent: …` undo entry), and undo (only the named entry);
+  - the designer publishes its selection, and an agent's edit moves it with its element;
+  - a new engine op, `setText`.
+
+  `e2e/mcp.spec.ts` runs the whole loop in a browser. The designer proxy's guard now also
+  covers `/@trivia/mcp`; a test showed a LAN client could reach it before.
+- **Roadmap review** (the user's draft of five tracks):
+  - Track 1 (the trivia-preservation spike) was already answered in session 1: rule 1.
+  - Track 3 (a postMessage bridge) is dropped: same-origin direct access already does it.
+  - Track 4: drift is handled; a git-dirty guard comes with the first multi-file generator.
+  - Track 2 (forms with zod + react-hook-form + shadcn `Field`, which replaces the deprecated
+    `Form`) is the next product milestone.
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 229/229 (16 suites); clippy `-D warnings` clean.
-- Vitest: plugin 68, designer 400 (including 6 architecture rules), contract-sync 76.
+- `cargo test --workspace` 243/243 (17 suites); clippy `-D warnings` clean.
+- Vitest: plugin 94, designer 411 (including 6 architecture rules), contract-sync 76.
 - napi crash suite 30/30, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 36/36, twice in a row.
+- Playwright 37/37, twice in a row.
 - Not re-done in session 2: the Claude in Chrome manual pass. Session 1's is described below,
-  and Playwright covers the same flows.
+  and Playwright covers the same flows. No real Claude Code session has used the MCP endpoint
+  yet: the SDK client in the tests stands in for it.
 
 **Brief acceptance:** Steps 1–3 were met in session 1 (validated by hand in Chrome; GIFs in
 the user's `~/Downloads/trivia-*.gif`).
 
 **Not built yet:**
+- the canvas right-click menu (approved design below, §7);
 - the designer Data Explorer and drag-to-bind;
-- DataTable and AutoForm generation;
+- DataTable and form generation;
 - the playground's `@tanstack/react-query` dependency and QueryClientProvider.
 
 `contract-sync` and `bindQuery` exist and are tested; see `docs/data-provider.md`.
@@ -170,15 +190,33 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. Data provider, designer side:
-   - a Data Explorer drawer (manifest tree, operations, schema) as a new
-     `features/data-explorer/`, plus drag-to-bind using `bindQuery`;
-   - generate the DataTable component, its columns, and forms;
-   - add `@tanstack/react-query` and a QueryClientProvider to the playground;
-   - contract drift badges.
-2. An engine op for editing JSX text (a new `ops/` module); cross-file move;
-   `canvas.fitZoom`; a layers panel (a new feature).
-3. A Tauri shell (the engine is already a plain Rust library).
+1. **The canvas right-click menu** (design approved by the user; no code yet):
+   - In design mode, right-clicking an element selects it and opens a menu at the cursor:
+     Select parent (↑), Move up, Move down, Delete (⌫). The native menu is suppressed.
+   - No menu on empty canvas, while an edit renders (the existing `stale` rule) or in
+     interact mode.
+   - Move up/down use the `move` op (before the previous / after the next sibling, both
+     names guarded). They are disabled at the ends, for roots, and next to `{…}` siblings.
+   - Code: `features/canvas` only (controller `contextmenu` handler and menu view, a
+     `ContextMenu.tsx` on the shadcn `DropdownMenu`). Controller tests first, then an e2e.
+2. **Try point and ask in a real Claude Code session**
+   (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
+   real agent trips on (tool descriptions, error hints).
+3. **Data UI** (Track 2 plus the old item 1):
+   - the playground's QueryClientProvider;
+   - a Data Explorer as `features/data-explorer/`, with drag-to-bind via `bindQuery`;
+   - DataTable generation;
+   - forms: hey-api's built-in `zod` plugin (no second generator) feeding react-hook-form
+     with shadcn `Field` + `Controller`. Asterisks come from OpenAPI `required`, not
+     `nullable`. Forms are generated as their own file plus one inserted `<XForm />`;
+   - a `git status --porcelain` guard before any multi-file generation (refuse and list the
+     dirty files; never auto-stash).
+4. MCP follow-ups: an outline tool and a screenshot tool ("agent builds, you watch"),
+   `trivia_sync_openapi`, and `bindQuery` through MCP.
+5. Engine: a cross-file move; `canvas.fitZoom`; a layers panel; a pinned regression fixture
+   for the user's CustomerCard case (JSDoc, `{/* TODO */}`, Prettier multi-line props).
+6. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
+   designer's localhost URL and stay same-origin, so no bridge is needed.
 
 ## 8. Repo map
 
@@ -189,10 +227,11 @@ The full layout and its rules are in `docs/architecture.md`. In short:
     `import_manager.rs`, `workspace.rs` (the only I/O);
   - `inspect.rs` and `prop_analyzer.rs` (reads);
   - `ops/` (writes): `mod.rs` holds `Op` and the shared machinery, plus `insert.rs`,
-    `update_prop.rs`, `remove.rs`, `move_node.rs` and `bind_query.rs`.
+    `update_prop.rs`, `set_text.rs`, `remove.rs`, `move_node.rs` and `bind_query.rs`.
 - `crates/trivia_napi/`: the napi binding (JSON envelope API), package `@trivia/engine`.
-- `packages/vite-plugin-ast-locator/src/`: `transform.ts` (locators), `api.ts` (HTTP),
-  `history.ts` (undo), `options.ts` (uiDir/importBase from `components.json`).
+- `packages/vite-plugin-ast-locator/src/`: `transform.ts` (locators), `api/` (HTTP routes,
+  `service.ts` with the queue, undo history and selection, `guard.ts`), `mcp/` (the MCP
+  endpoint and tools), `options.ts` (uiDir/importBase from `components.json`).
 - `packages/designer/`:
   - `server/` (the API guard);
   - `src/app/` (shell);
