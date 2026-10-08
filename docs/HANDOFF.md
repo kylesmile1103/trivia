@@ -77,13 +77,18 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   Claude Code shows the model `structuredContent`, not the text summary, so hints are now
   data fields; `trivia_get_selection` returns the undo history (a fresh session couldn't
   undo); error advice is per tool; sync says whether the contract changed.
+- **Desktop shell** (`crates/trivia_shell`, Tauri 2.11.6, its own Cargo workspace): a window
+  on the designer, with a waiting page until it answers. Verified on macOS by an agent's
+  screenshot from the minimized window. That check found a screenshot bug browsers have too:
+  html-to-image waited for an animation frame, which a background tab never gets. The
+  designer now rasterizes the SVG itself (`features/canvas/capture.ts`).
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 262 passed; clippy `-D warnings` clean.
+- `cargo test --workspace` 262 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
 - Vitest: plugin 113, designer 444 (including 6 architecture rules), contract-sync 79.
 - napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 44/44, twice in a row.
+- Playwright 46/46, twice in a row.
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -109,6 +114,8 @@ TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev
 cargo test --workspace                       # engine + binding
 cargo test -p trivia_oxc_engine --test roundtrip   # one suite (~15 s; exhaustive byte round-trips)
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --manifest-path crates/trivia_shell/Cargo.toml   # the desktop shell (its own workspace)
+cargo run --manifest-path crates/trivia_shell/Cargo.toml    # a window on the designer (:4400)
 pnpm typecheck                               # all TS packages
 pnpm --filter @trivia/vite-plugin-ast-locator test
 pnpm --filter @trivia/designer test          # vitest (unit)
@@ -211,8 +218,10 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
-   designer's localhost URL and stay same-origin, so no bridge is needed.
+The session-2 backlog is done. Candidates, not yet prioritized with the user:
+- Edit forms (an update body plus loading the row) and nested-object fields in generated forms.
+- The shell: try clicking, dragging and the inspector by hand in WebKit; Linux and Windows;
+  a `tauri build` bundle; perhaps starting the dev servers itself.
 
 ## 8. Repo map
 

@@ -130,3 +130,43 @@ test('trivia_screenshot returns the canvas as the open designer renders it', asy
   expect(stats.colors).toBeGreaterThan(5) // text, borders, the dark Save button
   expect(r.content[1]?.text).toBe(`The canvas, ${stats.width}×${stats.height} px.`)
 })
+
+// A background tab or a covered window gets no animation frames. The user is usually in their
+// terminal talking to the agent, so the screenshot must not wait for one.
+async function pauseFrames(page: Page, hidden: boolean) {
+  await page.evaluate((hide) => {
+    window.requestAnimationFrame = () => 0
+    if (hide) Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+  }, hidden)
+}
+
+test('trivia_screenshot works while the designer gets no animation frames', async ({ page }) => {
+  await page.goto('/__trivia/')
+  await expect(app(page).getByRole('button', { name: 'Save changes' })).toBeVisible()
+  await pauseFrames(page, true)
+  await connectAgent()
+  const r = (await agent!.callTool({ name: 'trivia_screenshot', arguments: {} })) as {
+    isError?: boolean
+    content: Array<{ type: string; data?: string; text?: string }>
+  }
+  expect(r.isError, r.content.map((c) => c.text).join('\n')).toBeFalsy()
+  expect(r.content[0]?.type).toBe('image')
+  expect(r.content[0]?.data?.length).toBeGreaterThan(1000)
+})
+
+test('trivia_screenshot says why when a hidden designer stalls on a <canvas>', async ({ page }) => {
+  test.setTimeout(40_000)
+  await page.goto('/__trivia/')
+  await expect(app(page).getByRole('button', { name: 'Save changes' })).toBeVisible()
+  // html-to-image still waits for a frame to clone a <canvas> (a chart, say).
+  await page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>('iframe[title="App canvas"]')!.contentDocument!
+    doc.body.append(Object.assign(doc.createElement('canvas'), { width: 20, height: 20 }))
+  })
+  await pauseFrames(page, true)
+  await connectAgent()
+  const r = (await agent!.callTool({ name: 'trivia_screenshot', arguments: {} })) as { isError?: boolean; content: Array<{ text?: string }> }
+  expect(r.isError).toBe(true)
+  expect(r.content[0]?.text).toContain('the designer is in the background')
+  expect(r.content[0]?.text).toContain('bring the designer to the front')
+})

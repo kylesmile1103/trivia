@@ -9,6 +9,7 @@ the repo splits by package, and each package splits into vertical slices of its 
 crates/
   trivia_oxc_engine/      the engine: pure Rust library (I/O only in workspace.rs)
   trivia_napi/            its Node binding, npm package @trivia/engine
+  trivia_shell/           the desktop shell (Tauri): a window on the designer; its own workspace
 packages/
   vite-plugin-ast-locator/  dev-only Vite plugin: stamps locators, serves /@trivia/api
   designer/               the React designer, @trivia/designer

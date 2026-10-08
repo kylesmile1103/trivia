@@ -72,7 +72,11 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   `html-to-image` (`packages/designer/src/features/canvas/controller.ts`, `capture`). With no
   designer open it fails after 15 s (`screenshotTimeoutMs`), and the error says to ask the user
   to open it. Like any DOM-to-SVG capture it is close but not pixel-exact: `::placeholder`
-  styles are not copied, so a placeholder shows in the text colour.
+  styles are not copied, so a placeholder shows in the text colour. It works while the designer
+  is a background tab or a minimized window (`features/canvas/capture.ts` rasterizes without
+  waiting for an animation frame, which a hidden page never gets). A page with a `<canvas>` or
+  `<video>` still needs a frame to clone those, so there a hidden designer fails after 10 s
+  with an error that asks the user to bring it to the front.
 - `trivia_sync_openapi` regenerates the typed API client (TanStack Query hooks, zod schemas)
   and `trivia.manifest.json` from the OpenAPI spec, by default the one the manifest names, so
   an agent can pick up a backend change before building data UI. It overwrites generated files

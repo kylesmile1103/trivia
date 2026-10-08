@@ -1,0 +1,19 @@
+# Its own workspace, not a member of the root one: Tauri needs a system webview's dev
+# libraries (webkit2gtk on Linux) to build, and `cargo test --workspace` on the engine
+# shouldn't.
+[workspace]
+
+[package]
+name = "trivia_shell"
+version = "0.1.0"
+description = "Trivia's desktop shell: a native window on the designer"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+publish = false
+
+[dependencies]
+tauri = { version = "=2.11.6", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }

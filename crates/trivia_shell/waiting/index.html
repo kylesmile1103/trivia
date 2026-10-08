@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trivia</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #fafafa; --fg: #18181b; --muted: #71717a; --code: #f4f4f5; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #09090b; --fg: #fafafa; --muted: #a1a1aa; --code: #27272a; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 34rem; padding: 2rem; }
+      h1 { font-size: 1.125rem; margin: 0 0 0.5rem; }
+      p { margin: 0.5rem 0; color: var(--muted); }
+      code, pre { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); border-radius: 6px; }
+      code { padding: 0.1rem 0.3rem; }
+      pre { padding: 0.75rem 1rem; color: var(--fg); overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Waiting for the Trivia designer</h1>
+      <p>Nothing answers at <code id="target">the designer's URL</code> yet. This window opens it as soon as it does.</p>
+      <p>Start your app's dev server (with the Trivia Vite plugin), then the designer:</p>
+      <pre>pnpm --filter playground dev
+TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev</pre>
+      <p>Another URL: <code>trivia_shell &lt;url&gt;</code> or <code>TRIVIA_DESIGNER_URL</code>.</p>
+    </main>
+    <script src="waiting.js"></script>
+  </body>
+</html>

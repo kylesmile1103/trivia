@@ -16,6 +16,7 @@ import { ZOOM_MIN } from '@/shared/state/zoom'
 import { type DesignerState, designer } from '@/shared/state/store'
 import { TEMPLATE_MIME, type Template, templateOps } from '@/shared/template'
 
+import { type Capture, captureDocument } from './capture'
 import {
   type Point,
   type Rect,
@@ -37,6 +38,8 @@ import { PREVIEW_ATTR, PREVIEW_STYLE_ID, Previews } from './previews'
 const DRAG_THRESHOLD_PX = 4
 /** Tallest page a screenshot covers (px of the app). */
 const MAX_CAPTURE_HEIGHT = 4000
+/** Under the plugin's 15 s, so the agent hears why a capture stalled, not just that it did. */
+const CAPTURE_TIMEOUT_MS = 10_000
 /** A page that renders nothing annotated this long after load is reported, not waited on. */
 const LOCATOR_GRACE_MS = 1500
 
@@ -867,17 +870,10 @@ export class CanvasController {
    * The app's page as a PNG, for agents (trivia_screenshot): its document rendered at its own
    * width, up to 4000 px of its height, without the designer's overlay.
    */
-  private async capture(): Promise<{ png: string; width: number; height: number } | null> {
+  private async capture(): Promise<Capture | null> {
     const doc = this.session.doc
-    const view = doc?.defaultView
-    if (!doc || !view) return null
-    const root = doc.documentElement
-    const width = root.clientWidth
-    const height = Math.min(root.scrollHeight, MAX_CAPTURE_HEIGHT)
-    const { toPng } = await import('html-to-image')
-    const background = view.getComputedStyle(doc.body).backgroundColor
-    const png = await toPng(root, { width, height, pixelRatio: 1, ...(background ? { backgroundColor: background } : {}) })
-    return { png, width, height }
+    if (!doc?.defaultView) return null
+    return captureDocument(doc, { maxHeight: MAX_CAPTURE_HEIGHT, timeoutMs: CAPTURE_TIMEOUT_MS })
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {

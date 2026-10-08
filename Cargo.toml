@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/trivia_oxc_engine", "crates/trivia_napi"]
+# The desktop shell is its own workspace: it needs a system webview to build (its README).
+exclude = ["crates/trivia_shell"]
 
 [workspace.package]
 edition = "2024"
