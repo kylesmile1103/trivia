@@ -25,7 +25,9 @@
 //! * `move_across`: `move` and `moveNode` between two files (`apply_across`);
 //! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too);
 //! * `values`: `insertElement`, `removeElement`, `moveElement`, `setProperty` and
-//!   `removeProperty`, on object and array literals addressed by value path (`crate::values`).
+//!   `removeProperty`, on object and array literals addressed by value path (`crate::values`);
+//! * `chains`: `setCallArgument`, `insertCall` and `removeCall`, on one call of a method chain
+//!   (a zod rule) addressed by value path.
 //!
 //! A new op is a new module here plus its `Op` variant.
 
@@ -46,6 +48,7 @@ use crate::parse;
 use crate::text::{self, Edit};
 
 pub mod bind_query;
+mod chains;
 mod insert;
 mod move_across;
 mod move_node;
@@ -181,7 +184,8 @@ pub enum Op {
     /// Move the array element `path` selects to position `index` (counted after the move).
     MoveElement { path: String, index: usize },
     /// Set property `prop` of the object literal at `path` to `value` (one expression, as
-    /// source text): replaced in place when it exists, else appended.
+    /// source text): replaced in place when it exists, else added after the last property
+    /// that is not a spread, so trailing `...spread`s still override it.
     SetProperty {
         path: String,
         prop: String,
@@ -191,6 +195,21 @@ pub enum Op {
     },
     /// Remove property `prop` of the object literal at `path`.
     RemoveProperty { path: String, prop: String },
+    /// In the method chain at `path` (`z.string().max(100)`), set argument `index` of its one
+    /// call to `method` (`max`; the first call by its callee, `z.string`) to `value` (one
+    /// expression). `index` may be the argument count, which appends one.
+    SetCallArgument { path: String, method: String, index: usize, value: String },
+    /// Add `call` (`max(500)`) to the method chain at `path`: before the first call whose
+    /// method is in `before` (`["optional", "refine"]`), else at the end.
+    InsertCall {
+        path: String,
+        call: String,
+        #[serde(default)]
+        before: Vec<String>,
+    },
+    /// Remove the one call to `method` from the method chain at `path` (not its first call);
+    /// imports whose last reference it was are dropped.
+    RemoveCall { path: String, method: String },
 }
 
 impl Op {
@@ -202,7 +221,10 @@ impl Op {
             | Op::RemoveElement { path }
             | Op::MoveElement { path, .. }
             | Op::SetProperty { path, .. }
-            | Op::RemoveProperty { path, .. } => return Ok(crate::values::ValuePath::parse(path)?.file),
+            | Op::RemoveProperty { path, .. }
+            | Op::SetCallArgument { path, .. }
+            | Op::InsertCall { path, .. }
+            | Op::RemoveCall { path, .. } => return Ok(crate::values::ValuePath::parse(path)?.file),
             _ => {}
         }
         let primary = match self {
@@ -218,7 +240,10 @@ impl Op {
             | Op::RemoveElement { .. }
             | Op::MoveElement { .. }
             | Op::SetProperty { .. }
-            | Op::RemoveProperty { .. } => unreachable!("returned above"),
+            | Op::RemoveProperty { .. }
+            | Op::SetCallArgument { .. }
+            | Op::InsertCall { .. }
+            | Op::RemoveCall { .. } => unreachable!("returned above"),
         };
         Ok(Locator::parse(primary)?.file)
     }
@@ -260,6 +285,9 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         Op::MoveElement { path, index } => return values::move_element(source, file, path, *index),
         Op::SetProperty { path, prop, value, imports } => return values::set_property(source, file, path, prop, value, imports),
         Op::RemoveProperty { path, prop } => return values::remove_property(source, file, path, prop),
+        Op::SetCallArgument { path, method, index, value } => return chains::set_call_argument(source, file, path, method, *index, value),
+        Op::InsertCall { path, call, before } => return chains::insert_call(source, file, path, call, before),
+        Op::RemoveCall { path, method } => return chains::remove_call(source, file, path, method),
         _ => {}
     }
     let alloc = Allocator::default();
@@ -308,7 +336,10 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         | Op::RemoveElement { .. }
         | Op::MoveElement { .. }
         | Op::SetProperty { .. }
-        | Op::RemoveProperty { .. } => unreachable!("handled above"),
+        | Op::RemoveProperty { .. }
+        | Op::SetCallArgument { .. }
+        | Op::InsertCall { .. }
+        | Op::RemoveCall { .. } => unreachable!("handled above"),
     }
 }
 

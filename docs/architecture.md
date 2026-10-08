@@ -75,6 +75,8 @@ crates/trivia_oxc_engine/src/
   workspace.rs     paths under the root, atomic and guarded writes (the only I/O)
   inspect.rs       read: node details for the inspector
   prop_analyzer.rs read: prop schemas from the user's components (rule 8)
+  values.rs        read: value paths into object/array literals and method chains
+  mentions.rs      read: where a file still names a field (member, string, key)
   ops/
     mod.rs         Op, Placement, Outcome, apply_op, and what every op shares
     insert.rs      insert, insertChild (and the snippet limits)
@@ -83,6 +85,9 @@ crates/trivia_oxc_engine/src/
     move_node.rs   move, moveNode (and the scope check)
     bind_query.rs  bindQuery
     set_text.rs    setText
+    move_across.rs move and moveNode between two files
+    values.rs      insertElement, removeElement, moveElement, setProperty, removeProperty
+    chains.rs      setCallArgument, insertCall, removeCall (one call of a method chain)
 ```
 
 A new op (a cross-file move, say) is a new `ops/<op>.rs` plus its `Op` variant

@@ -159,14 +159,14 @@ impl Seq {
 }
 
 /// A parsed value snippet: one expression, with what it needs from the file.
-struct ValueSnippet {
+pub(super) struct ValueSnippet {
     text: String,
     components: Vec<String>,
     free: BTreeSet<String>,
     frozen: Vec<(u32, u32)>,
 }
 
-fn parse_value_snippet(snippet: &str) -> Result<ValueSnippet> {
+pub(super) fn parse_value_snippet(snippet: &str) -> Result<ValueSnippet> {
     let snippet = snippet.trim();
     if snippet.is_empty() {
         return Err(EngineError::InvalidSnippet("empty value".into()));
@@ -177,8 +177,10 @@ fn parse_value_snippet(snippet: &str) -> Result<ValueSnippet> {
     let alloc = Allocator::default();
     let program = parse(&alloc, &wrapped, "value.tsx").map_err(|e| EngineError::InvalidSnippet(e.to_string()))?;
     let exact = Span::new(PREFIX.len() as u32, (PREFIX.len() + snippet.len()) as u32);
+    // `a, b` parses as one (sequence) expression, but in a list it would be two items.
     let ok = matches!(program.body.as_slice(), [Statement::ExpressionStatement(stmt)]
-        if stmt.expression.without_parentheses().span() == exact);
+        if stmt.expression.without_parentheses().span() == exact
+            && !matches!(stmt.expression.without_parentheses(), Expression::SequenceExpression(_)));
     if !ok {
         return Err(EngineError::InvalidSnippet("expected exactly one expression, without comments around it".into()));
     }
@@ -191,21 +193,21 @@ fn parse_value_snippet(snippet: &str) -> Result<ValueSnippet> {
 }
 
 impl ValueSnippet {
-    fn indented(&self, src: &str, indent: &str) -> String {
+    pub(super) fn indented(&self, src: &str, indent: &str) -> String {
         let nl = text::newline(src);
         text::reindent_snippet(&self.text, indent, nl, &self.frozen, &text::indent_unit(&self.text), &text::indent_unit(src))
     }
 }
 
 /// A file parsed for a value edit.
-struct ValueDoc<'d> {
-    src: &'d str,
-    file: &'d str,
-    path: ValuePath,
+pub(super) struct ValueDoc<'d> {
+    pub(super) src: &'d str,
+    pub(super) file: &'d str,
+    pub(super) path: ValuePath,
 }
 
 impl ValueDoc<'_> {
-    fn new<'d>(src: &'d str, file: &'d str, path: &str) -> Result<ValueDoc<'d>> {
+    pub(super) fn new<'d>(src: &'d str, file: &'d str, path: &str) -> Result<ValueDoc<'d>> {
         let path = ValuePath::parse(path)?;
         if path.file != file {
             return Err(EngineError::Unsupported(format!("`{path}` is in {} but this edit is applied to {file}", path.file)));
@@ -214,7 +216,7 @@ impl ValueDoc<'_> {
     }
 
     /// Write `edits` (with the snippet's imports, if any) and validate the result.
-    fn commit(&self, program: &Program<'_>, mut edits: Vec<Edit>, snippet: Option<(&ValueSnippet, &[ImportSpec])>) -> Result<Outcome> {
+    pub(super) fn commit(&self, program: &Program<'_>, mut edits: Vec<Edit>, snippet: Option<(&ValueSnippet, &[ImportSpec])>) -> Result<Outcome> {
         let mut imported: Vec<String> = Vec::new();
         if let Some((snippet, imports)) = snippet {
             import_manager::validate_specs(imports)?;
@@ -313,10 +315,15 @@ pub(super) fn set_property(src: &str, file: &str, path: &str, prop: &str, value:
             Edit::replace(p.span.start, p.span.end, format!("{key}: {}", snippet.indented(src, indent)))
         }
         None => {
+            // Before trailing spreads (`{ name: "", ...defaults }`): what they pass in still wins.
+            let mut at = obj.properties.len();
+            while at > 0 && matches!(obj.properties[at - 1], ObjectPropertyKind::SpreadProperty(_)) {
+                at -= 1;
+            }
             let seq = Seq::of(target, &doc.path)?;
             let indent = seq.item_indent(src);
             let item = format!("{key}: {}", snippet.indented(src, &indent));
-            seq.insert(src, seq.items.len(), &item).0
+            seq.insert(src, at, &item).0
         }
     };
     doc.commit(&program, vec![edit], Some((&snippet, imports)))
@@ -341,7 +348,7 @@ pub(super) fn remove_property(src: &str, file: &str, path: &str, prop: &str) -> 
 }
 
 /// Apply a removal, then drop the imports only the removed code used (CLAUDE.md rule 9).
-fn remove_and_prune(doc: &ValueDoc<'_>, program: &Program<'_>, edits: Vec<Edit>) -> Result<Outcome> {
+pub(super) fn remove_and_prune(doc: &ValueDoc<'_>, program: &Program<'_>, edits: Vec<Edit>) -> Result<Outcome> {
     let before = import_manager::import_reference_counts(program);
     let (code, _) = text::apply_edits(doc.src, &edits)?;
     let code = import_manager::prune_dropped(&code, doc.file, &before)?;
@@ -474,6 +481,24 @@ export function List() {
     }
 
     #[test]
+    fn adds_a_property_before_trailing_spreads() {
+        const FORM: &str = "export function Form({ initial }) {\n  const inline = { name: \"\", ...initial };\n  const lines = {\n    name: \"\",\n    ...initial,\n  };\n  const only = { ...initial };\n  const after = { ...initial, name: \"\" };\n  return null;\n}\n";
+        let p = |b: &str| format!("{FILE}#Form#{b}");
+        let set = |b: &str| set_property(FORM, FILE, &p(b), "email", "\"\"", &[]).unwrap().code;
+        let cases = [
+            ("inline", "const inline = { name: \"\", email: \"\", ...initial };"),
+            ("lines", "    name: \"\",\n    email: \"\",\n    ...initial,\n"),
+            ("only", "const only = { email: \"\", ...initial };"),
+            ("after", "const after = { ...initial, name: \"\", email: \"\" };"),
+        ];
+        for (binding, expected) in cases {
+            let code = set(binding);
+            assert!(code.contains(expected), "{binding}: {code}");
+            assert_eq!(remove_property(&code, FILE, &p(binding), "email").unwrap().code, FORM, "{binding}");
+        }
+    }
+
+    #[test]
     fn adds_the_imports_a_value_uses() {
         let cell = "{\n  id: \"kyc\",\n  cell: () => <Tag>kyc</Tag>,\n}";
         let imports = [ImportSpec { name: "Tag".into(), source: "@/components/ui/tag".into(), default: false }];
@@ -492,6 +517,7 @@ export function List() {
         assert!(err(remove_element(LIST, FILE, &path("columns[id=nope]"))).contains("no element has id \"nope\""));
         assert_eq!(insert_element(LIST, FILE, &path("columns"), None, "1; 2", &[]).unwrap_err().code(), "invalid_snippet");
         assert!(err(insert_element(LIST, FILE, &path("columns"), None, "1), (2", &[])).contains("exactly one expression"));
+        assert!(err(insert_element(LIST, FILE, &path("columns"), None, "1, 2", &[])).contains("exactly one expression"));
         assert!(err(insert_element(LIST, FILE, &path("columns"), Some(9), "1", &[])).contains("out of range"));
         assert!(err(move_element(LIST, FILE, &path("columns[id=name]"), 3)).contains("out of range"));
         assert!(err(remove_property(LIST, FILE, &path("options"), "zzz")).contains("no property `zzz`"));

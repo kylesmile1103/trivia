@@ -89,6 +89,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   list read before another fix ran still applies correctly.
   `trivia_apply` also takes the value ops (`insertElement`, `removeElement`, `moveElement`,
   `setProperty`, `removeProperty`) for edits the adapter doesn't plan, such as renaming a header.
+  The chain ops (`setCallArgument`, `insertCall`, `removeCall`) edit one call of a zod rule in
+  place, such as `.max(100)` → `.max(500)`, and leave the rest of the rule as written.
 - `trivia_screenshot` returns what the user sees on the Trivia canvas, so the agent can check
   its edit: one `image` block (`image/png`, the canvas width, at most 4000 px of its height)
   and a text line with its size. The plugin has no browser; it asks the open designer

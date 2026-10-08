@@ -236,6 +236,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 { "op": "moveElement", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=segment]", "index": 0 }
 { "op": "setProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting", "value": "false", "imports": [] }
 { "op": "removeProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting" }
+{ "op": "setCallArgument", "path": "src/pages/customers/edit.tsx#module#customerSchema.notes", "method": "max", "index": 0, "value": "500" }
+{ "op": "insertCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.fullName", "call": "max(120, \"Enter at most 120 characters.\")", "before": ["optional", "refine"] }
+{ "op": "removeCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.phone", "method": "optional" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -269,13 +272,29 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     and `[i]`.
 
   On the way, values unwrap to the literal they hold: parentheses and TS `as`/`satisfies`/`!`,
-  a function to what it returns, a call to its first argument. So `columns` reaches the array in
-  `useMemo(() => [...], [])`. `value` is source text for one expression; its imports work as a
+  a function to what it returns, a call to its first argument. A method chain whose first call
+  holds a literal unwraps to that literal. So `columns` reaches the array in
+  `useMemo(() => [...], [])`, and `schema` the object in `z.object({…}).refine(…)`. A new
+  `setProperty` key goes before trailing spreads (`{ name: "", ...defaults }`), so they still
+  override it. `value` is source text for one expression; its imports work as a
   snippet's do. Layout follows the literal (one item per line with or without a trailing
   comma, or one line), and inserting then removing an item, or moving it there and back,
   restores the bytes. Keyed paths are their own stale guard: a missing key is 404
   `node_not_found`, and a key two elements share is 422 `unsupported`. `removeElement` and
   `removeProperty` drop imports only the removed code used. `locator` in the result is `null`.
+- **Chain ops** (`setCallArgument`, `insertCall`, `removeCall`) edit one call of the method chain
+  at a value path, such as a zod rule `z.string().max(100, "…").optional()`. The other calls,
+  and the developer's messages, stay as written.
+  - `method` names a call after the first by its method (`max`), and the first by its callee
+    (`z.string`, `z.enum`). A chain that calls it twice is 422 `unsupported`.
+  - `setCallArgument` replaces argument `index`, or appends one when `index` is the argument
+    count.
+  - `insertCall` adds `call` (one method call: `max(500)`) before the first call named in
+    `before`, else at the end. It takes the chain's layout: a line of its own when the calls
+    around it have one, else inline.
+  - `removeCall` drops a call (not the first) and the imports only it used.
+  - Inserting and then removing a call restores the bytes. A path that holds no call is 422
+    `unsupported`.
 - `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
   references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
   `attributes[].source` is the text as written.

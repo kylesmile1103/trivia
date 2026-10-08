@@ -37,6 +37,8 @@ const CONSTRUCTS = {
   nots: (depth) => `{${'!'.repeat(depth)}x}`,
   typeofs: (depth) => `{${'typeof '.repeat(depth)}x}`,
   casts: (depth) => `{x${' as T'.repeat(depth)}}`,
+  // A method chain (a zod rule grown by hand): value descriptions walk its calls.
+  chains: (depth) => `{z.string()${'.min(1)'.repeat(depth)}}`,
 }
 
 /** A component whose `<div>` holds `inner`. */
@@ -47,7 +49,11 @@ async function child(fn, construct, depth) {
   const engine = await import(path.join(here, '..', 'index.js'))
   const deep = CONSTRUCTS[construct](depth)
   // `insert` sends the deep text as a snippet into a small file, as POST /apply would.
-  const src = component(fn === 'insert' ? '' : deep)
+  // Value reads look at bindings, so there the deep code is a binding's value.
+  const src =
+    fn === 'describeValues' || fn === 'mentions'
+      ? `export function App() {\n  const value = ${deep.slice(1, -1)};\n  return <div />\n}\n`
+      : component(fn === 'insert' ? '' : deep)
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-deep-'))
   try {
     fs.mkdirSync(path.join(root, 'src/components/ui'), { recursive: true })
@@ -76,6 +82,10 @@ async function child(fn, construct, depth) {
         const insert = { op: 'insert', target: `${FILE}#App#0`, expectedName: 'div', placement: 'lastChild', snippet: deep, imports: [] }
         return envelope(engine.applyOps(root, JSON.stringify([insert])))
       }
+      case 'describeValues':
+        return envelope(engine.describeValues(root, FILE))
+      case 'mentions':
+        return envelope(engine.mentions(root, FILE, 'min'))
       case 'components':
         fs.writeFileSync(path.join(root, 'src/components/ui/deep.tsx'), src)
         return envelope(engine.components(root, 'src/components/ui', '@/components/ui'))
@@ -109,7 +119,7 @@ if (!fs.existsSync(path.join(here, '..', 'index.js'))) {
 // `refused`: the call must fail cleanly (an error envelope, or a throw for `annotate`).
 const cases = [
   // Past the main thread's crash points (5 000 brackets, 18 000 elements).
-  ...['annotate', 'inspect', 'outline', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles'].map((fn) => [
+  ...['annotate', 'inspect', 'outline', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles', 'describeValues', 'mentions'].map((fn) => [
     fn,
     'brackets',
     15_000,
@@ -134,6 +144,7 @@ const cases = [
   ...['ternaries', 'arrows', 'assignments', 'news'].map((construct) => ['annotate', construct, 200_000, 'result']),
   ['applyOps', 'ternaries', 200_000, 'result'],
   ['applyOps', 'arrows', 200_000, 'result'],
+  ...['describeValues', 'mentions'].flatMap((fn) => ['ternaries', 'arrows', 'chains'].map((construct) => [fn, construct, 200_000, 'result'])),
   // The rest of the review's chains at its 50 000 levels: cheap per level, but the review
   // crashed the main thread with them.
   ...['powers', 'sums', 'nullish', 'nots', 'typeofs', 'casts'].map((construct) => ['annotate', construct, 50_000, 'result']),

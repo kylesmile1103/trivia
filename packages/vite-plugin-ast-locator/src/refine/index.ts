@@ -14,12 +14,12 @@ import { type PageDrift, pageDrift } from './drift.js'
 import { formFieldFor, kebab } from './fields.js'
 import { type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { PAGE_KINDS, type PageKind, pageFiles, supportedKinds } from './scaffold.js'
-import { type ListPage, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
+import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
 export type { FormFieldInfo, FormPage } from './form.js'
 export type { PageKind } from './scaffold.js'
-export type { ColumnInfo, FieldInfo, ListPage } from './page.js'
+export type { ChainCall, ColumnInfo, FieldInfo, ListPage, Mention } from './page.js'
 
 /** A Refine page Trivia can edit: a list (columns) or a form (fields). */
 export type Page = ListPage | FormPage
@@ -122,6 +122,8 @@ export interface RefineHost {
   inspect(locator: string): unknown
   /** The value at a value path (engine describeValue). */
   describeValue?(path: string): unknown
+  /** Where a file names `name` (engine mentions). */
+  mentions?(file: string, name: string): Mention[]
 }
 
 /** The `<Refine resources>` entry named `name`. */

@@ -263,6 +263,13 @@ pub fn describe_value(root: String, path: String) -> String {
     engine_call(move || Workspace::new(&root).and_then(|ws| ws.describe_value(&path)).and_then(to_value).map_err(Failure::from))
 }
 
+/// Where `file` still names `name`: member accesses, string literals, object keys and
+/// destructured names (`trivia_oxc_engine::mentions`).
+#[napi]
+pub fn mentions(root: String, file: String, name: String) -> String {
+    engine_call(move || Workspace::new(&root).and_then(|ws| ws.mentions(&file, &name)).and_then(to_value).map_err(Failure::from))
+}
+
 /// Prop schemas for every component file in `ui_dir`.
 #[napi]
 pub fn components(root: String, ui_dir: String, import_base: String) -> String {

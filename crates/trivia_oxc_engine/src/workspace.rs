@@ -195,6 +195,11 @@ impl Workspace {
         crate::values::describe_values(&self.read(file)?, file)
     }
 
+    /// Where `file` still names `name` (`crate::mentions`).
+    pub fn mentions(&self, file: &str, name: &str) -> Result<Vec<crate::mentions::Mention>> {
+        crate::mentions::mentions(&self.read(file)?, file, name)
+    }
+
     /// The value at a value path, unwrapped to its literal.
     pub fn describe_value(&self, path: &str) -> Result<crate::values::Value> {
         let file = crate::values::ValuePath::parse(path)?.file;

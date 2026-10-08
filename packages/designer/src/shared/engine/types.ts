@@ -35,6 +35,10 @@ export type Op =
   | { op: 'moveElement'; path: string; index: number }
   | { op: 'setProperty'; path: string; prop: string; value: string; imports?: ImportSpec[] }
   | { op: 'removeProperty'; path: string; prop: string }
+  // Chain ops: one call of a method chain (a zod rule) at a value path.
+  | { op: 'setCallArgument'; path: string; method: string; index: number; value: string }
+  | { op: 'insertCall'; path: string; call: string; before?: string[] }
+  | { op: 'removeCall'; path: string; method: string }
 
 /** Ops that address a value path rather than a JSX locator. */
 export type ValueOp = Extract<Op, { path: string }>

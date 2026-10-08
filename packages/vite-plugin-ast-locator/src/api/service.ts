@@ -8,7 +8,7 @@ import path from 'node:path'
 
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
-import { RefineAdapter } from '../refine/index.js'
+import { type Mention, RefineAdapter } from '../refine/index.js'
 import { uncommitted } from './git.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
@@ -80,6 +80,7 @@ export class EngineService {
       outline: (file) => this.outline(file),
       inspect: (locator) => this.inspect(locator),
       describeValue: (path) => this.describeValue(path),
+      mentions: (file, name) => this.mentions(file, name),
     })
   }
 
@@ -113,6 +114,11 @@ export class EngineService {
   /** The value at a value path (`<file>#<scope>#<path>`), unwrapped to its literal. */
   describeValue(path: string): unknown {
     return unwrap<unknown>(this.#options.engine.describeValue(this.#options.root, path))
+  }
+
+  /** Where `file` still names `name`: member accesses, string literals, object keys, destructured names. */
+  mentions(file: string, name: string): Mention[] {
+    return unwrap<Mention[]>(this.#options.engine.mentions(this.#options.root, file, name))
   }
 
   history(): HistoryState {
@@ -348,6 +354,10 @@ function describe(op: Json): string {
       return `Set ${prop}`
     case 'removeProperty':
       return `Remove ${prop}`
+    case 'setCallArgument':
+    case 'insertCall':
+    case 'removeCall':
+      return 'Edit rule'
     default:
       return 'Edit'
   }

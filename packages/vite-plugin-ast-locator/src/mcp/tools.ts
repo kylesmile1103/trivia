@@ -97,6 +97,24 @@ const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('moveElement'), path: valuePath.describe('The element to move, by key: `…#columns[id=email]`'), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
   z.object({ op: z.literal('setProperty'), path: valuePath.describe('An object literal, e.g. a column `…#columns[id=email]`'), prop: z.string().min(1), value: valueText, imports }).strict(),
   z.object({ op: z.literal('removeProperty'), path: valuePath.describe('An object literal'), prop: z.string().min(1) }).strict(),
+  z
+    .object({
+      op: z.literal('setCallArgument'),
+      path: valuePath.describe('A method chain, e.g. a zod rule `…#module#customerSchema.notes`'),
+      method: z.string().min(1).describe('The call: a method (`max`), or the first call by its callee (`z.enum`)'),
+      index: z.number().int().min(0).describe('The argument; the argument count appends one'),
+      value: valueText,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('insertCall'),
+      path: valuePath.describe('A method chain, e.g. a zod rule'),
+      call: z.string().min(1).describe('One method call, e.g. `max(500, "At most 500 characters.")`'),
+      before: z.array(z.string().min(1)).optional().describe('Goes before the first call with one of these methods, e.g. ["optional", "refine"]; default: at the end'),
+    })
+    .strict(),
+  z.object({ op: z.literal('removeCall'), path: valuePath.describe('A method chain, e.g. a zod rule'), method: z.string().min(1).describe('The method to drop, e.g. `optional`') }).strict(),
 ])
 
 const fieldChange = z.discriminatedUnion('action', [
@@ -283,7 +301,9 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         'insertChild, remove, move (also to another file: its imports come along), moveNode, bindQuery (a TanStack Query ' +
         'hook feeding the element, docs/data-provider.md) and createFile (a new component file; undo deletes it); and, ' +
         'for object and array literals addressed by value path (Refine columns, zod schemas, defaultValues), ' +
-        'insertElement, removeElement, moveElement, setProperty and removeProperty. ' +
+        'insertElement, removeElement, moveElement, setProperty and removeProperty; and for one call of a method chain ' +
+        '(a zod rule: `z.string().max(100, "…").optional()`), setCallArgument, insertCall and removeCall, which keep the ' +
+        'other calls and messages as written. ' +
         'Each names elements by locator and must carry the tag name you read there ' +
         '(expectedName, and expectedTargetName / expectedParentName for the other element): the edit is refused instead ' +
         'of hitting the wrong element when the file changed. Several ops: each op\'s locators must hold after the ops ' +

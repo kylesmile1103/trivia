@@ -24,8 +24,8 @@ use std::fmt;
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    ArrayExpressionElement, BindingPattern, Declaration, Expression, ExportDefaultDeclarationKind, ObjectPropertyKind,
-    Program, Statement,
+    ArrayExpressionElement, BindingPattern, CallExpression, Declaration, Expression, ExportDefaultDeclarationKind,
+    ObjectPropertyKind, Program, Statement,
 };
 use oxc_span::{GetSpan, Span};
 use serde::Serialize;
@@ -456,19 +456,101 @@ pub(crate) fn unwrap_literal<'p, 'a>(mut e: &'p Expression<'a>) -> &'p Expressio
                 Some(expr) => expr,
                 None => return e,
             },
-            Expression::CallExpression(call) => match call.arguments.first().and_then(|a| a.as_expression()) {
-                Some(arg) => arg,
-                None => return e,
-            },
+            Expression::CallExpression(call) => {
+                if let Some(literal) = receiver_literal(call) {
+                    return literal;
+                }
+                match call.arguments.first().and_then(|a| a.as_expression()) {
+                    Some(arg) => arg,
+                    None => return e,
+                }
+            }
             _ => return e,
         };
     }
+}
+
+/// For a method chain (`z.object({…}).refine(…).strict()`), the literal its first call holds,
+/// when it holds one. A method on a call works on what that call returns, so the schema
+/// object is what `.refine(…)` refines, not its callback.
+fn receiver_literal<'p, 'a>(call: &'p CallExpression<'a>) -> Option<&'p Expression<'a>> {
+    let mut base = chained_receiver(call)?;
+    // Down the chain without recursing: chains can be long.
+    while let Expression::CallExpression(inner) = base.without_parentheses() {
+        match chained_receiver(inner) {
+            Some(receiver) => base = receiver,
+            None => break,
+        }
+    }
+    let literal = unwrap_literal(base);
+    matches!(literal, Expression::ObjectExpression(_) | Expression::ArrayExpression(_)).then_some(literal)
+}
+
+/// The call a method is called on (`z.string()` in `z.string().max(1)`), when it is a call.
+fn chained_receiver<'p, 'a>(call: &'p CallExpression<'a>) -> Option<&'p Expression<'a>> {
+    match call.callee.without_parentheses() {
+        Expression::StaticMemberExpression(m) if matches!(m.object.without_parentheses(), Expression::CallExpression(_)) => {
+            Some(&m.object)
+        }
+        _ => None,
+    }
+}
+
+/// One call of a method chain (`z.string().max(100).optional()` has three).
+pub(crate) struct Link<'p, 'a> {
+    /// The method (`max`); for the chain's first call, its whole callee (`z.string`).
+    pub name: String,
+    pub call: &'p CallExpression<'a>,
+    /// When the callee is `object.name`: where `object` ends and where `name` starts. Between
+    /// them is the `.`, and any line break the chain's layout puts before it.
+    pub gap: Option<(u32, u32)>,
+}
+
+/// The calls of the chain `e` is (first call first), or `None` when it is not a call.
+pub(crate) fn chain<'p, 'a>(e: &'p Expression<'a>) -> Option<Vec<Link<'p, 'a>>> {
+    let Expression::CallExpression(first) = e.without_parentheses() else { return None };
+    let mut call: &'p CallExpression<'a> = first;
+    let mut links = Vec::new();
+    loop {
+        let callee = call.callee.without_parentheses();
+        let gap = match callee {
+            Expression::StaticMemberExpression(m) => Some((m.object.span().end, m.property.span.start)),
+            _ => None,
+        };
+        match callee {
+            Expression::StaticMemberExpression(m) => match m.object.without_parentheses() {
+                Expression::CallExpression(inner) => {
+                    links.push(Link { name: m.property.name.to_string(), call, gap });
+                    call = inner;
+                }
+                _ => {
+                    links.push(Link { name: callee_text(callee), call, gap });
+                    break;
+                }
+            },
+            _ => {
+                links.push(Link { name: callee_text(callee), call, gap });
+                break;
+            }
+        }
+    }
+    links.reverse();
+    Some(links)
 }
 
 /// The callees a value goes through on the way to its literal (`useMemo`, `z.object`).
 fn via(mut e: &Expression<'_>) -> Vec<String> {
     let mut out = Vec::new();
     loop {
+        if let Expression::CallExpression(call) = e
+            && receiver_literal(call).is_some()
+        {
+            let links = chain(e).expect("a call is a chain");
+            out.extend(links.iter().skip(1).rev().map(|l| format!(".{}", l.name)));
+            e = links[0].call.arguments.first().and_then(|a| a.as_expression()).expect("the literal is in its first call");
+            out.push(links[0].name.clone());
+            continue;
+        }
         e = match e {
             Expression::ParenthesizedExpression(p) => &p.expression,
             Expression::TSAsExpression(x) => &x.expression,
@@ -638,7 +720,7 @@ fn find_call<'p, 'a>(body: &ScopeBody<'p, 'a>, callee: &str) -> Option<&'p Expre
     })
 }
 
-fn kind_name(e: &Expression<'_>) -> &'static str {
+pub(crate) fn kind_name(e: &Expression<'_>) -> &'static str {
     match e {
         Expression::ObjectExpression(_) => "an object",
         Expression::ArrayExpression(_) => "an array",
@@ -671,7 +753,8 @@ pub enum ValueDesc {
     Object { properties: Vec<PropertyDesc> },
     Array { elements: Vec<Value> },
     Function { source: String },
-    Call { callee: String, source: String },
+    /// `chain`: the calls of a method chain, first call first (one for a plain call).
+    Call { callee: String, source: String, chain: Vec<ChainCall> },
     Jsx { source: String },
     Other { source: String },
 }
@@ -683,6 +766,16 @@ pub struct Value {
     pub line: u32,
     #[serde(flatten)]
     pub desc: ValueDesc,
+}
+
+/// One call of a chain: `z.string` with no arguments, then `max` with `100`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainCall {
+    /// The method; for the first call, its whole callee (`z.string`).
+    pub name: String,
+    /// Each argument's source (an excerpt when long).
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -878,7 +971,15 @@ fn describe(source: &str, e: &Expression<'_>, depth: usize) -> Value {
         Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_) => {
             ValueDesc::Function { source: excerpt(source, e.span()) }
         }
-        Expression::CallExpression(call) => ValueDesc::Call { callee: callee_text(&call.callee), source: excerpt(source, e.span()) },
+        Expression::CallExpression(call) => ValueDesc::Call {
+            callee: callee_text(&call.callee),
+            source: excerpt(source, e.span()),
+            chain: chain(e)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|l| ChainCall { name: l.name, args: l.call.arguments.iter().map(|a| excerpt(source, a.span())).collect() })
+                .collect(),
+        },
         Expression::JSXElement(_) | Expression::JSXFragment(_) => ValueDesc::Jsx { source: excerpt(source, e.span()) },
         _ => other(),
     })
@@ -1043,5 +1144,44 @@ export const PostEdit = () => {
         let memo = list.calls.iter().find(|c| c.callee == "useMemo").unwrap();
         assert_eq!(memo.type_args, ["ColumnDef<Post>[]"]);
         assert_eq!(scopes[2].calls[0].callee, "useForm");
+    }
+
+    #[test]
+    fn follows_method_chains_to_the_literal_their_first_call_holds() {
+        const SCHEMA: &str = r#"const schema = z
+  .object({
+    notes: z.string().max(100, "At most 100.").optional(),
+  })
+  .refine((v) => v.notes !== "x", { message: "No." })
+  .strict();
+const rule = z.string().min(2);
+const kept = [1, 2].filter(Boolean);
+"#;
+        let scopes = describe_values(SCHEMA, "src/f.ts").unwrap();
+        let module = &scopes[0];
+        let schema = module.bindings.iter().find(|b| b.name == "schema").unwrap();
+        assert_eq!(schema.via, [".strict", ".refine", "z.object"]);
+        let json = serde_json::to_value(&schema.value).unwrap();
+        assert_eq!(json["kind"], "object", "the object, not the refine callback: {json}");
+        let notes = &json["properties"][0]["value"];
+        assert_eq!(notes["kind"], "call");
+        assert_eq!(
+            notes["chain"],
+            serde_json::json!([
+                { "name": "z.string", "args": [] },
+                { "name": "max", "args": ["100", "\"At most 100.\""] },
+                { "name": "optional", "args": [] },
+            ])
+        );
+        // A chain whose first call holds no literal keeps the old unwrapping (its first argument).
+        let rule = module.bindings.iter().find(|b| b.name == "rule").unwrap();
+        assert_eq!(serde_json::to_value(&rule.value).unwrap()["kind"], "number");
+        // A method on a literal is not a chain: unwrapped as before, to its first argument.
+        let kept = module.bindings.iter().find(|b| b.name == "kept").unwrap();
+        assert_eq!(serde_json::to_value(&kept.value).unwrap()["kind"], "identifier");
+        let alloc = Allocator::default();
+        let program = parse(&alloc, SCHEMA, "src/f.ts").unwrap();
+        let notes = resolve(&program, &ValuePath::parse("src/f.ts#module#schema.notes").unwrap()).unwrap();
+        assert!(SCHEMA[notes.expr.span().start as usize..].starts_with("z.string().max(100"));
     }
 }

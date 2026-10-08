@@ -16,7 +16,24 @@ export type ValueDesc =
   | { kind: 'object'; properties: Array<{ key: string; line: number; value: ValueDesc }>; line: number }
   | { kind: 'array'; elements: ValueDesc[]; line: number }
   | { kind: 'function' | 'jsx' | 'other'; source: string; line: number }
-  | { kind: 'call'; callee: string; source: string; line: number }
+  /** `chain`: a method chain's calls, first call first (`z.string`, then `max` with `["100"]`). */
+  | { kind: 'call'; callee: string; source: string; chain: ChainCall[]; line: number }
+
+export interface ChainCall {
+  /** The method; for the first call, its whole callee (`z.string`). */
+  name: string
+  /** Each argument's source (an excerpt when long). */
+  args: string[]
+}
+
+/** Where a file names something (engine `mentions`): `x.email`, `"email"`, `email:`, `{ email }`. */
+export interface Mention {
+  kind: 'member' | 'string' | 'key' | 'binding'
+  line: number
+  column: number
+  /** The line, trimmed. */
+  text: string
+}
 
 export interface ScopeValues {
   scope: string

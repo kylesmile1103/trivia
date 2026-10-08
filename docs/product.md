@@ -116,6 +116,83 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
 | 2. Form fields | On the customer create/edit pages: add a contract field (zod + default + FormField, one undo entry), remove one, reorder. Widgets by type. |
 | 3. Contract drift | After the spec changes: the Data tab and `trivia_contract_drift` list each page's broken references, with fixes from slices 1–2. |
 | 4. New resource | Pages, resource entry and routes for a contract resource that has none. |
+| 5. Forms that survive real code | On `refine-admin`'s edit page, written in Refine's `<FormField>` style with a grid wrapper and a schema-level `.refine`: fields read, add, remove and rebuild like the others. After a spec change to a bound (`maxLength`), drift's fix edits the rule in place, so custom calls and messages stay. After a change to required-ness, the fix adds or removes `.optional()`. A removed field's other mentions are listed. |
+
+## Slice 5: forms that survive real code (⚑ planned by the agent, 2026-10-09)
+
+The user's own idea was an AOT JSON Schema → TSX compiler with day-2 sync. Assessed with them,
+it was reduced to what their real apps need: **OpenAPI stays the input** (no JSON Schema or
+uiSchema layer), and the new abilities go into what exists. Real Refine forms differ from
+slice 2's in four ways, each made to work:
+
+1. **Refine's own form style.** Refine's shadcn docs and registry write
+   `<Form {...form}>` + `<FormField control name render>` + `FormItem`/`FormLabel`/`FormControl`/
+   `FormMessage` (shadcn's older `form` component). Slice 2 only read `<Controller>` + `<Field>`.
+   - Both are read: a field's control is a `Controller` or a `FormField`.
+   - ⚑ A new field is written in its form's style: the style its fields already use. An empty
+     form, and new pages, take the style most of the project's forms use. With no forms yet,
+     `ui/field.tsx` means `Field`, else `ui/form.tsx` means `FormField`. A `FormField` needs
+     `<Form>` around it; without one, `Field` is used.
+2. **Hand edits to the rule.** Developers add messages, `.refine(…)`, `.transform(…)` to the
+   zod rules, and `.refine` to the whole schema.
+   - Engine: a value path through `z.object({…}).refine(…)` reaches the object. A method on a
+     call or literal unwraps to its receiver when the receiver holds the literal. Before, it
+     unwrapped into the callback.
+   - Engine: **chain ops** edit one call of a method chain in place. `setCallArgument`
+     replaces or appends one argument of `.max(…)`. `insertCall` adds `.max(500)` before the
+     first of the calls it is told to stay before. `removeCall` drops `.optional()`. They keep
+     the chain's layout (one call per line or inline) and round-trip byte for byte.
+   - Engine: call descriptions carry the chain (`z.string`, `min(2, "…")`, `optional()`), so
+     adapters read a rule without regexes.
+3. **Bounds from the contract.** The manifest gains each field's `constraints` (minLength,
+   maxLength, minimum, maximum, pattern), additive and optional. New rules use them:
+   `.min(n, "Enter at least n characters.")`, `.max(…)`, `.regex(new RegExp("…"))`.
+   - Drift `constraint_changed`: the contract states a bound and the rule's differs or is
+     missing. ⚑ A bound only the form has is left alone: it may be deliberate.
+   - Drift `optionality_changed`: the contract now requires a field the rule makes optional
+     or nullable. ⚑ The other way round (a form stricter than the API) is not drift.
+   - Both are fixed by a field change `align`, resolved when planned. It edits the bounds and
+     modifiers in place with chain ops. A new bound goes before modifiers (`.optional()`,
+     `.refine(…)`, …).
+   - ⚑ Messages: the old bound in the message is replaced by the new one when it appears in it
+     exactly once (`"At most 100 characters"` → `"… 500 …"`). Otherwise the message is left as
+     written.
+4. **Layout the developer chose.**
+   - ⚑ Without an index, a new field goes right after the nearest field before it in the
+     contract's order, inside that field's own wrapper (grid, card, tab). Without one, it goes
+     before the nearest field after it, else at the end. A field under a `{cond && …}` guard
+     is never an anchor.
+   - Plans track locators by index-path prefix, so several changes in one plan work across
+     wrappers. Before, they were refused.
+   - The engine's `setProperty` puts a new key before trailing spreads
+     (`{ name: "", ...defaults }`), so values passed in still win. Before, it appended after
+     the spread and overrode them.
+5. **Removed fields still used elsewhere.** A field removed from the contract may still be
+   named in other code: `data.email` in a `.refine`, `watch("email")`.
+   - The engine's `mentions(file, name)` finds member accesses and string arguments with that
+     name, outside JSX attributes and object keys.
+   - A `missing_field` issue lists those lines, and a plan that removes the field returns them
+     as `warnings`.
+6. **Widgets.** ⚑ A `Textarea` for strings with `maxLength` over 255 when the project has
+   `ui/textarea.tsx`, and `type="password"` for `format: password`. Switch, radio and date
+   picker wait: without a uiSchema, nothing would choose them.
+
+Example and tests:
+- `refine-admin` gets `ui/form.tsx` (Refine's registry version, adapted to `radix-ui`).
+- `customers/edit.tsx` is rewritten in that style, with a two-column grid and a schema
+  `.refine`.
+- The spec gains `notes` (maxLength 1000).
+- Engine unit and round-trip tests for the chain ops.
+- Plugin tests reproduce the user's day-1.5 fixture: a grid wrapper, a root `.refine`, a
+  custom message and `...defaultValues`. Bytes outside the edits are checked, and `tsc` runs
+  on every result.
+- The e2e drift test extends to a bound change.
+
+Shipped in four parts, each through the full gate:
+- 5a: engine;
+- 5b: constraints and widgets;
+- 5c: FormField style and placement;
+- 5d: drift.
 
 ## Status
 
@@ -154,6 +231,11 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
     **Add … pages**. The raw TanStack Table and Create form actions are hidden there.
   - Tests: plugin tests that add Accounts' missing pages and a new Cards resource from a spec
     change, type-check them, and undo; `e2e/refine/pages.spec.ts`.
+- **Slice 5, forms that survive real code: in progress.**
+  - 5a, engine: done (2026-10-09). Value paths follow method chains to their literal, and call
+    descriptions carry the chain. The chain ops are in `ops/chains.rs`. `setProperty` adds new
+    keys before trailing spreads, and `mentions` is in `src/mentions.rs`; the napi binding exposes
+    it. Value snippets now refuse `a, b` (a sequence would become two items).
 - Known limits of slices 1–4:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
