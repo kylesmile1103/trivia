@@ -710,11 +710,58 @@ export class RefineAdapter {
   async previewModule(id: string): Promise<string | null> {
     const request = this.#previews.get(id)
     if (!request) return null
+    let code: string
     try {
-      return (await this.#inferred(request)).code
+      code = (await this.#inferred(request)).code
     } catch (error) {
       return `throw new Error(${JSON.stringify(error instanceof Error ? error.message : String(error))});\n`
     }
+    // The one line the preview has beyond the file Eject writes: Tailwind finds classes in files
+    // on disk, and this page isn't one yet.
+    return this.#tailwindEntry() === null ? code : `${code}\nimport "${PREVIEW_PREFIX}${id}.css";\n`
+  }
+
+  /**
+   * The stylesheet of preview `id`: the utilities its classes need, built by the app's Tailwind
+   * (v4) with the app's theme, since Tailwind doesn't see a page that isn't on disk. Null for an
+   * unknown preview or an app without Tailwind v4.
+   */
+  async previewStyles(id: string): Promise<string | null> {
+    const request = this.#previews.get(id)
+    const entry = this.#tailwindEntry()
+    if (!request || entry === null) return null
+    let code = ''
+    try {
+      code = (await this.#inferred(request)).code
+    } catch {
+      // The module says why; no classes to add.
+    }
+    const classes = [...new Set([...code.matchAll(/className="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)).filter((c) => c !== '' && !/["\\]/.test(c)))]
+    const reference = path.join(this.#host.root, entry).split(path.sep).join('/')
+    return `@reference "${reference}";\n@import "tailwindcss/utilities.css" layer(utilities) source(none);\n@source inline("${classes.join(' ')}");\n`
+  }
+
+  #tailwind: string | null | undefined
+  /** The app's Tailwind v4 entry stylesheet (the CSS under src/ that imports "tailwindcss"), project-relative. */
+  #tailwindEntry(): string | null {
+    if (this.#tailwind !== undefined) return this.#tailwind
+    const found: string[] = []
+    const walk = (dir: string, depth: number) => {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(path.join(this.#host.root, dir), { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const rel = path.posix.join(dir, entry.name)
+        if (entry.isDirectory() && depth < 3 && !entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name)) walk(rel, depth + 1)
+        else if (entry.isFile() && entry.name.endsWith('.css') && /@import\s+["']tailwindcss["']/.test(fs.readFileSync(path.join(this.#host.root, rel), 'utf8'))) found.push(rel)
+      }
+    }
+    walk('src', 0)
+    this.#tailwind = found.sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))[0] ?? null
+    return this.#tailwind
   }
 
   /**

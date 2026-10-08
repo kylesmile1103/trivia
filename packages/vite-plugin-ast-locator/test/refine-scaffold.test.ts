@@ -47,7 +47,8 @@ describe('resource pages', () => {
     expect(reply.body.data).toEqual([
       { resource: 'Account', name: 'accounts', existing: ['list'], possible: ['list', 'create', 'edit', 'show'] },
       { resource: 'Customer', name: 'customers', existing: ['list', 'create', 'edit'], possible: ['list', 'create', 'edit', 'show'] },
-      { resource: 'Transaction', name: 'transactions', existing: ['list'], possible: ['list', 'show'] },
+      // Its show route renders the inferencer (docs/product.md, slice 6).
+      { resource: 'Transaction', name: 'transactions', existing: ['list', 'show'], possible: ['list', 'show'] },
     ])
   })
 

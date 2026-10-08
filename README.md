@@ -272,7 +272,10 @@ source of truth and plans page edits from it. The weekly jobs, in order:
 3. **Contract drift.** After a spec change, list what each page references that the contract removed,
    retyped or newly requires, each with a one-click fix.
 4. **New resource.** Generate the list, create, edit and show pages for a contract resource, register
-   them in `<Refine resources>` and add the routes.
+   them in `<Refine resources>` and add the routes. Or drop `<OpenApiListInferencer />` (from
+   `@trivia/openapi-inferencer`, a contract-driven replacement for Refine's inferencer) into a route.
+   The page runs live, even with no records, and **Eject to disk** writes it and switches the route
+   over.
 
 Behind it, `@trivia/contract-sync` turns the spec into typed code and a deterministic
 `trivia.manifest.json`:

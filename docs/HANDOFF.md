@@ -101,7 +101,13 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   - new fields go by contract order inside the developer's wrappers;
   - a removed field's other mentions are listed.
 
-  The user was away for the slice-1/2 and slice-5 design calls; they are marked ⚑ in
+  **Slice 6 (drop-in inferencer)** came from the user's `@trivia/openapi-inferencer` idea.
+  `packages/trivia-inferencer` renders a contract page live in a route, before any file
+  exists, and Eject writes it and swaps itself out through the new engine op `replaceElement`.
+  It is a thin layer on slice 4's generator. The preview *is* the generated code, served by the
+  plugin as a module (`/@trivia/preview/<id>.tsx`), plus a Tailwind stylesheet for its classes.
+
+  The user was away for the slice-1/2, slice-5 and slice-6 design calls; they are marked ⚑ in
   `product.md` for review.
 - **Desktop shell** (`crates/trivia_shell`, Tauri 2.11.6, its own Cargo workspace): a window
   on the designer, with a waiting page until it answers. Verified on macOS by an agent's
@@ -110,11 +116,11 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   designer now rasterizes the SVG itself (`features/canvas/capture.ts`).
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 283 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
-- Vitest: plugin 151, designer 445 (including 6 architecture rules), contract-sync 80.
+- `cargo test --workspace` 286 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
+- Vitest: plugin 158, designer 445 (including 6 architecture rules), contract-sync 80, inferencer 8.
 - napi crash suite 41/41, with RSS bounds (now including `describeValues` and `mentions`).
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 53/53 (playground and refine projects).
+- Playwright 54/54 (playground and refine projects).
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -255,6 +261,14 @@ writes `useQuery` hooks against it.
 - **Never run `cargo fmt`.** The repo isn't rustfmt-formatted: it uses long lines, and the
   default config rewrote every engine file (7000 lines of diff). If it happens, restore the
   crate from git and re-apply the edits.
+- **A page that isn't on disk has no Tailwind classes.** Tailwind v4 finds candidates in files
+  on disk, so the inferencer's preview modules bring a stylesheet (`@reference` the app's CSS,
+  `@source inline(…)` the page's classes). A screenshot found it: the e2e checked roles, not
+  layout. Look at new UI, don't only query it.
+- **Preview modules resolve twice.** The browser asks for `/@trivia/preview/<id>.tsx`, but
+  Vite writes imports between previews as `/src/.trivia-preview/<id>.css` (the resolved path
+  from the root). It also resolves a module's own absolute id again for HMR. The plugin's
+  `resolveId` claims all three forms.
 - **Sync refuses while the generated code has uncommitted changes**, which protects hand edits.
   After changing the example's spec, commit the regenerated `src/api/generated` before running
   Playwright, or the drift e2e times out waiting for a sync that was refused. The plugin's
@@ -263,7 +277,7 @@ writes `useQuery` hooks against it.
 ## 7. Backlog / next steps (in priority order)
 
 The order is the product's (`docs/product.md`, Slices):
-1. **Have the user try it on one of their real internal tools.** Slices 1–5 are done; what
+1. **Have the user try it on one of their real internal tools.** Slices 1–6 are done; what
    breaks on a real codebase decides what comes next. Likely candidates:
    - pages whose shape the adapter doesn't read (`register()` forms, columns from a helper);
    - other UI kits (an Ant Design or MUI adapter beside `src/refine/`);

@@ -55,6 +55,8 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
   // aliases, JSX transform and React refresh apply to them like to its own files) and their
   // code comes from the Refine adapter.
   let previewDir = ''
+  /** The same directory as a URL from the root (`/src/.trivia-preview/`): how Vite writes imports between previews. */
+  let previewUrl = ''
   const isPreview = (id: string) => previewDir !== '' && id.split('?', 1)[0]!.startsWith(previewDir)
 
   return {
@@ -70,18 +72,22 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       paths = resolveProjectPaths(config.root, config.resolve.alias, options)
       for (const warning of paths.warnings) config.logger.warn(`[trivia] ${warning}`)
       previewDir = path.join(config.root, 'src', '.trivia-preview') + path.sep
+      previewUrl = '/src/.trivia-preview/'
     },
 
     resolveId(id) {
       if (service === undefined) return null
       if (id.startsWith(PREVIEW_PREFIX)) return path.join(previewDir, id.slice(PREVIEW_PREFIX.length).split('?', 1)[0]!)
+      if (id.startsWith(previewUrl)) return path.join(previewDir, id.slice(previewUrl.length).split('?', 1)[0]!)
       // Vite resolves a module's own id again (its HMR self-accept): it is still a preview.
       return isPreview(id) ? id : null
     },
 
     async load(id) {
       if (service === undefined || !isPreview(id)) return null
-      const name = path.basename(id.split('?', 1)[0]!, '.tsx')
+      const file = id.split('?', 1)[0]!
+      if (file.endsWith('.css')) return (await service.refine.previewStyles(path.basename(file, '.css'))) ?? ''
+      const name = path.basename(file, '.tsx')
       const code = await service.refine.previewModule(name)
       return code ?? `throw new Error(${JSON.stringify(`no Trivia preview ${name}: the dev server restarted since it was asked for; reload the page`)});\n`
     },

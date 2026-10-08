@@ -26,6 +26,8 @@ the sections below record what was verified against the reference code on 2026-1
   `http://localhost:4400/__trivia/`; proxies everything else to the user's dev server.
 - `packages/contract-sync` — OpenAPI → hey-api TanStack Query code + `trivia.manifest.json`
   (`docs/data-provider.md`).
+- `packages/trivia-inferencer` — `@trivia/openapi-inferencer`, the drop-in contract-driven
+  replacement for Refine's inferencer (`docs/product.md`, slice 6).
 - `examples/playground` — a stock create-vite + shadcn (radix, nova) app used as the "user app".
 - `examples/refine-admin` — a Refine + shadcn back office on an OpenAPI mock: the user app for
   the product direction in `docs/product.md` (day 2 for Refine apps on OpenAPI backends).

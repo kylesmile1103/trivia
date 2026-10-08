@@ -6,6 +6,7 @@ import routerProvider, {
 } from "@refinedev/react-router";
 import { ArrowLeftRightIcon, LandmarkIcon, UsersIcon } from "lucide-react";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router";
+import { OpenApiShowInferencer } from "@trivia/openapi-inferencer";
 
 import { ErrorComponent } from "@/components/refine-ui/layout/error-component";
 import { Layout } from "@/components/refine-ui/layout/layout";
@@ -41,6 +42,7 @@ export default function App() {
           {
             name: "transactions",
             list: "/transactions",
+            show: "/transactions/show/:id",
             meta: { icon: <ArrowLeftRightIcon /> },
           },
         ]}
@@ -65,6 +67,7 @@ export default function App() {
             <Route path="/customers/edit/:id" element={<CustomerEdit />} />
             <Route path="/accounts" element={<AccountList />} />
             <Route path="/transactions" element={<TransactionList />} />
+            <Route path="/transactions/show/:id" element={<OpenApiShowInferencer />} />
             <Route path="*" element={<ErrorComponent />} />
           </Route>
         </Routes>

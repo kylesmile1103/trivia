@@ -96,6 +96,11 @@ stay in `tests/` (Cargo's convention); unit tests stay in their module.
 
 ## Node packages
 
+- **trivia-inferencer** (`@trivia/openapi-inferencer`): React components an app renders in a
+  route. They are thin over the plugin: the page, its module and eject all come from
+  `/@trivia/api/refine/*`. Inline styles, and no runtime dependencies beyond the `react` and
+  `@refinedev/core` peers. Its source is the package's entry in the workspace (the example
+  compiles it); `publishConfig` points a published build at `dist`.
 - **vite-plugin-ast-locator**: `index.ts` composes `transform.ts` (the locator stamping),
   `api/` (the HTTP routes over `service.ts`, which owns the edit queue, undo history and
   selection, and `guard.ts`, the caller checks) and `mcp/` (the MCP endpoint and its tools,

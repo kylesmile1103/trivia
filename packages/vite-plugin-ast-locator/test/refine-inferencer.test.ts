@@ -67,6 +67,21 @@ describe('inferred pages', () => {
     expect(out?.code).toContain('export function TransactionShow')
     // Its elements belong to no file yet, so they carry no locators to select.
     expect(out?.code).not.toContain('data-ast-node')
+    // Tailwind finds classes in files on disk: the preview brings a stylesheet for its own,
+    // built against the app's Tailwind entry (its theme).
+    const styles = page.module.replace(/\.tsx$/, '.css')
+    const id = path.basename(styles)
+    // Vite writes the import as the stylesheet's URL from the root; the browser asks for that.
+    expect(out?.code).toContain(`import "/src/.trivia-preview/${id}";`)
+    const resolved = await server.vite.pluginContainer.resolveId(`/src/.trivia-preview/${id}`)
+    // Vite works with the real path of the root (macOS's /var is /private/var).
+    const real = fs.realpathSync(root)
+    expect(resolved?.id).toBe(path.join(real, 'src/.trivia-preview', id))
+    const css = await server.vite.pluginContainer.load(resolved!.id)
+    const text = typeof css === 'string' ? css : (css as { code: string }).code
+    expect(text).toContain(`@reference "${path.join(real, 'src/index.css')}";`)
+    expect(text).toContain('@import "tailwindcss/utilities.css" layer(utilities) source(none);')
+    expect(text).toMatch(/@source inline\("[^"]*grid-cols-\[max-content_1fr\][^"]*"\);/)
     const unknown = await server.vite.transformRequest('/@trivia/preview/0000000000000000.tsx')
     expect(unknown?.code).toContain('the dev server restarted since it was asked for')
   })
@@ -89,15 +104,9 @@ describe('inferred pages', () => {
 
 describe('eject', () => {
   it('writes the page and puts its component where the inferencer was, as one undo entry', async () => {
-    // A stand-in for @trivia/openapi-inferencer: the swap only needs an element and its import.
-    fs.writeFileSync(path.join(root, 'src/inferencer.tsx'), 'export function OpenApiShowInferencer(_props: { resource?: string }) {\n  return null;\n}\n')
+    // The example renders Transactions' show route with the inferencer.
     const app = read('src/App.tsx')
-      .replace('import { TransactionList } from "@/pages/transactions/list";', 'import { TransactionList } from "@/pages/transactions/list";\nimport { OpenApiShowInferencer } from "@/inferencer";')
-      .replace(
-        '            <Route path="/transactions" element={<TransactionList />} />\n',
-        '            <Route path="/transactions" element={<TransactionList />} />\n            <Route path="/transactions/show/:id" element={<OpenApiShowInferencer />} />\n',
-      )
-    fs.writeFileSync(path.join(root, 'src/App.tsx'), app)
+    expect(app).toContain('<Route path="/transactions/show/:id" element={<OpenApiShowInferencer />} />')
     const outline = (await get(server.socket, '/outline?file=src/App.tsx')).body.data
     const find = (nodes: any[]): any => nodes.flatMap((n) => (n.name === 'OpenApiShowInferencer' ? [n] : [find(n.children)].filter(Boolean)))[0]
     const locator = find(outline).locator
@@ -112,7 +121,9 @@ describe('eject', () => {
     const after = read('src/App.tsx')
     expect(after).toContain('<Route path="/transactions/show/:id" element={<TransactionShow />} />')
     expect(after).toContain('import { TransactionShow } from "@/pages/transactions/show";')
+    // Its last use gone, the inferencer's import goes too (rule 9).
     expect(after).not.toContain('OpenApiShowInferencer')
+    expect(after).not.toContain('@trivia/openapi-inferencer')
     expect(read('src/pages/transactions/show.tsx')).toBe((await preview({ resource: 'transactions', kind: 'show' })).code)
     typecheck()
 

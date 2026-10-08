@@ -260,6 +260,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
       `src/`, with its aliases, components and React refresh, so the inferencer imports and
       renders it. Its elements get no locators: they belong to no file yet.
     - When the manifest changes, previews are invalidated and the page reloads.
+    - In a Tailwind v4 app (a CSS under `src/` that imports `"tailwindcss"`), the module also
+      imports `/@trivia/preview/<id>.css`. That stylesheet `@reference`s the app's entry CSS and
+      emits the utilities the page's `className`s need. Tailwind only finds classes in files on
+      disk, so without it the preview would miss the ones no file uses yet. That import is the
+      only line the module has beyond `code`.
   - `refine/eject` also takes `locator`, the inferencer element's own locator, and returns a plan:
     - a `createFile` of `code`;
     - a `replaceElement` that puts `<Component />` and its import where the inferencer was.

@@ -329,7 +329,7 @@ Shipped in three parts, each through the full gate:
       returns them as `warnings`. The designer shows them under the issue and as toasts after a
       fix.
     - The e2e drift test now includes a bound change.
-- **Slice 6, drop-in inferencer: in progress.**
+- **Slice 6, drop-in inferencer: done (2026-10-09).**
   - 6a, engine `replaceElement`: done (2026-10-09). It swaps one element for another where it
     stands, including inside `element={…}`. Imports come and go as with insert and remove, and
     the selection rebases. It's exposed over HTTP, MCP and the designer's op types.
@@ -338,7 +338,17 @@ Shipped in three parts, each through the full gate:
     Preview modules are served at `/@trivia/preview/<id>.tsx`, unstamped, and invalidated on a
     sync. Tests: `test/refine-inferencer.test.ts` (no records anywhere; the spec's FormField
     fixture under `tsc`; eject with undo).
-- Known limits of slices 1–5:
+  - 6c, the package: done (2026-10-09). `packages/trivia-inferencer` (`@trivia/openapi-inferencer`):
+    - the four inferencers, `useResourceContract` and `useEjectToDisk`;
+    - a banner with View code and Eject to disk;
+    - the live preview with an error boundary.
+
+    `refine-admin` renders Transactions' show route with `<OpenApiShowInferencer />`. A preview
+    also imports a stylesheet with its Tailwind classes, built by the app's Tailwind against its
+    theme: classes no file on disk had used were missing, which a screenshot showed. Tests: the
+    package's own (the eject payload and the dev server's errors; the banner, drawer and eject
+    flow in jsdom) and `e2e/refine/inferencer.spec.ts`.
+- Known limits of slices 1–6:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
@@ -350,6 +360,11 @@ Shipped in three parts, each through the full gate:
     written (order there doesn't show).
   - A field under a `{cond && …}` guard is read, but Trivia doesn't remove, move or rebuild
     it: the engine refuses, and says to edit it by hand.
+  - The inferencer needs Refine 5 and Trivia's dev server.
+    - Eject doesn't touch `<Refine resources>`: the route the inferencer sits in is the
+      developer's.
+    - The preview's stylesheet is for Tailwind v4 apps; others get the page unstyled by
+      classes no file uses yet.
   - Drift reads enum options from a column header's source excerpt (600 bytes). A longer header
     gets no enum verdict rather than a wrong one. A rebuilt column or field takes the generated
     shape: custom cells, widgets or messages in it are replaced.
