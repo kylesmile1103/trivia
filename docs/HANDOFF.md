@@ -15,9 +15,8 @@ Briefs and contracts:
 <!-- STATUS:BEGIN -->
 ## 1. Status (2026-10-08, end of session 2)
 
-Pushed to `origin` (github.com/kylesmile1103/trivia) up to `93de3cf`. Everything after it is
-committed on `main` but **not pushed**: the setText op, the MCP endpoint, the designer's
-selection sync and their docs. Every commit email is `kylesmile1103@gmail.com`;
+`main` is pushed to `origin` (github.com/kylesmile1103/trivia), including the setText op, the
+MCP endpoint, the designer's selection sync and their docs. Every commit email is `kylesmile1103@gmail.com`;
 `.git/hooks/pre-commit` and `pre-push` refuse the work email. Session 1's leftover `swarm/*`
 and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'s history.
 
@@ -180,6 +179,9 @@ writes `useQuery` hooks against it.
   window/tab is backgrounded (`document.visibilityState === "hidden"`), mouse presses aren't
   delivered and timers are throttled. Ask the user to bring the window to the front rather than
   diagnosing phantom bugs. A real `PointerEvent` dispatched in-page is the control experiment.
+- **Push when done and green, without asking** (the user's standing instruction, 2026-10-08):
+  once a task is complete and the whole gate passes (§2), push `main`, then say so. Never push
+  red or unfinished work. Check `git log origin/main..main --format='%ae %ce'` first.
 - **Commit identity:** `kylesmile1103@gmail.com`, in the repo-local git config. The global
   config holds a work email that must never reach the remote. `.git/hooks/pre-commit` and
   `pre-push` enforce this (case-insensitive). Never use `--no-verify`.
