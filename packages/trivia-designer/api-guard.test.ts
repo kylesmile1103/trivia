@@ -11,7 +11,7 @@ import path from 'node:path'
 import { createServer, type ViteDevServer } from 'vite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { apiGuard, guardMiddleware, isApiPath, isApiUpgrade } from './api-guard.ts'
+import { apiGuard, guardMiddleware, isApiPath, isApiUpgrade, proxyCanParse } from './api-guard.ts'
 
 /** This machine's first non-loopback IPv4 address: a client bound to it is "on the LAN". */
 const LAN = Object.values(os.networkInterfaces())
@@ -168,6 +168,21 @@ describe('the designer started with --host', () => {
     expect(received).toEqual([])
   })
 
+  it('answers 400 to a request target its proxy cannot parse, and keeps serving', async () => {
+    // The proxy (http-proxy-3) reads `\` as `/`, so `/\%40x/y` names the host `%40x`, which is
+    // invalid. Its `new URL` threw inside Vite's async proxy middleware, and the unhandled
+    // rejection killed the designer's dev server.
+    const targets = ['/\\%40x/y', '/\\[bad/y', '/\\%/y', '/\\:99999/y', '/\\%40x/@trivia/api/health']
+    for (const url of targets) {
+      const r = await send(url, { from: '127.0.0.1' })
+      expect(r.status, url).toBe(400)
+      // A WebSocket upgrade skips every middleware; the proxy's bypass refuses it instead.
+      expect((await send(url, { from: '127.0.0.1', headers: WEBSOCKET })).status, `upgrade ${url}`).toBe(404)
+    }
+    expect((await send('/src/main.tsx', { from: '127.0.0.1' })).status).toBe(200)
+    expect(received).toEqual(['GET /src/main.tsx'])
+  })
+
   it('never tunnels a WebSocket upgrade to the engine API, which has none', async () => {
     for (const from of ['127.0.0.1', ...(LAN === undefined ? [] : [LAN])]) {
       const r = await send('/@trivia/api/components', { from, headers: WEBSOCKET })
@@ -306,6 +321,17 @@ describe('isApiPath', () => {
     }
     for (const url of ['/', '/src/App.tsx', '/@trivia/apiary', '/%40trivia/api/apply', '//@trivia/api/apply', '/__trivia/']) {
       expect(isApiPath(url), url).toBe(false)
+    }
+  })
+
+  it('holds every target the proxy cannot parse, so the upgrade bypass refuses those too', () => {
+    const unparseable = ['/\\%40x/y', '/\\[bad/y', '/\\a b/y', '/\\%/y', '/\\:99999/y', '/\\a:b/y', '/\\x%00/y']
+    for (const url of unparseable) {
+      expect(proxyCanParse(url), url).toBe(false)
+      expect(isApiPath(url), url).toBe(true)
+    }
+    for (const url of ['/', '/src/App.tsx', '//[bad/y', '/\\evil.example/y', '/a\\b', '', undefined]) {
+      expect(proxyCanParse(url), String(url)).toBe(true)
     }
   })
 

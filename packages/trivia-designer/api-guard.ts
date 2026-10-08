@@ -22,10 +22,11 @@ type AllowedHosts = readonly string[] | true
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
 /**
- * Refuse /@trivia/api to callers not on this machine, with the plugin's 403 envelope. Its
- * middleware is registered directly in configureServer, so it runs before Vite's proxy
- * (vite 8.3.3 `dist/node/chunks/node.js`: plugin hooks at 25053, proxy at 25058; preview
- * server 35643 and 35645). WebSocket upgrades never reach a middleware: see `isApiUpgrade`.
+ * Refuse /@trivia/api to callers not on this machine, with the plugin's 403 envelope, and
+ * answer 400 to a request target the proxy cannot parse (`proxyCanParse`). Its middleware is
+ * registered directly in configureServer, so it runs before Vite's proxy (vite 8.3.3
+ * `dist/node/chunks/node.js`: plugin hooks at 25053, proxy at 25058; preview server 35643
+ * and 35645). WebSocket upgrades never reach a middleware: see `isApiUpgrade`.
  */
 export function apiGuard(): Plugin {
   return {
@@ -42,7 +43,9 @@ export function apiGuard(): Plugin {
 /**
  * For the proxy's `bypass`: true for a WebSocket upgrade (no `res`) to the engine API. The
  * API has no WebSocket endpoint, and an upgrade skips every middleware, so the proxy would
- * otherwise tunnel it to the user's server from loopback; returning false answers 404.
+ * otherwise tunnel it to the user's server from loopback; returning false answers 404. That
+ * includes every target the proxy cannot parse (`isApiPath` refuses what it cannot read),
+ * which would throw in the proxy as it does for plain HTTP.
  */
 export function isApiUpgrade(req: IncomingMessage, res: ServerResponse | undefined): boolean {
   return res === undefined && isApiPath(req.url)
@@ -51,6 +54,12 @@ export function isApiUpgrade(req: IncomingMessage, res: ServerResponse | undefin
 /** The middleware `apiGuard` registers; `allowedHosts` is the server's resolved option. */
 export function guardMiddleware(allowedHosts: AllowedHosts): Middleware {
   return (req, res, next) => {
+    if (!proxyCanParse(req.url)) {
+      // As Vite answers a `#` in the URL (its rejectInvalidRequestMiddleware).
+      res.statusCode = 400
+      res.end()
+      return
+    }
     if (!isApiPath(req.url)) {
       next()
       return
@@ -65,6 +74,17 @@ export function guardMiddleware(allowedHosts: AllowedHosts): Middleware {
     res.setHeader('cache-control', 'no-store')
     res.end(JSON.stringify({ ok: false, error: { code: 'forbidden', message: refusal } }))
   }
+}
+
+/**
+ * Whether Vite's proxy (http-proxy-3) can parse `url`, read as its `toURL` reads it (vite 8.3.3
+ * `dist/node/chunks/node.js` ~19028). The proxy calls `new URL` without a `try` inside an async
+ * middleware, so a target it cannot parse killed the designer's dev server with an unhandled
+ * rejection: `/\%40x/y`, where `\` reads as `/` and `%40x` is not a valid host.
+ */
+export function proxyCanParse(url: string | undefined): boolean {
+  const target = url ?? ''
+  return URL.canParse(target.startsWith('//') ? `http://base.invalid${target}` : target, 'http://base.invalid')
 }
 
 /**
