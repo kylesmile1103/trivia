@@ -1,0 +1,668 @@
+{
+  "$schema": "https://trivia.dev/schemas/manifest.v1.json",
+  "manifestVersion": 1,
+  "generator": {
+    "name": "@trivia/contract-sync",
+    "version": "0.1.0",
+    "heyApi": "0.99.0",
+    "plugins": [
+      "@hey-api/client-fetch",
+      "@hey-api/typescript",
+      "@hey-api/sdk",
+      "zod",
+      "@tanstack/react-query"
+    ]
+  },
+  "source": {
+    "location": "openapi/customers.openapi.json",
+    "format": "openapi-3.1",
+    "specVersion": "3.1.0",
+    "title": "Customer API",
+    "apiVersion": "1.4.0",
+    "style": "rest",
+    "excludedOperations": []
+  },
+  "schemaHash": "sha256:c7da9b233f71e7dd673d0cbe24bf3b48c06feb2ff77b02dc27ea8e503eea2f20",
+  "modules": {
+    "outputDir": "src/api/generated",
+    "queries": {
+      "file": "src/api/generated/@tanstack/react-query.gen.ts",
+      "importPath": "@/api/generated/@tanstack/react-query.gen"
+    },
+    "sdk": {
+      "file": "src/api/generated/sdk.gen.ts",
+      "importPath": "@/api/generated/sdk.gen"
+    },
+    "types": {
+      "file": "src/api/generated/types.gen.ts",
+      "importPath": "@/api/generated/types.gen"
+    },
+    "client": {
+      "file": "src/api/generated/client.gen.ts",
+      "importPath": "@/api/generated/client.gen"
+    },
+    "index": {
+      "file": "src/api/generated/index.ts",
+      "importPath": "@/api/generated"
+    },
+    "zod": {
+      "file": "src/api/generated/zod.gen.ts",
+      "importPath": "@/api/generated/zod.gen"
+    }
+  },
+  "resources": [
+    {
+      "name": "Customer",
+      "groupedBy": "tag",
+      "tag": "Customers",
+      "style": "rest",
+      "basePath": "/api/v1/customers",
+      "itemPath": "/api/v1/customers/{id}",
+      "primaryKey": "id",
+      "entity": {
+        "schemaRef": "#/components/schemas/CustomerDto",
+        "typeName": "CustomerDto",
+        "fields": [
+          {
+            "name": "id",
+            "type": "string",
+            "format": "uuid",
+            "required": true,
+            "nullable": false,
+            "readOnly": true,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "fullName",
+            "type": "string",
+            "format": null,
+            "required": true,
+            "nullable": false,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "email",
+            "type": "string",
+            "format": "email",
+            "required": true,
+            "nullable": false,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "phone",
+            "type": "string",
+            "format": null,
+            "required": false,
+            "nullable": true,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "format": null,
+            "required": true,
+            "nullable": false,
+            "readOnly": false,
+            "enum": [
+              "pending",
+              "active",
+              "suspended"
+            ],
+            "ref": "#/components/schemas/CustomerStatus",
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "kycStatus",
+            "type": "string",
+            "format": null,
+            "required": true,
+            "nullable": false,
+            "readOnly": false,
+            "enum": [
+              "not_started",
+              "in_review",
+              "approved",
+              "rejected"
+            ],
+            "ref": "#/components/schemas/KycStatus",
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "creditLimit",
+            "type": "number",
+            "format": "double",
+            "required": false,
+            "nullable": false,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "birthDate",
+            "type": "string",
+            "format": "date",
+            "required": false,
+            "nullable": true,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "tags",
+            "type": "array",
+            "format": null,
+            "required": false,
+            "nullable": false,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": {
+              "type": "string",
+              "format": null,
+              "enum": null,
+              "ref": null
+            },
+            "description": null
+          },
+          {
+            "name": "address",
+            "type": "object",
+            "format": null,
+            "required": false,
+            "nullable": false,
+            "readOnly": false,
+            "enum": null,
+            "ref": "#/components/schemas/Address",
+            "items": null,
+            "description": null
+          },
+          {
+            "name": "createdAt",
+            "type": "string",
+            "format": "date-time",
+            "required": true,
+            "nullable": false,
+            "readOnly": true,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": null
+          }
+        ]
+      },
+      "operations": {
+        "list": {
+          "kind": "list",
+          "method": "GET",
+          "path": "/api/v1/customers",
+          "operationId": "listCustomers",
+          "summary": "List customers",
+          "style": "rest",
+          "sdkFn": "listCustomers",
+          "queryOptionsFn": "listCustomersOptions",
+          "queryKeyFn": "listCustomersQueryKey",
+          "infiniteQueryOptionsFn": "listCustomersInfiniteOptions",
+          "infiniteQueryKeyFn": "listCustomersInfiniteQueryKey",
+          "mutationFn": null,
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "required": false,
+              "type": "integer",
+              "format": null,
+              "enum": null,
+              "default": 1
+            },
+            {
+              "name": "pageSize",
+              "in": "query",
+              "required": false,
+              "type": "integer",
+              "format": null,
+              "enum": null,
+              "default": 20
+            },
+            {
+              "name": "search",
+              "in": "query",
+              "required": false,
+              "type": "string",
+              "format": null,
+              "enum": null
+            },
+            {
+              "name": "status",
+              "in": "query",
+              "required": false,
+              "type": "string",
+              "format": null,
+              "enum": [
+                "pending",
+                "active",
+                "suspended"
+              ]
+            }
+          ],
+          "requestBody": null,
+          "response": {
+            "status": "200",
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CustomerPage",
+            "isArray": false
+          },
+          "listItemsPath": "items",
+          "pagination": {
+            "style": "page",
+            "pageParam": "page",
+            "pageSizeParam": "pageSize",
+            "limitParam": null,
+            "offsetParam": null,
+            "cursorParam": null,
+            "totalPath": "total",
+            "nextCursorPath": null
+          },
+          "postgrest": null
+        },
+        "get": {
+          "kind": "get",
+          "method": "GET",
+          "path": "/api/v1/customers/{id}",
+          "operationId": "getCustomerById",
+          "summary": "Get one customer",
+          "style": "rest",
+          "sdkFn": "getCustomerById",
+          "queryOptionsFn": "getCustomerByIdOptions",
+          "queryKeyFn": "getCustomerByIdQueryKey",
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": null,
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "format": "uuid",
+              "enum": null
+            }
+          ],
+          "requestBody": null,
+          "response": {
+            "status": "200",
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CustomerDto",
+            "isArray": false
+          },
+          "idParam": "id",
+          "postgrest": null
+        },
+        "create": {
+          "kind": "create",
+          "method": "POST",
+          "path": "/api/v1/customers",
+          "operationId": "createCustomer",
+          "summary": "Create a customer",
+          "style": "rest",
+          "sdkFn": "createCustomer",
+          "queryOptionsFn": null,
+          "queryKeyFn": null,
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": "createCustomerMutation",
+          "parameters": [],
+          "requestBody": {
+            "required": true,
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CreateCustomerRequest",
+            "fields": [
+              {
+                "name": "fullName",
+                "type": "string",
+                "format": null,
+                "required": true,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "email",
+                "type": "string",
+                "format": "email",
+                "required": true,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "phone",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": true,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "birthDate",
+                "type": "string",
+                "format": "date",
+                "required": false,
+                "nullable": true,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "creditLimit",
+                "type": "number",
+                "format": "double",
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "address",
+                "type": "object",
+                "format": null,
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": "#/components/schemas/Address",
+                "items": null,
+                "description": null
+              }
+            ],
+            "zodSchema": "zCreateCustomerBody"
+          },
+          "response": {
+            "status": "201",
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CustomerDto",
+            "isArray": false
+          },
+          "postgrest": null
+        },
+        "update": {
+          "kind": "update",
+          "method": "PUT",
+          "path": "/api/v1/customers/{id}",
+          "operationId": "updateCustomer",
+          "summary": "Update a customer",
+          "style": "rest",
+          "sdkFn": "updateCustomer",
+          "queryOptionsFn": null,
+          "queryKeyFn": null,
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": "updateCustomerMutation",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "format": "uuid",
+              "enum": null
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/UpdateCustomerRequest",
+            "fields": [
+              {
+                "name": "fullName",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "email",
+                "type": "string",
+                "format": "email",
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "phone",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": true,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": [
+                  "pending",
+                  "active",
+                  "suspended"
+                ],
+                "ref": "#/components/schemas/CustomerStatus",
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "creditLimit",
+                "type": "number",
+                "format": "double",
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              },
+              {
+                "name": "address",
+                "type": "object",
+                "format": null,
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": "#/components/schemas/Address",
+                "items": null,
+                "description": null
+              }
+            ],
+            "zodSchema": "zUpdateCustomerBody"
+          },
+          "response": {
+            "status": "200",
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CustomerDto",
+            "isArray": false
+          },
+          "idParam": "id",
+          "postgrest": null
+        },
+        "delete": {
+          "kind": "delete",
+          "method": "DELETE",
+          "path": "/api/v1/customers/{id}",
+          "operationId": "deleteCustomer",
+          "summary": "Delete a customer",
+          "style": "rest",
+          "sdkFn": "deleteCustomer",
+          "queryOptionsFn": null,
+          "queryKeyFn": null,
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": "deleteCustomerMutation",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "format": "uuid",
+              "enum": null
+            }
+          ],
+          "requestBody": null,
+          "response": {
+            "status": "204",
+            "contentType": null,
+            "schemaRef": null,
+            "isArray": false
+          },
+          "idParam": "id",
+          "postgrest": null
+        }
+      },
+      "customOperations": [
+        {
+          "kind": "custom",
+          "method": "POST",
+          "path": "/api/v1/customers/{id}/approve-kyc",
+          "operationId": "approveCustomerKyc",
+          "summary": "Approve the customer's KYC review",
+          "style": "rest",
+          "sdkFn": "approveCustomerKyc",
+          "queryOptionsFn": null,
+          "queryKeyFn": null,
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": "approveCustomerKycMutation",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "format": "uuid",
+              "enum": null
+            }
+          ],
+          "requestBody": {
+            "required": false,
+            "contentType": "application/json",
+            "schemaRef": null,
+            "fields": [
+              {
+                "name": "note",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": false,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": null
+              }
+            ],
+            "zodSchema": "zApproveCustomerKycBody"
+          },
+          "response": {
+            "status": "200",
+            "contentType": "application/json",
+            "schemaRef": "#/components/schemas/CustomerDto",
+            "isArray": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "groupedBy": "path",
+      "tag": null,
+      "style": "rest",
+      "basePath": null,
+      "itemPath": null,
+      "primaryKey": null,
+      "entity": null,
+      "operations": {
+        "list": null,
+        "get": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "customOperations": [
+        {
+          "kind": "custom",
+          "method": "GET",
+          "path": "/api/v1/health",
+          "operationId": "getHealth",
+          "summary": "Liveness probe",
+          "style": "rest",
+          "sdkFn": "getHealth",
+          "queryOptionsFn": "getHealthOptions",
+          "queryKeyFn": "getHealthQueryKey",
+          "infiniteQueryOptionsFn": null,
+          "infiniteQueryKeyFn": null,
+          "mutationFn": null,
+          "parameters": [],
+          "requestBody": null,
+          "response": {
+            "status": "200",
+            "contentType": "application/json",
+            "schemaRef": null,
+            "isArray": false
+          }
+        }
+      ]
+    }
+  ]
+}

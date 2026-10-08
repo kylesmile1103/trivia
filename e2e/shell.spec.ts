@@ -14,9 +14,9 @@ const appPort = Number(process.env.TRIVIA_APP_PORT ?? 5173)
 
 /** The playground components the prop analyzer reports, by palette group. */
 const GROUPS = {
-  Form: ['Button', 'Input', 'Textarea', 'Label', 'Checkbox', 'Switch', 'Select'],
+  Form: ['Button', 'Input', 'Textarea', 'Label', 'Field', 'Checkbox', 'Switch', 'Select'],
   Layout: ['Card', 'Separator'],
-  Display: ['Badge'],
+  Display: ['Badge', 'Table'],
 }
 
 let originals: Map<string, Buffer>
@@ -128,7 +128,7 @@ test('search narrows the palette to matching components and parts', async ({ pag
   await page.keyboard.press('/')
   await expect(page.getByRole('searchbox', { name: 'Search components' })).toBeFocused()
   await page.keyboard.type('title')
-  await expect.poll(() => itemNames(list)).toEqual(['Card', 'CardTitle'])
+  await expect.poll(() => itemNames(list)).toEqual(['Field', 'FieldTitle', 'Card', 'CardTitle'])
   await page.keyboard.press('Escape')
   await expect(list.locator('[data-palette-item="Select"]')).toBeVisible()
   await page.getByRole('searchbox', { name: 'Search components' }).fill('zzz')
