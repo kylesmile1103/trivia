@@ -242,7 +242,7 @@ export interface BodyInfo {
   schema: SchemaInfo | null
 }
 
-export function requestBody(reader: SpecReader, raw: RawOperation): BodyInfo | null {
+export function requestBody(reader: SpecReader, raw: RawOperation, style: ApiStyle): BodyInfo | null {
   if (reader.isSwagger2) {
     const body = raw.parameters.find((parameter) => parameter['in'] === 'body')
     if (body) {
@@ -252,6 +252,8 @@ export function requestBody(reader: SpecReader, raw: RawOperation): BodyInfo | n
           required: body['required'] === true,
           contentType: reader.pickMediaType(raw.operation, 'consumes'),
           schemaRef: schema?.ref ?? null,
+          fields: bodyFields(reader, schema, style),
+          zodSchema: null,
         },
         schema,
       }
@@ -265,6 +267,8 @@ export function requestBody(reader: SpecReader, raw: RawOperation): BodyInfo | n
           ? 'multipart/form-data'
           : 'application/x-www-form-urlencoded',
         schemaRef: null,
+        fields: null,
+        zodSchema: null,
       },
       schema: null,
     }
@@ -274,9 +278,21 @@ export function requestBody(reader: SpecReader, raw: RawOperation): BodyInfo | n
   const picked = reader.pickContent(body['content'])
   const schema = picked ? reader.schema(picked.schema) : null
   return {
-    summary: { required: body['required'] === true, contentType: picked?.contentType ?? null, schemaRef: schema?.ref ?? null },
+    summary: {
+      required: body['required'] === true,
+      contentType: picked?.contentType ?? null,
+      schemaRef: schema?.ref ?? null,
+      fields: bodyFields(reader, schema, style),
+      zodSchema: null,
+    },
     schema,
   }
+}
+
+/** The fields of an object body (what a form edits), or null for any other body. */
+function bodyFields(reader: SpecReader, schema: SchemaInfo | null, style: ApiStyle): ManifestField[] | null {
+  if (schema === null || fieldType(schema.node) !== 'object') return null
+  return summarizeEntity(reader, schema, style).fields
 }
 
 export interface ResponseInfo {

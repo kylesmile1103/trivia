@@ -38,6 +38,8 @@ export interface SyncContractOptions {
   headers?: Readonly<Record<string, string>>
   /** Injectable for tests. */
   fetch?: typeof fetch
+  /** Also generate zod schemas (zod.gen.ts) and record them in the manifest. Default false. */
+  zod?: boolean
 }
 
 export interface SyncContractResult {
@@ -90,6 +92,7 @@ export async function syncContract(options: SyncContractOptions): Promise<SyncCo
     style,
     excludeOperations,
     ...(options.client ? { client: options.client } : {}),
+    ...(options.zod ? { zod: true } : {}),
   })
   let manifest: TriviaManifest
   try {

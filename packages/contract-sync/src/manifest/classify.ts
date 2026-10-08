@@ -253,7 +253,7 @@ export function collectGroups(reader: SpecReader, style: ApiStyle, exclude: Read
       parameters: raw.parameters
         .map((parameter) => summarizeParameter(reader, parameter))
         .filter((parameter): parameter is ManifestParameter => parameter !== null),
-      body: requestBody(reader, raw),
+      body: requestBody(reader, raw, style),
       response: successResponse(reader, raw),
     }
     const { key, by, explicit } = grouping(raw, style)

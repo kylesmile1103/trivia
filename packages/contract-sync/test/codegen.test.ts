@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import Ajv2020 from 'ajv/dist/2020.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { runContractSync } from '../src/codegen/codegen.js'
@@ -10,6 +11,7 @@ import type { HeyApiClientPlugin } from '../src/manifest/generator.js'
 import type { SyncContractResult } from '../src/sync.js'
 import { syncContract } from '../src/sync.js'
 import {
+  PACKAGE_DIR,
   REPO_ROOT,
   fixture,
   listFiles,
@@ -284,5 +286,52 @@ describe('runtime independence of the template app', () => {
     expect(all.filter((name) => name === '@tangojs/boot' || name.startsWith('@refinedev/'))).toEqual([])
     // Only dev tooling may come from @trivia/*; nothing the app ships at runtime.
     expect(Object.keys(pkg['dependencies'] ?? {}).filter((name) => name.startsWith('@trivia/'))).toEqual([])
+  })
+})
+
+describe('with zod schemas (forms)', () => {
+  let project: { root: string; input: string }
+  let result: SyncContractResult
+  beforeAll(async () => {
+    project = await projectWithSpec('customers.openapi.json')
+    result = await syncContract({ input: project.input, cwd: project.root, zod: true })
+  })
+  afterAll(async () => {
+    await removeProject(project.root)
+  })
+
+  it('generates zod.gen.ts, whose only package import is zod', async () => {
+    expect(result.files).toContain('zod.gen.ts')
+    const text = await fsp.readFile(path.join(result.outputDir, 'zod.gen.ts'), 'utf8')
+    expect(moduleSpecifiers(text)).toEqual(['zod'])
+    expect(result.manifest.generator.plugins).toEqual(['@hey-api/client-fetch', '@hey-api/typescript', '@hey-api/sdk', 'zod', '@tanstack/react-query'])
+    expect(result.manifest.modules.zod).toEqual({ file: 'src/api/generated/zod.gen.ts', importPath: '@/api/generated/zod.gen' })
+  })
+
+  it('records each request body\'s fields and the zod schema that validates it', () => {
+    const customer = result.manifest.resources.find((r) => r.name === 'Customer')!
+    const create = customer.operations.create!.requestBody!
+    expect(create.zodSchema).toBe('zCreateCustomerBody')
+    expect(customer.operations.update!.requestBody!.zodSchema).toBe('zUpdateCustomerBody')
+    expect(create.fields?.map((f) => [f.name, f.type, f.format, f.required])).toEqual([
+      ['fullName', 'string', null, true],
+      ['email', 'string', 'email', true],
+      ['phone', 'string', null, false],
+      ['birthDate', 'string', 'date', false],
+      ['creditLimit', 'number', 'double', false],
+      ['address', 'object', null, false],
+    ])
+    expect(create.fields?.find((f) => f.name === 'phone')?.nullable).toBe(true)
+    const approve = customer.customOperations.find((op) => op.path.endsWith('approve-kyc'))!
+    expect(approve.requestBody?.zodSchema).toBe('zApproveCustomerKycBody')
+  })
+
+  it('type-checks with zod installed, and the manifest still matches its JSON Schema', async () => {
+    const { code, output } = await runTsc(project.root)
+    expect(output).toBe('')
+    expect(code).toBe(0)
+    const ajv = new Ajv2020.default({ allErrors: true, strict: true, allowUnionTypes: true })
+    const validate = ajv.compile(JSON.parse(await fsp.readFile(path.join(PACKAGE_DIR, 'manifest.schema.json'), 'utf8')))
+    expect(validate(result.manifest) ? [] : validate.errors).toEqual([])
   })
 })

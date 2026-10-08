@@ -37,7 +37,15 @@ trivia-contract-sync --input openapi/customers.openapi.json            # → src
 trivia-contract-sync --input https://api.example.com/openapi.json --output src/api/generated
 trivia-contract-sync --supabase-url https://<ref>.supabase.co --supabase-key "$SECRET"   # or TRIVIA_SUPABASE_KEY
 trivia-contract-sync --input spec.yaml --cwd ../my-app --import-alias '~/=app'
+trivia-contract-sync --input openapi/customers.openapi.json --zod   # also zod.gen.ts, for forms
 ```
+
+`--zod` (`zod: true`) adds hey-api's built-in `zod` plugin: `zod.gen.ts` exports a schema for
+every component schema and one per request body (`zCreateCustomerBody`), in zod 4 syntax. The
+manifest then records `modules.zod` and, on each operation's `requestBody`, the `zodSchema` that
+validates it (read back from the generated file, never derived). Every `requestBody` also lists
+its `fields` (top-level properties of an object body, as `entity.fields` does), which is what a
+form is generated from. The user's project needs the `zod` package.
 
 Exit codes: 0 ok, 1 failure (`error[<code>]: <message>` plus `hint: …`), 2 usage error.
 
@@ -282,10 +290,12 @@ project directories and comparing every generated file and the manifest. Also:
 
 ## Runtime independence
 
-Generated and bound user code imports nothing at runtime except `@tanstack/react-query`:
+Generated and bound user code imports nothing at runtime except `@tanstack/react-query` (and,
+with `--zod`, `zod` from `zod.gen.ts` only):
 
 - **Every run** parses every generated file's import, export-from and dynamic-import specifiers.
-  It fails (`runtime_dependency`) on anything that isn't relative or `@tanstack/react-query`.
+  It fails (`runtime_dependency`) on anything that isn't relative or `@tanstack/react-query`
+  (or `zod` in `zod.gen.ts`, with `--zod`).
   hey-api's fetch client is bundled (`client/`, `core/`), so no `@hey-api/*` package is needed.
 - **Tests** re-check the specifiers with an independent reader. They also assert that
   `examples/playground/package.json` has no `@tangojs/boot`, no `@refinedev/*`, and no

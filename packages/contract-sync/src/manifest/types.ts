@@ -73,6 +73,8 @@ export interface ManifestModules {
   client: ManifestModule
   /** `index.ts`: re-exports of the SDK and types. */
   index: ManifestModule
+  /** `zod.gen.ts`: zod schemas for every schema and request body; null unless generated with `zod`. */
+  zod: ManifestModule | null
 }
 
 export interface ManifestFieldItems {
@@ -124,6 +126,10 @@ export interface ManifestRequestBody {
   required: boolean
   contentType: string | null
   schemaRef: string | null
+  /** Top-level properties of an object body, in spec order; null when the body isn't an object. */
+  fields: ManifestField[] | null
+  /** The zod.gen.ts export that validates the body (e.g. "zCreateCustomerBody"); null without `zod`. */
+  zodSchema: string | null
 }
 
 export interface ManifestResponse {

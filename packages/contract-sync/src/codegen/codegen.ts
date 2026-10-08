@@ -19,7 +19,7 @@ import type { ApiStyle } from '../manifest/types.js'
 import { defaultExcludedOperations, detectStyle, patchPostgrestForCodegen } from '../spec/postgrest.js'
 import type { SpecDocument } from '../spec/spec.js'
 import { detectSpec, withoutOperations } from '../spec/spec.js'
-import { GENERATED_FILES, HEY_API_HEADER, importSpecifiers } from './generated-code.js'
+import { GENERATED_FILES, HEY_API_HEADER, ZOD_FILE, importSpecifiers } from './generated-code.js'
 
 export interface ContractSyncOptions {
   /** Spec file path (JSON or YAML), http(s) URL, or an already-parsed document. */
@@ -37,6 +37,8 @@ export interface ContractSyncOptions {
   excludeOperations?: readonly string[]
   /** Extra request headers when `input` is a URL. */
   headers?: Readonly<Record<string, string>>
+  /** Also generate zod schemas (hey-api's zod plugin, zod.gen.ts); the code may then import `zod`. */
+  zod?: boolean
 }
 
 export interface GeneratedModulePaths {
@@ -63,8 +65,9 @@ export interface ContractSyncResult {
 /** Only these clients bundle without importing a third-party package (verified in 0.99.0 dist/clients). */
 const RUNTIME_FREE_CLIENTS: ReadonlySet<string> = new Set<HeyApiClientPlugin>(['@hey-api/client-fetch', '@hey-api/client-next'])
 
-/** The only non-relative import generated code may contain. */
+/** The only non-relative import generated code may contain (plus `zod` for zod.gen.ts). */
 export const ALLOWED_RUNTIME_IMPORT = '@tanstack/react-query'
+const ZOD_IMPORT = 'zod'
 
 /**
  * hey-api loads `openapi-ts.config.*` from process.cwd() and deep-merges it into programmatic
@@ -144,21 +147,25 @@ async function assertReplaceable(outputDir: string): Promise<void> {
   }
 }
 
-/** Fails when generated code imports anything but relative modules and @tanstack/react-query. */
-export async function assertRuntimeIndependent(dir: string, files: readonly string[]): Promise<void> {
+/**
+ * Fails when generated code imports anything but relative modules and @tanstack/react-query
+ * (and, with `zod`, the zod package from zod.gen.ts).
+ */
+export async function assertRuntimeIndependent(dir: string, files: readonly string[], { zod = false }: { zod?: boolean } = {}): Promise<void> {
   const violations: string[] = []
   for (const file of files) {
     if (!file.endsWith('.ts')) continue
     const text = await fsp.readFile(path.join(dir, file), 'utf8')
     for (const specifier of importSpecifiers(text)) {
-      if (!specifier.startsWith('./') && !specifier.startsWith('../') && specifier !== ALLOWED_RUNTIME_IMPORT) {
+      const allowed = specifier === ALLOWED_RUNTIME_IMPORT || (zod && file === ZOD_FILE && specifier === ZOD_IMPORT)
+      if (!specifier.startsWith('./') && !specifier.startsWith('../') && !allowed) {
         violations.push(`${file} imports "${specifier}"`)
       }
     }
   }
   if (violations.length > 0) {
     throw new ContractSyncError('runtime_dependency', `Generated code depends on runtime packages: ${violations.join('; ')}`, {
-      hint: `Trivia's generated code may only import ${ALLOWED_RUNTIME_IMPORT}.`,
+      hint: `Trivia's generated code may only import ${ALLOWED_RUNTIME_IMPORT}${zod ? ' (and zod, from its zod schemas)' : ''}.`,
     })
   }
 }
@@ -178,6 +185,7 @@ export async function stageGeneratedCode(
     client?: HeyApiClientPlugin
     style?: ApiStyle
     excludeOperations?: readonly string[]
+    zod?: boolean
   },
 ): Promise<StagedCode> {
   detectSpec(spec)
@@ -209,7 +217,7 @@ export async function stageGeneratedCode(
     interactive: false,
     logs: { file: false, level: 'silent' },
     output: { clean: false, path: dir, postProcess: [], tsConfigPath: null },
-    plugins: heyApiPlugins(client) as NonNullable<UserConfig['plugins']>,
+    plugins: heyApiPlugins(client, { zod: options.zod ?? false }) as NonNullable<UserConfig['plugins']>,
   }
 
   try {
@@ -226,13 +234,14 @@ export async function stageGeneratedCode(
       })
     }
     const files = await listFiles(dir)
-    const missing = Object.values(GENERATED_FILES).filter((file) => !files.includes(file))
+    const expected = [...Object.values(GENERATED_FILES), ...(options.zod ? [ZOD_FILE] : [])]
+    const missing = expected.filter((file) => !files.includes(file))
     if (missing.length > 0) {
       throw new ContractSyncError('codegen_failed', `hey-api did not generate ${missing.join(', ')}`, {
         hint: 'A spec without operations produces no TanStack Query factories.',
       })
     }
-    await assertRuntimeIndependent(dir, files)
+    await assertRuntimeIndependent(dir, files, { zod: options.zod ?? false })
     return { dir, files, discard }
   } catch (error) {
     await discard()
@@ -296,6 +305,7 @@ export async function runContractSync(options: ContractSyncOptions): Promise<Con
     outputDir,
     ...(options.client ? { client: options.client } : {}),
     ...(options.excludeOperations ? { excludeOperations: options.excludeOperations } : {}),
+    ...(options.zod ? { zod: true } : {}),
   })
   try {
     await commitStaged(staged, outputDir)

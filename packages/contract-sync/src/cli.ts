@@ -20,6 +20,7 @@ Options:
   --supabase-url <url>    Supabase project URL; reads PostgREST's spec from <url>/rest/v1/
   --supabase-key <key>    Secret (sb_secret_…) or service_role key; or set TRIVIA_SUPABASE_KEY
   --import-alias <a=dir>  Import alias for the manifest's import paths (default: @/=src)
+  --zod                   Also generate zod schemas (zod.gen.ts) for forms; the code then imports zod
   --cwd <dir>             Project root; relative paths resolve against it (default: .)
   -h, --help              Show this help
   -v, --version           Show the version
@@ -62,6 +63,7 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo): Prom
         'supabase-url': { type: 'string' },
         'supabase-key': { type: 'string' },
         'import-alias': { type: 'string' },
+        zod: { type: 'boolean' },
         cwd: { type: 'string' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
@@ -101,6 +103,7 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo): Prom
       ...(values['manifest'] !== undefined ? { manifestPath: values['manifest'] as string } : {}),
       ...(values['cwd'] !== undefined ? { cwd: values['cwd'] as string } : {}),
       ...(importAlias !== undefined ? { importBase: parseImportAlias(importAlias) } : {}),
+      ...(values['zod'] ? { zod: true } : {}),
     })
     const { manifest } = result
     io.stdout(

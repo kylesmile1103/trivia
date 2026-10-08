@@ -16,6 +16,7 @@ import {
   readGeneratedCode,
   responseType,
   successStatuses,
+  ZOD_FILE,
 } from '../codegen/generated-code.js'
 import { ContractSyncError } from '../errors.js'
 import { defaultExcludedOperations, detectStyle } from '../spec/postgrest.js'
@@ -48,8 +49,8 @@ export type HeyApiClientPlugin = '@hey-api/client-fetch' | '@hey-api/client-next
 export const DEFAULT_CLIENT: HeyApiClientPlugin = '@hey-api/client-fetch'
 
 /** The plugin list handed to hey-api, in order. */
-export function heyApiPlugins(client: HeyApiClientPlugin = DEFAULT_CLIENT): string[] {
-  return [client, '@hey-api/typescript', '@hey-api/sdk', '@tanstack/react-query']
+export function heyApiPlugins(client: HeyApiClientPlugin = DEFAULT_CLIENT, { zod = false }: { zod?: boolean } = {}): string[] {
+  return [client, '@hey-api/typescript', '@hey-api/sdk', ...(zod ? ['zod'] : []), '@tanstack/react-query']
 }
 
 /** Maps an import alias to a project directory: `{ alias: '@/', dir: 'src' }` means `@/x` ↔ `src/x`. */
@@ -107,6 +108,22 @@ function reconcileFunctions(code: GeneratedCode, raw: RawOperation): { sdk: SdkF
   return { sdk, fns: code.functionsFor(sdk.name) }
 }
 
+/**
+ * The zod.gen.ts export validating an operation's body: hey-api's zod plugin names it after the
+ * SDK function (`createCustomer` → `zCreateCustomerBody`). Read back, never assumed: a body
+ * without that export is a mismatch with the generated code.
+ */
+function zodBody(code: GeneratedCode, sdkFn: string, raw: RawOperation): string | null {
+  if (code.zodExports === null) return null
+  const name = `z${sdkFn.charAt(0).toUpperCase()}${sdkFn.slice(1)}Body`
+  if (!code.zodExports.has(name)) {
+    throw new ContractSyncError('reconcile_failed', `${ZOD_FILE} exports no ${name} for the body of ${raw.method.toUpperCase()} ${raw.path}`, {
+      hint: 'The generated code does not match this spec; re-run codegen for the same input.',
+    })
+  }
+  return name
+}
+
 function requireFn(value: string | null, what: string, raw: RawOperation): string {
   if (value === null) {
     throw new ContractSyncError(
@@ -138,7 +155,7 @@ function baseOperation(context: Context, candidate: Candidate, kind: CrudKind | 
       infiniteQueryKeyFn: fns.infiniteQueryKeyFn,
       mutationFn: fns.mutationFn,
       parameters: candidate.parameters,
-      requestBody: candidate.body?.summary ?? null,
+      requestBody: candidate.body ? { ...candidate.body.summary, zodSchema: zodBody(context.code, sdk.name, candidate.raw) } : null,
       response: candidate.response?.summary ?? null,
     },
   }
@@ -349,7 +366,7 @@ function moduleEntry(projectRoot: string, outputDir: string, file: string, impor
   return { file: relativeFile, importPath: `${importBase.alias}${withoutExt.slice(baseDir.length + 1)}` }
 }
 
-function modules(projectRoot: string, outputDir: string, importBase: ImportBase | false): ManifestModules {
+function modules(projectRoot: string, outputDir: string, importBase: ImportBase | false, zod: boolean): ManifestModules {
   return {
     outputDir: toPosix(path.relative(projectRoot, outputDir)) || '.',
     queries: moduleEntry(projectRoot, outputDir, GENERATED_FILES.queries, importBase),
@@ -357,6 +374,7 @@ function modules(projectRoot: string, outputDir: string, importBase: ImportBase 
     types: moduleEntry(projectRoot, outputDir, GENERATED_FILES.types, importBase),
     client: moduleEntry(projectRoot, outputDir, GENERATED_FILES.client, importBase),
     index: moduleEntry(projectRoot, outputDir, GENERATED_FILES.index, importBase),
+    zod: zod ? moduleEntry(projectRoot, outputDir, ZOD_FILE, importBase) : null,
   }
 }
 
@@ -407,7 +425,7 @@ export function generateManifest(spec: SpecDocument, options: GenerateManifestOp
       name: '@trivia/contract-sync',
       version: contractSyncVersion(),
       heyApi: heyApiVersion(),
-      plugins: heyApiPlugins(options.client),
+      plugins: heyApiPlugins(options.client, { zod: context.code.zodExports !== null }),
     },
     source: {
       location: normalizeSource(options.schemaSource, projectRoot),
@@ -419,7 +437,7 @@ export function generateManifest(spec: SpecDocument, options: GenerateManifestOp
       excludedOperations: exclude,
     },
     schemaHash: schemaHash(spec),
-    modules: modules(projectRoot, outputDir, importBase),
+    modules: modules(projectRoot, outputDir, importBase, context.code.zodExports !== null),
     resources,
   }
 }

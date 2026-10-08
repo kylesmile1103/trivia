@@ -179,6 +179,7 @@ describe('customers.openapi.json (OpenAPI 3.1)', () => {
       types: { file: 'src/api/generated/types.gen.ts', importPath: '@/api/generated/types.gen' },
       client: { file: 'src/api/generated/client.gen.ts', importPath: '@/api/generated/client.gen' },
       index: { file: 'src/api/generated/index.ts', importPath: '@/api/generated' },
+      zod: null,
     })
     expect(manifest.generator).toEqual({
       name: '@trivia/contract-sync',
@@ -278,11 +279,13 @@ describe('orders.openapi.yaml (OpenAPI 3.0, operations without operationId)', ()
       nextCursorPath: 'nextCursor',
     })
     // requestBody via #/components/requestBodies, response via #/components/responses.
-    expect(order?.operations.create?.requestBody).toEqual({
+    expect(order?.operations.create?.requestBody).toMatchObject({
       required: true,
       contentType: 'application/json',
       schemaRef: '#/components/schemas/OrderInput',
+      zodSchema: null,
     })
+    expect(order?.operations.create?.requestBody?.fields?.length).toBeGreaterThan(0)
     expect(order?.operations.create?.response).toEqual({
       status: '201',
       contentType: 'application/json',
@@ -576,11 +579,14 @@ describe('more spec shapes, through the real pipeline', () => {
         custom: [],
       },
     ])
-    expect(manifest.resources[0]?.operations.create?.requestBody).toEqual({
+    expect(manifest.resources[0]?.operations.create?.requestBody).toMatchObject({
       required: true,
       contentType: 'application/json',
       schemaRef: '#/definitions/NewPet',
+      zodSchema: null,
     })
+    // Swagger 2.0 `in: body` schemas give their fields too.
+    expect(manifest.resources[0]?.operations.create?.requestBody?.fields?.map((f) => [f.name, f.required])).toEqual([['name', true]])
     expect(manifest.resources[0]?.entity?.fields.find((f) => f.name === 'tag')?.nullable).toBe(true)
     expect(validationErrors(manifest)).toEqual([])
   })

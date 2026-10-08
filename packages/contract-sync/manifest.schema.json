@@ -115,7 +115,8 @@
         "sdk",
         "types",
         "client",
-        "index"
+        "index",
+        "zod"
       ],
       "properties": {
         "outputDir": {
@@ -135,6 +136,16 @@
         },
         "index": {
           "$ref": "#/$defs/module"
+        },
+        "zod": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/module"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -385,7 +396,9 @@
       "required": [
         "required",
         "contentType",
-        "schemaRef"
+        "schemaRef",
+        "fields",
+        "zodSchema"
       ],
       "properties": {
         "required": {
@@ -398,6 +411,25 @@
           ]
         },
         "schemaRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fields": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/field"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zodSchema": {
           "type": [
             "string",
             "null"
