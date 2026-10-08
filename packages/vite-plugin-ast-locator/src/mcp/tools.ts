@@ -19,6 +19,13 @@ interface Node {
   [key: string]: unknown
 }
 
+interface OutlineNode {
+  locator: string
+  name: string
+  text?: string
+  children: OutlineNode[]
+}
+
 interface Component {
   name: string
   importSource: string
@@ -55,6 +62,20 @@ const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('remove'), target: locator, expectedName: guard('target') }).strict(),
   z.object({ op: z.literal('move'), source: locator, expectedName: guard('source'), target: locator, expectedTargetName: guard('target'), placement }).strict(),
   z.object({ op: z.literal('moveNode'), source: locator, expectedName: guard('source'), parent: locator, expectedParentName: guard('parent'), index: z.number().int().min(0) }).strict(),
+  z
+    .object({
+      op: z.literal('bindQuery'),
+      target: locator,
+      expectedName: guard('target'),
+      optionsFn: z.string().min(1).describe('The generated TanStack options factory, e.g. "listCustomersOptions" (trivia.manifest.json)'),
+      optionsImport: z.string().min(1).describe('The module exporting it, e.g. "@/api/generated/@tanstack/react-query.gen"'),
+      optionsArgs: z.string().optional().describe('The factory\'s argument as JS expression text, e.g. "{ query: { page: 1 } }"'),
+      resource: z.string().min(1).describe('Resource name for the variables: "Customer" → customerData, isCustomerLoading'),
+      itemsPath: z.string().optional().describe('Path to the rows in the response ("items" → data?.items ?? []); omit when the response is the array'),
+      dataProp: z.string().min(1).describe('Prop that receives the rows, usually "data"'),
+      loadingProp: z.string().optional().describe('Prop that receives the loading flag, usually "isLoading"'),
+    })
+    .strict(),
 ])
 
 // ---------------------------------------------------------------------------------------------
@@ -145,6 +166,29 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
   )
 
   server.registerTool(
+    'trivia_outline',
+    {
+      title: 'Outline a file',
+      description:
+        'Every JSX tree of a project file (e.g. the file trivia_get_selection names): each element\'s locator, tag ' +
+        'name, line, plain text and children. Use it to find an element the user describes in words.',
+      inputSchema: { file: z.string().min(1).describe('Project-relative path, e.g. "src/pages/Dashboard.tsx"') },
+      annotations: reads,
+    },
+    ({ file }) =>
+      run(async () => {
+        const trees = service.outline(file) as OutlineNode[]
+        const lines: string[] = []
+        const walk = (node: OutlineNode, depth: number) => {
+          lines.push(`${'  '.repeat(depth)}<${node.name}>${node.text ? ` ${node.text}` : ''}  ${node.locator}`)
+          for (const child of node.children) walk(child, depth + 1)
+        }
+        for (const tree of trees) walk(tree, 0)
+        return { data: { trees }, summary: lines.join('\n') || `${file} has no JSX.` }
+      }),
+  )
+
+  server.registerTool(
     'trivia_list_components',
     {
       title: 'List the component library',
@@ -172,7 +216,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       description:
         'Apply one or more guarded edits to the user\'s source files, byte for byte (formatting and comments are kept), ' +
         'as one entry in the designer\'s undo history. Ops: updateProp (value null removes it), setText, insert, ' +
-        'insertChild, remove, move, moveNode. Each names elements by locator and must carry the tag name you read there ' +
+        'insertChild, remove, move, moveNode, and bindQuery (a TanStack Query hook feeding the element, docs/data-provider.md). ' +
+        'Each names elements by locator and must carry the tag name you read there ' +
         '(expectedName, and expectedTargetName / expectedParentName for the other element): the edit is refused instead ' +
         'of hitting the wrong element when the file changed. Several ops: each op\'s locators must hold after the ops ' +
         'before it (an insert or remove shifts the indices of later siblings). The result gives the edited element\'s ' +

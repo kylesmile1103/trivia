@@ -49,6 +49,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/health` | — | `{ root, uiDir, importBase, version }` |
 | GET | `/@trivia/api/components` | — | `ComponentSchema[]` |
 | GET | `/@trivia/api/inspect` | `?locator=` | `NodeDetails` |
+| GET | `/@trivia/api/outline` | `?file=` (project-relative) | `OutlineNode[]` |
 | POST | `/@trivia/api/apply` | `{ op: Op, label?: string }` | `ApplyResult` |
 | POST | `/@trivia/api/batch` | `{ ops: Op[], label?: string }` | `ApplyResult` (last op's locator) |
 | POST | `/@trivia/api/undo` | `{}` | `HistoryResult` |
@@ -67,6 +68,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null }`.
+- `OutlineNode = { locator, name, line, isDirect, text?, children: OutlineNode[] }`: every JSX
+  tree of the file, component by component in source order (`text` as in `NodeDetails`).
 - `SelectionState = { selection: { locator, name } | null, version, by: "designer" | "agent" | null }`:
   what the designer has selected, for agents (`docs/mcp.md`). The designer posts every change
   (`name` is the tag name it saw there). Repeating the current selection changes nothing;

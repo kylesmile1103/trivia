@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::Serialize;
 
 use crate::error::{EngineError, Result};
-use crate::inspect::{self, NodeDetails};
+use crate::inspect::{self, NodeDetails, OutlineNode};
 use crate::ops::{self, Op, Outcome};
 use crate::prop_analyzer::{self, ComponentSchema};
 
@@ -97,6 +97,11 @@ impl Workspace {
     pub fn inspect(&self, locator: &str) -> Result<NodeDetails> {
         let file = crate::locator::Locator::parse(locator)?.file;
         inspect::inspect(&self.read(&file)?, locator)
+    }
+
+    /// Every JSX tree of the project-relative `file`.
+    pub fn outline(&self, file: &str) -> Result<Vec<OutlineNode>> {
+        inspect::outline(&self.read(file)?, file)
     }
 
     /// Analyze every `*.tsx` in `ui_dir` (project-relative; a leading `./` and trailing `/`

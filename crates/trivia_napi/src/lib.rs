@@ -210,6 +210,12 @@ pub fn inspect(root: String, locator: String) -> String {
     })
 }
 
+/// Every JSX tree of `file` (project-relative), with locators: `OutlineNode[]`.
+#[napi]
+pub fn outline(root: String, file: String) -> String {
+    engine_call(move || Workspace::new(&root).and_then(|ws| ws.outline(&file)).and_then(to_value).map_err(Failure::from))
+}
+
 /// Prop schemas for every component file in `ui_dir`.
 #[napi]
 pub fn components(root: String, ui_dir: String, import_base: String) -> String {

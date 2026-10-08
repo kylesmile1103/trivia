@@ -1,10 +1,11 @@
-//! Read-only node details for the inspector.
+//! Read-only views of a file's JSX: one node's details (the inspector), and the whole tree
+//! (`outline`, for agents).
 
 use oxc_allocator::Allocator;
 use serde::Serialize;
 
 use crate::error::Result;
-use crate::locator::{AttrValue, JsxTable, Locator, NodeKind};
+use crate::locator::{AttrValue, JsxNode, JsxTable, Locator, NodeKind};
 use crate::{parse, text};
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,15 +92,7 @@ pub fn inspect(source: &str, locator: &str) -> Result<NodeDetails> {
         })
         .collect();
 
-    // Plain-text content only: one non-whitespace child that is JSX text. Reported as it
-    // renders (JSX whitespace rules, character references decoded).
-    let text = match node.content.as_slice() {
-        [only] if only.node.is_none() => {
-            let raw = slice(only.span);
-            if raw.trim_start().starts_with('{') { None } else { text::jsx_text_value(&raw) }
-        }
-        _ => None,
-    };
+    let text = plain_text(source, node);
 
     Ok(NodeDetails {
         locator: loc.to_string(),
@@ -115,4 +108,52 @@ pub fn inspect(source: &str, locator: &str) -> Result<NodeDetails> {
         attributes,
         text,
     })
+}
+
+/// The element's text when its only content is plain text (e.g. a Button label), as it renders
+/// (JSX whitespace rules, character references decoded).
+fn plain_text(source: &str, node: &JsxNode) -> Option<String> {
+    match node.content.as_slice() {
+        [only] if only.node.is_none() => {
+            let raw = &source[only.span.start as usize..only.span.end as usize];
+            if raw.trim_start().starts_with('{') { None } else { text::jsx_text_value(raw) }
+        }
+        _ => None,
+    }
+}
+
+/// One JSX node of a file and its subtree.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutlineNode {
+    pub locator: String,
+    /// Tag name as written; `<>` for fragments.
+    pub name: String,
+    /// 1-based line of the opening tag.
+    pub line: u32,
+    /// False when rendered from a `{…}` expression, and for roots.
+    pub is_direct: bool,
+    /// Plain-text content, as [`NodeDetails::text`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    pub children: Vec<OutlineNode>,
+}
+
+/// Every JSX tree of `source` (the content of `file`), component by component in source order.
+pub fn outline(source: &str, file: &str) -> Result<Vec<OutlineNode>> {
+    let alloc = Allocator::default();
+    let program = parse(&alloc, source, file)?;
+    let table = JsxTable::build(&program, file)?;
+    fn node(table: &JsxTable, source: &str, file: &str, idx: usize) -> OutlineNode {
+        let n = &table.nodes[idx];
+        OutlineNode {
+            locator: table.locator(idx, file).to_string(),
+            name: n.display_name().to_string(),
+            line: text::line_col(source, n.span.start).0,
+            is_direct: n.direct,
+            text: plain_text(source, n),
+            children: n.children.iter().map(|&c| node(table, source, file, c)).collect(),
+        }
+    }
+    Ok((0..table.nodes.len()).filter(|&i| table.nodes[i].parent.is_none()).map(|i| node(&table, source, file, i)).collect())
 }

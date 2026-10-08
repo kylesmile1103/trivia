@@ -66,6 +66,8 @@ async function child(fn, construct, depth) {
         }
       case 'inspect':
         return envelope(engine.inspect(root, `${FILE}#App#0`))
+      case 'outline':
+        return envelope(engine.outline(root, FILE))
       case 'applyOp':
         return envelope(engine.applyOp(root, JSON.stringify(update)))
       case 'applyOps':
@@ -107,7 +109,7 @@ if (!fs.existsSync(path.join(here, '..', 'index.js'))) {
 // `refused`: the call must fail cleanly (an error envelope, or a throw for `annotate`).
 const cases = [
   // Past the main thread's crash points (5 000 brackets, 18 000 elements).
-  ...['annotate', 'inspect', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles'].map((fn) => [
+  ...['annotate', 'inspect', 'outline', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles'].map((fn) => [
     fn,
     'brackets',
     15_000,
@@ -118,8 +120,9 @@ const cases = [
   // (past the main thread's crash point) but refuses them once their locators would pass
   // 2^22 segments, about 2 900 levels deep, so they cost no more than a shallow file.
   ['annotate', 'elements', 2_800, 'result'],
+  ['outline', 'elements', 2_800, 'result'],
   ...['annotate', 'inspect', 'applyOps'].map((fn) => [fn, 'elements', 24_000, 'refused']),
-  ...['annotate', 'inspect', 'applyOps'].map((fn) => [fn, 'elements', 50_000, 'refused']),
+  ...['annotate', 'inspect', 'outline', 'applyOps'].map((fn) => [fn, 'elements', 50_000, 'refused']),
   // The round-1 review's 1.4 MB snippet (POST /apply): it killed a 64 MiB engine thread
   // before the engine refused deep snippets.
   ['insert', 'elements', 200_000, 'either'],

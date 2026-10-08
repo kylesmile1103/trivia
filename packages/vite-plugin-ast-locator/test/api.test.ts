@@ -73,6 +73,19 @@ describe('read endpoints', () => {
     expect([outside.status, outside.body.error.code]).toEqual([422, 'path_outside_root'])
   })
 
+  it('outline lists a file\'s JSX trees with locators', async () => {
+    const r = await get(socket, `/outline?file=${encodeURIComponent(DASHBOARD)}`)
+    expect(r.status).toBe(200)
+    const [root] = r.body.data
+    expect(root).toMatchObject({ locator: `${DASHBOARD}#Dashboard#0`, name: 'div' })
+    const footer = root.children[0].children[2]
+    expect(footer).toMatchObject({ name: 'CardFooter', children: [{ locator: CANCEL, name: 'Button', text: 'Cancel' }, { locator: SAVE, text: 'Save changes' }] })
+    const missing = await get(socket, '/outline')
+    expect([missing.status, missing.body.error.code]).toEqual([400, 'invalid_op'])
+    const outside = await get(socket, `/outline?file=${encodeURIComponent('../etc/passwd.tsx')}`)
+    expect([outside.status, outside.body.error.code]).toEqual([422, 'path_outside_root'])
+  })
+
   it('history starts empty', async () => {
     const r = await get(socket, '/history')
     expect(r.body.data).toEqual({ canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })

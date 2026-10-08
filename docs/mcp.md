@@ -43,6 +43,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | --- | --- | --- |
 | `trivia_get_selection` (read-only) | — | `{ selection: NodeDetails & { component } \| null }` |
 | `trivia_inspect` (read-only) | `{ locator }` | `{ node: NodeDetails & { component } }` |
+| `trivia_outline` (read-only) | `{ file }` | `{ trees: OutlineNode[] }` (and an indented text tree) |
 | `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
 | `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
 | `trivia_undo` | `{ label }` | `HistoryResult` |
@@ -51,8 +52,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   library (its props with enum options and defaults), else null. With nothing selected,
   `selection` is null and the text says to ask the user to select an element. A selection the
   source no longer matches (another tag at its locator) is a `stale_locator` error.
-- `trivia_apply` takes the ops of `docs/api.md` except `bindQuery`: `updateProp`, `setText`,
-  `insert`, `insertChild`, `remove`, `move`, `moveNode`. **Every stale-locator guard is
+- `trivia_apply` takes every op of `docs/api.md`: `updateProp`, `setText`, `insert`,
+  `insertChild`, `remove`, `move`, `moveNode`, `bindQuery`. **Every stale-locator guard is
   required** (`expectedName`, plus `expectedTargetName` / `expectedParentName`), so an agent
   working from a stale read is refused instead of editing the wrong element. One call is one
   undo entry, labelled `Agent: <label>`. With several ops, each op's locators must hold after
@@ -84,6 +85,5 @@ loop in a browser).
 
 ## Not yet
 
-- The "agent builds, you watch" workflow (a file outline tool), a screenshot tool so the
-  agent can see the result, and `trivia_sync_openapi` for contract sync.
-- `bindQuery` through MCP (data binding comes with the Data Explorer).
+- A screenshot tool so the agent can see the result, and `trivia_sync_openapi` for contract
+  sync.

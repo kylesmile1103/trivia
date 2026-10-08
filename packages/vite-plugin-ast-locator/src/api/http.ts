@@ -58,6 +58,16 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         },
       },
     ],
+    [
+      '/outline',
+      {
+        GET: (url) => {
+          const file = url.searchParams.get('file')
+          if (!file) throw new ApiError('invalid_op', 'missing ?file=<project-relative path>')
+          return service.outline(file)
+        },
+      },
+    ],
     ['/history', { GET: (): HistoryState => service.history() }],
     [
       '/selection',

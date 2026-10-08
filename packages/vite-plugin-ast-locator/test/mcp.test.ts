@@ -64,13 +64,21 @@ describe('tools', () => {
   it('are the point-and-ask set', async () => {
     const client = await connect()
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['trivia_apply', 'trivia_get_selection', 'trivia_inspect', 'trivia_list_components', 'trivia_undo'])
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'trivia_apply',
+      'trivia_get_selection',
+      'trivia_inspect',
+      'trivia_list_components',
+      'trivia_outline',
+      'trivia_undo',
+    ])
     const apply = tools.find((t) => t.name === 'trivia_apply')!
     expect(apply.description).toContain('expectedName')
     expect(tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name).sort()).toEqual([
       'trivia_get_selection',
       'trivia_inspect',
       'trivia_list_components',
+      'trivia_outline',
     ])
   })
 })
@@ -109,6 +117,18 @@ describe('trivia_inspect and trivia_list_components', () => {
     const list = await call('trivia_list_components')
     const names = list.structuredContent.components.map((c: any) => c.name)
     expect(names).toEqual(expect.arrayContaining(['Badge', 'Button', 'Card', 'CardContent', 'Input']))
+  })
+})
+
+describe('trivia_outline', () => {
+  it('gives a file\'s element tree, so an agent can find its way around a page', async () => {
+    const r = await call('trivia_outline', { file: DASHBOARD })
+    const [root] = r.structuredContent.trees
+    expect(root.children[0].children[2].children.map((c: any) => [c.locator, c.text])).toEqual([
+      [CANCEL, 'Cancel'],
+      [SAVE, 'Save changes'],
+    ])
+    expect(text(r)).toContain('<Button> Cancel')
   })
 })
 
@@ -151,6 +171,27 @@ describe('trivia_apply', () => {
     await select(SAVE)
     await call('trivia_apply', { label: 'Drop save', ops: [{ op: 'remove', target: SAVE, expectedName: 'Button' }] })
     expect((await get(server.socket, '/selection')).body.data).toMatchObject({ selection: null, by: 'agent' })
+  })
+
+  it('binds an element to a TanStack Query with bindQuery', async () => {
+    const r = await call('trivia_apply', {
+      label: 'Bind the badges',
+      ops: [
+        {
+          op: 'bindQuery',
+          target: SAVE,
+          expectedName: 'Button',
+          optionsFn: 'listCustomersOptions',
+          optionsImport: '@/api/generated/@tanstack/react-query.gen',
+          resource: 'Customer',
+          dataProp: 'data',
+          loadingProp: 'disabled',
+        },
+      ],
+    })
+    expect(r.isError).toBeFalsy()
+    expect(read()).toContain('useQuery({ ...listCustomersOptions() })')
+    expect(read()).toContain('import { useQuery } from "@tanstack/react-query"')
   })
 
   it('returns a refusal as a tool error with its code and what to do next', async () => {

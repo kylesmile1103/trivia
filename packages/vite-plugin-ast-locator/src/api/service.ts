@@ -54,6 +54,12 @@ export class EngineService {
     return unwrap<unknown>(this.#options.engine.inspect(this.#options.root, locator))
   }
 
+  /** Every JSX tree of the project-relative `file`, with locators (docs/api.md). */
+  outline(file: string): unknown[] {
+    if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
+    return unwrap<unknown[]>(this.#options.engine.outline(this.#options.root, file))
+  }
+
   history(): HistoryState {
     return this.#history.state()
   }
