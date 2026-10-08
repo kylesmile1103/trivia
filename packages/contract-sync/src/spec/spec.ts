@@ -5,7 +5,7 @@
 
 import { createHash } from 'node:crypto'
 
-import { ContractSyncError } from './errors.js'
+import { ContractSyncError } from '../errors.js'
 
 export type JsonObject = { [key: string]: unknown }
 

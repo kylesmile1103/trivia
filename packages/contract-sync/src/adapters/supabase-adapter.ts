@@ -4,9 +4,9 @@
 // @supabase/supabase-js is involved.
 
 import { ContractSyncError, describeError } from '../errors.js'
-import { POSTGREST_EXCLUDED_OPERATIONS, detectStyle } from '../postgrest.js'
-import type { SpecDocument } from '../spec.js'
-import { isObject } from '../spec.js'
+import { POSTGREST_EXCLUDED_OPERATIONS, detectStyle } from '../spec/postgrest.js'
+import type { SpecDocument } from '../spec/spec.js'
+import { isObject } from '../spec/spec.js'
 import type { LoadedSpec } from './rest-adapter.js'
 import { parseSpecText, redactUrl } from './rest-adapter.js'
 

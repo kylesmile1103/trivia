@@ -11,15 +11,15 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@hey-api/openapi-ts'
 import type { UserConfig } from '@hey-api/openapi-ts'
 
-import { loadSpec } from './adapters/rest-adapter.js'
-import { ContractSyncError, describeError } from './errors.js'
+import { loadSpec } from '../adapters/rest-adapter.js'
+import { ContractSyncError, describeError } from '../errors.js'
+import type { HeyApiClientPlugin } from '../manifest/generator.js'
+import { DEFAULT_CLIENT, heyApiPlugins } from '../manifest/generator.js'
+import type { ApiStyle } from '../manifest/types.js'
+import { defaultExcludedOperations, detectStyle, patchPostgrestForCodegen } from '../spec/postgrest.js'
+import type { SpecDocument } from '../spec/spec.js'
+import { detectSpec, withoutOperations } from '../spec/spec.js'
 import { GENERATED_FILES, HEY_API_HEADER, importSpecifiers } from './generated-code.js'
-import type { HeyApiClientPlugin } from './manifest-generator.js'
-import { DEFAULT_CLIENT, heyApiPlugins } from './manifest-generator.js'
-import type { ApiStyle } from './manifest-types.js'
-import { defaultExcludedOperations, detectStyle, patchPostgrestForCodegen } from './postgrest.js'
-import type { SpecDocument } from './spec.js'
-import { detectSpec, withoutOperations } from './spec.js'
 
 export interface ContractSyncOptions {
   /** Spec file path (JSON or YAML), http(s) URL, or an already-parsed document. */

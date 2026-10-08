@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 
 import ts from 'typescript'
 
-import type { ManifestParameter, TriviaManifest } from '../src/manifest-types.js'
+import type { ManifestParameter, TriviaManifest } from '../src/manifest/types.js'
 
 const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)

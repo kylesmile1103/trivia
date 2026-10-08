@@ -6,12 +6,12 @@
 // `<base>/{param}`. PostgREST: there are no item paths; rows are selected with filters on the
 // collection path, keyed by the column PostgREST marks `<pk/>`.
 
-import { ContractSyncError } from './errors.js'
-import type { ApiStyle, CrudKind, ManifestEntity, ManifestParameter, ResourceGrouping } from './manifest-types.js'
+import { ContractSyncError } from '../errors.js'
+import type { BodyInfo, ListShape, RawOperation, ResponseInfo, SchemaInfo, SpecReader } from '../spec/reader.js'
+import { listShape, requestBody, successResponse, summarizeParameter, textOrNull } from '../spec/reader.js'
+import { isObject, refName } from '../spec/spec.js'
 import { resourceNameFrom, resourceNameFromSchema } from './naming.js'
-import type { BodyInfo, ListShape, RawOperation, ResponseInfo, SchemaInfo, SpecReader } from './spec-reader.js'
-import { listShape, requestBody, successResponse, summarizeParameter, textOrNull } from './spec-reader.js'
-import { isObject, refName } from './spec.js'
+import type { ApiStyle, CrudKind, ManifestEntity, ManifestParameter, ResourceGrouping } from './types.js'
 
 /** One operation with its parameter, body and response summaries. */
 export interface Candidate {

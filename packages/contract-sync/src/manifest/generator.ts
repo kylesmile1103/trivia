@@ -6,10 +6,7 @@ import path from 'node:path'
 
 import type ts from 'typescript'
 
-import type { Candidate, Classified, Group } from './classify.js'
-import { classifyPostgrest, classifyRest, collectGroups, resourceName, restPrimaryKey } from './classify.js'
-import { ContractSyncError } from './errors.js'
-import type { GeneratedCode, OperationFunctions, SdkFunction } from './generated-code.js'
+import type { GeneratedCode, OperationFunctions, SdkFunction } from '../codegen/generated-code.js'
 import {
   GENERATED_FILES,
   arrayElement,
@@ -19,7 +16,16 @@ import {
   readGeneratedCode,
   responseType,
   successStatuses,
-} from './generated-code.js'
+} from '../codegen/generated-code.js'
+import { ContractSyncError } from '../errors.js'
+import { defaultExcludedOperations, detectStyle } from '../spec/postgrest.js'
+import type { RawOperation, SchemaInfo } from '../spec/reader.js'
+import { SpecReader, fieldType, pagination, summarizeEntity, textOrNull } from '../spec/reader.js'
+import type { SpecDocument } from '../spec/spec.js'
+import { isObject, schemaHash } from '../spec/spec.js'
+import { contractSyncVersion, heyApiVersion } from '../versions.js'
+import type { Candidate, Classified, Group } from './classify.js'
+import { classifyPostgrest, classifyRest, collectGroups, resourceName, restPrimaryKey } from './classify.js'
 import type {
   ApiStyle,
   CrudKind,
@@ -34,14 +40,8 @@ import type {
   ManifestPostgrest,
   ManifestResource,
   TriviaManifest,
-} from './manifest-types.js'
-import { MANIFEST_SCHEMA_ID } from './manifest-types.js'
-import { defaultExcludedOperations, detectStyle } from './postgrest.js'
-import type { RawOperation, SchemaInfo } from './spec-reader.js'
-import { SpecReader, fieldType, pagination, summarizeEntity, textOrNull } from './spec-reader.js'
-import type { SpecDocument } from './spec.js'
-import { isObject, schemaHash } from './spec.js'
-import { contractSyncVersion, heyApiVersion } from './versions.js'
+} from './types.js'
+import { MANIFEST_SCHEMA_ID } from './types.js'
 
 export type HeyApiClientPlugin = '@hey-api/client-fetch' | '@hey-api/client-next'
 

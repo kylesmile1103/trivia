@@ -1,7 +1,7 @@
 // PostgREST knowledge shared by the adapter, codegen and the manifest generator. Facts follow
 // PostgREST's OpenAPI generator (src/PostgREST/Response/OpenAPI.hs, v12.2.3).
 
-import type { ApiStyle } from './manifest-types.js'
+import type { ApiStyle } from '../manifest/types.js'
 import type { SpecDocument } from './spec.js'
 import { isObject } from './spec.js'
 

@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url'
 import yaml from 'js-yaml'
 
 import { ContractSyncError, describeError } from '../errors.js'
-import type { SpecDocument } from '../spec.js'
-import { detectSpec, isObject } from '../spec.js'
+import type { SpecDocument } from '../spec/spec.js'
+import { detectSpec, isObject } from '../spec/spec.js'
 
 export interface LoadedSpec {
   spec: SpecDocument

@@ -72,7 +72,7 @@ client in `client/` and `core/`, `@tanstack/react-query.gen.ts` and `index.ts`.
 
 The schema is `packages/contract-sync/manifest.schema.json`
 (`$id: https://trivia.dev/schemas/manifest.v1.json`, JSON Schema 2020-12), mirrored by
-`src/manifest-types.ts`. Every generated manifest in the tests validates against it, using ajv in
+`src/manifest/types.ts`. Every generated manifest in the tests validates against it, using ajv in
 strict mode. Excerpt (trimmed) from the customers fixture:
 
 ```json

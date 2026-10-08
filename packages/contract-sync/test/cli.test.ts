@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import type { CliIo } from '../src/cli.js'
 import { main } from '../src/cli.js'
-import type { TriviaManifest } from '../src/manifest-types.js'
+import type { TriviaManifest } from '../src/manifest/types.js'
 import { fixture, listFiles, makeProject, removeProject } from './helpers.js'
 
 function capture(env: Record<string, string | undefined> = {}): CliIo & { out: string[]; err: string[] } {

@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import ts from 'typescript'
 
-import { ContractSyncError } from './errors.js'
+import { ContractSyncError } from '../errors.js'
 
 export const GENERATED_FILES = {
   queries: '@tanstack/react-query.gen.ts',

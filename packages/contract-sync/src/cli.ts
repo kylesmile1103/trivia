@@ -3,7 +3,7 @@
 import { parseArgs } from 'node:util'
 
 import { ContractSyncError, describeError } from './errors.js'
-import type { ImportBase } from './manifest-generator.js'
+import type { ImportBase } from './manifest/generator.js'
 import { DEFAULT_MANIFEST_PATH, DEFAULT_OUTPUT_DIR, syncContract } from './sync.js'
 import { contractSyncVersion } from './versions.js'
 

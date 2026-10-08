@@ -3,7 +3,7 @@
 // 3.0/3.1 (components, `requestBody`, response `content`). Every access is checked; `$ref`s are
 // resolved one hop at a time, so recursive schemas are safe.
 
-import { ContractSyncError } from './errors.js'
+import { ContractSyncError } from '../errors.js'
 import type {
   ApiStyle,
   EnumValue,
@@ -15,7 +15,7 @@ import type {
   ManifestParameter,
   ManifestRequestBody,
   ManifestResponse,
-} from './manifest-types.js'
+} from '../manifest/types.js'
 import type { HttpMethod, JsonObject, SpecDocument, SpecInfo } from './spec.js'
 import { HTTP_METHODS, RefResolver, asString, detectSpec, isObject } from './spec.js'
 

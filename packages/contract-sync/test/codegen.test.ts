@@ -4,9 +4,9 @@ import path from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { runContractSync } from '../src/codegen/codegen.js'
 import { ContractSyncError } from '../src/errors.js'
-import { runContractSync } from '../src/codegen.js'
-import type { HeyApiClientPlugin } from '../src/manifest-generator.js'
+import type { HeyApiClientPlugin } from '../src/manifest/generator.js'
 import type { SyncContractResult } from '../src/sync.js'
 import { syncContract } from '../src/sync.js'
 import {
