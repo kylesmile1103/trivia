@@ -11,8 +11,8 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 import { ApiError } from '../engine.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
-import { formFieldFor, kebab } from './fields.js'
-import { type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
+import { type FormStyle, formFieldFor, kebab } from './fields.js'
+import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { PAGE_KINDS, type PageKind, pageFiles, supportedKinds } from './scaffold.js'
 import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
@@ -226,6 +226,7 @@ export class RefineAdapter {
       pagesDir,
       pagesImport: `${srcImport}/${pagesDir.split('/').slice(1).join('/')}`,
       textarea: this.#hasUi('textarea'),
+      style: await this.#projectStyle(),
     })
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
@@ -384,37 +385,81 @@ export class RefineAdapter {
     const manifest = await this.#manifest()
     const resource = contractResource(manifest, page.contract?.resource ?? page.resource?.name ?? null, null)
     const body = resource && page.contract ? bodyFields(resource, page.contract.operation) : null
-    const context = { ui: this.#host.importBase, idPrefix: kebab(resource?.name ?? page.resource?.name ?? 'field'), textarea: this.#hasUi('textarea') }
+    const style = await this.#styleFor(page)
+    const context = { ui: this.#host.importBase, idPrefix: kebab(resource?.name ?? page.resource?.name ?? 'field'), textarea: this.#hasUi('textarea'), style }
 
-    // The form's Controllers as the changes so far leave them. A Controller's locator is its
-    // position among its parent's children, so each insert, removal or move renumbers the ones
-    // after it: tracked here so a later change in the same plan names the right element.
-    type Control = { name: string; locator: string }
-    let controls: Control[] = page.fields.flatMap((f) => (f.control ? [{ name: f.name, locator: f.control.locator }] : []))
-    const parent = (loc: string) => loc.slice(0, loc.lastIndexOf('.'))
-    const slot = (loc: string) => Number(loc.slice(loc.lastIndexOf('.') + 1))
-    const at = (loc: string, i: number) => `${parent(loc)}.${i}`
-    const siblings = controls.every((c) => parent(c.locator) === parent(controls[0]!.locator))
-    if (changes.length > 1 && !siblings) {
-      throw new ApiError('unsupported', `${page.component}'s Controllers are not all in one parent; make one change at a time`)
+    // The form's controls as the changes so far leave them. A control's locator is its position
+    // among its parent's children, so each insert, removal or move renumbers the elements after
+    // it, and everything inside them (a field in a later grid row): tracked here by index-path
+    // prefix, so a later change in the same plan names the right element.
+    type Control = { name: string; locator: string; element: ControlElement; direct: boolean; parent: { locator: string; name: string } | null }
+    let controls: Control[] = page.fields.flatMap((f) => (f.control ? [{ name: f.name, ...f.control }] : []))
+    const split = (loc: string) => {
+      const at = loc.lastIndexOf('#') + 1
+      return { head: loc.slice(0, at), path: loc.slice(at).split('.').map(Number) }
     }
-    const shift = (from: number, by: number) => {
-      controls = controls.map((c) => (slot(c.locator) >= from ? { ...c, locator: at(c.locator, slot(c.locator) + by) } : c))
+    let container = page.container
+    /**
+     * Shift by `by` every tracked locator (controls, their parents, the container) at or after
+     * (an insert) or after (a removal) the slot `at` names, and everything inside them.
+     */
+    const renumber = (at: string, by: 1 | -1) => {
+      const { head, path } = split(at)
+      const depth = path.length - 1
+      const from = path[depth]! + (by === -1 ? 1 : 0)
+      const shift = (loc: string): string => {
+        const l = split(loc)
+        const inside = l.head === head && l.path.length > depth && path.slice(0, depth).every((seg, i) => l.path[i] === seg)
+        if (!inside || l.path[depth]! < from) return loc
+        const moved = [...l.path]
+        moved[depth] = moved[depth]! + by
+        return head + moved.join('.')
+      }
+      controls = controls.map((c) => ({ ...c, locator: shift(c.locator), parent: c.parent && { ...c.parent, locator: shift(c.parent.locator) } }))
+      if (container) container = { ...container, locator: shift(container.locator) }
+    }
+    const sibling = (loc: string, placement: 'before' | 'after') => {
+      const { head, path } = split(loc)
+      return head + [...path.slice(0, -1), path.at(-1)! + (placement === 'after' ? 1 : 0)].join('.')
+    }
+    /**
+     * Where a new field goes without an index (⚑ docs/product.md, slice 5): after the nearest
+     * field before it in the contract, inside that field's own wrapper; else before the nearest
+     * one after it; else after the last field. Guarded (non-direct) fields are never anchors.
+     */
+    const anchorFor = (name: string): { target: Control; placement: 'before' | 'after' } | null => {
+      const order = (body ?? []).map((f) => f.name)
+      const usable = controls.filter((c) => c.direct)
+      const at = order.indexOf(name)
+      for (let i = at - 1; i >= 0; i -= 1) {
+        const target = usable.find((c) => c.name === order[i])
+        if (target) return { target, placement: 'after' }
+      }
+      for (let i = at + 1; i < order.length; i += 1) {
+        const target = usable.find((c) => c.name === order[i])
+        if (target) return { target, placement: 'before' }
+      }
+      const last = usable.at(-1)
+      return last ? { target: last, placement: 'after' } : null
     }
     const schema = new Set(page.fields.filter((f) => f.rule !== null).map((f) => f.name))
     const defaults = new Set(page.fields.filter((f) => f.hasDefault).map((f) => f.name))
     const ops: Plan['ops'] = []
     const labels: string[] = []
-    const step = (change: FieldChange): void => {
+    /** Where a rebuilt field goes back: the slot it was removed from, at its place in the form's order. */
+    type Slot = { parent: { locator: string; name: string }; index: number; order: number }
+    const step = (change: FieldChange, slot?: Slot): void => {
       switch (change.action) {
         case 'rebuild': {
           // Resolved here, against the form as it now is: a fix computed earlier may hold an
           // index that edits since have made stale.
-          const index = controls.findIndex((c) => c.name === change.field)
-          if (index < 0) throw new ApiError('node_not_found', `${page.component} renders no \`${change.field}\` field to rebuild`)
+          const order = controls.findIndex((c) => c.name === change.field)
+          const control = controls[order]
+          if (!control) throw new ApiError('node_not_found', `${page.component} renders no \`${change.field}\` field to rebuild`)
           const label = page.fields.find((f) => f.name === change.field)?.label ?? undefined
           step({ action: 'remove', field: change.field })
-          step({ action: 'add', field: change.field, index, ...(label ? { label } : {}) })
+          const again: FieldChange = { action: 'add', field: change.field, ...(label ? { label } : {}) }
+          step(again, control.parent ? { parent: control.parent, index: split(control.locator).path.at(-1)!, order } : undefined)
           labels.splice(-2, 2, `Rebuild field ${label ?? humanize(change.field)}`)
           break
         }
@@ -437,22 +482,40 @@ export class RefineAdapter {
           if (page.defaultsPath) ops.push({ op: 'setProperty', path: page.defaultsPath, prop: field.name, value: snippet.defaultValue })
           schema.add(field.name)
           defaults.add(field.name)
-          const index = change.index ?? controls.length
-          if (index > controls.length) throw new ApiError('invalid_op', `index ${index} is out of range: ${page.component} has ${controls.length} fields`)
-          if (controls.length === 0) {
-            if (!page.container) throw new ApiError('unsupported', `${page.component} has no <FieldGroup> or <form> to put a field in`)
-            ops.push({ op: 'insertChild', parent: page.container.locator, expectedName: page.container.name, index: 0, snippet: snippet.controller, imports: snippet.imports })
-            controls = [{ name: field.name, locator: `${page.container.locator}.0` }]
-          } else if (index < controls.length) {
-            const before = controls[index]!
-            ops.push({ op: 'insert', target: before.locator, expectedName: 'Controller', placement: 'before', snippet: snippet.controller, imports: snippet.imports })
-            shift(slot(before.locator), 1)
-            controls.splice(index, 0, { name: field.name, locator: at(before.locator, slot(before.locator) - 1) })
+          if (change.index !== undefined && change.index > controls.length) {
+            throw new ApiError('invalid_op', `index ${change.index} is out of range: ${page.component} has ${controls.length} fields`)
+          }
+          const anchor =
+            change.index === undefined
+              ? anchorFor(field.name)
+              : change.index < controls.length
+                ? { target: controls[change.index]!, placement: 'before' as const }
+                : controls.length > 0
+                  ? { target: controls[controls.length - 1]!, placement: 'after' as const }
+                  : null
+          const added: Control = { name: field.name, locator: '', element: snippet.element, direct: true, parent: null }
+          if (slot) {
+            // Back where it was, inside the same wrapper.
+            ops.push({ op: 'insertChild', parent: slot.parent.locator, expectedName: slot.parent.name, index: slot.index, snippet: snippet.controller, imports: snippet.imports })
+            added.locator = `${slot.parent.locator}.${slot.index}`
+            added.parent = slot.parent
+            renumber(added.locator, 1)
+            controls.splice(slot.order, 0, added)
+          } else if (!anchor) {
+            if (!container) throw new ApiError('unsupported', `${page.component} has no <FieldGroup> or <form> to put a field in`)
+            ops.push({ op: 'insertChild', parent: container.locator, expectedName: container.name, index: 0, snippet: snippet.controller, imports: snippet.imports })
+            added.locator = `${container.locator}.0`
+            added.parent = container
+            renumber(added.locator, 1)
+            controls = [added, ...controls]
           } else {
-            const last = controls[controls.length - 1]!
-            ops.push({ op: 'insert', target: last.locator, expectedName: 'Controller', placement: 'after', snippet: snippet.controller, imports: snippet.imports })
-            shift(slot(last.locator) + 1, 1)
-            controls.push({ name: field.name, locator: at(last.locator, slot(last.locator) + 1) })
+            const { target, placement } = anchor
+            ops.push({ op: 'insert', target: target.locator, expectedName: target.element, placement, snippet: snippet.controller, imports: snippet.imports })
+            added.locator = sibling(target.locator, placement)
+            added.parent = target.parent
+            renumber(added.locator, 1)
+            const at = controls.indexOf(controls.find((c) => c.name === target.name)!)
+            controls.splice(placement === 'before' ? at : at + 1, 0, added)
           }
           labels.push(`Add field ${label}`)
           break
@@ -463,9 +526,9 @@ export class RefineAdapter {
             throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` field (it has ${page.fields.map((f) => f.name).join(', ')})`)
           }
           if (control) {
-            ops.push({ op: 'remove', target: control.locator, expectedName: 'Controller' })
+            ops.push({ op: 'remove', target: control.locator, expectedName: control.element })
             controls = controls.filter((c) => c !== control)
-            shift(slot(control.locator) + 1, -1)
+            renumber(control.locator, -1)
           }
           if (defaults.delete(change.field) && page.defaultsPath) ops.push({ op: 'removeProperty', path: page.defaultsPath, prop: change.field })
           if (schema.delete(change.field) && page.schemaPath) ops.push({ op: 'removeProperty', path: page.schemaPath, prop: change.field })
@@ -480,15 +543,13 @@ export class RefineAdapter {
           const moved = controls[from]!
           const target = controls[change.index]!
           const placement = change.index < from ? 'before' : 'after'
-          ops.push({ op: 'move', source: moved.locator, expectedName: 'Controller', target: target.locator, expectedTargetName: 'Controller', placement })
-          // Out of its slot, then into the target's (before) or the one after it (after).
-          const out = slot(moved.locator)
+          ops.push({ op: 'move', source: moved.locator, expectedName: moved.element, target: target.locator, expectedTargetName: target.element, placement })
+          // Out of its slot, then in next to the target, wherever that now is.
           controls.splice(from, 1)
-          shift(out + 1, -1)
-          const t = slot(controls[placement === 'before' ? change.index : change.index - 1]!.locator)
-          const into = placement === 'before' ? t : t + 1
-          shift(into, 1)
-          controls.splice(change.index, 0, { ...moved, locator: at(moved.locator, into) })
+          renumber(moved.locator, -1)
+          const into = sibling(controls.find((c) => c.name === target.name)!.locator, placement)
+          renumber(into, 1)
+          controls.splice(change.index, 0, { ...moved, locator: into })
           labels.push(`Move field ${humanize(change.field)}`)
           break
         }
@@ -498,6 +559,31 @@ export class RefineAdapter {
     }
     for (const change of changes) step(change)
     return { ops, label: labels.join('; ') }
+  }
+
+  /**
+   * The style a new field in `page` is written in (⚑ docs/product.md, slice 5): the one its
+   * fields use; for an empty form, the project's, as long as a `<Form>` provider is there for
+   * `FormField` to use.
+   */
+  async #styleFor(page: FormPage): Promise<FormStyle> {
+    if (page.style) return page.style
+    const project = await this.#projectStyle()
+    return project === 'form' && !page.provider ? 'field' : project
+  }
+
+  /** The style most of the project's forms use; with none, the shadcn component it has (`field` first). */
+  async #projectStyle(): Promise<FormStyle> {
+    let field = 0
+    let form = 0
+    for (const p of await this.pages()) {
+      if (p.kind !== 'form' || p.style === null) continue
+      if (p.style === 'form') form += 1
+      else field += 1
+    }
+    if (field !== form) return form > field ? 'form' : 'field'
+    if (this.#hasUi('field')) return 'field'
+    return this.#hasUi('form') ? 'form' : 'field'
   }
 
   /** The ops for one column change on the list page in `file` (its `component`, when it has several). */

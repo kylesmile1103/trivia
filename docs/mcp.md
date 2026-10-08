@@ -77,8 +77,9 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   columns or fields as the source has them and the contract fields it doesn't have yet.
   `trivia_edit_columns` adds contract fields as typed columns and removes or reorders columns by
   key, in order, as one `Agent: …` undo entry, and returns the page as it now reads.
-  `trivia_edit_fields` does the same for a form page's fields (rule, default and Controller
-  together), against the create or update request body.
+  `trivia_edit_fields` does the same for a form page's fields (rule, default and control
+  together), against the create or update request body. The control is written in the form's
+  style: a `Controller` with shadcn's `Field`, or Refine's `<FormField>`.
   `trivia_contract_drift` lists where pages no longer match the contract (`docs/api.md`
   `refine/drift`). Each issue's `fix.changes` go to `trivia_edit_columns` or
   `trivia_edit_fields`; a `note` says to sync first when the spec file changed.

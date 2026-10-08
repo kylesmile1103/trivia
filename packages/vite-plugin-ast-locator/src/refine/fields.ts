@@ -1,6 +1,6 @@
 // A Refine + shadcn form field for a contract field (docs/product.md, slice 2): its zod rule,
-// its default value, and a react-hook-form `Controller` around a shadcn `Field` (shadcn v4 has no
-// `form` component; `Field` replaced it). The widget follows the field's type: a Select for an
+// its default value, and its control: a react-hook-form `Controller` around a shadcn `Field`
+// (shadcn v4), or shadcn's older `FormField` (Refine's docs and registry, slice 5). The widget follows the field's type: a Select for an
 // enum, a number input, a date input, a checkbox for a boolean, a textarea for long text, else a
 // text input. The rule carries the bounds the contract declares (slice 5).
 
@@ -20,7 +20,16 @@ export interface FieldContext {
   idPrefix: string
   /** The project has shadcn's `textarea` (long text gets one). */
   textarea?: boolean
+  /**
+   * How the form writes a field (docs/product.md, slice 5): `field` is a react-hook-form
+   * `<Controller>` around shadcn's `Field` (v4); `form` is shadcn's older `<FormField>` with
+   * `FormItem`/`FormLabel`/`FormControl`/`FormMessage`, as Refine's docs and registry write it.
+   * Default `field`.
+   */
+  style?: FormStyle
 }
+
+export type FormStyle = 'field' | 'form'
 
 /** Longest text a single-line input gets (⚑ docs/product.md, slice 5); longer gets a textarea. */
 const TEXTAREA_OVER = 255
@@ -100,8 +109,10 @@ export interface FieldSnippet {
   rule: string
   /** The default value, as source text. */
   defaultValue: string
-  /** The `<Controller …/>` element. */
+  /** The `<Controller …/>` or `<FormField …/>` element. */
   controller: string
+  /** Its tag: `Controller` or `FormField`. */
+  element: 'Controller' | 'FormField'
   imports: ImportSpec[]
 }
 
@@ -181,11 +192,21 @@ function defaultValue(field: FormField): string {
 /** The pieces of a form field for `field`, labelled `label` (default: the humanized name). */
 export function formFieldFor(field: FormField, context: FieldContext, label = humanize(field.name)): FieldSnippet {
   const shape = fieldShape(field)
+  const style = context.style ?? 'field'
   const id = `${context.idPrefix}-${kebab(field.name)}`
   const imports = new Map<string, ImportSpec>()
   const use = (name: string, source: string) => imports.set(name, { name, source })
-  use('Controller', 'react-hook-form')
-  for (const name of ['Field', 'FieldError', 'FieldLabel']) use(name, `${context.ui}/field`)
+  if (style === 'field') {
+    use('Controller', 'react-hook-form')
+    for (const name of ['Field', 'FieldError', 'FieldLabel']) use(name, `${context.ui}/field`)
+  } else {
+    for (const name of ['FormControl', 'FormField', 'FormItem', 'FormLabel', 'FormMessage']) use(name, `${context.ui}/form`)
+  }
+  // `Field` wires the label and the error state by hand; `FormControl` does it from context.
+  const wired = style === 'field' ? [`  id=${str(id)}`] : []
+  const invalid = style === 'field' ? [`  aria-invalid={fieldState.invalid}`] : []
+  /** `lines` as the control: inside `<FormControl>` in the `form` style. */
+  const control = (lines: string[]) => (style === 'field' ? lines : ['<FormControl>', ...lines.map((l) => `  ${l}`), '</FormControl>'])
 
   // An optional text field left empty is absent, not "" (which a format check would refuse).
   const emptyIsAbsent = field.required ? '' : ' || undefined'
@@ -193,11 +214,10 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
   if (shape === 'enum') {
     for (const name of ['Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue']) use(name, `${context.ui}/select`)
     const values = (field.enum ?? []).filter((v): v is string => typeof v === 'string')
+    const trigger = style === 'field' ? `<SelectTrigger id=${str(id)} aria-invalid={fieldState.invalid}>` : '<SelectTrigger>'
     input = [
       `<Select value={field.value ?? ""} onValueChange={field.onChange}>`,
-      `  <SelectTrigger id=${str(id)} aria-invalid={fieldState.invalid}>`,
-      `    <SelectValue placeholder="Choose…" />`,
-      `  </SelectTrigger>`,
+      ...control([trigger, `  <SelectValue placeholder="Choose…" />`, `</SelectTrigger>`]).map((l) => `  ${l}`),
       `  <SelectContent>`,
       ...values.map((v) => `    <SelectItem value=${str(v)}>${optionLabel(v)}</SelectItem>`),
       `  </SelectContent>`,
@@ -205,36 +225,30 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
     ]
   } else if (shape === 'boolean') {
     use('Checkbox', `${context.ui}/checkbox`)
-    input = [
-      `<Checkbox`,
-      `  id=${str(id)}`,
-      `  checked={field.value ?? false}`,
-      `  onCheckedChange={(checked) => field.onChange(checked === true)}`,
-      `/>`,
-    ]
+    input = control([`<Checkbox`, ...wired, `  checked={field.value ?? false}`, `  onCheckedChange={(checked) => field.onChange(checked === true)}`, `/>`])
   } else if (shape === 'number') {
     use('Input', `${context.ui}/input`)
-    input = [
+    input = control([
       `<Input`,
       `  {...field}`,
-      `  id=${str(id)}`,
+      ...wired,
       `  type="number"`,
       `  value={field.value ?? ""}`,
       `  onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}`,
-      `  aria-invalid={fieldState.invalid}`,
+      ...invalid,
       `/>`,
-    ]
+    ])
   } else if (context.textarea && isLongText(field)) {
     use('Textarea', `${context.ui}/textarea`)
-    input = [
+    input = control([
       `<Textarea`,
       `  {...field}`,
-      `  id=${str(id)}`,
+      ...wired,
       `  value={field.value ?? ""}`,
       `  onChange={(e) => field.onChange(e.target.value${emptyIsAbsent})}`,
-      `  aria-invalid={fieldState.invalid}`,
+      ...invalid,
       `/>`,
-    ]
+    ])
   } else {
     use('Input', `${context.ui}/input`)
     const type =
@@ -249,29 +263,44 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
               : field.format === 'uri' || field.format === 'url'
                 ? 'url'
                 : null
-    input = [
+    input = control([
       `<Input`,
       `  {...field}`,
-      `  id=${str(id)}`,
+      ...wired,
       ...(type ? [`  type=${str(type)}`] : []),
       `  value={field.value ?? ""}`,
       `  onChange={(e) => field.onChange(e.target.value${emptyIsAbsent})}`,
-      `  aria-invalid={fieldState.invalid}`,
+      ...invalid,
       `/>`,
-    ]
+    ])
   }
-  const controller = [
-    `<Controller`,
-    `  name=${str(field.name)}`,
-    `  control={form.control}`,
-    `  render={({ field, fieldState }) => (`,
-    `    <Field data-invalid={fieldState.invalid}>`,
-    `      <FieldLabel htmlFor=${str(id)}>${escapeJsxText(label)}</FieldLabel>`,
-    ...input.map((line) => `      ${line}`),
-    `      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}`,
-    `    </Field>`,
-    `  )}`,
-    `/>`,
-  ].join('\n')
-  return { rule: rule(field), defaultValue: defaultValue(field), controller, imports: [...imports.values()] }
+  const controller =
+    style === 'field'
+      ? [
+          `<Controller`,
+          `  name=${str(field.name)}`,
+          `  control={form.control}`,
+          `  render={({ field, fieldState }) => (`,
+          `    <Field data-invalid={fieldState.invalid}>`,
+          `      <FieldLabel htmlFor=${str(id)}>${escapeJsxText(label)}</FieldLabel>`,
+          ...input.map((line) => `      ${line}`),
+          `      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}`,
+          `    </Field>`,
+          `  )}`,
+          `/>`,
+        ]
+      : [
+          `<FormField`,
+          `  control={form.control}`,
+          `  name=${str(field.name)}`,
+          `  render={({ field }) => (`,
+          `    <FormItem>`,
+          `      <FormLabel>${escapeJsxText(label)}</FormLabel>`,
+          ...input.map((line) => `      ${line}`),
+          `      <FormMessage />`,
+          `    </FormItem>`,
+          `  )}`,
+          `/>`,
+        ]
+  return { rule: rule(field), defaultValue: defaultValue(field), controller: controller.join('\n'), element: style === 'field' ? 'Controller' : 'FormField', imports: [...imports.values()] }
 }

@@ -462,10 +462,12 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
     {
       title: 'Edit a form\'s fields',
       description:
-        'Add request-body fields of the contract to a Refine form page (each as its zod rule, its default value and a ' +
-        'react-hook-form Controller around a shadcn Field: a Select for enums, a number input, a date input, a checkbox ' +
-        'for booleans, else a text input), and remove or reorder fields by name, as one entry in the designer\'s undo ' +
-        'history. Changes apply in order; an index counts the fields the form renders after the changes before it.',
+        'Add request-body fields of the contract to a Refine form page (each as its zod rule with the contract\'s bounds, ' +
+        'its default value and a control in the form\'s own style: a react-hook-form Controller around a shadcn Field, or ' +
+        'shadcn\'s FormField; a Select for enums, a number input, a date input, a checkbox for booleans, a textarea for ' +
+        'long text, else a text input), and remove or reorder fields by name, as one entry in the designer\'s undo ' +
+        'history. Without an index, a new field goes after the field before it in the contract, inside that field\'s ' +
+        'wrapper. Changes apply in order; an index counts the fields the form renders after the changes before it.',
       inputSchema: {
         file: z.string().min(1).describe('The form page file, from trivia_get_page'),
         component: z.string().min(1).optional().describe('The form component, when the file has several'),

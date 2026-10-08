@@ -8,10 +8,13 @@ import { fileURLToPath } from 'node:url'
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
 const CREATE = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/create.tsx', import.meta.url))
+const EDIT = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/edit.tsx', import.meta.url))
 const original = fs.readFileSync(CREATE, 'utf8')
+const originalEdit = fs.readFileSync(EDIT, 'utf8')
 
 test.afterEach(() => {
   if (fs.readFileSync(CREATE, 'utf8') !== original) fs.writeFileSync(CREATE, original)
+  if (fs.readFileSync(EDIT, 'utf8') !== originalEdit) fs.writeFileSync(EDIT, originalEdit)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
@@ -63,4 +66,31 @@ test('fields move and go away, rule and default with them', async ({ page }) => 
   await undo(page).click()
   await expect(labels(page)).toHaveText(['Full name', 'Email', 'Segment'])
   await expect.poll(() => fs.readFileSync(CREATE, 'utf8')).toBe(original)
+})
+
+// Slice 5: the edit page is written the way Refine's docs write forms (<Form> + <FormField>),
+// with status and segment in a grid. A new field takes that style and its contract place.
+test('a FormField form gets FormFields, in the contract\'s order, around the developer\'s grid', async ({ page }) => {
+  const formLabels = app(page).locator('[data-slot="form-label"]')
+  await page.goto('/__trivia/')
+  await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible()
+  await page.evaluate(() =>
+    document.querySelector<HTMLIFrameElement>('iframe[title="App canvas"]')!.contentWindow!.location.assign('/customers/edit/00000000-0000-4000-8000-000100000001'),
+  )
+  await expect(formLabels).toHaveText(['Full name', 'Email', 'Status', 'Segment'])
+  await expect(app(page).getByRole('textbox', { name: 'Full name' })).toHaveValue('Ada Lovelace')
+  await page.getByRole('tab', { name: 'Data' }).click()
+  await expect(page.getByRole('list', { name: 'Fields of CustomerEdit' }).getByRole('listitem')).toHaveCount(4)
+
+  await page.getByRole('button', { name: 'Add field' }).click()
+  await page.getByRole('menuitem', { name: /phone/ }).click()
+  // After email (its place in the contract), before the grid: not appended after segment.
+  await expect(formLabels).toHaveText(['Full name', 'Email', 'Phone', 'Status', 'Segment'])
+  const code = fs.readFileSync(EDIT, 'utf8')
+  expect(code).toContain('<FormLabel>Phone</FormLabel>')
+  expect(code).not.toContain('Controller')
+
+  await undo(page).click()
+  await expect(formLabels).toHaveText(['Full name', 'Email', 'Status', 'Segment'])
+  await expect.poll(() => fs.readFileSync(EDIT, 'utf8')).toBe(originalEdit)
 })

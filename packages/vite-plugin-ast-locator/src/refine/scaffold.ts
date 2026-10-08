@@ -6,7 +6,7 @@
 import type { ManifestField, ManifestResource } from '@trivia/contract-sync'
 
 import { type ImportSpec, columnFor, fieldShape, humanize } from './columns.js'
-import { formFieldFor, kebab } from './fields.js'
+import { type FormStyle, formFieldFor, kebab } from './fields.js'
 import { bodyFields } from './form.js'
 import { refineName } from './page.js'
 
@@ -25,6 +25,8 @@ export interface ScaffoldContext {
   pagesImport: string
   /** The project has shadcn's `textarea`. */
   textarea?: boolean
+  /** How forms write fields (`fields.ts` FormStyle); default `field`. */
+  style?: FormStyle
 }
 
 export interface PageFile {
@@ -229,9 +231,11 @@ function formPage(
   imports.add({ name: View, source: `${refineUi}/views/${kind}-view` })
   imports.add({ name: `${View}Header`, source: `${refineUi}/views/${kind}-view` })
   imports.add({ name: 'Button', source: `${context.ui}/button` })
-  imports.add({ name: 'FieldGroup', source: `${context.ui}/field` })
+  const style = context.style ?? 'field'
+  // `FormField` reads the form from `<Form>`'s context; `Field`s sit in a `FieldGroup`.
+  imports.add(style === 'form' ? { name: 'Form', source: `${context.ui}/form` } : { name: 'FieldGroup', source: `${context.ui}/field` })
 
-  const fieldContext = { ui: context.ui, idPrefix: kebab(resource.name), ...(context.textarea ? { textarea: true } : {}) }
+  const fieldContext = { ui: context.ui, idPrefix: kebab(resource.name), style, ...(context.textarea ? { textarea: true } : {}) }
   const pieces = editable.map((f: ManifestField) => {
     const piece = formFieldFor(f, fieldContext)
     for (const spec of piece.imports) imports.add(spec)
@@ -239,6 +243,31 @@ function formPage(
   })
   const key = (n: string) => (/^[A-Za-z_$][\w$]*$/.test(n) ? n : JSON.stringify(n))
   const submit = kind === 'create' ? `Create ${humanize(resource.name).toLowerCase()}` : 'Save changes'
+  const skippedNote = (at: number) => skipped.map((f) => `\n${' '.repeat(at)}{/* ${f.name} (${f.type}): not generated; add its fields by hand */}`).join('')
+  const button = (at: number) =>
+    [`<Button type="submit" disabled={formLoading} className="justify-self-start">`, `  ${submit}`, `</Button>`].map((l) => ' '.repeat(at) + l).join('\n')
+  const formJsx =
+    style === 'form'
+      ? `      <Form {...form}>
+        <form
+          noValidate
+          onSubmit={form.handleSubmit(onFinish)}
+          className="grid max-w-xl gap-6"
+        >
+${pieces.map((p) => indent(p.controller, 10)).join('\n')}${skippedNote(10)}
+${button(10)}
+        </form>
+      </Form>`
+      : `      <form
+        noValidate
+        onSubmit={form.handleSubmit(onFinish)}
+        className="grid max-w-xl gap-6"
+      >
+        <FieldGroup>
+${pieces.map((p) => indent(p.controller, 10)).join('\n')}${skippedNote(10)}
+        </FieldGroup>
+${button(8)}
+      </form>`
   return `${imports.render()}
 
 const ${schema} = z.object({
@@ -266,18 +295,7 @@ ${pieces.map((p) => `      ${key(p.name)}: ${p.defaultValue},`).join('\n')}
   return (
     <${View}>
       <${View}Header />
-      <form
-        noValidate
-        onSubmit={form.handleSubmit(onFinish)}
-        className="grid max-w-xl gap-6"
-      >
-        <FieldGroup>
-${pieces.map((p) => indent(p.controller, 10)).join('\n')}${skipped.map((f) => `\n          {/* ${f.name} (${f.type}): not generated; add its fields by hand */}`).join('')}
-        </FieldGroup>
-        <Button type="submit" disabled={formLoading} className="justify-self-start">
-          ${submit}
-        </Button>
-      </form>
+${formJsx}
     </${View}>
   );
 }

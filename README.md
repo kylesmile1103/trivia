@@ -265,8 +265,10 @@ source of truth and plans page edits from it. The weekly jobs, in order:
 
 1. **Columns.** Add, remove or reorder a list column from the contract. The cell renders by field type
    (badge for enums, formatted dates, Yes/No for booleans) and gets the matching filter.
-2. **Form fields.** Add a contract field to a create/edit form: the zod rule, the default value and the
-   `Controller` field with a widget chosen by type, as one undo entry.
+2. **Form fields.** Add a contract field to a create/edit form: the zod rule with the contract's bounds,
+   the default value and the field control in the form's own style (a `Controller` with shadcn's `Field`,
+   or Refine's `<FormField>`) with a widget chosen by type, as one undo entry. It goes where the contract
+   puts it, inside the developer's own grid or card.
 3. **Contract drift.** After a spec change, list what each page references that the contract removed,
    retyped or newly requires, each with a one-click fix.
 4. **New resource.** Generate the list, create, edit and show pages for a contract resource, register

@@ -241,20 +241,32 @@ Shipped in four parts, each through the full gate:
     can recognize later. Long text gets a `Textarea`, and `format: password` a password input.
     The example's spec gains `notes` (maxLength 1000). The Data tab's add menu shows a field's
     bounds on hover.
-- Known limits of slices 1–4:
+  - 5c, FormField style and placement: done (2026-10-09).
+    - Forms are read with `Controller` or `FormField` controls. New fields are written in the
+      form's style, empty forms and new pages in the project's.
+    - New fields are placed by contract order inside the developer's wrappers, never under a
+      guard. Plans track locators by index-path prefix, and a rebuilt field returns to its slot.
+    - Example: `ui/form.tsx` (Refine's registry version), and `customers/edit.tsx` rewritten in
+      that style with a grid and a schema `.refine`.
+    - Tests: `test/refine-formfield.test.ts` (including the day-1.5 fixture, checked line by
+      line) and an e2e on the edit page.
+- Known limits of slices 1–5:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
   - Pages come from `src/` files that import `@refinedev/react-table` or
     `@refinedev/react-hook-form`.
-  - A form's fields are found through `zodResolver(schema)` and `<Controller name>`; forms
-    built with `register()` or another resolver are not read.
-  - Moving a field moves its Controller only; the schema's and defaults' key order stay as
+  - A form's fields are found through `zodResolver(schema)` and `<Controller name>` or
+    `<FormField name>`; forms built with `register()` or another resolver are not read.
+  - Moving a field moves its control only; the schema's and defaults' key order stay as
     written (order there doesn't show).
+  - A field under a `{cond && …}` guard is read, but Trivia doesn't remove, move or rebuild
+    it: the engine refuses, and says to edit it by hand.
   - Drift reads enum options from a column header's source excerpt (600 bytes). A longer header
     gets no enum verdict rather than a wrong one. A rebuilt column or field takes the generated
     shape: custom cells, widgets or messages in it are replaced.
-  - New pages assume refine-ui and shadcn's `field` in their usual places, Refine's route
+  - New pages assume refine-ui and shadcn's `field` (or `form`, by the project's style) in
+    their usual places, Refine's route
     conventions, and an app that renders `<Refine resources={[…]}>` with `<Route path>`s. A
     list shows the first six scalar fields; object and array body fields are left as comments
     in forms.

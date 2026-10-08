@@ -1,24 +1,37 @@
 // What Trivia knows about a Refine form page (docs/product.md, slice 2): a component calling
 // `useForm` (@refinedev/react-hook-form) with a zod resolver. Its fields are three things that
-// must agree: the zod schema's keys, `defaultValues`, and a react-hook-form `Controller` per
-// field in the JSX. The contract is the request body of the create or update operation.
+// must agree: the zod schema's keys, `defaultValues`, and a control per field in the JSX: a
+// react-hook-form `Controller` (around shadcn's `Field`) or shadcn's `FormField` (slice 5). The
+// contract is the request body of the create or update operation.
 
 import type { ManifestField, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
-import { type FieldInfo, type ScopeValues, type ValueDesc, contractResource, fieldInfo, refineName } from './page.js'
+import type { FormStyle } from './fields.js'
+import { type ChainCall, type FieldInfo, type ScopeValues, type ValueDesc, contractResource, fieldInfo, refineName } from './page.js'
+
+/** The JSX elements a field's control can be. */
+export const CONTROLS = ['Controller', 'FormField'] as const
+export type ControlElement = (typeof CONTROLS)[number]
 
 export interface FormFieldInfo {
   name: string
-  /** The `<FieldLabel>` text inside its Controller. */
+  /** The `<FieldLabel>` or `<FormLabel>` text inside its control. */
   label: string | null
   /** The input it renders (`Input`, `Select`, `Checkbox`…). */
   widget: string | null
-  /** Its Controller's `render` source. */
+  /** Its control's `render` source. */
   renderSource: string | null
-  /** Its Controller element, when the JSX has one. */
-  control: { locator: string; line: number } | null
+  /**
+   * Its control element, when the JSX has one. `direct` is false under a `{cond && …}` guard
+   * or inside another expression: such a control is never an anchor for a new field.
+   */
+  control: { locator: string; line: number; element: ControlElement; direct: boolean; parent: { locator: string; name: string } | null } | null
   /** Its zod rule as written, when the schema has the key. */
   rule: string | null
+  /** The rule's method chain (`z.string`, `max(100)`, `optional()`), when it is a call. */
+  ruleChain: ChainCall[] | null
+  /** The line of its key in the schema object. */
+  ruleLine: number | null
   hasDefault: boolean
   /** The contract field it edits. */
   field: FieldInfo | null
@@ -37,11 +50,15 @@ export interface FormPage {
   schemaPath: string | null
   /** Value path of `useForm({ defaultValues })`. */
   defaultsPath: string | null
-  /** In the order the form shows them (Controllers first, in source order), then schema-only keys. */
+  /** In the order the form shows them (controls first, in source order), then schema-only keys. */
   fields: FormFieldInfo[]
+  /** The style its controls are written in (the more common one), or null when it has none. */
+  style: FormStyle | null
+  /** True when a `<Form>` (react-hook-form's provider, shadcn `form`) encloses the `<form>`. */
+  provider: boolean
   /** Request body fields the form doesn't have yet. */
   available: FieldInfo[]
-  /** The element a new field's Controller goes into when there are none yet. */
+  /** The element a new field's control goes into when there are none yet. */
   container: { locator: string; name: string } | null
 }
 
@@ -50,6 +67,8 @@ export interface OutlineNode {
   locator: string
   name: string
   line: number
+  /** False when rendered from a `{…}` expression, and for roots. */
+  isDirect: boolean
   children: OutlineNode[]
 }
 
@@ -107,9 +126,9 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
       return {
         name: typeof name === 'string' ? name : null,
         render: render || null,
-        label: render.match(/<FieldLabel[^>]*>([^<{]+)<\/FieldLabel>/)?.[1]?.trim() ?? null,
+        label: render.match(/<(?:FieldLabel|FormLabel)\b[^>]*>([^<{]+)<\/(?:FieldLabel|FormLabel)>/)?.[1]?.trim() ?? null,
         widget: render.match(/<(Input|Select|Checkbox|Switch|Textarea|RadioGroup|Combobox|Calendar)\b/)?.[1] ?? null,
-        control: { locator: c.locator, line: c.line },
+        control: { locator: c.locator, line: c.line, element: c.name as ControlElement, direct: c.isDirect, parent: c.parent },
       }
     })
     const schemaKeys = schema?.value.kind === 'object' ? schema.value.properties.filter((p) => p.key !== '...') : []
@@ -127,11 +146,15 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
         renderSource: control?.render ?? null,
         control: control?.control ?? null,
         rule: rule ? sourceOf(rule) : null,
+        ruleChain: rule?.kind === 'call' ? rule.chain : null,
+        ruleLine: schemaKeys.find((p) => p.key === name)?.line ?? null,
         hasDefault: defaultKeys.has(name),
         field: contractField ? fieldInfo(contractField) : null,
       }
     })
     const shown = new Set(fields.map((f) => f.name))
+    const fieldStyle = controllers.filter((c) => c.control.element === 'Controller').length
+    const formStyle = controllers.length - fieldStyle
     out.push({
       kind: 'form',
       file,
@@ -143,6 +166,8 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
       schemaPath: schema?.value.kind === 'object' ? schema.path : null,
       defaultsPath: defaults?.kind === 'object' ? `${call.path}.defaultValues` : null,
       fields,
+      style: controllers.length === 0 ? null : formStyle > fieldStyle ? 'form' : 'field',
+      provider: hasProvider(outline, scope.scope),
       available: (body ?? []).filter((f) => !f.readOnly && !shown.has(f.name)).map(fieldInfo),
       container: containerOf(outline, scope.scope),
     })
@@ -180,17 +205,30 @@ function sourceOf(v: ValueDesc): string {
   }
 }
 
-/** The Controllers a component renders, in source order. */
-function controllersOf(outline: OutlineNode[], component: string): OutlineNode[] {
-  const out: OutlineNode[] = []
-  const walk = (nodes: OutlineNode[]) => {
+/** The field controls (`Controller`, `FormField`) a component renders, in source order, with their parent element. */
+function controllersOf(outline: OutlineNode[], component: string): Array<OutlineNode & { parent: { locator: string; name: string } | null }> {
+  const out: Array<OutlineNode & { parent: { locator: string; name: string } | null }> = []
+  const walk = (nodes: OutlineNode[], parent: OutlineNode | null) => {
     for (const n of nodes) {
-      if (n.name === 'Controller') out.push(n)
-      walk(n.children)
+      if ((CONTROLS as readonly string[]).includes(n.name)) out.push({ ...n, parent: parent ? { locator: parent.locator, name: parent.name } : null })
+      walk(n.children, n)
     }
   }
-  walk(outline.filter((t) => t.locator.split('#').at(-2) === component))
+  walk(
+    outline.filter((t) => t.locator.split('#').at(-2) === component),
+    null,
+  )
   return out
+}
+
+/** True when a `<Form>` provider encloses the component's `<form>`. */
+function hasProvider(outline: OutlineNode[], component: string): boolean {
+  const walk = (nodes: OutlineNode[], inForm: boolean): boolean =>
+    nodes.some((n) => (n.name === 'form' && inForm) || walk(n.children, inForm || n.name === 'Form'))
+  return walk(
+    outline.filter((t) => t.locator.split('#').at(-2) === component),
+    false,
+  )
 }
 
 /** Where a first field goes: the form's `FieldGroup`, else its `<form>`. */

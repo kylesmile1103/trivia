@@ -317,7 +317,14 @@ export interface FormPageField {
   name: string
   label: string | null
   widget: string | null
-  control: { locator: string; line: number } | null
+  /** `element`: a `Controller` (shadcn `Field`) or a `FormField` (shadcn `form`); `direct` is false under a `{cond && …}` guard. */
+  control: {
+    locator: string
+    line: number
+    element: 'Controller' | 'FormField'
+    direct: boolean
+    parent: { locator: string; name: string } | null
+  } | null
   rule: string | null
   hasDefault: boolean
   field: PageField | null
@@ -334,6 +341,9 @@ export interface FormPage {
   schemaPath: string | null
   defaultsPath: string | null
   fields: FormPageField[]
+  /** How its fields are written: shadcn v4 `Field`s or shadcn's `form` (`FormField`); null with none. */
+  style: 'field' | 'form' | null
+  provider: boolean
   available: PageField[]
   container: { locator: string; name: string } | null
 }

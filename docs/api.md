@@ -136,21 +136,30 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `resolver: zodResolver(<schema>)`. Its fields are three things kept in step:
   - the schema's keys;
   - `defaultValues`;
-  - a react-hook-form `<Controller name=…>` per field (shadcn v4's `Field` inside, since v4 has
-    no `form` component).
+  - a control per field: a react-hook-form `<Controller name=…>` around shadcn v4's `Field`, or
+    shadcn's older `<FormField name=…>` (`FormItem`/`FormLabel`/`FormControl`/`FormMessage`), as
+    Refine's docs and registry write it.
+
+  The schema is found through a schema-level `.refine(…)` (`z.object({…}).refine(…)`) too.
 
   `FormPage = { file, component, action, resource, contract, schemaPath, defaultsPath, fields,
-  available, container }`:
+  style, provider, available, container }`:
   - `action` is `refineCoreProps.action`, else the file name (`create.tsx`, `edit.tsx`);
   - `contract` is the request body it sends (`create` for a create form, `update` for an edit);
-  - each field has its `label` (the `<FieldLabel>` text), `widget` (`Input`, `Select`…),
-    `rule` (its zod rule as written), `hasDefault`, its Controller's locator, and the body
-    `field`;
+  - each field has:
+    - its `label` (the `<FieldLabel>` or `<FormLabel>` text) and `widget` (`Input`, `Select`…);
+    - `rule` (its zod rule as written), `ruleChain` (the rule's calls) and `ruleLine`;
+    - `hasDefault`, and the body `field`;
+    - `control`: `{ locator, line, element, direct, parent }`. `element` is `Controller` or
+      `FormField`, and `direct` is false under a `{cond && …}` guard;
+  - `style` is the style its controls use (`field` or `form`; null when it has none), and
+    `provider` says a `<Form>` encloses its `<form>`;
   - `available` lists the body's writable fields the form lacks.
 
   `FieldChange = { action: "add", field, index?, label? } | { action: "remove", field } |
-  { action: "move", field, index } | { action: "rebuild", field }`. The changes in one plan are tracked: each Controller insert,
-  removal or move renumbers its later siblings' locators. An added field is:
+  { action: "move", field, index } | { action: "rebuild", field }`. The changes in one plan are
+  tracked by index-path prefix: each insert, removal or move renumbers the elements after it and
+  everything inside them, so one plan can change fields in different wrappers. An added field is:
   - `setProperty` on the schema with its rule: `z.enum([…])`, `z.number()` (`.int()` for
     integers), `z.boolean()`, `z.iso.date()`, `z.email()`, `z.string().min(1, "Required.")`, …,
     then the bounds the contract declares (`constraints`):
@@ -160,13 +169,22 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     - then `.nullable()` and `.optional()` from the contract;
   - `setProperty` on `defaultValues`: the spec's default, else `""`, the first enum value, `0` or
     `false` for a required field, and `undefined` for an optional one;
-  - an `insert` of its Controller, after the last one or before the `index`-th. The widget is a
+  - an `insert` of its control, in its form's style. An empty form takes the style most of the
+    project's forms use; with none, `ui/field.tsx` means `Field`, else `ui/form.tsx` means
+    `FormField`. `FormField` is used only when a `<Form>` provider is there.
+    - With an `index`, it goes before the `index`-th field, or after the last.
+    - Without one, it goes after the nearest field before it in the contract's order, inside
+      that field's wrapper. Failing that, before the nearest one after it, else after the last.
+      A guarded field is never the anchor.
+    - A rebuilt field goes back into the slot it came from.
+
+    The widget is a
     `Select` for an enum, a number input, a date input, a `Checkbox` for a boolean, a
     `Textarea` for text with `maxLength` over 255 (when the project has `ui/textarea.tsx`), a
     password input for `format: password`, else a text input. Its empty value is absent when the
     field is optional.
 
-  A removal drops all three (and imports only it used). A move moves the Controller.
+  A removal drops all three (and imports only it used). A move moves the control.
 - `refine/drift` is contract drift (`docs/product.md`, slice 3): where the Refine pages no longer
   match the manifest. `spec` is the `/manifest` drift: when it says `changed`, sync first.
   `PageDrift = { file, component, kind, issues }`, each issue `{ code, name, message, line, fix }`:

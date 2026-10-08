@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { HttpError } from "@refinedev/core";
 import { useForm } from "@refinedev/react-hook-form";
-import { Controller } from "react-hook-form";
 import * as z from "zod";
 
 import type { CustomerDto } from "@/api/generated/types.gen";
@@ -11,11 +10,13 @@ import {
 } from "@/components/refine-ui/views/edit-view";
 import { Button } from "@/components/ui/button";
 import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -25,12 +26,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const customerSchema = z.object({
-  fullName: z.string().min(2, "Enter at least 2 characters."),
-  email: z.email("Enter an email address."),
-  status: z.enum(["pending", "active", "suspended"]),
-  segment: z.enum(["retail", "private", "business"]),
-});
+// Status and segment are checked together: compliance handles private-banking suspensions.
+const customerSchema = z
+  .object({
+    fullName: z.string().min(2, "Enter at least 2 characters."),
+    email: z.email("Enter an email address."),
+    status: z.enum(["pending", "active", "suspended"]),
+    segment: z.enum(["retail", "private", "business"]),
+  })
+  .refine((values) => !(values.status === "suspended" && values.segment === "private"), {
+    message: "Private banking customers are suspended by compliance, not here.",
+    path: ["status"],
+  });
 
 type CustomerFormValues = z.infer<typeof customerSchema>;
 
@@ -56,89 +63,90 @@ export function CustomerEdit() {
   return (
     <EditView>
       <EditViewHeader />
-      <form
-        noValidate
-        onSubmit={form.handleSubmit(onFinish)}
-        className="grid max-w-xl gap-6"
-        aria-busy={query?.isLoading}
-      >
-        <FieldGroup>
-          <Controller
+      <Form {...form}>
+        <form
+          noValidate
+          onSubmit={form.handleSubmit(onFinish)}
+          className="grid max-w-xl gap-6"
+          aria-busy={query?.isLoading}
+        >
+          <FormField
+            control={form.control}
             name="fullName"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="customer-full-name">Full name</FieldLabel>
-                <Input
-                  {...field}
-                  id="customer-full-name"
-                  aria-invalid={fieldState.invalid}
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Full name</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )}
           />
-          <Controller
+          <FormField
+            control={form.control}
             name="email"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="customer-email">Email</FieldLabel>
-                <Input
-                  {...field}
-                  id="customer-email"
-                  type="email"
-                  aria-invalid={fieldState.invalid}
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input {...field} type="email" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )}
           />
-          <Controller
-            name="status"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="customer-status">Status</FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="customer-status" aria-invalid={fieldState.invalid}>
-                    <SelectValue placeholder="Choose…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
-                  </SelectContent>
-                </Select>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )}
-          />
-          <Controller
-            name="segment"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="customer-segment">Segment</FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="customer-segment" aria-invalid={fieldState.invalid}>
-                    <SelectValue placeholder="Choose…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="private">Private</SelectItem>
-                    <SelectItem value="business">Business</SelectItem>
-                  </SelectContent>
-                </Select>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )}
-          />
-        </FieldGroup>
-        <Button type="submit" disabled={formLoading} className="justify-self-start">
-          Save changes
-        </Button>
-      </form>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose…" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="segment"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Segment</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose…" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="retail">Retail</SelectItem>
+                      <SelectItem value="private">Private</SelectItem>
+                      <SelectItem value="business">Business</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <Button type="submit" disabled={formLoading} className="justify-self-start">
+            Save changes
+          </Button>
+        </form>
+      </Form>
     </EditView>
   );
 }
