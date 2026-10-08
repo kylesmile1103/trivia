@@ -112,3 +112,31 @@ fn stale_locator_fails_loudly() {
     let err = apply_op(SRC, FILE, &Op::Remove { target: locator_of(SRC, "Switch"), expected_name: Some("Button".into()) }).unwrap_err();
     assert_eq!(err.code(), "stale_locator");
 }
+
+/// The brief's preservation test (the user's Track 1 draft): a Prettier-formatted component with
+/// JSDoc, an inline `{/* TODO */}` comment, multi-line props and deliberate blank lines. Adding
+/// a Button to `<CardContent>` touches exactly two places: the new import line and the new
+/// element's line. Every other byte is the input's.
+#[test]
+fn customer_card_keeps_every_byte_but_the_import_and_the_new_button() {
+    const CARD: &str = "src/hand/CustomerCard.tsx";
+    let src = include_str!("fixtures/hand/CustomerCard.tsx");
+    let card_content = locator_of(src, "CardContent").replacen(FILE, CARD, 1);
+    let out = apply_op(src, CARD, &Op::Insert {
+        target: card_content,
+        expected_name: Some("CardContent".into()),
+        placement: Placement::LastChild,
+        snippet: r#"<Button variant="outline">Click me</Button>"#.into(),
+        imports: vec![ImportSpec { name: "Button".into(), source: "@/components/ui/button".into(), default: false }],
+    })
+    .unwrap();
+    let import = "import { Button } from \"@/components/ui/button\"\n";
+    let button = "        <Button variant=\"outline\">Click me</Button>\n";
+    // The import goes after the last import (here a multi-line one), the button after <Badge>'s
+    // closing tag, each on its own line: nothing else moves.
+    let expected = src
+        .replacen("} from \"@/components/ui/card\"\n", &format!("}} from \"@/components/ui/card\"\n{import}"), 1)
+        .replacen("        </Badge>\n", &format!("        </Badge>\n{button}"), 1);
+    assert_eq!(out.code, expected);
+    assert_eq!(out.code.len(), src.len() + import.len() + button.len());
+}
