@@ -14,11 +14,10 @@ Briefs and contracts:
 <!-- STATUS:BEGIN -->
 ## 1. Status (2026-10-08, end of session 2)
 
-Session 2 is 8 commits on `main` after `3d5253b`, **not pushed**: `git log 3d5253b..HEAD`.
-Session 1's `main` is on `origin` (git@github.com:kylesmile1103/trivia.git). Every commit
-email is `kylesmile1103@gmail.com`; `.git/hooks/pre-commit` and `pre-push` refuse the work
-email. The local `swarm/*` and `worktree-wf_*` branches are leftovers from session 1 with
-pre-rewrite SHAs: don't merge them.
+`main` is pushed to `origin` (github.com/kylesmile1103/trivia); session 2 is
+`git log 3d5253b..93de3cf`. Every commit email is `kylesmile1103@gmail.com`;
+`.git/hooks/pre-commit` and `pre-push` refuse the work email. Session 1's leftover `swarm/*`
+and `worktree-wf_*` branches were deleted. Each tip's tree was in `origin/main`'s history.
 
 **Session 2:**
 - **Round-2 residuals fixed**, each with a regression test that failed first:
