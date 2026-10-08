@@ -12,6 +12,8 @@ import { Layout } from "@/components/refine-ui/layout/layout";
 import { Toaster } from "@/components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "@/components/refine-ui/notification/use-notification-provider";
 import { AccountList } from "@/pages/accounts/list";
+import { CustomerCreate } from "@/pages/customers/create";
+import { CustomerEdit } from "@/pages/customers/edit";
 import { CustomerList } from "@/pages/customers/list";
 import { TransactionList } from "@/pages/transactions/list";
 import { dataProvider } from "@/providers/data-provider";
@@ -27,6 +29,8 @@ export default function App() {
           {
             name: "customers",
             list: "/customers",
+            create: "/customers/create",
+            edit: "/customers/edit/:id",
             meta: { icon: <UsersIcon /> },
           },
           {
@@ -57,6 +61,8 @@ export default function App() {
           >
             <Route index element={<NavigateToResource resource="customers" />} />
             <Route path="/customers" element={<CustomerList />} />
+            <Route path="/customers/create" element={<CustomerCreate />} />
+            <Route path="/customers/edit/:id" element={<CustomerEdit />} />
             <Route path="/accounts" element={<AccountList />} />
             <Route path="/transactions" element={<TransactionList />} />
             <Route path="*" element={<ErrorComponent />} />
