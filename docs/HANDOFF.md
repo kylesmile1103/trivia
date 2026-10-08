@@ -86,7 +86,10 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   - a Columns panel in the Data tab;
   - `examples/refine-admin` with its own e2e project.
 
-  The user was away for the slice-1 design calls; they are marked ⚑ in `product.md` for
+  **Slice 2 (form fields) is done too:** a create/edit form's zod rule, default and
+  Controller are kept in step, from the request body.
+
+  The user was away for the slice-1/2 design calls; they are marked ⚑ in `product.md` for
   review.
 - **Desktop shell** (`crates/trivia_shell`, Tauri 2.11.6, its own Cargo workspace): a window
   on the designer, with a waiting page until it answers. Verified on macOS by an agent's
@@ -95,11 +98,11 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   designer now rasterizes the SVG itself (`features/canvas/capture.ts`).
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 262 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
-- Vitest: plugin 113, designer 444 (including 6 architecture rules), contract-sync 79.
+- `cargo test --workspace` 273 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
+- Vitest: plugin 129, designer 444 (including 6 architecture rules), contract-sync 79.
 - napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 46/46, twice in a row.
+- Playwright 50/50 (playground and refine projects), twice in a row.
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -234,13 +237,11 @@ writes `useQuery` hooks against it.
 ## 7. Backlog / next steps (in priority order)
 
 The order is the product's (`docs/product.md`, Slices):
-1. **Slice 2, form fields:** create and edit pages in `refine-admin`, then add, remove and
-   reorder a contract field (zod rule + default value + `<Field>`, one undo entry).
-2. **Slice 3, contract drift:** after a spec change, each page's broken references, with
+1. **Slice 3, contract drift:** after a spec change, each page's broken references, with
    fixes.
-3. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
+2. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
    routes.
-4. Have the user try it on one of their real internal tools.
+3. Have the user try it on one of their real internal tools.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).

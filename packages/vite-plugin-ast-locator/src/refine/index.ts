@@ -10,9 +10,43 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { ApiError } from '../engine.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
+import { formFieldFor, kebab } from './fields.js'
+import { type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { type ListPage, type ScopeValues, contractResource, listPages } from './page.js'
 
+export type { FormFieldInfo, FormPage } from './form.js'
 export type { ColumnInfo, FieldInfo, ListPage } from './page.js'
+
+/** A Refine page Trivia can edit: a list (columns) or a form (fields). */
+export type Page = ListPage | FormPage
+
+/** A change to a form page's fields. */
+export type FieldChange =
+  | { action: 'add'; field: string; index?: number; label?: string }
+  | { action: 'remove'; field: string }
+  | { action: 'move'; field: string; index: number }
+
+/** `changes` for a form from a request body, checked. */
+export function parseFieldChanges(value: unknown): FieldChange[] {
+  const bad = () =>
+    new ApiError(
+      'invalid_op',
+      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", field } or { action: "move", field, index }',
+    )
+  if (!Array.isArray(value) || value.length === 0) throw bad()
+  return value.map((c: unknown) => {
+    if (typeof c !== 'object' || c === null) throw bad()
+    const { action, field, index, label } = c as Record<string, unknown>
+    const isIndex = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0
+    if (typeof field !== 'string' || field === '') throw bad()
+    if (action === 'add' && (index === undefined || isIndex(index)) && (label === undefined || typeof label === 'string')) {
+      return { action, field, ...(index !== undefined ? { index: index as number } : {}), ...(label !== undefined ? { label: label as string } : {}) }
+    }
+    if (action === 'remove') return { action, field }
+    if (action === 'move' && isIndex(index)) return { action, field, index: index as number }
+    throw bad()
+  })
+}
 
 /** A change to a list page's columns. */
 export type ColumnChange =
@@ -54,6 +88,10 @@ export interface RefineHost {
   importBase: string
   describeValues(file: string): unknown
   manifest(): Promise<{ manifest: unknown }>
+  /** The JSX trees of a file (engine outline). */
+  outline(file: string): unknown[]
+  /** An element's details (engine inspect): its attributes are what the adapter reads. */
+  inspect(locator: string): unknown
 }
 
 /** Most files a page scan reads. */
@@ -67,19 +105,19 @@ export class RefineAdapter {
     this.#host = host
   }
 
-  /** The list pages of one file. */
-  async page(file: string): Promise<ListPage[]> {
+  /** The pages of one file: lists and forms. */
+  async page(file: string): Promise<Page[]> {
     if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/customers/list.tsx)')
-    return listPages(file, this.#host.describeValues(file) as ScopeValues[], await this.#manifest())
+    return this.#pagesOf(file, await this.#manifest())
   }
 
-  /** Every list page under src/ (files that import @refinedev/react-table). */
-  async pages(): Promise<ListPage[]> {
+  /** Every Refine page under src/ (files that import @refinedev/react-table or react-hook-form). */
+  async pages(): Promise<Page[]> {
     const manifest = await this.#manifest()
-    const out: ListPage[] = []
+    const out: Page[] = []
     for (const file of await this.#scan()) {
       try {
-        out.push(...listPages(file, this.#host.describeValues(file) as ScopeValues[], manifest))
+        out.push(...this.#pagesOf(file, manifest))
       } catch {
         // A file that doesn't parse right now (mid-edit) is skipped, not fatal for the list.
       }
@@ -87,10 +125,140 @@ export class RefineAdapter {
     return out
   }
 
+  #pagesOf(file: string, manifest: TriviaManifest | null): Page[] {
+    const scopes = this.#host.describeValues(file) as ScopeValues[]
+    const forms = formPages(file, scopes, manifest, {
+      outline: (f) => this.#host.outline(f) as OutlineNode[],
+      attributes: (locator) => ((this.#host.inspect(locator) as { attributes?: unknown[] }).attributes ?? []) as Array<{ name: string; source: string; value: unknown }>,
+    })
+    return [...listPages(file, scopes, manifest), ...forms].sort((a, b) => a.line - b.line)
+  }
+
+  /** The ops for changes to the fields of the form page in `file`. */
+  async planFields(file: string, component: string | undefined, changes: FieldChange[]): Promise<Plan> {
+    if (changes.length === 0) throw new ApiError('invalid_op', 'changes must not be empty')
+    const forms = (await this.page(file)).filter((p): p is FormPage => p.kind === 'form')
+    const page = component ? forms.find((p) => p.component === component) : forms[0]
+    if (!page) {
+      throw new ApiError(
+        'node_not_found',
+        component ? `${file} has no form in \`${component}\`` : `${file} has no Refine form (a component calling useForm with a zodResolver)`,
+      )
+    }
+    if (!component && forms.length > 1) {
+      throw new ApiError('invalid_op', `${file} has ${forms.length} forms (${forms.map((p) => p.component).join(', ')}); pass component`)
+    }
+    const manifest = await this.#manifest()
+    const resource = contractResource(manifest, page.contract?.resource ?? page.resource?.name ?? null, null)
+    const body = resource && page.contract ? bodyFields(resource, page.contract.operation) : null
+    const context = { ui: this.#host.importBase, idPrefix: kebab(resource?.name ?? page.resource?.name ?? 'field') }
+
+    // The form's Controllers as the changes so far leave them. A Controller's locator is its
+    // position among its parent's children, so each insert, removal or move renumbers the ones
+    // after it: tracked here so a later change in the same plan names the right element.
+    type Control = { name: string; locator: string }
+    let controls: Control[] = page.fields.flatMap((f) => (f.control ? [{ name: f.name, locator: f.control.locator }] : []))
+    const parent = (loc: string) => loc.slice(0, loc.lastIndexOf('.'))
+    const slot = (loc: string) => Number(loc.slice(loc.lastIndexOf('.') + 1))
+    const at = (loc: string, i: number) => `${parent(loc)}.${i}`
+    const siblings = controls.every((c) => parent(c.locator) === parent(controls[0]!.locator))
+    if (changes.length > 1 && !siblings) {
+      throw new ApiError('unsupported', `${page.component}'s Controllers are not all in one parent; make one change at a time`)
+    }
+    const shift = (from: number, by: number) => {
+      controls = controls.map((c) => (slot(c.locator) >= from ? { ...c, locator: at(c.locator, slot(c.locator) + by) } : c))
+    }
+    const schema = new Set(page.fields.filter((f) => f.rule !== null).map((f) => f.name))
+    const defaults = new Set(page.fields.filter((f) => f.hasDefault).map((f) => f.name))
+    const ops: Plan['ops'] = []
+    const labels: string[] = []
+    for (const change of changes) {
+      switch (change.action) {
+        case 'add': {
+          const field = body?.find((f) => f.name === change.field)
+          if (!field) {
+            throw new ApiError(
+              'invalid_op',
+              body
+                ? `the ${page.contract?.operation} body of ${resource?.name} has no field \`${change.field}\` (it has ${body.map((f) => f.name).join(', ')})`
+                : `${page.component} sends no contract request body, so there are no fields to add (run contract-sync, or set refineCoreProps.resource and action)`,
+            )
+          }
+          if (schema.has(field.name) || controls.some((c) => c.name === field.name)) {
+            throw new ApiError('conflict', `${page.component} already has a \`${field.name}\` field`)
+          }
+          const label = change.label ?? humanize(field.name)
+          const snippet = formFieldFor(field, context, label)
+          if (page.schemaPath) ops.push({ op: 'setProperty', path: page.schemaPath, prop: field.name, value: snippet.rule })
+          if (page.defaultsPath) ops.push({ op: 'setProperty', path: page.defaultsPath, prop: field.name, value: snippet.defaultValue })
+          schema.add(field.name)
+          defaults.add(field.name)
+          const index = change.index ?? controls.length
+          if (index > controls.length) throw new ApiError('invalid_op', `index ${index} is out of range: ${page.component} has ${controls.length} fields`)
+          if (controls.length === 0) {
+            if (!page.container) throw new ApiError('unsupported', `${page.component} has no <FieldGroup> or <form> to put a field in`)
+            ops.push({ op: 'insertChild', parent: page.container.locator, expectedName: page.container.name, index: 0, snippet: snippet.controller, imports: snippet.imports })
+            controls = [{ name: field.name, locator: `${page.container.locator}.0` }]
+          } else if (index < controls.length) {
+            const before = controls[index]!
+            ops.push({ op: 'insert', target: before.locator, expectedName: 'Controller', placement: 'before', snippet: snippet.controller, imports: snippet.imports })
+            shift(slot(before.locator), 1)
+            controls.splice(index, 0, { name: field.name, locator: at(before.locator, slot(before.locator) - 1) })
+          } else {
+            const last = controls[controls.length - 1]!
+            ops.push({ op: 'insert', target: last.locator, expectedName: 'Controller', placement: 'after', snippet: snippet.controller, imports: snippet.imports })
+            shift(slot(last.locator) + 1, 1)
+            controls.push({ name: field.name, locator: at(last.locator, slot(last.locator) + 1) })
+          }
+          labels.push(`Add field ${label}`)
+          break
+        }
+        case 'remove': {
+          const control = controls.find((c) => c.name === change.field)
+          if (!control && !schema.has(change.field) && !defaults.has(change.field)) {
+            throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` field (it has ${page.fields.map((f) => f.name).join(', ')})`)
+          }
+          if (control) {
+            ops.push({ op: 'remove', target: control.locator, expectedName: 'Controller' })
+            controls = controls.filter((c) => c !== control)
+            shift(slot(control.locator) + 1, -1)
+          }
+          if (defaults.delete(change.field) && page.defaultsPath) ops.push({ op: 'removeProperty', path: page.defaultsPath, prop: change.field })
+          if (schema.delete(change.field) && page.schemaPath) ops.push({ op: 'removeProperty', path: page.schemaPath, prop: change.field })
+          labels.push(`Remove field ${humanize(change.field)}`)
+          break
+        }
+        case 'move': {
+          const from = controls.findIndex((c) => c.name === change.field)
+          if (from < 0) throw new ApiError('node_not_found', `${page.component} renders no \`${change.field}\` field to move`)
+          if (change.index >= controls.length) throw new ApiError('invalid_op', `index ${change.index} is out of range: ${page.component} has ${controls.length} fields`)
+          if (change.index === from) break
+          const moved = controls[from]!
+          const target = controls[change.index]!
+          const placement = change.index < from ? 'before' : 'after'
+          ops.push({ op: 'move', source: moved.locator, expectedName: 'Controller', target: target.locator, expectedTargetName: 'Controller', placement })
+          // Out of its slot, then into the target's (before) or the one after it (after).
+          const out = slot(moved.locator)
+          controls.splice(from, 1)
+          shift(out + 1, -1)
+          const t = slot(controls[placement === 'before' ? change.index : change.index - 1]!.locator)
+          const into = placement === 'before' ? t : t + 1
+          shift(into, 1)
+          controls.splice(change.index, 0, { ...moved, locator: at(moved.locator, into) })
+          labels.push(`Move field ${humanize(change.field)}`)
+          break
+        }
+        default:
+          throw new ApiError('invalid_op', `unknown field change ${JSON.stringify(change)} (add, remove or move)`)
+      }
+    }
+    return { ops, label: labels.join('; ') }
+  }
+
   /** The ops for one column change on the list page in `file` (its `component`, when it has several). */
   async planColumns(file: string, component: string | undefined, changes: ColumnChange[]): Promise<Plan> {
     if (changes.length === 0) throw new ApiError('invalid_op', 'changes must not be empty')
-    const pages = await this.page(file)
+    const pages = (await this.page(file)).filter((p): p is ListPage => p.kind === 'list')
     const page = component ? pages.find((p) => p.component === component) : pages[0]
     if (!page) {
       throw new ApiError(
@@ -107,11 +275,19 @@ export class RefineAdapter {
     const labels: string[] = []
     // The columns as the changes so far leave them, so a later change can name a column an
     // earlier one added (add `kycStatus`, then move it).
-    const columns: Array<{ keys: string[]; path: string; label: string }> = page.columns.map((c) => ({
+    const columns: Array<{ keys: string[]; path: string; label: string; data: boolean }> = page.columns.map((c) => ({
       keys: [c.key, c.accessorKey].filter((k): k is string => k !== null),
       path: c.path,
       label: c.label ?? c.key ?? 'column',
+      data: c.field !== null,
     }))
+    // Without an index, a new column goes after the last one showing a field: before trailing
+    // columns such as row actions.
+    const after = () => {
+      let i = columns.length
+      while (i > 0 && !columns[i - 1]!.data) i -= 1
+      return i === 0 ? columns.length : i
+    }
     const find = (key: string) => {
       const column = columns.find((c) => c.keys.includes(key))
       if (!column) {
@@ -137,16 +313,10 @@ export class RefineAdapter {
           if (shown(field.name)) throw new ApiError('conflict', `${page.component} already shows \`${field.name}\``)
           const label = change.label ?? humanize(field.name)
           const column = columnFor(field, this.#context(), label)
-          const at = change.index ?? columns.length
+          const at = change.index ?? after()
           if (at > columns.length) throw new ApiError('invalid_op', `index ${at} is out of range: ${page.component} has ${columns.length} columns`)
-          columns.splice(at, 0, { keys: [field.name], path: `${page.columnsPath}[id=${field.name}]`, label })
-          ops.push({
-            op: 'insertElement',
-            path: page.columnsPath,
-            ...(change.index !== undefined ? { index: change.index } : {}),
-            value: column.value,
-            imports: column.imports,
-          })
+          columns.splice(at, 0, { keys: [field.name], path: `${page.columnsPath}[id=${field.name}]`, label, data: true })
+          ops.push({ op: 'insertElement', path: page.columnsPath, index: at, value: column.value, imports: column.imports })
           labels.push(`Add column ${label}`)
           break
         }
@@ -213,7 +383,7 @@ export class RefineAdapter {
         } else if (/\.(tsx|jsx)$/.test(entry.name)) {
           read += 1
           const text = await fsp.readFile(path.join(root, rel), 'utf8').catch(() => '')
-          if (/from\s+["']@refinedev\/react-table["']/.test(text) && text.includes('useTable')) found.push(rel)
+          if (/from\s+["']@refinedev\/react-(table|hook-form)["']/.test(text)) found.push(rel)
         }
       }
     }

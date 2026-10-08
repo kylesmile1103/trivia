@@ -77,6 +77,8 @@ export class EngineService {
       importBase: options.importBase,
       describeValues: (file) => this.describeValues(file),
       manifest: () => this.manifest(),
+      outline: (file) => this.outline(file),
+      inspect: (locator) => this.inspect(locator),
     })
   }
 

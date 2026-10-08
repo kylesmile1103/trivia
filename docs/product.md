@@ -130,11 +130,25 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
   - Example: `examples/refine-admin`.
   - Tests: engine fixtures with round trips, plugin tests (including `tsc` on a page with a
     column of every field type), and `e2e/refine/columns.spec.ts`.
-- Known limits of slice 1:
+- **Slice 2, form fields: done (2026-10-09).**
+  - Plugin: `src/refine/form.ts` (form pages) and `fields.ts` (rule, default, Controller), with
+    `/refine/fields/plan` and MCP `trivia_edit_fields`.
+  - Designer: the Data tab's page card shows a form's fields.
+  - Example: customer create and edit pages (`Field` + `Controller`, since shadcn v4 has no
+    `form`) and a row-actions column.
+  - Tests: plugin tests, including `tsc` with every body field added to both forms, and
+    `e2e/refine/fields.spec.ts`.
+  - New columns now go after the last data column, before row actions.
+- Known limits of slices 1–2:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
-  - Pages come from `src/` files that import `@refinedev/react-table`.
+  - Pages come from `src/` files that import `@refinedev/react-table` or
+    `@refinedev/react-hook-form`.
+  - A form's fields are found through `zodResolver(schema)` and `<Controller name>`; forms
+    built with `register()` or another resolver are not read.
+  - Moving a field moves its Controller only; the schema's and defaults' key order stay as
+    written (order there doesn't show).
 
 ## Decisions to review (⚑)
 

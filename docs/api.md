@@ -59,9 +59,10 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/selection` | — | `SelectionState` |
 | POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
 | POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
-| GET | `/@trivia/api/refine/pages` | — | `ListPage[]` (every Refine list page under `src/`) |
-| GET | `/@trivia/api/refine/page` | `?file=` | `ListPage[]` (that file's) |
+| GET | `/@trivia/api/refine/pages` | — | `(ListPage \| FormPage)[]` (every Refine page under `src/`) |
+| GET | `/@trivia/api/refine/page` | `?file=` | `(ListPage \| FormPage)[]` (that file's) |
 | POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
+| POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label }` |
 | GET | `/@trivia/api/screenshot/next` | — | `{ id: string \| null }` (long poll) |
 | POST | `/@trivia/api/screenshot` | `{ id, png, width, height }` or `{ id, error }` | `null` |
 
@@ -128,6 +129,35 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   Refused: an unknown field (400 `invalid_op`, listing the resource's fields), a field already
   shown (409 `conflict`), an unknown column (404 `node_not_found`, listing the columns), and a
   file with no list page (404).
+- A **form page** is a component calling `useForm` (`@refinedev/react-hook-form`) with
+  `resolver: zodResolver(<schema>)`. Its fields are three things kept in step:
+  - the schema's keys;
+  - `defaultValues`;
+  - a react-hook-form `<Controller name=…>` per field (shadcn v4's `Field` inside, since v4 has
+    no `form` component).
+
+  `FormPage = { file, component, action, resource, contract, schemaPath, defaultsPath, fields,
+  available, container }`:
+  - `action` is `refineCoreProps.action`, else the file name (`create.tsx`, `edit.tsx`);
+  - `contract` is the request body it sends (`create` for a create form, `update` for an edit);
+  - each field has its `label` (the `<FieldLabel>` text), `widget` (`Input`, `Select`…),
+    `rule` (its zod rule as written), `hasDefault`, its Controller's locator, and the body
+    `field`;
+  - `available` lists the body's writable fields the form lacks.
+
+  `FieldChange = { action: "add", field, index?, label? } | { action: "remove", field } |
+  { action: "move", field, index }`. The changes in one plan are tracked: each Controller insert,
+  removal or move renumbers its later siblings' locators. An added field is:
+  - `setProperty` on the schema with its rule: `z.enum([…])`, `z.number()` (`.int()` for
+    integers), `z.boolean()`, `z.iso.date()`, `z.email()`, `z.string().min(1, "Required.")`, …,
+    plus `.nullable()` and `.optional()` from the contract;
+  - `setProperty` on `defaultValues`: the spec's default, else `""`, the first enum value, `0` or
+    `false` for a required field, and `undefined` for an optional one;
+  - an `insert` of its Controller, after the last one or before the `index`-th. The widget is a
+    `Select` for an enum, a number input, a date input, a `Checkbox` for a boolean, else a text
+    input whose empty value is absent when the field is optional.
+
+  A removal drops all three (and imports only it used). A move moves the Controller.
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
   `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with

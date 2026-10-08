@@ -119,7 +119,7 @@ export function listPages(file: string, scopes: ScopeValues[], manifest: TriviaM
   return out
 }
 
-function fieldInfo(f: ManifestField): FieldInfo {
+export function fieldInfo(f: ManifestField): FieldInfo {
   return {
     name: f.name,
     type: f.type,
@@ -188,7 +188,7 @@ function columnInfo(el: ValueDesc, index: number, columnsPath: string, fields: F
   const header = prop(el, 'header')
   const source = header && 'source' in header ? header.source : ''
   const label =
-    header?.kind === 'string' ? header.value : (source.match(/<span[^>]*>([^<{]+)<\/span>/)?.[1]?.trim() ?? null)
+    (header?.kind === 'string' ? header.value.trim() : source.match(/<span[^>]*>([^<{]+)<\/span>/)?.[1]?.trim()) || null
   const key = id ?? accessorKey
   const fieldName = accessorKey ?? id
   const sorting = prop(el, 'enableSorting')

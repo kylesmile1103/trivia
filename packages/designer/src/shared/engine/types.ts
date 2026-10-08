@@ -296,11 +296,45 @@ export interface ListPage {
   available: PageField[]
 }
 
+export interface FormPageField {
+  name: string
+  label: string | null
+  widget: string | null
+  control: { locator: string; line: number } | null
+  rule: string | null
+  hasDefault: boolean
+  field: PageField | null
+}
+
+export interface FormPage {
+  kind: 'form'
+  file: string
+  component: string
+  line: number
+  action: 'create' | 'edit' | null
+  resource: { name: string; from: 'refineCoreProps' | 'typeArgument' | 'folder' } | null
+  contract: { resource: string; operation: 'create' | 'update' } | null
+  schemaPath: string | null
+  defaultsPath: string | null
+  fields: FormPageField[]
+  available: PageField[]
+  container: { locator: string; name: string } | null
+}
+
+/** A Refine page Trivia can edit. */
+export type RefinePage = ListPage | FormPage
+
+export type FieldChange =
+  | { action: 'add'; field: string; index?: number; label?: string }
+  | { action: 'remove'; field: string }
+  | { action: 'move'; field: string; index: number }
+
 export type ColumnChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; column: string }
   | { action: 'move'; column: string; index: number }
 
+/** Ops for a page change (columns or fields), with its undo label. */
 export interface ColumnPlan {
   ops: Op[]
   label: string

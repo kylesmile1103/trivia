@@ -53,7 +53,7 @@ describe('list pages', () => {
   it('finds every page that calls useTable, and the contract resource it shows', async () => {
     const reply = await get(server.socket, '/refine/pages')
     const pages = reply.body.data as Array<Record<string, any>>
-    expect(pages.map((p) => [p.file, p.component, p.resource, p.contract?.resource])).toEqual([
+    expect(pages.filter((p) => p.kind === 'list').map((p) => [p.file, p.component, p.resource, p.contract?.resource])).toEqual([
       ['src/pages/accounts/list.tsx', 'AccountList', { name: 'accounts', from: 'refineCoreProps' }, 'Account'],
       ['src/pages/customers/list.tsx', 'CustomerList', { name: 'customers', from: 'refineCoreProps' }, 'Customer'],
       // No resource prop: the row type names the contract resource.
@@ -70,6 +70,8 @@ describe('list pages', () => {
       ['email', 'Email', null, false, false, 'text'],
       ['status', 'Status', 'DataTableFilterCombobox', true, true, 'enum'],
       ['createdAt', 'Customer since', null, true, true, 'dateTime'],
+      // Row actions: no label, no field.
+      ['actions', null, null, false, true, undefined],
     ])
     expect(p.columns[2].path).toBe(`${CUSTOMERS}#CustomerList#columns[id=status]`)
     expect(p.available.map((f: any) => f.name)).toEqual(['id', 'phone', 'kycStatus', 'segment', 'creditLimit', 'birthDate'])
@@ -91,13 +93,14 @@ describe('column plans', () => {
     expect(added).toContain('{ label: "Not started", value: "not_started" },')
     expect(added).toContain('<Badge variant="secondary">{getValue<string>()}</Badge>')
     expect(added).toMatch(/^      \{\n        id: "kycStatus",\n        accessorKey: "kycStatus",\n        header: \(\{ column \}\) => \(\n/)
-    expect((await page()).columns.map((c: any) => c.key)).toEqual(['fullName', 'email', 'status', 'kycStatus', 'createdAt'])
+    expect((await page()).columns.map((c: any) => c.key)).toEqual(['fullName', 'email', 'status', 'kycStatus', 'createdAt', 'actions'])
   })
 
   it('writes columns that type-check, for every kind of field', async () => {
     await apply(['id', 'phone', 'segment', 'creditLimit', 'birthDate', 'kycStatus'].map((field) => ({ action: 'add', field })))
     const added = (await page()).columns.map((c: any) => c.key)
-    expect(added).toEqual(['fullName', 'email', 'status', 'createdAt', 'id', 'phone', 'segment', 'creditLimit', 'birthDate', 'kycStatus'])
+    // Without an index, each goes after the last data column, before the row actions.
+    expect(added).toEqual(['fullName', 'email', 'status', 'createdAt', 'id', 'phone', 'segment', 'creditLimit', 'birthDate', 'kycStatus', 'actions'])
     const code = read()
     expect(code).toContain('<DataTableFilterDropdownNumeric')
     expect(code).toContain('<DataTableFilterDropdownDateRangePicker column={column} />')
@@ -112,9 +115,9 @@ describe('column plans', () => {
 
   it('moves and removes columns by key, and undo restores the bytes', async () => {
     await apply([{ action: 'move', column: 'status', index: 0 }])
-    expect((await page()).columns.map((c: any) => c.key)).toEqual(['status', 'fullName', 'email', 'createdAt'])
+    expect((await page()).columns.map((c: any) => c.key)).toEqual(['status', 'fullName', 'email', 'createdAt', 'actions'])
     await apply([{ action: 'remove', column: 'email' }])
-    expect((await page()).columns.map((c: any) => c.key)).toEqual(['status', 'fullName', 'createdAt'])
+    expect((await page()).columns.map((c: any) => c.key)).toEqual(['status', 'fullName', 'createdAt', 'actions'])
     await post(server.socket, '/undo')
     await post(server.socket, '/undo')
     expect(read()).toBe(original)
@@ -127,7 +130,7 @@ describe('column plans', () => {
     }
     expect(await refused([{ action: 'add', field: 'nope' }])).toMatch(/^400 invalid_op: Customer has no field `nope` \(it has id, fullName/)
     expect(await refused([{ action: 'add', field: 'email' }])).toMatch(/^409 conflict: CustomerList already shows `email`/)
-    expect(await refused([{ action: 'remove', column: 'nope' }])).toMatch(/^404 node_not_found: CustomerList has no column `nope` \(it has fullName, email, status, createdAt\)/)
+    expect(await refused([{ action: 'remove', column: 'nope' }])).toMatch(/^404 node_not_found: CustomerList has no column `nope` \(it has fullName, email, status, createdAt, actions\)/)
     expect(await refused([{ action: 'explode' }])).toMatch(/^400 invalid_op: changes must be/)
     expect(await refused([{ action: 'remove', column: 'x' }], 'src/App.tsx')).toMatch(/^404 node_not_found: src\/App.tsx has no Refine list page/)
   })
@@ -148,13 +151,21 @@ describe('MCP', () => {
   it('trivia_get_page reads the selected element\'s page, else every page', async () => {
     await post(server.socket, '/selection', { locator: null })
     const all = await call('trivia_get_page')
-    expect(all.structuredContent.pages.map((p: any) => p.component)).toEqual(['AccountList', 'CustomerList', 'TransactionList'])
+    expect(all.structuredContent.pages.map((p: any) => `${p.kind} ${p.component}`)).toEqual([
+      'list AccountList',
+      'form CustomerCreate',
+      'form CustomerEdit',
+      'list CustomerList',
+      'list TransactionList',
+    ])
     const outline = await get(server.socket, `/outline?file=${encodeURIComponent(CUSTOMERS)}`)
     const listView = outline.body.data.at(-1)
     await post(server.socket, '/selection', { locator: listView.locator, name: listView.name })
     const one = await call('trivia_get_page')
     expect(one.structuredContent.file).toBe(CUSTOMERS)
     expect(one.structuredContent.pages[0].available.map((f: any) => f.name)).toContain('kycStatus')
+    const forms = await call('trivia_get_page', { file: 'src/pages/customers/create.tsx' })
+    expect(forms.structuredContent.pages[0].fields.map((f: any) => f.name)).toEqual(['fullName', 'email', 'segment'])
     const none = await call('trivia_get_page', { file: 'src/App.tsx' })
     expect(none.structuredContent.hint).toContain('has no Refine list page')
     await post(server.socket, '/selection', { locator: null })
@@ -167,7 +178,7 @@ describe('MCP', () => {
       label: 'Show KYC status',
     })
     expect(r.isError, JSON.stringify(r.content)).toBeFalsy()
-    expect(r.structuredContent.page.columns.map((c: any) => c.key)).toEqual(['fullName', 'kycStatus', 'status', 'createdAt'])
+    expect(r.structuredContent.page.columns.map((c: any) => c.key)).toEqual(['fullName', 'kycStatus', 'status', 'createdAt', 'actions'])
     expect(r.structuredContent.history.undoLabel).toBe('Agent: Show KYC status')
     await post(server.socket, '/undo')
     expect(read()).toBe(original)
@@ -185,3 +196,28 @@ describe('MCP', () => {
     expect(refused.content[0]?.text).toMatch(/^invalid_op: Customer has no field `nope`/)
   })
 })
+
+describe('MCP fields', () => {
+  it('trivia_edit_fields adds a field to a form in one undo entry', async () => {
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+    const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
+    const client = new Client({ name: 'refine-test', version: '0.0.0' })
+    await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/@trivia/mcp'), { fetch: socketFetch(server.socket) }) as unknown as Transport)
+    const file = 'src/pages/customers/create.tsx'
+    const before = fs.readFileSync(path.join(root, file), 'utf8')
+    try {
+      const r = (await client.callTool({
+        name: 'trivia_edit_fields',
+        arguments: { file, changes: [{ action: 'add', field: 'phone', index: 2 }], label: 'Ask for a phone number' },
+      })) as { isError?: boolean; content: Array<{ text?: string }>; structuredContent?: any }
+      expect(r.isError, JSON.stringify(r.content)).toBeFalsy()
+      expect(r.structuredContent.page.fields.map((f: any) => f.name)).toEqual(['fullName', 'email', 'phone', 'segment'])
+      expect(r.structuredContent.history.undoLabel).toBe('Agent: Ask for a phone number')
+    } finally {
+      await client.close()
+      await post(server.socket, '/undo')
+    }
+    expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe(before)
+  })
+})
+

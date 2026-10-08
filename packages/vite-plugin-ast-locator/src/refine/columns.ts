@@ -189,6 +189,6 @@ export function columnFor(field: ColumnField, context: ColumnContext, label = hu
   return { value: lines.join('\n'), imports: [...imports.values()] }
 }
 
-function escapeJsxText(text: string): string {
+export function escapeJsxText(text: string): string {
   return text.replace(/[{}<>]/g, (c) => `{${JSON.stringify(c)}}`)
 }

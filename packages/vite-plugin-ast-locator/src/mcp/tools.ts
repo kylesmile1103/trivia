@@ -8,7 +8,7 @@ import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
 import { ApiError } from '../engine.js'
-import { parseColumnChanges } from '../refine/index.js'
+import { type ListPage, parseColumnChanges, parseFieldChanges } from '../refine/index.js'
 import type { ErrorCode } from '../types.js'
 
 /** Every agent edit's history label starts with this, so the designer's undo menu says whose it is. */
@@ -97,6 +97,19 @@ const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('moveElement'), path: valuePath.describe('The element to move, by key: `…#columns[id=email]`'), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
   z.object({ op: z.literal('setProperty'), path: valuePath.describe('An object literal, e.g. a column `…#columns[id=email]`'), prop: z.string().min(1), value: valueText, imports }).strict(),
   z.object({ op: z.literal('removeProperty'), path: valuePath.describe('An object literal'), prop: z.string().min(1) }).strict(),
+])
+
+const fieldChange = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('add'),
+      field: z.string().min(1).describe('A request-body field the form does not have yet (trivia_get_page: available)'),
+      index: z.number().int().min(0).optional().describe('Before this field; omit to append'),
+      label: z.string().min(1).optional().describe('The label; default: the field name, humanized'),
+    })
+    .strict(),
+  z.object({ action: z.literal('remove'), field: z.string().min(1) }).strict(),
+  z.object({ action: z.literal('move'), field: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
 ])
 
 const columnChange = z.discriminatedUnion('action', [
@@ -299,10 +312,11 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
     {
       title: 'Read a Refine page',
       description:
-        'The Refine list pages of a file (components calling useTable): each one\'s columns as the source has them ' +
-        '(key, header label, filter, the contract field it shows) and the contract fields it does not show yet ' +
-        '(available, with type and enum values from the OpenAPI contract). Without a file, the selected element\'s file; ' +
-        'with neither, every list page in src/. Use it before trivia_edit_columns.',
+        'The Refine pages of a file. A list page (a component calling useTable) has its columns as the source has them ' +
+        '(key, header label, filter, the contract field it shows); a form page (useForm with a zodResolver) has its fields ' +
+        '(label, widget, zod rule). Each lists the contract fields it does not have yet (available, with type and enum ' +
+        'values from the OpenAPI contract). Without a file, the selected element\'s file; with neither, every page in src/. ' +
+        'Use it before trivia_edit_columns or trivia_edit_fields.',
       inputSchema: { file: z.string().min(1).optional().describe('Project-relative file, e.g. "src/pages/customers/list.tsx"') },
       annotations: reads,
     },
@@ -317,7 +331,15 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
             : null
         return {
           data: { file: target ?? null, pages, ...(hint ? { hint } : {}) },
-          summary: hint ?? pages.map((p) => `${p.component} (${p.file}): ${p.columns.map((c) => c.key).join(', ')}`).join('\n'),
+          summary:
+            hint ??
+            pages
+              .map((p) =>
+                p.kind === 'list'
+                  ? `${p.component} (${p.file}), list: ${p.columns.map((c) => c.key).join(', ')}`
+                  : `${p.component} (${p.file}), ${p.action ?? ''} form: ${p.fields.map((f) => f.name).join(', ')}`,
+              )
+              .join('\n'),
         }
       }),
   )
@@ -344,11 +366,42 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const entry = `${AGENT_LABEL}${label.trim()}`
         const plan = await service.refine.planColumns(file, component, parseColumnChanges(changes))
         const result = await service.batch(plan.ops, entry, { by: 'agent' })
-        const pages = await service.refine.page(file)
+        const pages = (await service.refine.page(file)).filter((p): p is ListPage => p.kind === 'list')
         const page = (component ? pages.find((p) => p.component === component) : pages[0]) ?? null
         return {
           data: { ...result, page, selection: service.selection() },
           summary: `Applied "${entry}": ${plan.label}. Columns now: ${page?.columns.map((c) => c.key).join(', ') ?? '?'}.`,
+        }
+      }),
+  )
+
+  server.registerTool(
+    'trivia_edit_fields',
+    {
+      title: 'Edit a form\'s fields',
+      description:
+        'Add request-body fields of the contract to a Refine form page (each as its zod rule, its default value and a ' +
+        'react-hook-form Controller around a shadcn Field: a Select for enums, a number input, a date input, a checkbox ' +
+        'for booleans, else a text input), and remove or reorder fields by name, as one entry in the designer\'s undo ' +
+        'history. Changes apply in order; an index counts the fields the form renders after the changes before it.',
+      inputSchema: {
+        file: z.string().min(1).describe('The form page file, from trivia_get_page'),
+        component: z.string().min(1).optional().describe('The form component, when the file has several'),
+        changes: z.array(fieldChange).min(1),
+        label: z.string().min(1).describe('A few words for the undo menu, e.g. "Ask for the credit limit"'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ file, component, changes, label }) =>
+      run(async () => {
+        const entry = `${AGENT_LABEL}${label.trim()}`
+        const plan = await service.refine.planFields(file, component, parseFieldChanges(changes))
+        const result = await service.batch(plan.ops, entry, { by: 'agent' })
+        const forms = (await service.refine.page(file)).filter((p) => p.kind === 'form')
+        const page = (component ? forms.find((p) => p.component === component) : forms[0]) ?? null
+        return {
+          data: { ...result, page, selection: service.selection() },
+          summary: `Applied "${entry}": ${plan.label}. Fields now: ${page && page.kind === 'form' ? page.fields.map((f) => f.name).join(', ') : '?'}.`,
         }
       }),
   )

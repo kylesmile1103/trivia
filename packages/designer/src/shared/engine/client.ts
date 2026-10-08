@@ -6,15 +6,16 @@ import type {
   ApplyResult,
   ColumnChange,
   ColumnPlan,
+  FieldChange,
   ComponentSchema,
   Envelope,
   Health,
   HistoryResult,
   HistoryState,
-  ListPage,
   ManifestState,
   NodeDetails,
   Op,
+  RefinePage,
   SelectionState,
 } from './types'
 
@@ -75,8 +76,10 @@ export const engine = {
   postScreenshot: (answer: { id: string; png: string; width: number; height: number } | { id: string; error: string }) =>
     post<null>('/screenshot', answer),
   select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
-  refinePages: () => request<ListPage[]>('/refine/pages'),
-  refinePage: (file: string) => request<ListPage[]>(`/refine/page?file=${encodeURIComponent(file)}`),
+  refinePages: () => request<RefinePage[]>('/refine/pages'),
+  refinePage: (file: string) => request<RefinePage[]>(`/refine/page?file=${encodeURIComponent(file)}`),
   planColumns: (file: string, component: string, changes: ColumnChange[]) =>
     post<ColumnPlan>('/refine/columns/plan', { file, component, changes }),
+  planFields: (file: string, component: string, changes: FieldChange[]) =>
+    post<ColumnPlan>('/refine/fields/plan', { file, component, changes }),
 }
