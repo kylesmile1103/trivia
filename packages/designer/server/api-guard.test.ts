@@ -18,8 +18,11 @@ const LAN = Object.values(os.networkInterfaces())
   .flat()
   .find((a) => a !== undefined && a.family === 'IPv4' && !a.internal)?.address
 
-/** What the plugin treats as the API (vite-plugin-ast-locator/src/api.ts). */
-const reachesApi = (url: string) => new URL(url, 'http://localhost').pathname.startsWith('/@trivia/api/')
+/** What the plugin serves as the API or the MCP endpoint (vite-plugin-ast-locator/src/{api/http,mcp/server}.ts). */
+const reachesApi = (url: string) => {
+  const pathname = new URL(url, 'http://localhost').pathname
+  return pathname.startsWith('/@trivia/api/') || pathname === '/@trivia/mcp'
+}
 
 let upstream: http.Server
 let designer: ViteDevServer
@@ -127,6 +130,22 @@ describe('the designer started with --host', () => {
       expect(r.body.error.message).toContain(`refusing a request from ::ffff:${lan}`)
     }
     expect(received).toEqual([])
+  })
+
+  it.skipIf(LAN === undefined)('refuses the MCP endpoint to another machine too, in any spelling', async () => {
+    const lan = LAN as string
+    const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' })
+    for (const url of ['/@trivia/mcp', '/./@trivia/mcp', '/x/../@trivia/mcp', '//evil.example/@trivia/mcp', '/\\evil.example/@trivia/mcp']) {
+      const r = await send(url, { from: lan, method: 'POST', headers: { 'content-type': 'application/json' }, body: ping })
+      expect([r.status, r.body.error?.code], url).toEqual([403, 'forbidden'])
+    }
+    expect(received.filter((line) => reachesApi(line.split(' ')[1] ?? '/'))).toEqual([])
+  })
+
+  it('still forwards the MCP endpoint for this machine', async () => {
+    const r = await send('/@trivia/mcp', { from: '127.0.0.1', method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    expect(r.status).toBe(200)
+    expect(received).toEqual(['POST /@trivia/mcp'])
   })
 
   it.skipIf(LAN === undefined)('still proxies the rest of the user app to another machine', async () => {
@@ -316,10 +335,13 @@ describe('isApiPath', () => {
       '///evil.example/@trivia/api/apply',
       '/\\evil.example/@trivia/api/apply',
       '//[bad', // unparseable: refused rather than guessed
+      '/@trivia/mcp',
+      '/./@trivia/mcp?x=1',
+      '//evil.example/@trivia/mcp',
     ]) {
       expect(isApiPath(url), url).toBe(true)
     }
-    for (const url of ['/', '/src/App.tsx', '/@trivia/apiary', '/%40trivia/api/apply', '//@trivia/api/apply', '/__trivia/']) {
+    for (const url of ['/', '/src/App.tsx', '/@trivia/apiary', '/%40trivia/api/apply', '//@trivia/api/apply', '/__trivia/', '/@trivia/mcpx']) {
       expect(isApiPath(url), url).toBe(false)
     }
   })

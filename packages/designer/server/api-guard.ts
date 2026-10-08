@@ -1,5 +1,5 @@
-// The engine API (/@trivia/api, served by vite-plugin-ast-locator in the user's dev server)
-// rewrites source files, so the plugin answers only this machine (docs/api.md, Envelope). This
+// The engine API (/@trivia/api) and MCP endpoint (/@trivia/mcp), served by vite-plugin-ast-locator in the user's dev server,
+// rewrite source files, so the plugin answers only this machine (docs/api.md, Envelope). This
 // designer proxies it, and the proxy hides two of the plugin's three checks: it reaches the
 // user's server from loopback whoever its client is, and `changeOrigin` rewrites Host to the
 // target. So the designer makes the same checks itself before its proxy forwards anything.
@@ -10,6 +10,8 @@ import net from 'node:net'
 import type { Plugin } from 'vite'
 
 const API_BASE = '/@trivia/api'
+/** The plugin's MCP endpoint (docs/mcp.md) edits files through the same engine. */
+const MCP_PATH = '/@trivia/mcp'
 
 const LOOPBACK = new net.BlockList()
 LOOPBACK.addSubnet('127.0.0.0', 8, 'ipv4') // also matches IPv4-mapped IPv6 (::ffff:127.0.0.1)
@@ -88,7 +90,7 @@ export function proxyCanParse(url: string | undefined): boolean {
 }
 
 /**
- * Whether the plugin could serve `url` as the API once the proxy forwards it. The URL is
+ * Whether the plugin could serve `url` as the API (or its MCP endpoint) once the proxy forwards it. The URL is
  * parsed twice on the way: the proxy (http-proxy-3) normalizes the path and forwards the
  * result, and the plugin parses that again. Both use WHATWG URL, which drops dot segments
  * (`%2e` too) and reads `\` as `/`; read relative to a host, a path that starts with `//` is
@@ -105,7 +107,7 @@ export function isApiPath(url: string | undefined): boolean {
     for (const reading of pending) {
       for (const pathname of readings(reading)) {
         if (pathname === null) return true // unparseable: refuse rather than guess
-        if (pathname === API_BASE || pathname.startsWith(`${API_BASE}/`)) return true
+        if (pathname === API_BASE || pathname.startsWith(`${API_BASE}/`) || pathname === MCP_PATH) return true
         if (!seen.has(pathname)) {
           seen.add(pathname)
           next.push(pathname)

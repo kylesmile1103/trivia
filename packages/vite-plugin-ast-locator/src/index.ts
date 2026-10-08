@@ -8,11 +8,13 @@ import type { Plugin } from 'vite'
 
 import { createApiMiddleware } from './api/http.js'
 import { EngineService } from './api/service.js'
+import { createMcpMiddleware } from './mcp/server.js'
 import { type EngineBinding, loadEngine } from './engine.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
 
 export { API_BASE } from './api/http.js'
+export { MCP_PATH } from './mcp/server.js'
 export type * from './types.js'
 
 export interface AstLocatorOptions {
@@ -24,8 +26,10 @@ export interface AstLocatorOptions {
   uiDir?: string
   /** Import prefix of library components. Default: components.json `aliases.ui`, else `@/components/ui`. */
   importBase?: string
-  /** Serve the engine HTTP API at /@trivia/api. Default: true. */
+  /** Serve the engine HTTP API at /@trivia/api, and the MCP endpoint at /@trivia/mcp. Default: true. */
   api?: boolean
+  /** Serve the MCP endpoint for agents at /@trivia/mcp (docs/mcp.md). Default: true (with `api`). */
+  mcp?: boolean
   /**
    * **Dangerous.** Let clients on other machines call the engine API. It rewrites source files,
    * so with `vite --host` (or Docker, or `server.host`) anyone who can reach the dev server
@@ -93,9 +97,9 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         version: pkg.version,
         engine,
       })
-      server.middlewares.use(
-        createApiMiddleware({ service, logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }),
-      )
+      const rules = { logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }
+      server.middlewares.use(createApiMiddleware({ service, ...rules }))
+      if (options.mcp !== false) server.middlewares.use(createMcpMiddleware({ service, ...rules }))
     },
   }
 }

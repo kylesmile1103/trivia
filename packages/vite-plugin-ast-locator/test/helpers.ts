@@ -132,3 +132,37 @@ export function post(socket: string, endpoint: string, body: unknown = {}, heade
 export function get(socket: string, endpoint: string, headers?: Record<string, string>): Promise<Reply> {
   return request(socket, `/@trivia/api${endpoint}`, headers ? { headers } : {})
 }
+
+/**
+ * A `fetch` that reaches the test server's Unix socket, for clients that only speak URLs (the
+ * MCP SDK's). `extra` headers go on every request (`from(…)` to pose as another machine).
+ */
+export function socketFetch(socket: string, extra: Record<string, string> = {}): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    for (const [name, value] of Object.entries(extra)) headers.set(name, value)
+    const body = init?.body == null ? undefined : Buffer.from(await new Response(init.body).arrayBuffer())
+    return new Promise<Response>((resolve, reject) => {
+      const req = http.request(
+        { socketPath: socket, path: url.pathname + url.search, method: init?.method ?? 'GET', headers: Object.fromEntries(headers) },
+        (res) => {
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => {
+            const status = res.statusCode ?? 0
+            const responseHeaders = new Headers()
+            for (const [name, value] of Object.entries(res.headers)) {
+              if (value !== undefined) responseHeaders.set(name, Array.isArray(value) ? value.join(', ') : value)
+            }
+            const empty = status === 204 || status === 205 || status === 304
+            resolve(new Response(empty ? null : Buffer.concat(chunks), { status, headers: responseHeaders }))
+          })
+        },
+      )
+      req.on('error', reject)
+      if (body !== undefined) req.write(body)
+      req.end()
+    })
+  }) as typeof fetch
+}
