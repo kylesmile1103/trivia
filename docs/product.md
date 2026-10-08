@@ -231,7 +231,7 @@ Shipped in four parts, each through the full gate:
     **Add … pages**. The raw TanStack Table and Create form actions are hidden there.
   - Tests: plugin tests that add Accounts' missing pages and a new Cards resource from a spec
     change, type-check them, and undo; `e2e/refine/pages.spec.ts`.
-- **Slice 5, forms that survive real code: in progress.**
+- **Slice 5, forms that survive real code: done (2026-10-09).**
   - 5a, engine: done (2026-10-09). Value paths follow method chains to their literal, and call
     descriptions carry the chain. The chain ops are in `ops/chains.rs`. `setProperty` adds new
     keys before trailing spreads, and `mentions` is in `src/mentions.rs`; the napi binding exposes
@@ -250,6 +250,14 @@ Shipped in four parts, each through the full gate:
       that style with a grid and a schema `.refine`.
     - Tests: `test/refine-formfield.test.ts` (including the day-1.5 fixture, checked line by
       line) and an e2e on the edit page.
+  - 5d, drift: done (2026-10-09).
+    - `constraint_changed` and `optionality_changed` issues, both fixed by `align`, which edits
+      the rule with chain ops (`src/refine/rules.ts`). Messages that name the old bound follow
+      it.
+    - `missing_field` lists the file's other mentions of the field, and the removal plan
+      returns them as `warnings`. The designer shows them under the issue and as toasts after a
+      fix.
+    - The e2e drift test now includes a bound change.
 - Known limits of slices 1–5:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.

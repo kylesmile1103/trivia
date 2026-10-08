@@ -38,6 +38,7 @@ export function DriftList({ reload }: { reload: number }) {
           ? await engine.planColumns(page.file, page.component, issue.fix.changes as ColumnChange[])
           : await engine.planFields(page.file, page.component, issue.fix.changes as FieldChange[])
       await dispatchBatch(plan.ops, issue.fix.label)
+      for (const warning of plan.warnings ?? []) toast.warning(warning)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
@@ -68,6 +69,15 @@ export function DriftList({ reload }: { reload: number }) {
                       {issue.message}
                       {issue.line !== null && <span className="text-muted-foreground"> (line {issue.line})</span>}
                     </span>
+                    {issue.references && issue.references.length > 0 && (
+                      <ul className="grid gap-0.5" aria-label={`Other code that names ${issue.name}`}>
+                        {issue.references.map((r) => (
+                          <li key={r.line} className="truncate font-mono text-[10px] text-muted-foreground" title={r.text}>
+                            {r.line}: {r.text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {issue.fix && (
                       <Button
                         variant="outline"

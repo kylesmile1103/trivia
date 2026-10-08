@@ -129,6 +129,12 @@ const fieldChange = z.discriminatedUnion('action', [
   z.object({ action: z.literal('remove'), field: z.string().min(1) }).strict(),
   z.object({ action: z.literal('move'), field: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
   z.object({ action: z.literal('rebuild'), field: z.string().min(1).describe('Re-generate it from the contract where it is (trivia_contract_drift fixes)') }).strict(),
+  z
+    .object({
+      action: z.literal('align'),
+      field: z.string().min(1).describe('Edit its zod rule in place to the contract\'s bounds and required-ness, keeping the rest (trivia_contract_drift fixes)'),
+    })
+    .strict(),
 ])
 
 const columnChange = z.discriminatedUnion('action', [
@@ -374,8 +380,9 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       title: 'Check pages against the contract',
       description:
         'Where the Refine pages no longer match the OpenAPI contract (trivia.manifest.json): a column or field for a ' +
-        'field the contract dropped, enum values or a type that changed, a field a create body now requires. Each ' +
-        'issue has a fix: pass fix.changes to trivia_edit_columns (list pages) or trivia_edit_fields (forms), one ' +
+        'field the contract dropped (with `references`: other lines that still name it), enum values or a type that ' +
+        'changed, bounds (minLength, maxLength, minimum…) that differ, a rule that is optional where the contract now ' +
+        'requires the field, a field a create body now requires. Each issue has a fix: pass fix.changes to trivia_edit_columns (list pages) or trivia_edit_fields (forms), one ' +
         'issue at a time, reading this again in between. spec.status "changed" means the spec file changed since the ' +
         'last sync: run trivia_sync_openapi first.',
       annotations: reads,
@@ -483,9 +490,12 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const result = await service.batch(plan.ops, entry, { by: 'agent' })
         const forms = (await service.refine.page(file)).filter((p) => p.kind === 'form')
         const page = (component ? forms.find((p) => p.component === component) : forms[0]) ?? null
+        // Data, not just text: the client shows the model structuredContent.
         return {
-          data: { ...result, page, selection: service.selection() },
-          summary: `Applied "${entry}": ${plan.label}. Fields now: ${page && page.kind === 'form' ? page.fields.map((f) => f.name).join(', ') : '?'}.`,
+          data: { ...result, page, selection: service.selection(), ...(plan.warnings ? { warnings: plan.warnings } : {}) },
+          summary:
+            `Applied "${entry}": ${plan.label}. Fields now: ${page && page.kind === 'form' ? page.fields.map((f) => f.name).join(', ') : '?'}.` +
+            (plan.warnings ? `\nCheck: ${plan.warnings.join('\n')}` : ''),
         }
       }),
   )

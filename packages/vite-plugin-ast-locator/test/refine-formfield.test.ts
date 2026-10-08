@@ -302,3 +302,78 @@ describe('a form edited by hand (the day-1.5 fixture)', () => {
     expect(read(NOTES)).toBe(NOTES_PAGE)
   })
 })
+
+describe('contract drift on hand-edited forms', () => {
+  const drift = async () => {
+    const reply = await get(server.socket, '/refine/drift')
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200)
+    return reply.body.data.pages as Array<{ file: string; component: string; kind: string; issues: any[] }>
+  }
+  const fix = async (page: { file: string; component: string }, issue: { fix: { label: string; changes: unknown[] } }) => {
+    const planned = await post(server.socket, '/refine/fields/plan', { file: page.file, component: page.component, changes: issue.fix.changes })
+    expect(planned.status, JSON.stringify(planned.body)).toBe(200)
+    const applied = await post(server.socket, '/batch', { ops: planned.body.data.ops, label: issue.fix.label })
+    expect(applied.status, JSON.stringify(applied.body)).toBe(200)
+    return planned.body.data
+  }
+  const summary = (pages: Awaited<ReturnType<typeof drift>>) => pages.map((p) => `${p.component}: ${p.issues.map((i) => `${i.code} ${i.name}`).join(', ')}`)
+
+  it('edits a bound in place: the custom message follows, the rest of the rule stays', async () => {
+    // The fixture allows 100 characters of notes; the contract allows 1000.
+    const pages = await drift()
+    expect(summary(pages)).toEqual(['CustomerNotes: constraint_changed notes'])
+    const issue = pages[0]!.issues[0]
+    expect(issue).toMatchObject({
+      message: 'Field Notes\'s rule has other bounds than the contract: max length 100 → max length 1000',
+      line: 24,
+      fix: { label: 'Update the Notes rule from the contract', changes: [{ action: 'align', field: 'notes' }] },
+    })
+    await fix(pages[0]!, issue)
+    expect(read(NOTES)).toBe(NOTES_PAGE.replace('.max(100, "Notes must be 100 characters or fewer")', '.max(1000, "Notes must be 1000 characters or fewer")'))
+    expect(await drift()).toEqual([])
+    // A stale second click says so instead of writing nothing.
+    const again = await post(server.socket, '/refine/fields/plan', { file: NOTES, changes: [{ action: 'align', field: 'notes' }] })
+    expect(`${again.status} ${again.body.error.code}`).toBe('409 conflict')
+  })
+
+  it('after a spec change: bounds, required-ness and a removed field\'s other mentions', async () => {
+    fs.writeFileSync(path.join(root, NOTES), NOTES_PAGE.replace('.max(100, "Notes must be 100 characters or fewer")', '.max(1000, "Notes must be 1000 characters or fewer")'))
+    const specFile = path.join(root, 'openapi/bank.openapi.json')
+    const spec = JSON.parse(fs.readFileSync(specFile, 'utf8'))
+    const schemas = spec.components.schemas
+    for (const name of ['CustomerDto', 'CreateCustomerRequest', 'UpdateCustomerRequest']) schemas[name].properties.fullName = { type: 'string', minLength: 3, maxLength: 120 }
+    schemas.UpdateCustomerRequest.required = ['creditLimit']
+    delete schemas.UpdateCustomerRequest.properties.notes
+    fs.writeFileSync(specFile, JSON.stringify(spec, null, 2))
+    expect((await post(server.socket, '/sync', {})).status).toBe(200)
+
+    const pages = await drift()
+    expect(summary(pages)).toEqual([
+      'CustomerCreate: constraint_changed fullName',
+      'CustomerEdit: constraint_changed fullName',
+      'CustomerNotes: constraint_changed fullName, optionality_changed creditLimit, missing_field notes',
+    ])
+    const notes = pages[2]!
+    expect(notes.issues[0].message).toBe('Field Full name\'s rule has other bounds than the contract: min length 2 → min length 3, no max length → max length 120')
+    expect(notes.issues[1].message).toBe('Field Credit limit leaves it out when empty, but the contract now requires it')
+    expect(notes.issues[2].references).toEqual([
+      { line: 30, text: '.refine((values) => !values.notes?.includes("TODO"), {' },
+      { line: 32, text: 'path: ["notes"],' },
+    ])
+    expect(notes.issues[2].message).toMatch(/; the file still mentions it on lines 30, 32$/)
+
+    // Fix the bounds and required-ness everywhere: in place, so everything else stays.
+    for (const page of pages) for (const issue of page.issues.filter((i) => i.code !== 'missing_field')) await fix(page, issue)
+    expect(read('src/pages/customers/create.tsx')).toContain('fullName: z.string().min(3, "Enter at least 3 characters.").max(120, "Enter at most 120 characters."),')
+    expect(read(NOTES)).toContain('    creditLimit: z.number().min(0, "Enter 0 or more."),\n')
+    expect(read(NOTES)).toContain('  .refine((values) => !values.notes?.includes("TODO"), {')
+    expect(summary(await drift())).toEqual(['CustomerNotes: missing_field notes'])
+    typecheck()
+
+    // Removing the field says what still names it (tsc would say it too).
+    const removed = await fix(notes, notes.issues[2])
+    expect(removed.warnings).toEqual([
+      `${NOTES} still mentions \`notes\` outside its field: line 30 (.refine((values) => !values.notes?.includes("TODO"), {); line 32 (path: ["notes"],)`,
+    ])
+  }, 180_000)
+})

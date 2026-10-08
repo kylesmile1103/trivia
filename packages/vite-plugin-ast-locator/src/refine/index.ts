@@ -13,6 +13,7 @@ import { type ColumnContext, columnFor, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
 import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
+import { alignOps, hasDiff, ruleDiff } from './rules.js'
 import { PAGE_KINDS, type PageKind, pageFiles, supportedKinds } from './scaffold.js'
 import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
@@ -31,13 +32,18 @@ export type FieldChange =
   | { action: 'move'; field: string; index: number }
   /** Re-generate a field from the contract where it is now, keeping its label (drift fixes). */
   | { action: 'rebuild'; field: string }
+  /**
+   * Bring a field's zod rule in line with the contract in place: its bounds, and `.optional()`/
+   * `.nullable()` where the contract no longer allows them (drift fixes, slice 5).
+   */
+  | { action: 'align'; field: string }
 
 /** `changes` for a form from a request body, checked. */
 export function parseFieldChanges(value: unknown): FieldChange[] {
   const bad = () =>
     new ApiError(
       'invalid_op',
-      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", field }, { action: "move", field, index } or { action: "rebuild", field }',
+      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", field }, { action: "move", field, index }, { action: "rebuild", field } or { action: "align", field }',
     )
   if (!Array.isArray(value) || value.length === 0) throw bad()
   return value.map((c: unknown) => {
@@ -48,7 +54,7 @@ export function parseFieldChanges(value: unknown): FieldChange[] {
     if (action === 'add' && (index === undefined || isIndex(index)) && (label === undefined || typeof label === 'string')) {
       return { action, field, ...(index !== undefined ? { index: index as number } : {}), ...(label !== undefined ? { label: label as string } : {}) }
     }
-    if (action === 'remove' || action === 'rebuild') return { action, field }
+    if (action === 'remove' || action === 'rebuild' || action === 'align') return { action, field }
     if (action === 'move' && isIndex(index)) return { action, field, index: index as number }
     throw bad()
   })
@@ -106,6 +112,8 @@ interface AppShell {
 export interface Plan {
   ops: Array<Record<string, unknown>>
   label: string
+  /** What the plan leaves for the developer to check, e.g. code that still names a removed field. */
+  warnings?: string[]
 }
 
 /** What the adapter needs from the engine service. */
@@ -353,7 +361,9 @@ export class RefineAdapter {
         required = (body ?? []).filter((f) => f.required).map((f) => f.name)
         for (const f of page.fields) if (f.renderSource) sources.set(f.name, f.renderSource)
       }
-      const drift = pageDrift(page, { fields, required }, sources)
+      const drift = pageDrift(page, { fields, required }, sources, (name) =>
+        page.kind === 'form' ? this.#leftover(page, name).map(({ line, text }) => ({ line, text })) : [],
+      )
       if (drift.issues.length > 0) out.push(drift)
     }
     return { spec: state.drift ?? null, pages: out }
@@ -446,6 +456,9 @@ export class RefineAdapter {
     const defaults = new Set(page.fields.filter((f) => f.hasDefault).map((f) => f.name))
     const ops: Plan['ops'] = []
     const labels: string[] = []
+    const warnings: string[] = []
+    // A rebuild removes and re-adds a field: its other mentions still have a field to name.
+    const rebuilding = new Set<string>()
     /** Where a rebuilt field goes back: the slot it was removed from, at its place in the form's order. */
     type Slot = { parent: { locator: string; name: string }; index: number; order: number }
     const step = (change: FieldChange, slot?: Slot): void => {
@@ -457,7 +470,9 @@ export class RefineAdapter {
           const control = controls[order]
           if (!control) throw new ApiError('node_not_found', `${page.component} renders no \`${change.field}\` field to rebuild`)
           const label = page.fields.find((f) => f.name === change.field)?.label ?? undefined
+          rebuilding.add(change.field)
           step({ action: 'remove', field: change.field })
+          rebuilding.delete(change.field)
           const again: FieldChange = { action: 'add', field: change.field, ...(label ? { label } : {}) }
           step(again, control.parent ? { parent: control.parent, index: split(control.locator).path.at(-1)!, order } : undefined)
           labels.splice(-2, 2, `Rebuild field ${label ?? humanize(change.field)}`)
@@ -520,10 +535,29 @@ export class RefineAdapter {
           labels.push(`Add field ${label}`)
           break
         }
+        case 'align': {
+          const info = page.fields.find((f) => f.name === change.field)
+          const field = body?.find((f) => f.name === change.field)
+          if (!info?.rule || !field) {
+            throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` rule from the contract to align (it has ${page.fields.map((f) => f.name).join(', ')})`)
+          }
+          const diff = ruleDiff(info.ruleChain, field)
+          if (!page.schemaPath || !diff || !/^[A-Za-z_$][\w$]*$/.test(change.field)) {
+            throw new ApiError('unsupported', `\`${change.field}\`'s rule \`${info.rule.slice(0, 60)}\` is not a zod chain Trivia can edit in place; rebuild the field instead`)
+          }
+          if (!hasDiff(diff)) throw new ApiError('conflict', `\`${change.field}\`'s rule already matches the contract`)
+          ops.push(...alignOps(`${page.schemaPath}.${change.field}`, info.ruleChain!, diff))
+          labels.push(`Update the ${info.label ?? humanize(change.field)} rule from the contract`)
+          break
+        }
         case 'remove': {
           const control = controls.find((c) => c.name === change.field)
           if (!control && !schema.has(change.field) && !defaults.has(change.field)) {
             throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` field (it has ${page.fields.map((f) => f.name).join(', ')})`)
+          }
+          const left = rebuilding.has(change.field) ? [] : this.#leftover(page, change.field)
+          if (left.length > 0) {
+            warnings.push(`${page.file} still mentions \`${change.field}\` outside its field: ${left.map((m) => `line ${m.line} (${m.text})`).join('; ')}`)
           }
           if (control) {
             ops.push({ op: 'remove', target: control.locator, expectedName: control.element })
@@ -558,7 +592,21 @@ export class RefineAdapter {
       }
     }
     for (const change of changes) step(change)
-    return { ops, label: labels.join('; ') }
+    return { ops, label: labels.join('; '), ...(warnings.length > 0 ? { warnings } : {}) }
+  }
+
+  /**
+   * Where a form's file still names `name` outside the field's own pieces (its schema key, its
+   * default, its control's `name="…"`): code that breaks or stops working when the field goes.
+   */
+  #leftover(page: FormPage, name: string): Mention[] {
+    const info = page.fields.find((f) => f.name === name)
+    const own = new Set([info?.ruleLine, info?.defaultLine].filter((l): l is number => l !== null && l !== undefined))
+    try {
+      return (this.#host.mentions?.(page.file, name) ?? []).filter((m) => !(m.kind === 'key' && own.has(m.line)))
+    } catch {
+      return []
+    }
   }
 
   /**

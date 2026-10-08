@@ -356,6 +356,8 @@ export type FieldChange =
   | { action: 'remove'; field: string }
   | { action: 'move'; field: string; index: number }
   | { action: 'rebuild'; field: string }
+  /** Edit its zod rule in place to the contract's bounds and required-ness (drift fixes). */
+  | { action: 'align'; field: string }
 
 export type ColumnChange =
   | { action: 'add'; field: string; index?: number; label?: string }
@@ -367,14 +369,18 @@ export type ColumnChange =
 export interface ColumnPlan {
   ops: Op[]
   label: string
+  /** What the plan leaves for the developer to check, e.g. code that still names a removed field. */
+  warnings?: string[]
 }
 
 export interface DriftIssue {
-  code: 'missing_field' | 'enum_changed' | 'type_changed' | 'required_missing'
+  code: 'missing_field' | 'enum_changed' | 'type_changed' | 'required_missing' | 'constraint_changed' | 'optionality_changed'
   name: string
   message: string
   line: number | null
   fix: { label: string; changes: Array<ColumnChange | FieldChange> } | null
+  /** For a removed form field: other lines of the file that still name it. */
+  references?: Array<{ line: number; text: string }>
 }
 
 export interface PageDrift {

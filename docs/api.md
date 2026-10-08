@@ -157,7 +157,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `available` lists the body's writable fields the form lacks.
 
   `FieldChange = { action: "add", field, index?, label? } | { action: "remove", field } |
-  { action: "move", field, index } | { action: "rebuild", field }`. The changes in one plan are
+  { action: "move", field, index } | { action: "rebuild", field } | { action: "align", field }`
+  (`align`: see `refine/drift` below). A plan is `{ ops, label, warnings? }`. The changes in one plan are
   tracked by index-path prefix: each insert, removal or move renumbers the elements after it and
   everything inside them, so one plan can change fields in different wrappers. An added field is:
   - `setProperty` on the schema with its rule: `z.enum([…])`, `z.number()` (`.int()` for
@@ -187,15 +188,34 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   A removal drops all three (and imports only it used). A move moves the control.
 - `refine/drift` is contract drift (`docs/product.md`, slice 3): where the Refine pages no longer
   match the manifest. `spec` is the `/manifest` drift: when it says `changed`, sync first.
-  `PageDrift = { file, component, kind, issues }`, each issue `{ code, name, message, line, fix }`:
+  `PageDrift = { file, component, kind, issues }`, each issue `{ code, name, message, line, fix,
+  references? }`:
   - `missing_field`: a column with an accessor, or a form field, names a field the entity or
-    request body no longer has. Fix: remove it.
+    request body no longer has. Fix: remove it. For a form, `references` lists the other lines
+    of the file that still name it (`values.email` in a `.refine`, `watch("email")`, a key, a
+    destructured `{ email }`), from the engine's `mentions`. The field's own schema key, default
+    and `name="…"` are left out. They break when the field goes, so the plan that removes it
+    returns them as `warnings`.
   - `enum_changed`: a column's `DataTableFilterCombobox` options, or a form field's
     `z.enum([…])` or `<SelectItem>` values, differ from the contract's. Fix: rebuild it in
     place.
   - `type_changed`: a column's filter, or a field's zod rule, belongs to another type than the
     field now has. Fix: rebuild it in place.
   - `required_missing`: a create form lacks a field its body now requires. Fix: add it.
+  - `constraint_changed`: a field's rule has another bound than the contract states, or none:
+    `min`/`max` for text length, `regex` for a pattern, `min`/`max`/`gt`/`lt` for numbers.
+    A bound only the rule has is not drift: it may be deliberate.
+  - `optionality_changed`: the rule is `.optional()` (or `.nullish()`) for a field the contract
+    now requires, or `.nullable()` for one it no longer lets be null. A rule stricter than the
+    contract is not drift.
+
+  Both are fixed by `{ action: "align", field }`. It edits the rule in place with chain ops, so
+  custom calls (`.refine(…)`, `.transform(…)`) and the developer's messages stay. A differing
+  bound's argument is set (`setCallArgument`), and a missing one is inserted before the
+  modifiers (`insertCall`, before `.optional()`, `.refine(…)`, …). `.optional()` and `.nullable()`
+  are removed (`removeCall`). A message that names the old bound exactly once gets the new one
+  (`"At most 100 characters"` → `"At most 500 characters"`), and Trivia's own "Required." becomes
+  the new minimum's message. Aligning a rule that already matches is 409 `conflict`.
 
   `fix = { label, changes }` takes column changes (list) or field changes (form) for the plan
   routes above. A rebuild (`{ action: "rebuild", column | field }`) is resolved where the item is

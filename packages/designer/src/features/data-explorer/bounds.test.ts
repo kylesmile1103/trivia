@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { boundsText } from './ThisPage'
+import { boundsText } from './bounds'
 
 describe('boundsText', () => {
   it('says each bound the contract declares, and nothing when there are none', () => {

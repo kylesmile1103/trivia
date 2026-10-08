@@ -92,8 +92,17 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   fix each, and offers Sync. **Slice 4 (new resource):** a contract resource's missing list,
   create, edit and show pages, registered in `<Refine resources>` and routed, as one undo entry.
 
-  The user was away for the slice-1/2 design calls; they are marked ⚑ in `product.md` for
-  review.
+  **Slice 5 (forms that survive real code)** came from the user's form-compiler idea. Assessed
+  with them, OpenAPI stayed the input:
+  - the engine follows method chains (`z.object({…}).refine(…)`) and edits one call in place
+    (chain ops);
+  - the manifest carries bounds, and drift compares rules against them with an in-place fix;
+  - Refine's `<FormField>` style is read and written;
+  - new fields go by contract order inside the developer's wrappers;
+  - a removed field's other mentions are listed.
+
+  The user was away for the slice-1/2 and slice-5 design calls; they are marked ⚑ in
+  `product.md` for review.
 - **Desktop shell** (`crates/trivia_shell`, Tauri 2.11.6, its own Cargo workspace): a window
   on the designer, with a waiting page until it answers. Verified on macOS by an agent's
   screenshot from the minimized window. That check found a screenshot bug browsers have too:
@@ -101,11 +110,11 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   designer now rasterizes the SVG itself (`features/canvas/capture.ts`).
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 274 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
-- Vitest: plugin 135, designer 444 (including 6 architecture rules), contract-sync 79.
-- napi crash suite 33/33, with RSS bounds.
+- `cargo test --workspace` 283 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
+- Vitest: plugin 151, designer 445 (including 6 architecture rules), contract-sync 80.
+- napi crash suite 41/41, with RSS bounds (now including `describeValues` and `mentions`).
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 52/52 (playground and refine projects), twice in a row.
+- Playwright 53/53 (playground and refine projects).
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -243,11 +252,18 @@ writes `useQuery` hooks against it.
   saw `unknown endpoint /refine/drift`).
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
   per `Op` variant.
+- **Never run `cargo fmt`.** The repo isn't rustfmt-formatted: it uses long lines, and the
+  default config rewrote every engine file (7000 lines of diff). If it happens, restore the
+  crate from git and re-apply the edits.
+- **Sync refuses while the generated code has uncommitted changes**, which protects hand edits.
+  After changing the example's spec, commit the regenerated `src/api/generated` before running
+  Playwright, or the drift e2e times out waiting for a sync that was refused. The plugin's
+  tests copy the example outside git, so they never see this.
 
 ## 7. Backlog / next steps (in priority order)
 
 The order is the product's (`docs/product.md`, Slices):
-1. **Have the user try it on one of their real internal tools.** Slices 1–4 are done; what
+1. **Have the user try it on one of their real internal tools.** Slices 1–5 are done; what
    breaks on a real codebase decides what comes next. Likely candidates:
    - pages whose shape the adapter doesn't read (`register()` forms, columns from a helper);
    - other UI kits (an Ant Design or MUI adapter beside `src/refine/`);
@@ -256,7 +272,8 @@ The order is the product's (`docs/product.md`, Slices):
 2. Review the ⚑ decisions in `docs/product.md`.
 3. A narrower drift fix for changed enum options: update the options in place instead of
    rebuilding the column or field. A real agent showed that a rebuild drops customisations
-   (`docs/mcp.md`, the Refine session).
+   (`docs/mcp.md`, the Refine session). The rule half is now one `setCallArgument` on `z.enum`.
+   The `<SelectItem>`s and a column's filter options still need their own in-place edit.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).

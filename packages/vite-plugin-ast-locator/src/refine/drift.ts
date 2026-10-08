@@ -4,6 +4,7 @@
 
 import type { FieldChange, Page } from './index.js'
 import type { FieldInfo } from './page.js'
+import { boundWords, hasDiff, ruleDiff } from './rules.js'
 
 export type DriftCode =
   /** It shows or sends a field the contract no longer has. */
@@ -14,6 +15,10 @@ export type DriftCode =
   | 'type_changed'
   /** A create form lacks a field the contract now requires. */
   | 'required_missing'
+  /** A field's rule has other bounds than the contract states (`maxLength` 100 → 500). */
+  | 'constraint_changed'
+  /** A field's rule lets through a missing or null value the contract no longer accepts. */
+  | 'optionality_changed'
 
 export interface DriftFix {
   label: string
@@ -28,6 +33,8 @@ export interface DriftIssue {
   message: string
   line: number | null
   fix: DriftFix | null
+  /** For a removed form field: other code in the file that still names it (it breaks with the fix). */
+  references?: Array<{ line: number; text: string }>
 }
 
 export interface PageDrift {
@@ -69,6 +76,8 @@ export function pageDrift(
   page: Page,
   contract: { fields: FieldInfo[] | null; required: string[] },
   sources: Map<string, string>,
+  /** Where a form's file still names a field outside the field itself. */
+  leftover: (name: string) => Array<{ line: number; text: string }> = () => [],
 ): PageDrift {
   const issues: DriftIssue[] = []
   if (contract.fields === null) return { file: page.file, component: page.component, kind: page.kind, issues }
@@ -132,20 +141,29 @@ export function pageDrift(
     const index = rendered.findIndex((r) => r.name === f.name)
     const line = f.control?.line ?? null
     if (!field) {
+      const references = leftover(f.name)
+      const where = references.map((r) => r.line)
       issues.push({
         code: 'missing_field',
         name: f.name,
-        message: `Field ${f.label ?? f.name} sends \`${f.name}\`, which the ${page.contract?.operation ?? 'request'} body no longer has`,
+        message:
+          `Field ${f.label ?? f.name} sends \`${f.name}\`, which the ${page.contract?.operation ?? 'request'} body no longer has` +
+          (where.length > 0 ? `; the file still mentions it on ${where.length === 1 ? 'line' : 'lines'} ${where.join(', ')}` : ''),
         line,
         fix: { label: `Remove field ${f.label ?? f.name}`, changes: [{ action: 'remove', field: f.name }] },
+        ...(references.length > 0 ? { references } : {}),
       })
       continue
     }
     const rebuild: DriftFix | null =
       index >= 0 ? { label: `Rebuild field ${f.label ?? f.name} from the contract`, changes: [{ action: 'rebuild', field: f.name } satisfies FieldChange] } : null
     const rule = f.rule ?? ''
+    // The rule's first call, from its parsed chain when it has one: a chain written over several
+    // lines (`z\n  .string()`) doesn't start with `z.string` as text.
+    const base = f.ruleChain?.[0]
+    const head = base ? `${base.name}(${base.args.join(', ')})` : rule
     if (field.shape === 'enum') {
-      const ruleValues = /^z\.enum\(/.test(rule) ? quoted(rule.slice(0, rule.indexOf(')') + 1)) : null
+      const ruleValues = /^z\.enum\(/.test(head) ? quoted(base ? (base.args[0] ?? '') : head.slice(0, head.indexOf(')') + 1)) : null
       const render = sources.get(f.name) ?? ''
       const items = [...render.matchAll(/<SelectItem\s+value="((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!)
       const stale = (ruleValues && !sameSet(ruleValues, field.enum ?? [])) || (items.length > 0 && !sameSet(items, field.enum ?? []))
@@ -160,13 +178,35 @@ export function pageDrift(
         continue
       }
     }
-    if (rule && !ruleFamily[field.shape].test(rule)) {
+    if (rule && !ruleFamily[field.shape].test(head)) {
       issues.push({
         code: 'type_changed',
         name: f.name,
         message: `Field ${f.label ?? f.name} validates with \`${rule.slice(0, 40)}\`, but \`${f.name}\` is now ${describe(field)}`,
         line,
         fix: rebuild,
+      })
+      continue
+    }
+    // In place, by chain ops: the rest of the rule stays as written.
+    const diff = ruleDiff(f.ruleChain, field)
+    if (!hasDiff(diff)) continue
+    const label = f.label ?? f.name
+    const align: DriftFix = { label: `Update the ${label} rule from the contract`, changes: [{ action: 'align', field: f.name } satisfies FieldChange] }
+    if (diff.bounds.length > 0) {
+      const changes = diff.bounds.map(({ bound, have }) => `${boundWords(bound.key, have?.args[0]?.trim() ?? null)} → ${boundWords(bound.key, bound.value)}`)
+      issues.push({ code: 'constraint_changed', name: f.name, message: `Field ${label}'s rule has other bounds than the contract: ${changes.join(', ')}`, line: f.ruleLine ?? line, fix: align })
+    }
+    if (diff.optional || diff.nullable) {
+      const what = [diff.optional ? 'leaves it out' : null, diff.nullable ? 'sends null' : null].filter(Boolean).join(' or ')
+      const contractSays = [diff.optional ? 'requires it' : null, diff.nullable ? 'does not accept null' : null].filter(Boolean).join(' and ')
+      issues.push({
+        code: 'optionality_changed',
+        name: f.name,
+        message: `Field ${label} ${what} when empty, but the contract now ${contractSays}`,
+        line: f.ruleLine ?? line,
+        // The same fix as the bounds issue's: aligning the rule settles both.
+        fix: align,
       })
     }
   }

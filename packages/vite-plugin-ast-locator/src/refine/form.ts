@@ -33,6 +33,8 @@ export interface FormFieldInfo {
   /** The line of its key in the schema object. */
   ruleLine: number | null
   hasDefault: boolean
+  /** The line of its key in `defaultValues`. */
+  defaultLine: number | null
   /** The contract field it edits. */
   field: FieldInfo | null
 }
@@ -133,7 +135,8 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
     })
     const schemaKeys = schema?.value.kind === 'object' ? schema.value.properties.filter((p) => p.key !== '...') : []
     const defaults = prop(options, 'defaultValues')
-    const defaultKeys = new Set(defaults?.kind === 'object' ? defaults.properties.map((p) => p.key) : [])
+    const defaultProps = defaults?.kind === 'object' ? defaults.properties : []
+    const defaultKeys = new Set(defaultProps.map((p) => p.key))
     const names = [...controllers.map((c) => c.name).filter((n): n is string => n !== null), ...schemaKeys.map((p) => p.key)]
     const fields: FormFieldInfo[] = [...new Set(names)].map((name) => {
       const control = controllers.find((c) => c.name === name)
@@ -149,6 +152,7 @@ export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaM
         ruleChain: rule?.kind === 'call' ? rule.chain : null,
         ruleLine: schemaKeys.find((p) => p.key === name)?.line ?? null,
         hasDefault: defaultKeys.has(name),
+        defaultLine: defaultProps.find((p) => p.key === name)?.line ?? null,
         field: contractField ? fieldInfo(contractField) : null,
       }
     })
