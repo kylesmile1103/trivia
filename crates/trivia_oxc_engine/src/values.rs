@@ -5,8 +5,10 @@
 //! A value path is `<file>#<scope>#<head><step>*`:
 //! * `scope` is a top-level function (component or hook) named as JSX locators name it, or
 //!   `module` for the file's top level;
-//! * `head` is a `const`/`let` binding at the top level of that scope's body (`columns`), or the
-//!   first call there to a function of that name (`useForm()`);
+//! * `head` is a `const`/`let` binding at the top level of that scope's body (`columns`), the
+//!   first call there to a function of that name (`useForm()`), or the first JSX element of that
+//!   name in the scope (`<Refine>`), whose first step names an attribute
+//!   (`<Refine>.resources`: the expression in `resources={…}`);
 //! * a step is `.prop` (an object property), `[key=value]` (the array element that is an
 //!   object whose `key` is the string `value`) or `[i]` (the `i`-th element).
 //!
@@ -44,6 +46,8 @@ const MAX_EXCERPT: usize = 600;
 pub enum Head {
     Binding(String),
     Call(String),
+    /// The first JSX element with this tag name in the scope; the next step is an attribute.
+    Element(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,12 +75,23 @@ impl ValuePath {
         if file.is_empty() || !is_identifier(scope) {
             return Err(invalid());
         }
-        let head_end = rest.find(['.', '[']).unwrap_or(rest.len());
+        let head_end = if rest.starts_with('<') {
+            rest.find('>').map_or(rest.len(), |i| i + 1)
+        } else {
+            rest.find(['.', '[']).unwrap_or(rest.len())
+        };
         let (head_text, mut steps_text) = rest.split_at(head_end);
-        let head = match head_text.strip_suffix("()") {
-            Some(callee) if is_identifier(callee) => Head::Call(callee.to_string()),
-            None if is_identifier(head_text) => Head::Binding(head_text.to_string()),
-            _ => return Err(invalid()),
+        let head = if let Some(tag) = head_text.strip_prefix('<').and_then(|t| t.strip_suffix('>')) {
+            if !tag.split('.').all(is_identifier) {
+                return Err(invalid());
+            }
+            Head::Element(tag.to_string())
+        } else {
+            match head_text.strip_suffix("()") {
+                Some(callee) if is_identifier(callee) => Head::Call(callee.to_string()),
+                None if is_identifier(head_text) => Head::Binding(head_text.to_string()),
+                _ => return Err(invalid()),
+            }
         };
         let mut steps = Vec::new();
         while !steps_text.is_empty() {
@@ -123,6 +138,7 @@ impl fmt::Display for ValuePath {
         match &self.head {
             Head::Binding(name) => write!(f, "{name}")?,
             Head::Call(callee) => write!(f, "{callee}()")?,
+            Head::Element(tag) => write!(f, "<{tag}>")?,
         }
         for step in &self.steps {
             match step {
@@ -171,14 +187,22 @@ pub(crate) fn resolve<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Res
     let body = scope_body(program, &path.scope).ok_or_else(|| {
         missing(format!("no top-level function `{}` in {} (scopes are named as JSX locators name them)", path.scope, path.file))
     })?;
+    let mut steps = path.steps.as_slice();
     let mut expr = match &path.head {
         Head::Binding(name) => find_binding(&body, name)
             .ok_or_else(|| missing(format!("`{name}` is not a binding with a value at the top of `{}`", path.scope)))?,
         Head::Call(callee) => find_call(&body, callee)
             .ok_or_else(|| missing(format!("`{}` makes no call to `{callee}` at its top level", path.scope)))?,
+        Head::Element(tag) => {
+            let Some((Step::Prop(attr), rest)) = steps.split_first() else {
+                return Err(EngineError::InvalidValuePath(format!("{path} (after <{tag}> comes the attribute: <{tag}>.name)")));
+            };
+            steps = rest;
+            element_attribute(program, &path.file, &path.scope, tag, attr).map_err(missing)?
+        }
     };
     let mut slot = None;
-    for step in &path.steps {
+    for step in steps {
         let container = unwrap_literal(expr);
         match step {
             Step::Prop(prop) => {
@@ -231,6 +255,164 @@ pub(crate) fn resolve<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Res
         }
     }
     Ok(Resolved { expr, slot })
+}
+
+/// The expression of attribute `attr` (`attr={…}`) on the first `<tag>` element in `scope`.
+fn element_attribute<'p, 'a>(
+    program: &'p Program<'a>,
+    file: &str,
+    scope: &str,
+    tag: &str,
+    attr: &str,
+) -> std::result::Result<&'p Expression<'a>, String> {
+    let table = crate::locator::JsxTable::build(program, file).map_err(|e| e.to_string())?;
+    let in_scope = |n: &crate::locator::JsxNode| scope == MODULE_SCOPE || n.scope == scope;
+    let node = table
+        .nodes
+        .iter()
+        .find(|n| in_scope(n) && n.name.as_deref() == Some(tag))
+        .ok_or_else(|| format!("`{scope}` renders no <{tag}>"))?;
+    let at = node
+        .attributes
+        .iter()
+        .find(|a| a.name.as_deref() == Some(attr))
+        .ok_or_else(|| format!("<{tag}> has no `{attr}` attribute"))?;
+    if !matches!(at.value, Some(crate::locator::AttrValue::Expression { .. })) {
+        return Err(format!("<{tag}>'s `{attr}` is not a `{{…}}` expression"));
+    }
+    descend::attribute(program, at.span)
+        .and_then(|a| match &a.value {
+            Some(oxc_ast::ast::JSXAttributeValue::ExpressionContainer(c)) => c.expression.as_expression(),
+            _ => None,
+        })
+        .ok_or_else(|| format!("<{tag}>'s `{attr}` holds no expression Trivia can reach"))
+}
+
+/// Find a node by span, stepping at each level into the child that contains it. Covers where
+/// JSX sits in components: statements and declarations, returns, function bodies, calls,
+/// conditionals, logical and TS wrappers, literals, and JSX attributes and children.
+mod descend {
+    use oxc_ast::ast::{
+        Declaration, ExportDefaultDeclarationKind, Expression, JSXAttribute, JSXAttributeItem, JSXAttributeValue, JSXChild,
+        JSXElement, ObjectPropertyKind, Program, Statement,
+    };
+    use oxc_span::{GetSpan, Span};
+
+    pub fn attribute<'p, 'a>(program: &'p Program<'a>, target: Span) -> Option<&'p JSXAttribute<'a>> {
+        statements(&program.body, target)
+    }
+
+    fn holds(outer: Span, target: Span) -> bool {
+        outer.start <= target.start && target.end <= outer.end
+    }
+
+    fn statements<'p, 'a>(stmts: &'p [Statement<'a>], target: Span) -> Option<&'p JSXAttribute<'a>> {
+        stmts.iter().find(|s| holds(s.span(), target)).and_then(|s| statement(s, target))
+    }
+
+    fn statement<'p, 'a>(stmt: &'p Statement<'a>, target: Span) -> Option<&'p JSXAttribute<'a>> {
+        match stmt {
+            Statement::ExpressionStatement(s) => expression(&s.expression, target),
+            Statement::ReturnStatement(r) => r.argument.as_ref().and_then(|e| expression(e, target)),
+            Statement::BlockStatement(b) => statements(&b.body, target),
+            Statement::IfStatement(i) => {
+                if holds(i.consequent.span(), target) {
+                    statement(&i.consequent, target)
+                } else {
+                    i.alternate.as_ref().and_then(|a| statement(a, target))
+                }
+            }
+            Statement::VariableDeclaration(d) => declarators(&d.declarations, target),
+            Statement::FunctionDeclaration(f) => f.body.as_ref().and_then(|b| statements(&b.statements, target)),
+            Statement::ExportDeclaration(e) => match &e.declaration {
+                Declaration::FunctionDeclaration(f) => f.body.as_ref().and_then(|b| statements(&b.statements, target)),
+                Declaration::VariableDeclaration(d) => declarators(&d.declarations, target),
+                _ => None,
+            },
+            Statement::ExportDefaultDeclaration(e) => match &e.declaration {
+                ExportDefaultDeclarationKind::FunctionDeclaration(f) => f.body.as_ref().and_then(|b| statements(&b.statements, target)),
+                kind => kind.as_expression().and_then(|x| expression(x, target)),
+            },
+            _ => None,
+        }
+    }
+
+    fn declarators<'p, 'a>(decls: &'p [oxc_ast::ast::VariableDeclarator<'a>], target: Span) -> Option<&'p JSXAttribute<'a>> {
+        decls.iter().find(|d| holds(d.span, target)).and_then(|d| d.init.as_ref()).and_then(|e| expression(e, target))
+    }
+
+    fn expression<'p, 'a>(e: &'p Expression<'a>, target: Span) -> Option<&'p JSXAttribute<'a>> {
+        if !holds(e.span(), target) {
+            return None;
+        }
+        match e {
+            Expression::ParenthesizedExpression(p) => expression(&p.expression, target),
+            Expression::TSAsExpression(x) => expression(&x.expression, target),
+            Expression::TSSatisfiesExpression(x) => expression(&x.expression, target),
+            Expression::TSNonNullExpression(x) => expression(&x.expression, target),
+            Expression::JSXElement(el) => element(el, target),
+            Expression::JSXFragment(f) => children(&f.children, target),
+            Expression::ArrowFunctionExpression(a) => match (a.get_expression(), a.get_function_body()) {
+                (Some(x), _) => expression(x, target),
+                (None, Some(b)) => statements(&b.statements, target),
+                _ => None,
+            },
+            Expression::FunctionExpression(f) => f.body.as_ref().and_then(|b| statements(&b.statements, target)),
+            Expression::CallExpression(c) => std::iter::once(&c.callee)
+                .chain(c.arguments.iter().filter_map(|a| a.as_expression()))
+                .find(|x| holds(x.span(), target))
+                .and_then(|x| expression(x, target)),
+            Expression::ConditionalExpression(c) => [&c.test, &c.consequent, &c.alternate]
+                .into_iter()
+                .find(|x| holds(x.span(), target))
+                .and_then(|x| expression(x, target)),
+            Expression::LogicalExpression(l) => {
+                if holds(l.left.span(), target) { expression(&l.left, target) } else { expression(&l.right, target) }
+            }
+            Expression::ArrayExpression(a) => a
+                .elements
+                .iter()
+                .filter_map(|el| el.as_expression())
+                .find(|x| holds(x.span(), target))
+                .and_then(|x| expression(x, target)),
+            Expression::ObjectExpression(o) => o
+                .properties
+                .iter()
+                .find_map(|p| match p {
+                    ObjectPropertyKind::ObjectProperty(p) if holds(p.value.span(), target) => Some(&p.value),
+                    _ => None,
+                })
+                .and_then(|x| expression(x, target)),
+            _ => None,
+        }
+    }
+
+    fn element<'p, 'a>(el: &'p JSXElement<'a>, target: Span) -> Option<&'p JSXAttribute<'a>> {
+        for item in &el.opening_element.attributes {
+            if let JSXAttributeItem::Attribute(a) = item {
+                if a.span == target {
+                    return Some(a);
+                }
+                if holds(a.span, target) {
+                    return match &a.value {
+                        Some(JSXAttributeValue::ExpressionContainer(c)) => c.expression.as_expression().and_then(|x| expression(x, target)),
+                        Some(JSXAttributeValue::Element(inner)) => element(inner, target),
+                        _ => None,
+                    };
+                }
+            }
+        }
+        children(&el.children, target)
+    }
+
+    fn children<'p, 'a>(kids: &'p [JSXChild<'a>], target: Span) -> Option<&'p JSXAttribute<'a>> {
+        kids.iter().find(|c| holds(c.span(), target)).and_then(|c| match c {
+            JSXChild::Element(el) => element(el, target),
+            JSXChild::Fragment(f) => children(&f.children, target),
+            JSXChild::ExpressionContainer(x) => x.expression.as_expression().and_then(|x| expression(x, target)),
+            _ => None,
+        })
+    }
 }
 
 /// The string value of `obj.key` when `e` is an object literal with that property.
@@ -763,10 +945,12 @@ export const PostEdit = () => {
             "src/a.tsx#PostEdit#useForm().defaultValues.title",
             "src/a.tsx#PostList#columns[0]",
             "src/a.tsx#PostList#columns[accessorKey=category.id]",
+            "src/a.tsx#App#<Refine>.resources[name=posts]",
+            "src/a.tsx#App#<Foo.Bar>.items",
         ] {
             assert_eq!(ValuePath::parse(s).unwrap().to_string(), s);
         }
-        for bad in ["a.tsx#X", "a.tsx#X#", "a.tsx#X#1a", "a.tsx#X#a..b", "a.tsx#X#a[", "a.tsx#X#a[=v]", "a.tsx#X#a[x=]", "a.tsx#1#a", "a.tsx#X#f(x)"] {
+        for bad in ["a.tsx#X", "a.tsx#X#", "a.tsx#X#1a", "a.tsx#X#a..b", "a.tsx#X#a[", "a.tsx#X#a[=v]", "a.tsx#X#a[x=]", "a.tsx#1#a", "a.tsx#X#f(x)", "a.tsx#X#<1x>.a", "a.tsx#X#<A"] {
             assert!(ValuePath::parse(bad).is_err(), "{bad}");
         }
     }
@@ -781,6 +965,41 @@ export const PostEdit = () => {
         assert_eq!(resolve_text("src/posts.tsx#module#schema.title", false), "z.string().min(2)");
         assert_eq!(resolve_text("src/posts.tsx#module#schema", true).lines().next(), Some("{"));
         assert_eq!(resolve_text("src/posts.tsx#PostEdit#useForm().defaultValues", false), "{ title: \"\" }");
+    }
+
+    #[test]
+    fn resolves_jsx_attributes() {
+        const APP: &str = r#"export default function App() {
+  return (
+    <BrowserRouter>
+      {ready && (
+        <Refine
+          dataProvider={dataProvider}
+          resources={[
+            { name: "posts", list: "/posts" },
+            { name: "users", list: "/users", meta: { icon: <UserIcon /> } },
+          ]}
+        >
+          <Routes />
+        </Refine>
+      )}
+    </BrowserRouter>
+  );
+}
+"#;
+        let alloc = Allocator::default();
+        let program = parse(&alloc, APP, "src/App.tsx").unwrap();
+        let text = |p: &str| {
+            let r = resolve(&program, &ValuePath::parse(p).unwrap()).unwrap();
+            APP[r.expr.span().start as usize..r.expr.span().end as usize].to_string()
+        };
+        assert!(text("src/App.tsx#App#<Refine>.resources").starts_with("[\n            { name: \"posts\""));
+        assert_eq!(text("src/App.tsx#App#<Refine>.resources[name=users].list"), "\"/users\"");
+        assert_eq!(text("src/App.tsx#App#<Refine>.dataProvider"), "dataProvider");
+        let err = |p: &str| resolve(&program, &ValuePath::parse(p).unwrap()).err().unwrap().to_string();
+        assert!(err("src/App.tsx#App#<Refine>.nope").contains("<Refine> has no `nope` attribute"));
+        assert!(err("src/App.tsx#App#<Admin>.resources").contains("renders no <Admin>"));
+        assert!(err("src/App.tsx#App#<Refine>").contains("after <Refine> comes the attribute"));
     }
 
     #[test]
