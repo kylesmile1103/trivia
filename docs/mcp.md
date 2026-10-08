@@ -45,6 +45,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_inspect` (read-only) | `{ locator }` | `{ node: NodeDetails & { component } }` |
 | `trivia_outline` (read-only) | `{ file }` | `{ trees: OutlineNode[] }` (and an indented text tree) |
 | `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
+| `trivia_get_page` (read-only) | `{ file? }` | `{ file, pages: ListPage[], hint? }` |
+| `trivia_edit_columns` | `{ file, component?, changes: ColumnChange[] (1+), label }` | `ApplyResult & { page: ListPage, selection }` |
 | `trivia_screenshot` (read-only) | — | an image block: the canvas as a PNG (no structured result) |
 | `trivia_sync_openapi` | `{ input?, zod?, force? }` | `SyncResult & { note? }` |
 | `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
@@ -65,6 +67,14 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 - `trivia_undo` undoes the newest entry of the shared history only if its label is the one
   given (the agent passes `history.undoLabel` from its last result or from
   `trivia_get_selection`). The user's own edits are never undone by mistake.
+- `trivia_get_page` and `trivia_edit_columns` are the Refine adapter (`docs/product.md`,
+  `docs/api.md` `refine/*`). `trivia_get_page` reads a file's list pages: the selected
+  element's file when none is given, every list page under `src/` with neither. Each page has
+  its columns as the source has them and the contract fields it doesn't show yet.
+  `trivia_edit_columns` adds contract fields as typed columns and removes or reorders columns by
+  key, in order, as one `Agent: …` undo entry, and returns the page as it now reads.
+  `trivia_apply` also takes the value ops (`insertElement`, `removeElement`, `moveElement`,
+  `setProperty`, `removeProperty`) for edits the adapter doesn't plan, such as renaming a header.
 - `trivia_screenshot` returns what the user sees on the Trivia canvas, so the agent can check
   its edit: one `image` block (`image/png`, the canvas width, at most 4000 px of its height)
   and a text line with its size. The plugin has no browser; it asks the open designer

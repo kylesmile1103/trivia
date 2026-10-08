@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **New session? Start with `docs/HANDOFF.md`.** It covers the current status, the decisions, the catches, and the prioritized backlog.
+> **What the product is for** (who, which jobs, in what order) is `docs/product.md`.
 
 ## What Trivia is
 
@@ -26,6 +27,8 @@ the sections below record what was verified against the reference code on 2026-1
 - `packages/contract-sync` — OpenAPI → hey-api TanStack Query code + `trivia.manifest.json`
   (`docs/data-provider.md`).
 - `examples/playground` — a stock create-vite + shadcn (radix, nova) app used as the "user app".
+- `examples/refine-admin` — a Refine + shadcn back office on an OpenAPI mock: the user app for
+  the product direction in `docs/product.md` (day 2 for Refine apps on OpenAPI backends).
 - `e2e/` — Playwright across all of the above.
 
 Where code goes is in `docs/architecture.md`: packages at the top, feature slices inside.

@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { ApiError } from '../engine.js'
+import { parseColumnChanges } from '../refine/index.js'
 import type { ErrorCode, Health, HistoryState } from '../types.js'
 import { type CallerRules, checkCaller } from './guard.js'
 import { type EngineService, type Json, isObject } from './service.js'
@@ -68,6 +69,29 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
           const file = url.searchParams.get('file')
           if (!file) throw new ApiError('invalid_op', 'missing ?file=<project-relative path>')
           return service.outline(file)
+        },
+      },
+    ],
+    ['/refine/pages', { GET: () => service.refine.pages() }],
+    [
+      '/refine/page',
+      {
+        GET: (url) => {
+          const file = url.searchParams.get('file')
+          if (!file) throw new ApiError('invalid_op', 'missing ?file=<project-relative path>')
+          return service.refine.page(file)
+        },
+      },
+    ],
+    [
+      '/refine/columns/plan',
+      {
+        POST: (_url, body) => {
+          const { file, component } = body
+          if (typeof file !== 'string' || (component !== undefined && typeof component !== 'string')) {
+            throw new ApiError('invalid_op', 'body must be { file: string, component?: string, changes: [...] }')
+          }
+          return service.refine.planColumns(file, component, parseColumnChanges(body['changes']))
         },
       },
     ],

@@ -77,6 +77,17 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   Claude Code shows the model `structuredContent`, not the text summary, so hints are now
   data fields; `trivia_get_selection` returns the undo history (a fresh session couldn't
   undo); error advice is per tool; sync says whether the contract changed.
+- **Product reset** (`docs/product.md`). With the user, after a market scan: Trivia is the
+  contract-aware day-2 tool for **Refine + shadcn apps on OpenAPI backends** (internal tools).
+  Their weekly jobs, in order: columns, form fields, contract drift, new resources. General
+  editor features are frozen. **Slice 1 (columns) is done:**
+  - value paths and value ops in the engine;
+  - a Refine adapter in the plugin, with HTTP and MCP;
+  - a Columns panel in the Data tab;
+  - `examples/refine-admin` with its own e2e project.
+
+  The user was away for the slice-1 design calls; they are marked ⚑ in `product.md` for
+  review.
 - **Desktop shell** (`crates/trivia_shell`, Tauri 2.11.6, its own Cargo workspace): a window
   on the designer, with a waiting page until it answers. Verified on macOS by an agent's
   screenshot from the minimized window. That check found a screenshot bug browsers have too:
@@ -108,6 +119,7 @@ pnpm install
 pnpm build:engine            # napi addon (crates/trivia_napi → .node + index.js; both gitignored)
 pnpm build:plugin            # vite-plugin-ast-locator → dist (the playground imports the built plugin)
 pnpm --filter playground dev                 # user app, http://localhost:5173 (plugin + engine API)
+pnpm --filter refine-admin dev               # or the Refine example (docs/product.md), same port
 TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev
 #   designer: http://localhost:4400/__trivia/ (proxies everything else to the target)
 
@@ -122,6 +134,9 @@ pnpm --filter @trivia/designer test          # vitest (unit)
 pnpm --filter @trivia/contract-sync test     # runs hey-api codegen + real tsc on its output
 pnpm exec playwright test                    # e2e: starts the playground + designer itself
 TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 pnpm exec playwright test e2e/canvas.spec.ts   # other ports, one spec
+# Playwright runs two projects: playground (designer on TRIVIA_PORT) and refine (refine-admin on
+# TRIVIA_REFINE_APP_PORT, its designer on TRIVIA_REFINE_PORT; defaults 5174/4401).
+TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 TRIVIA_REFINE_APP_PORT=5312 TRIVIA_REFINE_PORT=4412 pnpm exec playwright test
 ```
 
 E2E tests and manual checks edit `examples/playground/src/**` on disk. Restore afterwards with
@@ -210,7 +225,7 @@ writes `useQuery` hooks against it.
   `pre-push` enforce this (case-insensitive). Never use `--no-verify`.
 - **Selecting a Chrome browser:** if clicks don't register, run `/chrome` to pick the right browser (a backgrounded or other browser drops presses). After HMR, `import()`-ing a module in the page gives a fresh copy, so trust screenshots.
 - **Probing agents write to live servers.** Stop your dev servers, or keep them on ports no agent knows, while review or verify agents run, and check `git status` afterwards.
-- **The plugin's vitest copies `examples/playground` as it is on disk.** Leftover edits from a
+- **The plugin's vitest copies `examples/playground` and `examples/refine-admin` as they are on disk.** Leftover edits from a
   manual or agent session there fail ten unrelated-looking MCP tests. `git checkout -- examples/`
   (and delete new files) first.
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
@@ -218,10 +233,17 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-The session-2 backlog is done. Candidates, not yet prioritized with the user:
-- Edit forms (an update body plus loading the row) and nested-object fields in generated forms.
-- The shell: try clicking, dragging and the inspector by hand in WebKit; Linux and Windows;
-  a `tauri build` bundle; perhaps starting the dev servers itself.
+The order is the product's (`docs/product.md`, Slices):
+1. **Slice 2, form fields:** create and edit pages in `refine-admin`, then add, remove and
+   reorder a contract field (zod rule + default value + `<Field>`, one undo entry).
+2. **Slice 3, contract drift:** after a spec change, each page's broken references, with
+   fixes.
+3. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
+   routes.
+4. Have the user try it on one of their real internal tools.
+
+Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
+and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).
 
 ## 8. Repo map
 

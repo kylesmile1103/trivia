@@ -4,7 +4,7 @@
 import { toast } from 'sonner'
 
 import { ApiError, engine } from '@/shared/engine/client'
-import type { ApplyResult, HistoryResult, Op } from '@/shared/engine/types'
+import { type ApplyResult, type HistoryResult, type Op, isValueOp } from '@/shared/engine/types'
 
 import { designer } from './store'
 
@@ -71,7 +71,7 @@ async function run(call: () => Promise<ApplyResult>, ops: readonly Op[], left: s
     // A new `history` tells the canvas an HMR is on its way; an unchanged result writes
     // nothing and adds no entry (docs/api.md), so there is nothing to wait for.
     if (result.changed) designer.getState().setHistory(result.history, { files: filesOf(result.file, ops), sentAt })
-    if (left === null) followSelection(result, ops.at(-1), selectedBefore)
+    if (left === null) followSelection(result, ops, selectedBefore)
     return result
   } catch (error) {
     report(error, left ?? undefined)
@@ -88,8 +88,16 @@ async function run(call: () => Promise<ApplyResult>, ops: readonly Op[], left: s
  * (re-selected meanwhile), and no canvas press is waiting to select. A removal still lets go of
  * its node when that is what is selected; a waiting press keeps waiting.
  */
-function followSelection(result: ApplyResult, last: Op | undefined, selectedBefore: string | null): void {
+function followSelection(result: ApplyResult, ops: readonly Op[], selectedBefore: string | null): void {
   const s = designer.getState()
+  const last = ops.at(-1)
+  // A value op (a Refine column, say) can add, drop or reorder JSX inside the literal it edits,
+  // which renumbers the JSX locators after it in that file. Nothing says where the selected
+  // node went, and a same-tag neighbour could slide into its old locator: let it go instead.
+  if (result.changed && s.selected !== null && ops.some((op) => isValueOp(op) && locatorFile(op.path) === locatorFile(s.selected!))) {
+    s.select(null)
+    return
+  }
   const subject = last ? subjectOf(last) : null
   if (s.selected !== selectedBefore && (subject === null || s.selected !== subject)) return
   if (result.locator) {
@@ -125,8 +133,15 @@ function filesOf(resultFile: string, ops: readonly Op[]): string[] {
       files.add(op.file)
       continue
     }
-    const locators =
-      op.op === 'insertChild' ? [op.parent] : op.op === 'move' ? [op.source, op.target] : op.op === 'moveNode' ? [op.source, op.parent] : [op.target]
+    const locators = isValueOp(op)
+      ? [op.path]
+      : op.op === 'insertChild'
+        ? [op.parent]
+        : op.op === 'move'
+          ? [op.source, op.target]
+          : op.op === 'moveNode'
+            ? [op.source, op.parent]
+            : [op.target]
     for (const locator of locators) {
       const file = locatorFile(locator)
       if (file) files.add(file)

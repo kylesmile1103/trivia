@@ -67,6 +67,8 @@ describe('tools', () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
       'trivia_apply',
+      'trivia_edit_columns',
+      'trivia_get_page',
       'trivia_get_selection',
       'trivia_inspect',
       'trivia_list_components',
@@ -78,6 +80,7 @@ describe('tools', () => {
     const apply = tools.find((t) => t.name === 'trivia_apply')!
     expect(apply.description).toContain('expectedName')
     expect(tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name).sort()).toEqual([
+      'trivia_get_page',
       'trivia_get_selection',
       'trivia_inspect',
       'trivia_list_components',

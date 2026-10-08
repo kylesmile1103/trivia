@@ -11,10 +11,12 @@ crates/
   trivia_napi/            its Node binding, npm package @trivia/engine
   trivia_shell/           the desktop shell (Tauri): a window on the designer; its own workspace
 packages/
-  vite-plugin-ast-locator/  dev-only Vite plugin: stamps locators, serves /@trivia/api
+  vite-plugin-ast-locator/  dev-only Vite plugin: stamps locators, serves /@trivia/api and /@trivia/mcp;
+                          src/refine/ is the Refine adapter (pages, columns, plans)
   designer/               the React designer, @trivia/designer
   contract-sync/          OpenAPI → hey-api code + trivia.manifest.json, @trivia/contract-sync
-examples/playground/      the "user app" every manual and e2e check runs against
+examples/playground/      the "user app" for the editor's manual and e2e checks
+examples/refine-admin/    a Refine + shadcn back office on an OpenAPI mock: the Refine work's user app
 e2e/                      Playwright, across designer + plugin + engine + playground
 docs/                     contracts (api.md, data-provider.md), this file, HANDOFF.md
 docs/briefs/              the original briefs, verbatim (historical; CLAUDE.md wins)

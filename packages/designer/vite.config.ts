@@ -17,6 +17,8 @@ const target = process.env.TRIVIA_TARGET ?? 'http://localhost:5173'
 
 export default defineConfig({
   base: '/__trivia/',
+  // Two designers at once (e2e runs one per example app) must not share a dependency cache.
+  ...(process.env.TRIVIA_CACHE_DIR ? { cacheDir: process.env.TRIVIA_CACHE_DIR } : {}),
   plugins: [apiGuard(), react(), tailwindcss()],
   // The shell names the proxied dev server in its status chip and its "can't connect" screen.
   define: { __TRIVIA_TARGET__: JSON.stringify(target) },

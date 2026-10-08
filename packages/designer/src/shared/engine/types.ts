@@ -29,6 +29,19 @@ export type Op =
   | { op: 'move'; source: string; expectedName?: string; target: string; expectedTargetName?: string; placement: Placement }
   | { op: 'moveNode'; source: string; expectedName?: string; parent: string; expectedParentName?: string; index: number }
   | ({ op: 'bindQuery' } & QueryBinding)
+  // Value ops: object and array literals addressed by value path (docs/api.md).
+  | { op: 'insertElement'; path: string; index?: number; value: string; imports?: ImportSpec[] }
+  | { op: 'removeElement'; path: string }
+  | { op: 'moveElement'; path: string; index: number }
+  | { op: 'setProperty'; path: string; prop: string; value: string; imports?: ImportSpec[] }
+  | { op: 'removeProperty'; path: string; prop: string }
+
+/** Ops that address a value path rather than a JSX locator. */
+export type ValueOp = Extract<Op, { path: string }>
+
+export function isValueOp(op: Op): op is ValueOp {
+  return 'path' in op
+}
 
 /** Bind an element to a TanStack Query factory (engine: ops/bind_query.rs). */
 export interface QueryBinding {
@@ -240,3 +253,56 @@ export interface ManifestState {
   manifest: TriviaManifest | null
   drift: Drift | null
 }
+
+// ---------------------------------------------------------------------------------------------
+// Refine pages (vite-plugin-ast-locator src/refine, docs/product.md)
+
+export type FieldShape = 'text' | 'enum' | 'number' | 'date' | 'dateTime' | 'boolean' | 'list' | 'other'
+
+export interface PageField {
+  name: string
+  type: string
+  format: string | null
+  shape: FieldShape
+  required: boolean
+  nullable: boolean
+  readOnly: boolean
+  enum: string[] | null
+  description: string | null
+}
+
+export interface PageColumn {
+  key: string | null
+  accessorKey: string | null
+  label: string | null
+  path: string
+  line: number
+  sortable: boolean
+  filter: string | null
+  hasCell: boolean
+  field: PageField | null
+}
+
+export interface ListPage {
+  kind: 'list'
+  file: string
+  component: string
+  line: number
+  columnsPath: string
+  resource: { name: string; from: 'refineCoreProps' | 'typeArgument' | 'folder' } | null
+  rowType: string | null
+  contract: { resource: string; typeName: string | null } | null
+  columns: PageColumn[]
+  available: PageField[]
+}
+
+export type ColumnChange =
+  | { action: 'add'; field: string; index?: number; label?: string }
+  | { action: 'remove'; column: string }
+  | { action: 'move'; column: string; index: number }
+
+export interface ColumnPlan {
+  ops: Op[]
+  label: string
+}
+

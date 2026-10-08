@@ -1,5 +1,5 @@
-// The Data tab: the project's API as contract-sync described it (trivia.manifest.json, through
-// GET /manifest). Each resource lists its operations and fields, and offers a table bound to its
+// The Data tab: the page on the canvas when it is a Refine list page (PageColumns), then the
+// project's API as contract-sync described it (trivia.manifest.json, through GET /manifest). Each resource lists its operations and fields, and offers a table bound to its
 // list query and a create form. Click to insert into the selection, or drag onto the canvas;
 // either is one undo entry. A badge says when the spec changed since the code was generated.
 
@@ -17,6 +17,7 @@ import { Button } from '@/shared/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 import { type CodegenContext, formTemplate, tableTemplate } from './codegen'
+import { PageColumns } from './PageColumns'
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; state: ManifestState }
 
@@ -51,6 +52,7 @@ export function DataPanel() {
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-width:thin]">
+        <PageColumns />
         {load.status === 'error' && <p className="px-1 text-xs text-destructive">Couldn’t read the manifest: {load.message}</p>}
         {load.status === 'ready' && load.state.manifest === null && (
           <div className="grid gap-2 px-1 text-xs text-muted-foreground">

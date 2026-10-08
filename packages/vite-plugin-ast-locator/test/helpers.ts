@@ -45,6 +45,16 @@ export function copyPlayground(): string {
   return dir
 }
 
+export const REFINE_ADMIN = path.resolve(import.meta.dirname, '../../../examples/refine-admin')
+
+/** A throwaway copy of the Refine example (docs/product.md), like copyPlayground. */
+export function copyRefineAdmin(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-refine-'))
+  for (const entry of COPIED) fs.cpSync(path.join(REFINE_ADMIN, entry), path.join(dir, entry), { recursive: true })
+  fs.symlinkSync(path.join(REFINE_ADMIN, 'node_modules'), path.join(dir, 'node_modules'), 'dir')
+  return dir
+}
+
 export interface TestServer {
   vite: ViteDevServer
   socket: string

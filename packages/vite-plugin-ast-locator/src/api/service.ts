@@ -8,6 +8,7 @@ import path from 'node:path'
 
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
+import { RefineAdapter } from '../refine/index.js'
 import { uncommitted } from './git.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
@@ -64,10 +65,19 @@ export class EngineService {
   readonly #queue = new SerialQueue()
   readonly #selection = new SelectionStore()
   readonly #screenshots = new ScreenshotRelay()
+  /** Refine pages: their columns, contract fields, and the ops that change them (docs/product.md). */
+  readonly refine: RefineAdapter
 
   constructor(options: ServiceOptions) {
     this.#options = options
     this.#history = new History(options.historyLimit ?? 100)
+    this.refine = new RefineAdapter({
+      root: options.root,
+      uiDir: options.uiDir,
+      importBase: options.importBase,
+      describeValues: (file) => this.describeValues(file),
+      manifest: () => this.manifest(),
+    })
   }
 
   health(): Health {
@@ -89,6 +99,12 @@ export class EngineService {
   outline(file: string): unknown[] {
     if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
     return unwrap<unknown[]>(this.#options.engine.outline(this.#options.root, file))
+  }
+
+  /** The scopes of `file` with their top-level bindings and hook calls (engine value descriptions). */
+  describeValues(file: string): unknown[] {
+    if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
+    return unwrap<unknown[]>(this.#options.engine.describeValues(this.#options.root, file))
   }
 
   history(): HistoryState {
@@ -314,6 +330,16 @@ function describe(op: Json): string {
       return `Move ${name}`
     case 'bindQuery':
       return `Bind ${name} to ${typeof op['optionsFn'] === 'string' ? op['optionsFn'] : 'a query'}`
+    case 'insertElement':
+      return 'Insert item'
+    case 'removeElement':
+      return 'Remove item'
+    case 'moveElement':
+      return 'Move item'
+    case 'setProperty':
+      return `Set ${prop}`
+    case 'removeProperty':
+      return `Remove ${prop}`
     default:
       return 'Edit'
   }

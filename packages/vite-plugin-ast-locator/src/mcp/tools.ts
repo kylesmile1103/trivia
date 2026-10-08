@@ -8,6 +8,7 @@ import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
 import { ApiError } from '../engine.js'
+import { parseColumnChanges } from '../refine/index.js'
 import type { ErrorCode } from '../types.js'
 
 /** Every agent edit's history label starts with this, so the designer's undo menu says whose it is. */
@@ -53,6 +54,13 @@ const imports = z
   .default([])
   .describe('Imports the snippet needs, e.g. [{ "name": "Badge", "source": "@/components/ui/badge" }] (trivia_list_components gives importSource)')
 const json = z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown()), z.record(z.string(), z.unknown())])
+const valuePath = z
+  .string()
+  .describe('A value path from trivia_get_page (a columnsPath, a column\'s path): `<file>#<scope>#<binding or call()>[.prop][[key=value]][[i]]`')
+const valueText = z
+  .string()
+  .min(1)
+  .describe('One JS/TSX expression as source text, unindented, e.g. `{ id: "email", accessorKey: "email", header: "Email" }`; the engine indents it')
 
 const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('updateProp'), target: locator, expectedName: guard('target'), prop: z.string().min(1), value: json.describe('The new value; null removes the prop') }).strict(),
@@ -84,6 +92,24 @@ const op = z.discriminatedUnion('op', [
       loadingProp: z.string().optional().describe('Prop that receives the loading flag, usually "isLoading"'),
     })
     .strict(),
+  z.object({ op: z.literal('insertElement'), path: valuePath, index: z.number().int().min(0).optional().describe('Before this element; omit to append'), value: valueText, imports }).strict(),
+  z.object({ op: z.literal('removeElement'), path: valuePath.describe('The element to remove, by key: `…#columns[id=email]`') }).strict(),
+  z.object({ op: z.literal('moveElement'), path: valuePath.describe('The element to move, by key: `…#columns[id=email]`'), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
+  z.object({ op: z.literal('setProperty'), path: valuePath.describe('An object literal, e.g. a column `…#columns[id=email]`'), prop: z.string().min(1), value: valueText, imports }).strict(),
+  z.object({ op: z.literal('removeProperty'), path: valuePath.describe('An object literal'), prop: z.string().min(1) }).strict(),
+])
+
+const columnChange = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('add'),
+      field: z.string().min(1).describe('A contract field the page does not show yet (trivia_get_page: available)'),
+      index: z.number().int().min(0).optional().describe('Before this column; omit to append'),
+      label: z.string().min(1).optional().describe('The header text; default: the field name, humanized'),
+    })
+    .strict(),
+  z.object({ action: z.literal('remove'), column: z.string().min(1).describe('The column key (trivia_get_page: columns[].key)') }).strict(),
+  z.object({ action: z.literal('move'), column: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
 ])
 
 // ---------------------------------------------------------------------------------------------
@@ -240,7 +266,9 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         'Apply one or more guarded edits to the user\'s source files, byte for byte (formatting and comments are kept), ' +
         'as one entry in the designer\'s undo history. Ops: updateProp (value null removes it), setText, insert, ' +
         'insertChild, remove, move (also to another file: its imports come along), moveNode, bindQuery (a TanStack Query ' +
-        'hook feeding the element, docs/data-provider.md) and createFile (a new component file; undo deletes it). ' +
+        'hook feeding the element, docs/data-provider.md) and createFile (a new component file; undo deletes it); and, ' +
+        'for object and array literals addressed by value path (Refine columns, zod schemas, defaultValues), ' +
+        'insertElement, removeElement, moveElement, setProperty and removeProperty. ' +
         'Each names elements by locator and must carry the tag name you read there ' +
         '(expectedName, and expectedTargetName / expectedParentName for the other element): the edit is refused instead ' +
         'of hitting the wrong element when the file changed. Several ops: each op\'s locators must hold after the ops ' +
@@ -262,6 +290,65 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         return {
           data,
           summary: result.changed ? `Applied "${entry}" to ${result.file}.` : `Nothing changed: ${result.file} already reads that way.`,
+        }
+      }),
+  )
+
+  server.registerTool(
+    'trivia_get_page',
+    {
+      title: 'Read a Refine page',
+      description:
+        'The Refine list pages of a file (components calling useTable): each one\'s columns as the source has them ' +
+        '(key, header label, filter, the contract field it shows) and the contract fields it does not show yet ' +
+        '(available, with type and enum values from the OpenAPI contract). Without a file, the selected element\'s file; ' +
+        'with neither, every list page in src/. Use it before trivia_edit_columns.',
+      inputSchema: { file: z.string().min(1).optional().describe('Project-relative file, e.g. "src/pages/customers/list.tsx"') },
+      annotations: reads,
+    },
+    ({ file }) =>
+      run(async () => {
+        const selected = service.selection().selection?.locator.split('#')[0]
+        const target = file ?? selected
+        const pages = target ? await service.refine.page(target) : await service.refine.pages()
+        const hint =
+          pages.length === 0
+            ? `${target ?? 'src/'} has no Refine list page (a component calling useTable from @refinedev/react-table).`
+            : null
+        return {
+          data: { file: target ?? null, pages, ...(hint ? { hint } : {}) },
+          summary: hint ?? pages.map((p) => `${p.component} (${p.file}): ${p.columns.map((c) => c.key).join(', ')}`).join('\n'),
+        }
+      }),
+  )
+
+  server.registerTool(
+    'trivia_edit_columns',
+    {
+      title: 'Edit a list page\'s columns',
+      description:
+        'Add contract fields as columns of a Refine list page (each written by its type: a badge and a multi-select ' +
+        'filter for enums, a numeric filter for numbers, a date range filter and a formatted cell for dates), and remove ' +
+        'or reorder columns by key, as one entry in the designer\'s undo history. Changes apply in order; an index ' +
+        'counts the columns after the changes before it.',
+      inputSchema: {
+        file: z.string().min(1).describe('The page file, from trivia_get_page'),
+        component: z.string().min(1).optional().describe('The page component, when the file has several'),
+        changes: z.array(columnChange).min(1),
+        label: z.string().min(1).describe('A few words for the undo menu, e.g. "Show KYC status"'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ file, component, changes, label }) =>
+      run(async () => {
+        const entry = `${AGENT_LABEL}${label.trim()}`
+        const plan = await service.refine.planColumns(file, component, parseColumnChanges(changes))
+        const result = await service.batch(plan.ops, entry, { by: 'agent' })
+        const pages = await service.refine.page(file)
+        const page = (component ? pages.find((p) => p.component === component) : pages[0]) ?? null
+        return {
+          data: { ...result, page, selection: service.selection() },
+          summary: `Applied "${entry}": ${plan.label}. Columns now: ${page?.columns.map((c) => c.key).join(', ') ?? '?'}.`,
         }
       }),
   )
