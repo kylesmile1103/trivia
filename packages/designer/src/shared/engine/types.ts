@@ -26,6 +26,7 @@ export type Op =
   | { op: 'setText'; target: string; expectedName?: string; text: string }
   | { op: 'createFile'; file: string; content: string; ifMissing?: boolean }
   | { op: 'remove'; target: string; expectedName?: string }
+  | { op: 'replaceElement'; target: string; expectedName?: string; snippet: string; imports?: ImportSpec[] }
   | { op: 'move'; source: string; expectedName?: string; target: string; expectedTargetName?: string; placement: Placement }
   | { op: 'moveNode'; source: string; expectedName?: string; parent: string; expectedParentName?: string; index: number }
   | ({ op: 'bindQuery' } & QueryBinding)

@@ -115,6 +115,7 @@ function subjectOf(op: Op): string | null {
     case 'updateProp':
     case 'setText':
     case 'remove':
+    case 'replaceElement':
     case 'bindQuery':
       return op.target
     case 'move':

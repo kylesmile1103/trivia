@@ -68,6 +68,9 @@ const op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('insert'), target: locator, expectedName: guard('target'), placement, snippet, imports }).strict(),
   z.object({ op: z.literal('insertChild'), parent: locator, expectedName: guard('parent'), index: z.number().int().min(0), snippet, imports }).strict(),
   z.object({ op: z.literal('remove'), target: locator, expectedName: guard('target') }).strict(),
+  z
+    .object({ op: z.literal('replaceElement'), target: locator, expectedName: guard('target'), snippet: snippet.describe('The element that takes its place, e.g. `<CustomerList />`'), imports })
+    .strict(),
   z.object({ op: z.literal('move'), source: locator, expectedName: guard('source'), target: locator, expectedTargetName: guard('target'), placement }).strict(),
   z.object({ op: z.literal('moveNode'), source: locator, expectedName: guard('source'), parent: locator, expectedParentName: guard('parent'), index: z.number().int().min(0) }).strict(),
   z
@@ -304,7 +307,7 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       description:
         'Apply one or more guarded edits to the user\'s source files, byte for byte (formatting and comments are kept), ' +
         'as one entry in the designer\'s undo history. Ops: updateProp (value null removes it), setText, insert, ' +
-        'insertChild, remove, move (also to another file: its imports come along), moveNode, bindQuery (a TanStack Query ' +
+        'insertChild, remove, replaceElement (one element for another where it stands, also inside element={…}), move (also to another file: its imports come along), moveNode, bindQuery (a TanStack Query ' +
         'hook feeding the element, docs/data-provider.md) and createFile (a new component file; undo deletes it); and, ' +
         'for object and array literals addressed by value path (Refine columns, zod schemas, defaultValues), ' +
         'insertElement, removeElement, moveElement, setProperty and removeProperty; and for one call of a method chain ' +

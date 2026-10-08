@@ -22,6 +22,7 @@
 //! * `set_text`: `setText`;
 //! * `remove`: `remove`;
 //! * `move_node`: `move` and `moveNode`, with the check that moved code keeps its bindings;
+//! * `replace`: `replaceElement`, one element for another where it stands;
 //! * `move_across`: `move` and `moveNode` between two files (`apply_across`);
 //! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too);
 //! * `values`: `insertElement`, `removeElement`, `moveElement`, `setProperty` and
@@ -53,6 +54,7 @@ mod insert;
 mod move_across;
 mod move_node;
 mod remove;
+mod replace;
 mod set_text;
 mod update_prop;
 mod values;
@@ -156,6 +158,18 @@ pub enum Op {
         expected_parent_name: Option<String>,
         index: usize,
     },
+    /// Replace the element at `target` with `snippet` (one JSX element), where it stands: also
+    /// inside `{…}` and attribute values (`element={<X />}`). The snippet's imports are added and
+    /// the old element's last-use imports dropped.
+    ReplaceElement {
+        target: String,
+        /// Stale-locator guard: the tag name the caller saw at `target`.
+        #[serde(default)]
+        expected_name: Option<String>,
+        snippet: String,
+        #[serde(default)]
+        imports: Vec<ImportSpec>,
+    },
     /// Bind an element to a TanStack Query: inject `useQuery` into its component and set its
     /// data/loading props (see `bind_query`).
     BindQuery(bind_query::QueryBinding),
@@ -231,7 +245,8 @@ impl Op {
             Op::Insert { target, .. }
             | Op::UpdateProp { target, .. }
             | Op::SetText { target, .. }
-            | Op::Remove { target, .. } => target,
+            | Op::Remove { target, .. }
+            | Op::ReplaceElement { target, .. } => target,
             Op::InsertChild { parent, .. } => parent,
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
             Op::BindQuery(binding) => &binding.target,
@@ -315,6 +330,10 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         Op::Remove { target, expected_name } => {
             let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
             doc.remove(target)
+        }
+        Op::ReplaceElement { target, expected_name, snippet, imports } => {
+            let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
+            doc.replace_element(target, snippet, imports)
         }
         Op::Move { source: from, expected_name, target, expected_target_name, placement } => {
             let from = table.resolve_expected(&doc.locate(from)?, expected_name.as_deref())?;

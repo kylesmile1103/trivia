@@ -280,6 +280,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 { "op": "moveElement", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=segment]", "index": 0 }
 { "op": "setProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting", "value": "false", "imports": [] }
 { "op": "removeProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting" }
+{ "op": "replaceElement", "target": "<loc>", "expectedName": "OpenApiListInferencer", "snippet": "<TransactionList />", "imports": [{ "name": "TransactionList", "source": "@/pages/transactions/list" }] }
 { "op": "setCallArgument", "path": "src/pages/customers/edit.tsx#module#customerSchema.notes", "method": "max", "index": 0, "value": "500" }
 { "op": "insertCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.fullName", "call": "max(120, \"Enter at most 120 characters.\")", "before": ["optional", "refine"] }
 { "op": "removeCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.phone", "method": "optional" }
@@ -326,6 +327,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   restores the bytes. Keyed paths are their own stale guard: a missing key is 404
   `node_not_found`, and a key two elements share is 422 `unsupported`. `removeElement` and
   `removeProperty` drop imports only the removed code used. `locator` in the result is `null`.
+- `replaceElement` swaps the element at `target` for `snippet` (one JSX element) where it
+  stands, also inside a `{…}` expression or an attribute value (`element={<X />}`), where
+  siblings can't be added. Its `imports` work as an insert's do, and the old element's imports
+  go when it was their last use. `locator` in the result is the new element's: it keeps the old
+  one's place.
 - **Chain ops** (`setCallArgument`, `insertCall`, `removeCall`) edit one call of the method chain
   at a value path, such as a zod rule `z.string().max(100, "…").optional()`. The other calls,
   and the developer's messages, stay as written.

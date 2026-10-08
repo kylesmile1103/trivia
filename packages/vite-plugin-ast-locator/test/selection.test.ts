@@ -29,6 +29,14 @@ describe('rebase: where the selected node is after an op', () => {
     expect(rebase(at('0.0'), remove, null)).toBe(at('0.0'))
   })
 
+  it('a replacement keeps it when it is the replaced element or outside it, and drops what was inside', () => {
+    const replace = { op: 'replaceElement', target: at('0.1'), expectedName: 'OpenApiListInferencer', snippet: '<CustomerList />' }
+    expect(rebase(at('0.1'), replace, at('0.1'))).toBe(at('0.1'))
+    expect(rebase(at('0.1.2'), replace, at('0.1'))).toBeNull()
+    expect(rebase(at('0.2'), replace, at('0.1'))).toBe(at('0.2'))
+    expect(rebase(at('0'), replace, at('0.1'))).toBe(at('0'))
+  })
+
   it('a move takes it along with its subtree, and shifts what the move passes', () => {
     // 0.1 moved after the old 0.3: out of 0.1 (0.2 and 0.3 move back), into 0.3 (0.3 on moves up).
     const move = { op: 'move', source: at('0.1'), target: at('0.3'), placement: 'after' }

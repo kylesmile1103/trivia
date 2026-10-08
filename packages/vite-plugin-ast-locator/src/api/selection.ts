@@ -97,6 +97,12 @@ export function rebase(locator: string, op: Json, result: string | null): string
       if (removed === null || within(node, removed)) return null
       return format(shift(node, removed, -1))
     }
+    case 'replaceElement': {
+      // One element for another in its place: it keeps its locator, what was inside it is gone.
+      const replaced = parse(op['target'])
+      if (replaced === null) return null
+      return within(node, replaced) && node.path.length > replaced.path.length ? null : locator
+    }
     case 'move':
     case 'moveNode': {
       const source = parse(op['source'])

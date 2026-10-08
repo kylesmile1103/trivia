@@ -63,15 +63,15 @@ impl Doc<'_, '_> {
 }
 
 /// What a parsed snippet needs from the file it goes into.
-struct SnippetInfo {
+pub(super) struct SnippetInfo {
     /// Component names its tags use (`Button`, `Card` in `Card.Header`): each must be bound
     /// in the file or come with an import.
-    components: Vec<String>,
+    pub(super) components: Vec<String>,
     /// Every name it references without binding it (components and `{…}` identifiers):
     /// the imports worth adding.
-    free: BTreeSet<String>,
+    pub(super) free: BTreeSet<String>,
     /// Multi-line string/template literal ranges (relative to the snippet) not to re-indent.
-    frozen: Vec<(u32, u32)>,
+    pub(super) frozen: Vec<(u32, u32)>,
 }
 
 /// Longest snippet accepted, in bytes (after trimming surrounding whitespace).
@@ -125,7 +125,7 @@ pub(super) fn check_snippet_size(snippet: &str) -> Result<()> {
 
 /// Parse a snippet as exactly one JSX element/fragment, with nothing else around it (no
 /// comments, no parentheses: those would become JSX text once spliced into children).
-fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
+pub(super) fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
     if snippet.is_empty() {
         return Err(EngineError::InvalidSnippet("empty snippet".into()));
     }

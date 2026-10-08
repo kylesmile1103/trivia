@@ -117,6 +117,7 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
 | 3. Contract drift | After the spec changes: the Data tab and `trivia_contract_drift` list each page's broken references, with fixes from slices 1–2. |
 | 4. New resource | Pages, resource entry and routes for a contract resource that has none. |
 | 5. Forms that survive real code | On `refine-admin`'s edit page, written in Refine's `<FormField>` style with a grid wrapper and a schema-level `.refine`: fields read, add, remove and rebuild like the others. After a spec change to a bound (`maxLength`), drift's fix edits the rule in place, so custom calls and messages stay. After a change to required-ness, the fix adds or removes `.optional()`. A removed field's other mentions are listed. |
+| 6. Drop-in inferencer | `<OpenApiShowInferencer />` in a route renders the contract's page with live data before any file exists. Eject writes it and switches the route, as one undo entry. |
 
 ## Slice 5: forms that survive real code (⚑ planned by the agent, 2026-10-09)
 
@@ -194,6 +195,76 @@ Shipped in four parts, each through the full gate:
 - 5c: FormField style and placement;
 - 5d: drift.
 
+## Slice 6: a drop-in inferencer, from the contract (⚑ planned by the agent, 2026-10-09)
+
+The user's idea: `@trivia/openapi-inferencer`, a contract-driven replacement for Refine's
+`@refinedev/inferencer`. Refine's inferencer guesses a page at runtime from one live record:
+- it shows nothing for an empty table;
+- it can't see bounds or enums;
+- its code ends in a copy-paste modal.
+
+**Assessment.** Most of it already exists. Slice 4 generates list, create, edit and show pages
+from the contract, with zero records, and writes them to disk as one undo entry. Slice 5 added
+bounds, enums and the `FormField` style. What is new is the **entry point**: a component a
+Refine developer drops into a route, the way they already use Refine's inferencer. The page
+runs there before any file exists, and one click writes it and switches the route over. For
+Refine users that is the most familiar pitch Trivia has, so it is worth building, as a thin
+layer on the existing generator.
+
+**Design.**
+- **Package** `packages/trivia-inferencer`, npm name `@trivia/openapi-inferencer` (as asked).
+  - It exports `OpenApiListInferencer`, `OpenApiCreateInferencer`, `OpenApiEditInferencer` and
+    `OpenApiShowInferencer`. Props: `{ resource?, ejectPath?, hideFields?, title? }`.
+  - The resource comes from `resource`, else Refine's route context.
+  - ⚑ It uses `useResourceParams()`: Refine 5 removed `useResource()` (its 4.x→5.x migration
+    guide). The peer is `@refinedev/core >= 5`.
+  - ⚑ Peers are only `react` and `@refinedev/core`; there are no runtime dependencies. Versions
+    follow the repo (React 19, TypeScript 6), not the spec's React 18 and TS 5.5.
+- **The preview is the generated code itself** (⚑, instead of separate dynamic table and form
+  renderers).
+  - The plugin serves each requested page as a module at `/@trivia/preview/<id>.tsx`, built by
+    slice 4's generator. Vite compiles it with the project's own aliases, components and React
+    refresh: a probe on Vite 8 confirmed it.
+  - The inferencer imports it and renders it inside the app's `<Refine>`, so it works against the
+    real data provider.
+  - What you preview is byte for byte what gets ejected; two renderers would drift apart.
+- ⚑ **No second generator.** The spec's list, form and column generators are slice 4's
+  `scaffold.ts`, which now also takes `hideFields` and `title`. So:
+  - ⚑ data goes through Refine's hooks (`useTable`, `useForm`, `useShow`) and the app's data
+    provider, not raw TanStack Query hooks (a standing product decision, above);
+  - ⚑ booleans keep a `Checkbox`, as everywhere else Trivia writes forms; `Switch` waits.
+- **Eject** goes through the plugin's API like every other edit (⚑, not a new
+  `/__trivia/eject`). `POST /refine/eject` plans it; `/batch` applies it as one undo entry:
+  - `createFile` for the page, at `ejectPath` or the conventional path;
+  - a new engine op, `replaceElement`, that swaps `<OpenApiListInferencer … />` for
+    `<CustomerList />` where it is, and adds the import. The plugin stamps every element with
+    its locator, so the inferencer knows its own.
+
+    The element sits in `element={…}`, an expression, where the JSX ops refuse siblings.
+    Replacing one element with another there is still a plain span splice. The inferencer's
+    import goes when its last use does (rule 9).
+  - Without a locator, the page is still written, and the reply says which element to swap.
+- **Banner.** "Inferred from the OpenAPI contract: Customer", with **View code** (a code drawer
+  with Copy: ⚑ a `<pre>`, not Monaco) and **Eject to disk** (confirm, with the target path).
+  - ⚑ Its styles are inline: Tailwind doesn't scan `node_modules`.
+  - In a production build, or with no Trivia dev server, it says so instead of rendering.
+- **Tests:**
+  - the engine op, with round trips and import handling;
+  - plugin tests: previews for every kind with the example's mock emptied (no records). The spec's
+    fixture (`minLength: 5`, `enum: ["Active", "Suspended"]`, `format: password`) gives a
+    `FormField` form with `.min(5`, `z.enum(["Active", "Suspended"])` and a password input, under
+    `tsc`;
+  - eject plans, including undo;
+  - unit tests of the package's hooks: the eject payload and the dev server's errors;
+  - an e2e on `refine-admin`, whose Transactions show route renders `<OpenApiShowInferencer />`:
+    the preview shows a real transaction, Eject writes `transactions/show.tsx` and switches the
+    route, and undo restores both.
+
+Shipped in three parts, each through the full gate:
+- 6a: engine `replaceElement`;
+- 6b: plugin previews and eject;
+- 6c: the package, the example and the e2e.
+
 ## Status
 
 - **Slice 1, columns: done (2026-10-09).**
@@ -258,6 +329,10 @@ Shipped in four parts, each through the full gate:
       returns them as `warnings`. The designer shows them under the issue and as toasts after a
       fix.
     - The e2e drift test now includes a bound change.
+- **Slice 6, drop-in inferencer: in progress.**
+  - 6a, engine `replaceElement`: done (2026-10-09). It swaps one element for another where it
+    stands, including inside `element={…}`. Imports come and go as with insert and remove, and
+    the selection rebases. It's exposed over HTTP, MCP and the designer's op types.
 - Known limits of slices 1–5:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.

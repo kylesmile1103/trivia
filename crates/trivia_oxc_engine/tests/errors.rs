@@ -195,7 +195,7 @@ fn ops_from_the_api_doc_deserialize() {
             ops.push(op);
         }
     }
-    assert_eq!(ops.len(), 17, "one example per op: {ops:?}");
+    assert_eq!(ops.len(), 18, "one example per op: {ops:?}");
     assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, expected_name: Some(n), .. } if imports.len() == 1 && n == "CardContent"));
     assert!(matches!(&ops[1], Op::InsertChild { expected_name: Some(n), .. } if n == "CardContent"));
     assert!(matches!(&ops[2], Op::UpdateProp { expected_name: Some(n), .. } if n == "Button"));
@@ -209,9 +209,10 @@ fn ops_from_the_api_doc_deserialize() {
     assert!(matches!(&ops[11], Op::MoveElement { index: 0, .. }));
     assert!(matches!(&ops[12], Op::SetProperty { prop, value, .. } if prop == "enableSorting" && value == "false"));
     assert!(matches!(&ops[13], Op::RemoveProperty { prop, .. } if prop == "enableSorting"));
-    assert!(matches!(&ops[14], Op::SetCallArgument { method, index: 0, value, .. } if method == "max" && value == "500"));
-    assert!(matches!(&ops[15], Op::InsertCall { before, .. } if before == &["optional", "refine"]));
-    assert!(matches!(&ops[16], Op::RemoveCall { method, .. } if method == "optional"));
+    assert!(matches!(&ops[14], Op::ReplaceElement { expected_name: Some(n), imports, .. } if n == "OpenApiListInferencer" && imports.len() == 1));
+    assert!(matches!(&ops[15], Op::SetCallArgument { method, index: 0, value, .. } if method == "max" && value == "500"));
+    assert!(matches!(&ops[16], Op::InsertCall { before, .. } if before == &["optional", "refine"]));
+    assert!(matches!(&ops[17], Op::RemoveCall { method, .. } if method == "optional"));
     for placement in ["before", "after", "firstChild", "lastChild"] {
         let text = format!(r#"{{ "op": "move", "source": "a#B#0", "target": "a#B#0", "placement": "{placement}" }}"#);
         assert!(serde_json::from_str::<Op>(&text).is_ok(), "{placement}");
@@ -247,6 +248,7 @@ fn exercise(src: &str, file: &str, locators: &[String]) -> bool {
             Op::UpdateProp { target: loc.clone(), expected_name: None, prop: "title".into(), value: json!("a\"b&c") },
             Op::UpdateProp { target: loc.clone(), expected_name: None, prop: "className".into(), value: json!(null) },
             Op::Move { source: loc.clone(), expected_name: None, target: locators[0].clone(), expected_target_name: None, placement: Placement::FirstChild },
+            Op::ReplaceElement { target: loc.clone(), expected_name: None, snippet: "<Zeta />".into(), imports: vec![spec("Zeta", "@/z")] },
         ] {
             if let Ok(out) = apply_op(src, file, &op) {
                 // Whatever succeeds must have produced code that parses.

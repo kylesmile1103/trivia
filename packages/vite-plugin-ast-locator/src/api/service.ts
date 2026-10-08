@@ -339,6 +339,8 @@ function describe(op: Json): string {
       return 'Insert element'
     case 'remove':
       return `Remove ${name}`
+    case 'replaceElement':
+      return `Replace ${name}`
     case 'move':
     case 'moveNode':
       return `Move ${name}`
