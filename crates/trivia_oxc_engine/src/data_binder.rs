@@ -97,7 +97,7 @@ pub fn bind_query(source: &str, file: &str, binding: &QueryBinding) -> Result<Ou
 
     let alloc = Allocator::default();
     let program = parse(&alloc, source, file)?;
-    let table = JsxTable::build(&program);
+    let table = JsxTable::build(&program, file)?;
     let loc = Locator::parse(&binding.target)?;
     if loc.file != file {
         return Err(EngineError::Unsupported(format!(
@@ -1256,7 +1256,7 @@ fn shifted(edits: &[Edit], pos: u32) -> u32 {
 fn finish(file: &str, original: &str, code: String, node_start: u32) -> Result<Outcome> {
     let alloc = Allocator::default();
     let program = parse(&alloc, &code, file).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
-    let table = JsxTable::build(&program);
+    let table = JsxTable::build(&program, file)?;
     let node = table.node_starting_at(node_start).ok_or_else(|| {
         EngineError::Internal(format!("the bound element is missing at byte {node_start} after the edit"))
     })?;

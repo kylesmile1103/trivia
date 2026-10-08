@@ -91,7 +91,9 @@ async function child(fn, construct, depth) {
 
 if (process.argv[2] === '--child') {
   const [fn, construct, depth] = process.argv.slice(3)
-  console.log(await child(fn, construct, Number(depth)))
+  const summary = await child(fn, construct, Number(depth))
+  // Peak RSS in MiB on the last line (`resourceUsage` reports KiB).
+  console.log(`${summary}\n${Math.round(process.resourceUsage().maxRSS / 1024)}`)
   process.exit(0)
 }
 
@@ -102,18 +104,22 @@ if (!fs.existsSync(path.join(here, '..', 'index.js'))) {
 
 // [function, construct, depth, outcome]. `result`: the file is valid, so the call must
 // succeed. `either`: an error envelope is as good as a result; only a dead process fails.
+// `refused`: the call must fail cleanly (an error envelope, or a throw for `annotate`).
 const cases = [
-  // Past the main thread's crash points (5 000 brackets, 18 000 elements). Elements stay
-  // near that point: every element's locator is as long as its depth, so their cost grows
-  // with the square of the depth.
+  // Past the main thread's crash points (5 000 brackets, 18 000 elements).
   ...['annotate', 'inspect', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles'].map((fn) => [
     fn,
     'brackets',
     15_000,
     'result',
   ]),
-  ['annotate', 'elements', 24_000, 'result'],
-  ['applyOps', 'elements', 24_000, 'result'],
+  // Every element's locator is as long as its depth, so locators grow with the square of the
+  // depth: 50 000 nested elements took more than 6 GB. The engine still parses these files
+  // (past the main thread's crash point) but refuses them once their locators would pass
+  // 2^22 segments, about 2 900 levels deep, so they cost no more than a shallow file.
+  ['annotate', 'elements', 2_800, 'result'],
+  ...['annotate', 'inspect', 'applyOps'].map((fn) => [fn, 'elements', 24_000, 'refused']),
+  ...['annotate', 'inspect', 'applyOps'].map((fn) => [fn, 'elements', 50_000, 'refused']),
   // The round-1 review's 1.4 MB snippet (POST /apply): it killed a 64 MiB engine thread
   // before the engine refused deep snippets.
   ['insert', 'elements', 200_000, 'either'],
@@ -130,6 +136,10 @@ const cases = [
   ...['powers', 'sums', 'nullish', 'nots', 'typeofs', 'casts'].map((construct) => ['annotate', construct, 50_000, 'result']),
 ]
 
+// Peak RSS a case may reach. The largest legitimate case (annotate of a 2 800-deep chain)
+// peaks near 140 MiB on darwin-arm64; 24 000 nested elements took 2.8 GB before the limit.
+const MAX_RSS_MIB = 512
+
 let failed = 0
 for (const [fn, construct, depth, outcome] of cases) {
   const run = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--child', fn, construct, String(depth)], {
@@ -138,14 +148,18 @@ for (const [fn, construct, depth, outcome] of cases) {
   })
   const label = `${fn}(${depth} nested ${construct})`.padEnd(40)
   const survived = run.status === 0 && run.signal === null
-  const ok = survived && (outcome === 'either' || !run.stdout.startsWith('error'))
+  const [result = '', rss = 'NaN'] = run.stdout.trim().split('\n')
+  const failure = result.startsWith('error')
+  const lean = Number(rss) <= MAX_RSS_MIB
+  const ok =
+    survived && lean && (outcome === 'either' || (outcome === 'refused' ? failure : !failure))
   if (!ok) failed += 1
   const summary =
     run.signal !== null
       ? `KILLED by ${run.signal}`
       : run.status !== 0
         ? `exit ${run.status}: ${(run.stderr.trim().split('\n').at(-1) ?? '').slice(0, 120)}`
-        : run.stdout.trim()
+        : `${result} (peak RSS ${rss} MiB${lean ? '' : `, over ${MAX_RSS_MIB}`})`
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label} ${summary}`)
 }
 console.log(failed === 0 ? `\nall ${cases.length} cases survived` : `\n${failed} of ${cases.length} cases failed`)

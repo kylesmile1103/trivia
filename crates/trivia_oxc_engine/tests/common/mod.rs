@@ -89,7 +89,7 @@ pub fn reindent_leading(src: &str, unit: &str) -> String {
 pub fn table(src: &str, file: &str) -> JsxTable {
     let alloc = Allocator::default();
     let program = parse(&alloc, src, file).unwrap_or_else(|e| panic!("{file} must parse: {e}\n{src}"));
-    JsxTable::build(&program)
+    JsxTable::build(&program, file).unwrap_or_else(|e| panic!("{file}: {e}"))
 }
 
 pub fn loc(t: &JsxTable, idx: usize, file: &str) -> String {

@@ -272,3 +272,62 @@ fn annotate_refuses_unparsable_source() {
     assert_eq!(annotate("export const X = () => <div>", "src/x.tsx").unwrap_err().code(), "parse_error");
     assert_eq!(annotate_utf16("<", "src/x.tsx").unwrap_err().code(), "parse_error");
 }
+
+/// A node's locator is as long as its depth, so a deep file's locators grow with the square of
+/// its nesting (50 000 nested elements took more than 6 GB). Past
+/// `locator::MAX_LOCATOR_SEGMENTS` segments in all, every entry point refuses the file
+/// (`unsupported`) instead. A chain of `n` elements holds `n(n+1)/2` segments, so the limit
+/// (2^22) falls between 2 895 and 2 896 levels. Runs on a large stack: a `cargo test` build
+/// parses a few KB of stack per level.
+#[test]
+fn files_whose_locators_would_pass_the_segment_limit_are_refused() {
+    std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(|| {
+            const FILE: &str = "src/deep.tsx";
+            let chain = |n: usize| format!("export const X = () => {}{}\n", "<a>".repeat(n), "</a>".repeat(n));
+            let deepest = |n: usize| format!("{FILE}#X#0{}", ".0".repeat(n - 1));
+            let refused = |err: trivia_oxc_engine::EngineError| {
+                assert_eq!(err.code(), "unsupported", "{err}");
+                assert!(err.to_string().starts_with("src/deep.tsx nests its JSX too deeply"), "{err}");
+            };
+            assert_eq!(locator::MAX_LOCATOR_SEGMENTS, 1 << 22);
+
+            let under = chain(2_895);
+            assert_eq!(annotate(&under, FILE).unwrap().len(), 2_895);
+            assert_eq!(inspect(&under, &deepest(2_895)).unwrap().name, "a");
+
+            let over = chain(2_896);
+            let message = annotate(&over, FILE).unwrap_err().to_string();
+            assert!(message.contains("4194304 index segments") && message.contains("2896 levels deep"), "{message}");
+            refused(annotate_utf16(&over, FILE).unwrap_err());
+            refused(inspect(&over, &format!("{FILE}#X#0")).unwrap_err());
+            let update: trivia_oxc_engine::Op = serde_json::from_value(serde_json::json!({
+                "op": "updateProp", "target": format!("{FILE}#X#0"), "expectedName": "a", "prop": "id", "value": "x"
+            }))
+            .unwrap();
+            refused(trivia_oxc_engine::apply_op(&over, FILE, &update).unwrap_err());
+            let bind = trivia_oxc_engine::QueryBinding {
+                target: format!("{FILE}#X#0"),
+                expected_name: Some("a".into()),
+                options_fn: "listPetsOptions".into(),
+                options_import: "@/api/generated/@tanstack/react-query.gen".into(),
+                options_args: None,
+                resource: "Pet".into(),
+                items_path: None,
+                data_prop: "data".into(),
+                loading_prop: None,
+            };
+            refused(trivia_oxc_engine::bind_query(&over, FILE, &bind).unwrap_err());
+
+            // An edit that would take a file past the limit is refused too, and writes nothing.
+            let insert: trivia_oxc_engine::Op = serde_json::from_value(serde_json::json!({
+                "op": "insert", "target": deepest(2_895), "expectedName": "a", "placement": "lastChild", "snippet": "<b />"
+            }))
+            .unwrap();
+            refused(trivia_oxc_engine::apply_op(&under, FILE, &insert).unwrap_err());
+        })
+        .unwrap()
+        .join()
+        .expect("the work thread panicked");
+}

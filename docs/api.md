@@ -135,6 +135,13 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   bracket. With these limits the worst accepted snippet needs about 5 MB of stack in a debug
   build, and much less in release, so it fits an 8 MiB main thread:
   `crates/trivia_oxc_engine/tests/stack_budget.rs`. 16 KiB of `!` would need about 20 MB.)
+- A user file whose locators would hold more than 2^22 (4 194 304) index segments in all is
+  422 `unsupported` on every endpoint that reads it, and the plugin serves it without locators
+  (with a warning). A locator is as long as its element's depth, so the total grows with the
+  square of the nesting: 50 000 nested elements took more than 6 GB. A single chain reaches the
+  limit about 2 900 elements deep. Of 1 036 real files measured, the largest held 1 448 and the
+  deepest nested 14 levels. Each top-level component numbers its own roots, so moving deep
+  markup into components of its own lowers the count.
 - Cross-file `move` is not supported yet (422).
 - A `move`/`moveNode` must not change what the moved code refers to: every identifier it uses
   but does not declare must resolve to the same binding where it lands, or stay a global

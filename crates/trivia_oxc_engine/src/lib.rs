@@ -47,7 +47,7 @@ pub fn parse<'a>(alloc: &'a Allocator, source: &'a str, file: &str) -> Result<Pr
 pub fn annotate(source: &str, file: &str) -> Result<Vec<Insertion>> {
     let alloc = Allocator::default();
     let program = parse(&alloc, source, file)?;
-    Ok(locator::annotate(&program, file))
+    locator::annotate(&program, file)
 }
 
 /// Same as [`annotate`] but with offsets in UTF-16 code units, for JavaScript callers.

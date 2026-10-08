@@ -56,7 +56,7 @@ pub fn inspect(source: &str, locator: &str) -> Result<NodeDetails> {
     let loc = Locator::parse(locator)?;
     let alloc = Allocator::default();
     let program = parse(&alloc, source, &loc.file)?;
-    let table = JsxTable::build(&program);
+    let table = JsxTable::build(&program, &loc.file)?;
     let idx = table.resolve(&loc)?;
     let node = &table.nodes[idx];
     let (line, column) = text::line_col(source, node.span.start);

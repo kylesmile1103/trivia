@@ -156,7 +156,7 @@ pub struct Outcome {
 pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
     let alloc = Allocator::default();
     let program = parse(&alloc, source, file)?;
-    let table = JsxTable::build(&program);
+    let table = JsxTable::build(&program, file)?;
     let doc = Doc { src: source, file, program: &program, table: &table };
     match op {
         Op::Insert { target, expected_name, placement, snippet, imports } => {
@@ -736,10 +736,13 @@ fn finish(file: &str, original: &str, code: String, node_start: Option<u32>, imp
             return Err(EngineError::InvalidResult(format!("`{name}` would not be imported in the result")));
         }
     }
-    let locator = node_start.and_then(|start| {
-        let table = JsxTable::build(&program);
-        table.node_starting_at(start).map(|i| table.locator(i, file).to_string())
-    });
+    let locator = match node_start {
+        Some(start) => {
+            let table = JsxTable::build(&program, file)?;
+            table.node_starting_at(start).map(|i| table.locator(i, file).to_string())
+        }
+        None => None,
+    };
     Ok(Outcome { file: file.to_string(), changed: code != original, locator, code })
 }
 
@@ -879,7 +882,7 @@ fn parse_snippet(snippet: &str) -> Result<SnippetInfo> {
         }
         None => return Err(EngineError::InvalidSnippet("expected exactly one JSX element".into())),
     }
-    let table = JsxTable::build(&program);
+    let table = JsxTable::build(&program, "snippet.tsx").map_err(|e| EngineError::InvalidSnippet(e.to_string()))?;
     let components: BTreeSet<String> =
         table.nodes.iter().filter_map(|n| n.component_ref().map(str::to_string)).collect();
     let semantic = oxc_semantic::SemanticBuilder::new().build(&program).semantic;

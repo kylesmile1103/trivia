@@ -156,6 +156,13 @@ impl JsxNode {
     }
 }
 
+/// Most locator path segments a file may hold, summed over its JSX nodes. A node's locator is
+/// as long as its depth, so a file's locators (and this table) grow with the square of its
+/// nesting: 20 000 nested elements took 2 GB, 50 000 more than 6 GB. Of 1 036 real `.tsx`
+/// files (the reference repos, the playground, the designer) the largest holds 1 448 and the deepest nests 14 levels; a
+/// single chain reaches this limit about 2 900 elements deep.
+pub const MAX_LOCATOR_SEGMENTS: usize = 1 << 22;
+
 /// Flat table of every JSX node in a file.
 #[derive(Debug, Default)]
 pub struct JsxTable {
@@ -164,7 +171,9 @@ pub struct JsxTable {
 }
 
 impl JsxTable {
-    pub fn build(program: &Program<'_>) -> Self {
+    /// Every JSX node of `program`, the source of `file`. Fails (`unsupported`) when the
+    /// locators would pass [`MAX_LOCATOR_SEGMENTS`]; collection stops at that point.
+    pub fn build(program: &Program<'_>, file: &str) -> Result<Self> {
         let mut c = Collector { src: program.source_text, ..Collector::default() };
         for stmt in &program.body {
             match stmt {
@@ -182,13 +191,20 @@ impl JsxTable {
                 }
             }
         }
+        if let Some(depth) = c.too_deep {
+            return Err(EngineError::Unsupported(format!(
+                "{file} nests its JSX too deeply for locators: they would hold more than \
+                 {MAX_LOCATOR_SEGMENTS} index segments in all (passed at an element {depth} levels \
+                 deep); move deep markup into components of its own"
+            )));
+        }
         let index = c
             .nodes
             .iter()
             .enumerate()
             .map(|(i, n)| ((n.scope.clone(), n.path.clone()), i))
             .collect();
-        Self { nodes: c.nodes, index }
+        Ok(Self { nodes: c.nodes, index })
     }
 
     pub fn find(&self, scope: &str, path: &[u32]) -> Option<usize> {
@@ -266,6 +282,10 @@ struct Collector<'s> {
     scope: String,
     root_counters: HashMap<String, u32>,
     next_is_direct: bool,
+    /// Sum of the paths collected so far (see [`MAX_LOCATOR_SEGMENTS`]).
+    segments: usize,
+    /// Depth of the node that passed the limit. Nothing is collected after it.
+    too_deep: Option<usize>,
 }
 
 impl Collector<'_> {
@@ -297,6 +317,10 @@ impl Collector<'_> {
                 *counter += 1;
                 node.direct = false;
             }
+        }
+        self.segments += node.path.len();
+        if self.segments > MAX_LOCATOR_SEGMENTS {
+            self.too_deep = Some(node.path.len());
         }
         node.scope = self.scope.clone();
         self.nodes.push(node);
@@ -365,6 +389,9 @@ impl Collector<'_> {
 
 impl<'a> Visit<'a> for Collector<'_> {
     fn visit_jsx_element(&mut self, it: &JSXElement<'a>) {
+        if self.too_deep.is_some() {
+            return;
+        }
         let opening = &it.opening_element;
         let name_span = opening.name.span();
         let attr_insert = opening.type_arguments.as_ref().map_or(name_span.end, |t| t.span.end);
@@ -392,6 +419,9 @@ impl<'a> Visit<'a> for Collector<'_> {
     }
 
     fn visit_jsx_fragment(&mut self, it: &JSXFragment<'a>) {
+        if self.too_deep.is_some() {
+            return;
+        }
         let node = JsxNode {
             scope: String::new(),
             path: Vec::new(),
@@ -466,10 +496,10 @@ pub struct Insertion {
 /// `import * as R from "react"` → `<R.Fragment>`).
 ///
 /// An element that already has a `data-ast-node` attribute keeps it and gets no second one.
-pub fn annotate(program: &Program<'_>, file: &str) -> Vec<Insertion> {
-    let table = JsxTable::build(program);
+pub fn annotate(program: &Program<'_>, file: &str) -> Result<Vec<Insertion>> {
+    let table = JsxTable::build(program, file)?;
     let fragments = fragment_names(program);
-    table
+    Ok(table
         .nodes
         .iter()
         .enumerate()
@@ -485,12 +515,12 @@ pub fn annotate(program: &Program<'_>, file: &str) -> Vec<Insertion> {
                 text: format!(" {ATTR}=\"{}\"", escape_attr(&loc)),
             }
         })
-        .collect()
+        .collect())
 }
 
 /// Apply [`annotate`] insertions, for tests and non-Vite consumers.
 pub fn annotate_source(program: &Program<'_>, file: &str) -> Result<String> {
-    let edits: Vec<Edit> = annotate(program, file).into_iter().map(|i| Edit::insert(i.offset, i.text)).collect();
+    let edits: Vec<Edit> = annotate(program, file)?.into_iter().map(|i| Edit::insert(i.offset, i.text)).collect();
     Ok(text::apply_edits(program.source_text, &edits)?.0)
 }
 
