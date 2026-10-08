@@ -225,6 +225,7 @@ export class RefineAdapter {
       typesImport: manifest!.modules.types?.importPath ?? '@/api/generated/types.gen',
       pagesDir,
       pagesImport: `${srcImport}/${pagesDir.split('/').slice(1).join('/')}`,
+      textarea: this.#hasUi('textarea'),
     })
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
@@ -383,7 +384,7 @@ export class RefineAdapter {
     const manifest = await this.#manifest()
     const resource = contractResource(manifest, page.contract?.resource ?? page.resource?.name ?? null, null)
     const body = resource && page.contract ? bodyFields(resource, page.contract.operation) : null
-    const context = { ui: this.#host.importBase, idPrefix: kebab(resource?.name ?? page.resource?.name ?? 'field') }
+    const context = { ui: this.#host.importBase, idPrefix: kebab(resource?.name ?? page.resource?.name ?? 'field'), textarea: this.#hasUi('textarea') }
 
     // The form's Controllers as the changes so far leave them. A Controller's locator is its
     // position among its parent's children, so each insert, removal or move renumbers the ones
@@ -608,6 +609,11 @@ export class RefineAdapter {
     const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
     const hasTable = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'data-table', 'data-table-filter.tsx'))
     return { badge: `${importBase}/badge`, dataTable: hasTable ? `${parentImport}/refine-ui/data-table` : null }
+  }
+
+  /** True when the project has shadcn's `name` component (`ui/name.tsx`). */
+  #hasUi(name: string): boolean {
+    return fs.existsSync(path.join(this.#host.root, this.#host.uiDir, `${name}.tsx`))
   }
 
   async #manifest(): Promise<TriviaManifest | null> {

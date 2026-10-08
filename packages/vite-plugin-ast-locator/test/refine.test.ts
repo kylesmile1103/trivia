@@ -74,7 +74,7 @@ describe('list pages', () => {
       ['actions', null, null, false, true, undefined],
     ])
     expect(p.columns[2].path).toBe(`${CUSTOMERS}#CustomerList#columns[id=status]`)
-    expect(p.available.map((f: any) => f.name)).toEqual(['id', 'phone', 'kycStatus', 'segment', 'creditLimit', 'birthDate'])
+    expect(p.available.map((f: any) => f.name)).toEqual(['id', 'phone', 'kycStatus', 'segment', 'creditLimit', 'birthDate', 'notes'])
     expect(p.available.find((f: any) => f.name === 'kycStatus')).toMatchObject({ shape: 'enum', enum: ['not_started', 'in_review', 'approved', 'rejected'] })
   })
 })

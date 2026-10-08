@@ -236,6 +236,11 @@ Shipped in four parts, each through the full gate:
     descriptions carry the chain. The chain ops are in `ops/chains.rs`. `setProperty` adds new
     keys before trailing spreads, and `mentions` is in `src/mentions.rs`; the napi binding exposes
     it. Value snippets now refuse `a, b` (a sequence would become two items).
+  - 5b, constraints and widgets: done (2026-10-09). The manifest's fields carry `constraints`.
+    New rules carry their bounds (`.min`, `.max`, `.regex`, `.gt`, `.lt`), with messages Trivia
+    can recognize later. Long text gets a `Textarea`, and `format: password` a password input.
+    The example's spec gains `notes` (maxLength 1000). The Data tab's add menu shows a field's
+    bounds on hover.
 - Known limits of slices 1–4:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.

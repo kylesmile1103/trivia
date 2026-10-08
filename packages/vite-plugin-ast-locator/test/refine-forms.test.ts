@@ -68,14 +68,15 @@ describe('form pages', () => {
       ['email', 'Email', 'Input', 'z.email("Enter an email address.")', true, 'text'],
       ['segment', 'Segment', 'Select', 'z.enum(["retail", "private", "business"])', true, 'enum'],
     ])
-    expect(p.available.map((f: any) => f.name)).toEqual(['phone', 'creditLimit', 'birthDate'])
+    expect(p.available.map((f: any) => f.name)).toEqual(['phone', 'creditLimit', 'birthDate', 'notes'])
+    expect(p.available.find((f: any) => f.name === 'notes').constraints).toEqual({ maxLength: 1000 })
   })
 
   it('reads an edit form against the update body', async () => {
     const p = await form(EDIT)
     expect(p).toMatchObject({ action: 'edit', contract: { resource: 'Customer', operation: 'update' } })
     expect(p.fields.map((f: any) => f.name)).toEqual(['fullName', 'email', 'status', 'segment'])
-    expect(p.available.map((f: any) => f.name)).toEqual(['phone', 'creditLimit', 'birthDate'])
+    expect(p.available.map((f: any) => f.name)).toEqual(['phone', 'creditLimit', 'birthDate', 'notes'])
   })
 })
 
@@ -84,7 +85,7 @@ describe('field plans', () => {
     const result = await apply(CREATE, [{ action: 'add', field: 'creditLimit' }])
     expect(result.history.undoLabel).toBe('Add field Credit limit')
     const code = read(CREATE)
-    expect(code).toContain('  creditLimit: z.number().optional(),\n});')
+    expect(code).toContain('  creditLimit: z.number().min(0, "Enter 0 or more.").optional(),\n});')
     expect(code).toContain('      creditLimit: undefined,\n    },')
     expect(code).toContain('            name="creditLimit"')
     expect(code).toContain('onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}')
@@ -92,10 +93,12 @@ describe('field plans', () => {
   })
 
   it('writes fields that type-check, for every kind the bodies have', async () => {
-    await apply(CREATE, ['phone', 'creditLimit', 'birthDate'].map((field) => ({ action: 'add', field })))
-    await apply(EDIT, ['phone', 'creditLimit', 'birthDate'].map((field) => ({ action: 'add', field })))
+    await apply(CREATE, ['phone', 'creditLimit', 'birthDate', 'notes'].map((field) => ({ action: 'add', field })))
+    await apply(EDIT, ['phone', 'creditLimit', 'birthDate', 'notes'].map((field) => ({ action: 'add', field })))
     expect(read(CREATE)).toContain('birthDate: z.iso.date("Enter a date.").nullable().optional(),')
+    expect(read(CREATE)).toContain('notes: z.string().max(1000, "Enter at most 1000 characters.").nullable().optional(),')
     expect(read(EDIT)).toContain('type="date"')
+    expect(read(EDIT)).toContain('<Textarea')
     typecheck()
   }, 120_000)
 

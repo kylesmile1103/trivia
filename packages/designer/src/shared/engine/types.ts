@@ -196,6 +196,18 @@ export interface ManifestField {
   readOnly: boolean
   enum: Array<string | number | boolean | null> | null
   description: string | null
+  /** Validation bounds the spec declares; omitted when none. */
+  constraints?: FieldConstraints
+}
+
+export interface FieldConstraints {
+  minLength?: number
+  maxLength?: number
+  minimum?: number
+  exclusiveMinimum?: number
+  maximum?: number
+  exclusiveMaximum?: number
+  pattern?: string
 }
 
 export interface ManifestModule {
@@ -273,6 +285,7 @@ export interface PageField {
   readOnly: boolean
   enum: string[] | null
   description: string | null
+  constraints: FieldConstraints | null
 }
 
 export interface PageColumn {

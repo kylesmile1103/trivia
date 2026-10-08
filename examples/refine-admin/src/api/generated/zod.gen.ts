@@ -57,7 +57,8 @@ export const zCustomerDto = z.object({
     segment: zSegment,
     creditLimit: z.number().gte(0).optional(),
     birthDate: z.iso.date().nullish(),
-    createdAt: z.iso.datetime().readonly()
+    createdAt: z.iso.datetime().readonly(),
+    notes: z.string().max(1000).nullish()
 });
 
 export const zCreateCustomerRequest = z.object({
@@ -66,7 +67,8 @@ export const zCreateCustomerRequest = z.object({
     phone: z.string().nullish(),
     segment: zSegment,
     creditLimit: z.number().gte(0).optional(),
-    birthDate: z.iso.date().nullish()
+    birthDate: z.iso.date().nullish(),
+    notes: z.string().max(1000).nullish()
 });
 
 export const zUpdateCustomerRequest = z.object({
@@ -76,7 +78,8 @@ export const zUpdateCustomerRequest = z.object({
     status: zCustomerStatus.optional(),
     segment: zSegment.optional(),
     creditLimit: z.number().gte(0).optional(),
-    birthDate: z.iso.date().nullish()
+    birthDate: z.iso.date().nullish(),
+    notes: z.string().max(1000).nullish()
 });
 
 export const zCustomerPage = z.object({
@@ -144,7 +147,8 @@ export const zCustomerDtoWritable = z.object({
     kycStatus: zKycStatus,
     segment: zSegment,
     creditLimit: z.number().gte(0).optional(),
-    birthDate: z.iso.date().nullish()
+    birthDate: z.iso.date().nullish(),
+    notes: z.string().max(1000).nullish()
 });
 
 export const zCustomerPageWritable = z.object({

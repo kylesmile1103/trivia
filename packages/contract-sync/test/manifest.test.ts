@@ -159,6 +159,9 @@ describe('customers.openapi.json (OpenAPI 3.1)', () => {
       ['address', 'object', null, false, false, false, null, '#/components/schemas/Address', null],
       ['createdAt', 'string', 'date-time', true, false, true, null, null, null],
     ])
+    expect(fields.some((f) => f.constraints)).toBe(false)
+    const body = get('customers.openapi.json').resources[0]?.operations.create?.requestBody?.fields ?? []
+    expect(Object.fromEntries(body.filter((f) => f.constraints).map((f) => [f.name, f.constraints]))).toEqual({ fullName: { minLength: 1 } })
   })
 
   it('records project-relative module paths and import paths through the @/ ↔ src/ alias', () => {
@@ -630,6 +633,47 @@ describe('more spec shapes, through the real pipeline', () => {
     expect(list?.listItemsPath).toBe('results')
     expect(list?.pagination).toMatchObject({ style: 'offset', offsetParam: 'skip', limitParam: 'take', totalPath: 'totalCount' })
     expect(manifest.resources[0]?.entity?.typeName).toBe('Invoice')
+  })
+
+  it('records the bounds a field declares, normalizing 3.0 exclusive bounds to 3.1', async () => {
+    const body = (version: string, extra: Record<string, unknown>) => ({
+      openapi: version,
+      info: { title: 'Bounds', version: '1' },
+      paths: {
+        '/items': {
+          get: { responses: { 200: { description: 'ok', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Item' } } } } } } },
+        },
+      },
+      components: { schemas: { Code: { type: 'string', pattern: '^[A-Z]{3}$', maxLength: 3 }, Item: { type: 'object', properties: extra } } },
+    })
+    const fields = async (name: string, version: string, extra: Record<string, unknown>) => {
+      const { manifest } = await sync(name, body(version, extra))
+      expect(validationErrors(manifest)).toEqual([])
+      return Object.fromEntries((manifest.resources[0]?.entity?.fields ?? []).map((f) => [f.name, f.constraints ?? null]))
+    }
+    expect(
+      await fields('bounds30', '3.0.3', {
+        // Spec order differs from the manifest's: the manifest's wins.
+        notes: { type: 'string', maxLength: 500, minLength: 1 },
+        rate: { type: 'number', minimum: 0, exclusiveMinimum: true, maximum: 1 },
+        code: { $ref: '#/components/schemas/Code' },
+        plain: { type: 'string' },
+        bad: { type: 'string', minLength: -1, maxLength: 1.5, pattern: '' },
+      }),
+    ).toEqual({
+      notes: { minLength: 1, maxLength: 500 },
+      rate: { exclusiveMinimum: 0, maximum: 1 },
+      code: { maxLength: 3, pattern: '^[A-Z]{3}$' },
+      plain: null,
+      bad: null,
+    })
+    expect(
+      await fields('bounds31', '3.1.0', {
+        rate: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 10 },
+        // 3.1 lets a $ref have siblings: the property's own bound wins.
+        code: { $ref: '#/components/schemas/Code', maxLength: 5 },
+      }),
+    ).toEqual({ rate: { exclusiveMinimum: 0, exclusiveMaximum: 10 }, code: { maxLength: 5, pattern: '^[A-Z]{3}$' } })
   })
 
   it('rejects an x-trivia-resource that is not an identifier, before touching the project', async () => {

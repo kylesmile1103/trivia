@@ -94,7 +94,19 @@ describe('resource pages', () => {
         expiresOn: { type: 'string', format: 'date' },
       },
     }
-    spec.components.schemas.CreateCardRequest = { type: 'object', required: ['accountId'], properties: { accountId: { type: 'string', format: 'uuid' }, dailyLimit: { type: 'number' }, contactless: { type: 'boolean' } } }
+    spec.components.schemas.CreateCardRequest = {
+      type: 'object',
+      required: ['accountId', 'pin'],
+      properties: {
+        accountId: { type: 'string', format: 'uuid' },
+        // Bounds of every kind, and the widgets they choose (docs/product.md, slice 5).
+        pin: { type: 'string', format: 'password', minLength: 4, maxLength: 6 },
+        nickname: { type: 'string', maxLength: 40, pattern: '^[A-Za-z ]+$' },
+        dailyLimit: { type: 'number', exclusiveMinimum: 0, maximum: 10000 },
+        contactless: { type: 'boolean' },
+        memo: { type: 'string', maxLength: 2000 },
+      },
+    }
     spec.components.schemas.CardPage = { type: 'object', required: ['items', 'total'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/CardDto' } }, total: { type: 'integer' } } }
     const ok = (schema: string, status = '200') => ({ [status]: { description: 'OK', content: { 'application/json': { schema: { $ref: `#/components/schemas/${schema}` } } } } })
     spec.paths['/api/v1/cards'] = {
@@ -116,7 +128,16 @@ describe('resource pages', () => {
     expect(list).toContain('const columns = useMemo<ColumnDef<CardDto>[]>(')
     expect(list).toContain('<ShowButton recordItemId={row.original.id} size="sm" variant="ghost" />')
     expect(list).not.toContain('EditButton')
-    expect(read('src/pages/cards/create.tsx')).toContain('contactless: z.boolean().optional(),')
+    const create = read('src/pages/cards/create.tsx')
+    expect(create).toContain('contactless: z.boolean().optional(),')
+    expect(create).toContain('pin: z.string().min(4, "Enter at least 4 characters.").max(6, "Enter at most 6 characters."),')
+    expect(create).toContain(
+      'nickname: z.string().max(40, "Enter at most 40 characters.").regex(new RegExp("^[A-Za-z ]+$"), "Enter a value in the expected format.").optional(),',
+    )
+    expect(create).toContain('dailyLimit: z.number().gt(0, "Enter more than 0.").max(10000, "Enter 10000 or less.").optional(),')
+    expect(create).toContain('type="password"')
+    expect(create).toMatch(/<Textarea\n\s+\{\.\.\.field\}\n\s+id="card-memo"/)
+    expect(create).toContain('import { Textarea } from "@/components/ui/textarea";')
     typecheck()
     // The new list is a page Trivia reads like any other.
     const page = (await get(server.socket, '/refine/page?file=src/pages/cards/list.tsx')).body.data[0]

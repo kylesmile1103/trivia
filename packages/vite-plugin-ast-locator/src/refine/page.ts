@@ -2,7 +2,7 @@
 // source has them, the Refine resource, and the contract resource it shows. Read from the
 // engine's value descriptions (describeValues), never by re-parsing here.
 
-import type { ManifestField, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
+import type { ManifestField, ManifestFieldConstraints, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import { fieldShape, type FieldShape } from './columns.js'
 
@@ -70,6 +70,8 @@ export interface FieldInfo {
   readOnly: boolean
   enum: string[] | null
   description: string | null
+  /** The bounds the contract declares (`maxLength`…), or null. */
+  constraints: ManifestFieldConstraints | null
 }
 
 export interface ListPage {
@@ -149,6 +151,7 @@ export function fieldInfo(f: ManifestField): FieldInfo {
     readOnly: f.readOnly,
     enum: f.enum ? f.enum.filter((v): v is string => typeof v === 'string') : null,
     description: f.description,
+    constraints: f.constraints ?? null,
   }
 }
 

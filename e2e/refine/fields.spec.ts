@@ -32,13 +32,13 @@ async function open(page: Page) {
 test('the Data tab lists the form\'s fields and adds a request-body field as rule, default and input', async ({ page }) => {
   await open(page)
   await page.getByRole('button', { name: 'Add field' }).click()
-  await expect(page.getByRole('menuitem')).toHaveText([/^phone/, /^creditLimit/, /^birthDate/])
+  await expect(page.getByRole('menuitem')).toHaveText([/^phone/, /^creditLimit/, /^birthDate/, /^notes/])
   await page.getByRole('menuitem', { name: /creditLimit/ }).click()
 
   await expect(labels(page)).toHaveText(['Full name', 'Email', 'Segment', 'Credit limit'])
   await expect(app(page).locator('#customer-credit-limit')).toHaveAttribute('type', 'number')
   const code = fs.readFileSync(CREATE, 'utf8')
-  expect(code).toContain('creditLimit: z.number().optional(),')
+  expect(code).toContain('creditLimit: z.number().min(0, "Enter 0 or more.").optional(),')
   expect(code).toContain('creditLimit: undefined,')
 
   await undo(page).click()

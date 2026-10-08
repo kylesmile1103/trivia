@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 
 import { canvas, type Layer } from '@/shared/canvas'
 import { engine } from '@/shared/engine/client'
-import type { ColumnPlan, FieldShape, FormPage, ListPage, PageField, RefinePage } from '@/shared/engine/types'
+import type { ColumnPlan, FieldConstraints, FieldShape, FormPage, ListPage, PageField, RefinePage } from '@/shared/engine/types'
 import { dispatchBatch } from '@/shared/state/actions'
 import { useDesigner } from '@/shared/state/store'
 import { Badge } from '@/shared/ui/badge'
@@ -26,6 +26,21 @@ const SHAPE: Record<FieldShape, string> = {
   boolean: 'yes/no',
   list: 'list',
   other: 'object',
+}
+
+/** A field's contract bounds in a few words ("2–120 characters, matches /^[A-Z]+$/"), for a tooltip. */
+export function boundsText(c: FieldConstraints | null | undefined): string | undefined {
+  if (!c) return undefined
+  const parts: string[] = []
+  if (c.minLength !== undefined && c.maxLength !== undefined) parts.push(`${c.minLength}–${c.maxLength} characters`)
+  else if (c.minLength !== undefined) parts.push(`at least ${c.minLength} characters`)
+  else if (c.maxLength !== undefined) parts.push(`at most ${c.maxLength} characters`)
+  if (c.minimum !== undefined) parts.push(`≥ ${c.minimum}`)
+  if (c.exclusiveMinimum !== undefined) parts.push(`> ${c.exclusiveMinimum}`)
+  if (c.maximum !== undefined) parts.push(`≤ ${c.maximum}`)
+  if (c.exclusiveMaximum !== undefined) parts.push(`< ${c.exclusiveMaximum}`)
+  if (c.pattern !== undefined) parts.push(`matches /${c.pattern}/`)
+  return parts.length > 0 ? parts.join(', ') : undefined
 }
 
 /** The files the canvas renders elements from (their locators' file part). */
@@ -235,7 +250,7 @@ function PageCard({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 w-52 overflow-y-auto" aria-label={`${Noun}s to add`}>
           {available.map((field) => (
-            <DropdownMenuItem key={field.name} onSelect={() => void change({ action: 'add', field: field.name })}>
+            <DropdownMenuItem key={field.name} title={boundsText(field.constraints)} onSelect={() => void change({ action: 'add', field: field.name })}>
               <span className="flex-1 truncate font-mono text-xs">
                 {field.name}
                 {field.required && <span className="text-destructive">*</span>}

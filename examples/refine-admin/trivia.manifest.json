@@ -22,7 +22,7 @@
     "style": "rest",
     "excludedOperations": []
   },
-  "schemaHash": "sha256:bb72d57edbe00700ef4e9e38aa1e4c520371759ee31079a15d95d7b4e65bce89",
+  "schemaHash": "sha256:35b4853b21bdb02335973e9f30e4970846a1aeeabfbe3ec7fc842009cc11a3fe",
   "modules": {
     "outputDir": "src/api/generated",
     "queries": {
@@ -153,7 +153,10 @@
             "enum": null,
             "ref": null,
             "items": null,
-            "description": null
+            "description": null,
+            "constraints": {
+              "minimum": 0
+            }
           },
           {
             "name": "status",
@@ -373,7 +376,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minimum": 0
+                }
               }
             ],
             "zodSchema": "zCreateAccountBody"
@@ -440,7 +446,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minimum": 0
+                }
               }
             ],
             "zodSchema": "zUpdateAccountBody"
@@ -492,7 +501,10 @@
             "enum": null,
             "ref": null,
             "items": null,
-            "description": null
+            "description": null,
+            "constraints": {
+              "minLength": 2
+            }
           },
           {
             "name": "email",
@@ -577,7 +589,10 @@
             "enum": null,
             "ref": null,
             "items": null,
-            "description": null
+            "description": null,
+            "constraints": {
+              "minimum": 0
+            }
           },
           {
             "name": "birthDate",
@@ -602,6 +617,21 @@
             "ref": null,
             "items": null,
             "description": null
+          },
+          {
+            "name": "notes",
+            "type": "string",
+            "format": null,
+            "required": false,
+            "nullable": true,
+            "readOnly": false,
+            "enum": null,
+            "ref": null,
+            "items": null,
+            "description": "Free-text notes from the relationship manager.",
+            "constraints": {
+              "maxLength": 1000
+            }
           }
         ]
       },
@@ -749,7 +779,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minLength": 2
+                }
               },
               {
                 "name": "email",
@@ -801,7 +834,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minimum": 0
+                }
               },
               {
                 "name": "birthDate",
@@ -814,6 +850,21 @@
                 "ref": null,
                 "items": null,
                 "description": null
+              },
+              {
+                "name": "notes",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": true,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": "Free-text notes from the relationship manager.",
+                "constraints": {
+                  "maxLength": 1000
+                }
               }
             ],
             "zodSchema": "zCreateCustomerBody"
@@ -864,7 +915,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minLength": 2
+                }
               },
               {
                 "name": "email",
@@ -932,7 +986,10 @@
                 "enum": null,
                 "ref": null,
                 "items": null,
-                "description": null
+                "description": null,
+                "constraints": {
+                  "minimum": 0
+                }
               },
               {
                 "name": "birthDate",
@@ -945,6 +1002,21 @@
                 "ref": null,
                 "items": null,
                 "description": null
+              },
+              {
+                "name": "notes",
+                "type": "string",
+                "format": null,
+                "required": false,
+                "nullable": true,
+                "readOnly": false,
+                "enum": null,
+                "ref": null,
+                "items": null,
+                "description": "Free-text notes from the relationship manager.",
+                "constraints": {
+                  "maxLength": 1000
+                }
               }
             ],
             "zodSchema": "zUpdateCustomerBody"

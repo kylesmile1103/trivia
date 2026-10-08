@@ -1,20 +1,99 @@
 // A Refine + shadcn form field for a contract field (docs/product.md, slice 2): its zod rule,
 // its default value, and a react-hook-form `Controller` around a shadcn `Field` (shadcn v4 has no
 // `form` component; `Field` replaced it). The widget follows the field's type: a Select for an
-// enum, a number input, a date input, a checkbox for a boolean, else a text input.
+// enum, a number input, a date input, a checkbox for a boolean, a textarea for long text, else a
+// text input. The rule carries the bounds the contract declares (slice 5).
 
-import type { ManifestField } from '@trivia/contract-sync'
+import type { ManifestField, ManifestFieldConstraints } from '@trivia/contract-sync'
 
 import { type ImportSpec, escapeJsxText, fieldShape, humanize, optionLabel } from './columns.js'
 
-export type FormField = Pick<ManifestField, 'name' | 'type' | 'format' | 'enum' | 'required' | 'nullable'> & { default?: unknown }
+export type FormField = Pick<ManifestField, 'name' | 'type' | 'format' | 'enum' | 'required' | 'nullable'> & {
+  default?: unknown
+  constraints?: ManifestFieldConstraints | null
+}
 
 export interface FieldContext {
   /** Module prefix of shadcn's ui components, e.g. `@/components/ui`. */
   ui: string
   /** Prefix for the inputs' `id`s, e.g. `customer` → `customer-credit-limit`. */
   idPrefix: string
+  /** The project has shadcn's `textarea` (long text gets one). */
+  textarea?: boolean
 }
+
+/** Longest text a single-line input gets (⚑ docs/product.md, slice 5); longer gets a textarea. */
+const TEXTAREA_OVER = 255
+
+/** A bound the contract declares, as a call on the zod rule: `.max(100, "Enter at most 100 characters.")`. */
+export interface Bound {
+  key: keyof ManifestFieldConstraints
+  method: 'min' | 'max' | 'gt' | 'lt' | 'regex'
+  /** The bound argument's source: `100`, `new RegExp("^[A-Z]{3}$")`. */
+  value: string
+  /** The message Trivia writes with it. */
+  message: string
+}
+
+/** The message Trivia writes for a bound (drift recognizes it to update it with the bound). */
+export function boundMessage(key: Bound['key'], value: number | string): string {
+  switch (key) {
+    case 'minLength':
+      return value === 1 ? 'Required.' : `Enter at least ${value} characters.`
+    case 'maxLength':
+      return `Enter at most ${value} characters.`
+    case 'minimum':
+      return `Enter ${value} or more.`
+    case 'maximum':
+      return `Enter ${value} or less.`
+    case 'exclusiveMinimum':
+      return `Enter more than ${value}.`
+    case 'exclusiveMaximum':
+      return `Enter less than ${value}.`
+    case 'pattern':
+      return 'Enter a value in the expected format.'
+  }
+}
+
+/** Source text for a pattern's RegExp, or null when JavaScript can't compile it. */
+export function patternSource(pattern: string): string | null {
+  try {
+    new RegExp(pattern)
+  } catch {
+    return null
+  }
+  return `new RegExp(${JSON.stringify(pattern)})`
+}
+
+/** The bounds of `field` its rule should carry, in the order they are written. */
+export function boundsOf(field: FormField): Bound[] {
+  const c = field.constraints ?? {}
+  const out: Bound[] = []
+  const add = (key: Bound['key'], method: Bound['method'], value: number | undefined) => {
+    if (value !== undefined) out.push({ key, method, value: String(value), message: boundMessage(key, value) })
+  }
+  const shape = fieldShape(field)
+  if (shape === 'text') {
+    add('minLength', 'min', c.minLength)
+    add('maxLength', 'max', c.maxLength)
+    const regex = c.pattern === undefined ? null : patternSource(c.pattern)
+    if (regex) out.push({ key: 'pattern', method: 'regex', value: regex, message: boundMessage('pattern', c.pattern!) })
+  } else if (shape === 'number') {
+    add('minimum', 'min', c.minimum)
+    add('exclusiveMinimum', 'gt', c.exclusiveMinimum)
+    add('maximum', 'max', c.maximum)
+    add('exclusiveMaximum', 'lt', c.exclusiveMaximum)
+  }
+  return out
+}
+
+/** True when `field` gets a textarea in a project that has one. */
+export function isLongText(field: FormField): boolean {
+  return fieldShape(field) === 'text' && !TEXT_FORMATS.has(field.format ?? '') && (field.constraints?.maxLength ?? 0) > TEXTAREA_OVER
+}
+
+/** String formats with an input of their own (or a zod check that rules out long text). */
+const TEXT_FORMATS = new Set(['email', 'uuid', 'uri', 'url', 'password'])
 
 export interface FieldSnippet {
   /** The zod rule, e.g. `z.enum(["retail", "private"])`. */
@@ -54,7 +133,8 @@ function rule(field: FormField): string {
     case 'dateTime':
       base = 'z.iso.datetime("Enter a date and time.")'
       break
-    case 'text':
+    case 'text': {
+      const declaresMin = field.constraints?.minLength !== undefined
       base =
         field.format === 'email'
           ? 'z.email("Enter an email address.")'
@@ -62,13 +142,15 @@ function rule(field: FormField): string {
             ? 'z.uuid()'
             : field.format === 'uri' || field.format === 'url'
               ? 'z.url("Enter a URL.")'
-              : field.required
+              : field.required && !declaresMin
                 ? 'z.string().min(1, "Required.")'
                 : 'z.string()'
       break
+    }
     default:
       base = 'z.unknown()'
   }
+  for (const b of boundsOf(field)) base += `.${b.method}(${b.value}, ${str(b.message)})`
   if (field.nullable) base += '.nullable()'
   if (!field.required) base += '.optional()'
   return base
@@ -142,10 +224,31 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
       `  aria-invalid={fieldState.invalid}`,
       `/>`,
     ]
+  } else if (context.textarea && isLongText(field)) {
+    use('Textarea', `${context.ui}/textarea`)
+    input = [
+      `<Textarea`,
+      `  {...field}`,
+      `  id=${str(id)}`,
+      `  value={field.value ?? ""}`,
+      `  onChange={(e) => field.onChange(e.target.value${emptyIsAbsent})}`,
+      `  aria-invalid={fieldState.invalid}`,
+      `/>`,
+    ]
   } else {
     use('Input', `${context.ui}/input`)
     const type =
-      field.format === 'email' ? 'email' : shape === 'date' ? 'date' : shape === 'dateTime' ? 'datetime-local' : field.format === 'uri' || field.format === 'url' ? 'url' : null
+      field.format === 'email'
+        ? 'email'
+        : field.format === 'password'
+          ? 'password'
+          : shape === 'date'
+            ? 'date'
+            : shape === 'dateTime'
+              ? 'datetime-local'
+              : field.format === 'uri' || field.format === 'url'
+                ? 'url'
+                : null
     input = [
       `<Input`,
       `  {...field}`,

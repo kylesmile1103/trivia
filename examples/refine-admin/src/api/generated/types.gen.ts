@@ -31,6 +31,10 @@ export type CustomerDto = {
     creditLimit?: number;
     birthDate?: string | null;
     readonly createdAt: string;
+    /**
+     * Free-text notes from the relationship manager.
+     */
+    notes?: string | null;
 };
 
 export type CreateCustomerRequest = {
@@ -40,6 +44,10 @@ export type CreateCustomerRequest = {
     segment: Segment;
     creditLimit?: number;
     birthDate?: string | null;
+    /**
+     * Free-text notes from the relationship manager.
+     */
+    notes?: string | null;
 };
 
 export type UpdateCustomerRequest = {
@@ -50,6 +58,10 @@ export type UpdateCustomerRequest = {
     segment?: Segment;
     creditLimit?: number;
     birthDate?: string | null;
+    /**
+     * Free-text notes from the relationship manager.
+     */
+    notes?: string | null;
 };
 
 export type CustomerPage = {
@@ -118,6 +130,10 @@ export type CustomerDtoWritable = {
     segment: Segment;
     creditLimit?: number;
     birthDate?: string | null;
+    /**
+     * Free-text notes from the relationship manager.
+     */
+    notes?: string | null;
 };
 
 export type CustomerPageWritable = {

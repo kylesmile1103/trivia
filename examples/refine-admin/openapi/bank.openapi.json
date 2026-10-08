@@ -692,6 +692,14 @@
             "type": "string",
             "format": "date-time",
             "readOnly": true
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Free-text notes from the relationship manager."
           }
         }
       },
@@ -730,6 +738,14 @@
               "null"
             ],
             "format": "date"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Free-text notes from the relationship manager."
           }
         }
       },
@@ -766,6 +782,14 @@
               "null"
             ],
             "format": "date"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Free-text notes from the relationship manager."
           }
         }
       },

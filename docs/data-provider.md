@@ -147,6 +147,10 @@ Fields by level:
 - **PostgREST operations:** a `postgrest` block (see below).
 - **Entity fields:** name, type, format, required, nullable, readOnly, enum, ref, item summary,
   description and `default`. These let the designer build columns and forms without the spec.
+  `constraints` holds the bounds the spec declares (`minLength`, `maxLength`, `minimum`,
+  `exclusiveMinimum`, `maximum`, `exclusiveMaximum`, `pattern`), and is omitted when it declares
+  none. OpenAPI 3.0's `exclusiveMinimum: true` becomes 3.1's numeric `exclusiveMinimum`. Refine
+  forms turn them into zod bounds, and contract drift compares against them.
 
 ## Heuristics
 

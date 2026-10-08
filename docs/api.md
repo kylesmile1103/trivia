@@ -153,12 +153,18 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   removal or move renumbers its later siblings' locators. An added field is:
   - `setProperty` on the schema with its rule: `z.enum([…])`, `z.number()` (`.int()` for
     integers), `z.boolean()`, `z.iso.date()`, `z.email()`, `z.string().min(1, "Required.")`, …,
-    plus `.nullable()` and `.optional()` from the contract;
+    then the bounds the contract declares (`constraints`):
+    - `.min(n, "Enter at least n characters.")` and `.max(…)` for text;
+    - `.regex(new RegExp("…"), …)` for a pattern JavaScript can compile;
+    - `.min`/`.max`/`.gt`/`.lt` for numbers;
+    - then `.nullable()` and `.optional()` from the contract;
   - `setProperty` on `defaultValues`: the spec's default, else `""`, the first enum value, `0` or
     `false` for a required field, and `undefined` for an optional one;
   - an `insert` of its Controller, after the last one or before the `index`-th. The widget is a
-    `Select` for an enum, a number input, a date input, a `Checkbox` for a boolean, else a text
-    input whose empty value is absent when the field is optional.
+    `Select` for an enum, a number input, a date input, a `Checkbox` for a boolean, a
+    `Textarea` for text with `maxLength` over 255 (when the project has `ui/textarea.tsx`), a
+    password input for `format: password`, else a text input. Its empty value is absent when the
+    field is optional.
 
   A removal drops all three (and imports only it used). A move moves the Controller.
 - `refine/drift` is contract drift (`docs/product.md`, slice 3): where the Refine pages no longer

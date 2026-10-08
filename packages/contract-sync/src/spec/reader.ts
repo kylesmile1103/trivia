@@ -10,6 +10,7 @@ import type {
   FieldType,
   ManifestEntity,
   ManifestField,
+  ManifestFieldConstraints,
   ManifestFieldItems,
   ManifestPagination,
   ManifestParameter,
@@ -368,9 +369,43 @@ function summarizeField(
     items: type === 'array' ? summarizeItems(reader, info.node['items']) : null,
     description: textOrNull(own['description']) ?? textOrNull(info.node['description']),
   }
+  const constraints = fieldConstraints(own, info.node)
+  if (constraints) field.constraints = constraints
   const declaredDefault = own['default'] !== undefined ? own['default'] : info.node['default']
   if (declaredDefault !== undefined) field.default = declaredDefault
   return field
+}
+
+/** The bounds a field's schema declares (on the property itself, else on what it references). */
+function fieldConstraints(own: JsonObject, node: JsonObject): ManifestFieldConstraints | null {
+  const pick = (key: string): unknown => (own[key] !== undefined ? own[key] : node[key])
+  const count = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+  const out: ManifestFieldConstraints = {}
+  const minLength = pick('minLength')
+  const maxLength = pick('maxLength')
+  if (count(minLength)) out.minLength = minLength
+  if (count(maxLength)) out.maxLength = maxLength
+  // 3.0: `exclusiveMinimum: true` makes `minimum` strict; 3.1: `exclusiveMinimum` is the bound.
+  const bound = (inclusive: 'minimum' | 'maximum', exclusive: 'exclusiveMinimum' | 'exclusiveMaximum') => {
+    const value = pick(inclusive)
+    const strict = pick(exclusive)
+    if (finite(strict)) out[exclusive] = strict
+    if (finite(value)) {
+      if (strict === true) out[exclusive] = value
+      else out[inclusive] = value
+    }
+  }
+  bound('minimum', 'exclusiveMinimum')
+  bound('maximum', 'exclusiveMaximum')
+  const pattern = pick('pattern')
+  if (typeof pattern === 'string' && pattern !== '') out.pattern = pattern
+  // In the manifest's key order, whatever order the spec used.
+  const ordered: ManifestFieldConstraints = {}
+  for (const key of ['minLength', 'maxLength', 'minimum', 'exclusiveMinimum', 'maximum', 'exclusiveMaximum', 'pattern'] as const) {
+    if (out[key] !== undefined) (ordered as Record<string, unknown>)[key] = out[key]
+  }
+  return Object.keys(ordered).length > 0 ? ordered : null
 }
 
 export function summarizeEntity(reader: SpecReader, schema: SchemaInfo, style: ApiStyle): ManifestEntity {

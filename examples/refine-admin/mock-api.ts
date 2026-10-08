@@ -49,6 +49,7 @@ function seed(): Record<string, Resource> {
     creditLimit,
     birthDate: i % 4 === 3 ? null : `19${50 + i * 5}-0${(i % 9) + 1}-1${i}`,
     createdAt: day(i + 1),
+    notes: i % 3 === 1 ? 'Prefers contact by email.' : null,
   }))
   const currencies = ['EUR', 'USD', 'GBP']
   const accounts: Row[] = customers.flatMap((c, i) =>
@@ -83,11 +84,11 @@ function seed(): Record<string, Resource> {
     customers: {
       rows: customers,
       create: {
-        fields: ['fullName', 'email', 'phone', 'segment', 'creditLimit', 'birthDate'],
+        fields: ['fullName', 'email', 'phone', 'segment', 'creditLimit', 'birthDate', 'notes'],
         required: ['fullName', 'email', 'segment'],
         defaults: () => ({ id: uuid(1, ++next), status: 'pending', kycStatus: 'not_started', createdAt: new Date().toISOString() }),
       },
-      update: ['fullName', 'email', 'phone', 'status', 'segment', 'creditLimit', 'birthDate'],
+      update: ['fullName', 'email', 'phone', 'status', 'segment', 'creditLimit', 'birthDate', 'notes'],
       remove: true,
     },
     accounts: {

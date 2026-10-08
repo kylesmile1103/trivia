@@ -23,6 +23,8 @@ export interface ScaffoldContext {
   /** Where pages go, and their import prefix: `src/pages`, `@/pages`. */
   pagesDir: string
   pagesImport: string
+  /** The project has shadcn's `textarea`. */
+  textarea?: boolean
 }
 
 export interface PageFile {
@@ -229,7 +231,7 @@ function formPage(
   imports.add({ name: 'Button', source: `${context.ui}/button` })
   imports.add({ name: 'FieldGroup', source: `${context.ui}/field` })
 
-  const fieldContext = { ui: context.ui, idPrefix: kebab(resource.name) }
+  const fieldContext = { ui: context.ui, idPrefix: kebab(resource.name), ...(context.textarea ? { textarea: true } : {}) }
   const pieces = editable.map((f: ManifestField) => {
     const piece = formFieldFor(f, fieldContext)
     for (const spec of piece.imports) imports.add(spec)

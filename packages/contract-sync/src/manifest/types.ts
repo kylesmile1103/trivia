@@ -98,8 +98,25 @@ export interface ManifestField {
   /** Element summary when `type` is "array". */
   items: ManifestFieldItems | null
   description: string | null
+  /** Validation bounds the spec declares; omitted when it declares none. */
+  constraints?: ManifestFieldConstraints
   /** The spec's declared default; omitted when the spec declares none. */
   default?: unknown
+}
+
+/**
+ * A field's validation bounds, as declared (only those present). OpenAPI 3.0's boolean
+ * `exclusiveMinimum: true` (with `minimum`) is normalized to 3.1's `exclusiveMinimum: <n>`.
+ */
+export interface ManifestFieldConstraints {
+  minLength?: number
+  maxLength?: number
+  minimum?: number
+  exclusiveMinimum?: number
+  maximum?: number
+  exclusiveMaximum?: number
+  /** An ECMA-262 regular expression, as the spec writes it (not anchored). */
+  pattern?: string
 }
 
 export interface ManifestEntity {
