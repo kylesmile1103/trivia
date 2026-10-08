@@ -5,7 +5,7 @@ from the **user's** Vite dev server under `/@trivia/api/`, calling the Rust engi
 napi binding (`@trivia/engine`). The designer reaches them through its same-origin proxy.
 
 TypeScript mirror of every shape: `packages/designer/src/shared/engine/types.ts`.
-Rust source of truth: `crates/trivia_oxc_engine/src/{mutator,inspect,prop_analyzer,error}.rs`.
+Rust source of truth: `crates/trivia_oxc_engine/src/{ops/mod,ops/bind_query,inspect,prop_analyzer,error}.rs`.
 
 ## Envelope
 
@@ -162,7 +162,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   422 `unsupported` as well: the hook would only ever see its first value. `optionsArgs` is one expression, at
   most 4096 bytes, nested at most 256 levels deep and with at most 1024 brackets and tags (else 400
   `invalid_op`). It is idempotent (re-binding returns
-  `changed: false`). Rules and refusals: `crates/trivia_oxc_engine/src/data_binder.rs`; design: `docs/data-provider.md`. Moving a node into itself or its own subtree
+  `changed: false`). Rules and refusals: `crates/trivia_oxc_engine/src/ops/bind_query.rs`; design: `docs/data-provider.md`. Moving a node into itself or its own subtree
   is 400 `invalid_op`.
 - The engine's guarded write (undo/redo `restore`) itself answers `conflict` when the file no
   longer has the expected content.

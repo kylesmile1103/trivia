@@ -22,7 +22,15 @@ the sections below record what was verified against the reference code on 2026-1
   the engine HTTP API at `/@trivia/api` (contract: `docs/api.md`).
 - `packages/designer` — React designer (`@trivia/designer`), served at
   `http://localhost:4400/__trivia/`; proxies everything else to the user's dev server.
+- `packages/contract-sync` — OpenAPI → hey-api TanStack Query code + `trivia.manifest.json`
+  (`docs/data-provider.md`).
 - `examples/playground` — a stock create-vite + shadcn (radix, nova) app used as the "user app".
+- `e2e/` — Playwright across all of the above.
+
+Where code goes is in `docs/architecture.md`: packages at the top, feature slices inside.
+The designer is `app/` → `features/<name>/` (public API in `index.ts`) → `shared/`. A feature
+never imports another feature, and `src/architecture.test.ts` enforces that. Engine write ops
+are one module each under `crates/trivia_oxc_engine/src/ops/`.
 
 ```sh
 cargo test -p trivia_oxc_engine                      # engine tests
@@ -190,7 +198,7 @@ Worth adopting:
   Tailwind JIT has CSS only for classes already in source, so previews of new values must be
   real CSS. Commit converts it to classes.
 - **One serializable action vocabulary** with undo/redo (`packages/models/src/actions/action.ts`).
-  Ours is `Op` (`mutator.rs`), shared by designer and agents. Undo is a guarded before/after file
+  Ours is `Op` (`ops/mod.rs`), shared by designer and agents. Undo is a guarded before/after file
   restore (byte-exact) instead of inverse actions.
 - **CSS→Tailwind, then `twMerge`** (`packages/utility/src/tailwind.ts`, `tw-merge.ts`).
 

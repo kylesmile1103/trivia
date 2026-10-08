@@ -1,51 +1,58 @@
 # Trivia — Agent Handoff
 
 **Read this first in a new session**, then `CLAUDE.md` (the design rules; it wins on conflicts).
-Last updated: 2026-10-08, at the end of the first build session (one lead, with multi-agent
-"ultracode" swarms).
+Last updated: 2026-10-08, at the end of session 2 (one lead, no swarms): the round-2 residuals
+are fixed and the codebase is reorganized into feature slices.
 
 Briefs and contracts:
+- `docs/architecture.md`: where code goes (packages at the top, feature slices inside).
 - `docs/briefs/spec.md`: the original brief.
 - `docs/briefs/data-provider.md`: the data-provider brief, with verified corrections at its top.
 - `docs/api.md`: the engine HTTP contract.
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
 <!-- STATUS:BEGIN -->
-## 1. Status (2026-10-08, end of session 1)
+## 1. Status (2026-10-08, end of session 2)
 
-`main` is pushed to `origin` (git@github.com:kylesmile1103/trivia.git) after a full green gate. Every
-commit's author and committer email is `kylesmile1103@gmail.com`; the history was rewritten once,
-before the first push, and `.git/hooks/pre-push` refuses the work email.
+Session 2 is 8 commits on `main` after `3d5253b`, **not pushed**: `git log 3d5253b..HEAD`.
+Session 1's `main` is on `origin` (git@github.com:kylesmile1103/trivia.git). Every commit
+email is `kylesmile1103@gmail.com`; `.git/hooks/pre-commit` and `pre-push` refuse the work
+email. The local `swarm/*` and `worktree-wf_*` branches are leftovers from session 1 with
+pre-rewrite SHAs: don't merge them.
 
-All work is merged: 9 builder branches, review-fix round 1 (5 fixers) and round 2 (3 fixers). The
-`swarm/*` branches are local leftovers. They were never pushed and still carry pre-rewrite SHAs, so
-don't merge them again.
+**Session 2:**
+- **Round-2 residuals fixed**, each with a regression test that failed first:
+  - Deep files: locators grow with the square of nesting (50 000 nested elements took over
+    6 GB). Every entry point now refuses a file whose locators would pass 2^22 segments:
+    422 `unsupported`, and the plugin serves it without locators. Measured: 117 MB at 50 000
+    levels, and the napi crash suite now bounds every case's peak RSS at 512 MiB.
+  - The designer answers 400 to a request target its proxy can't parse (`GET /\%40x/y` used to
+    kill the dev server).
+  - Leave-commits go through the action bus (`dispatch(op, label, { follow: false })`).
+  - `pnpm typecheck` covers `server/api-guard.test.ts`.
+  - Left as is: a deferred click can select a different element after the layout shifts (an
+    accepted trade-off).
+- **Reorganized** (`docs/architecture.md`):
+  - package folders follow npm names (`packages/designer`, `packages/contract-sync`);
+  - the designer is `app/` → `features/{canvas,inspector,palette,toolbar}/` → `shared/`,
+    enforced by `src/architecture.test.ts`;
+  - engine write ops are one module each in `src/ops/`;
+  - contract-sync is grouped by pipeline stage;
+  - briefs are in `docs/briefs/`.
 
-**Final gate on `main`:**
-- `cargo test --workspace` 228/228 (16 suites); `cargo clippy --workspace --all-targets -D warnings` clean.
-- plugin 68, designer 389, contract-sync 76 (vitest).
-- napi crash suite 25/25 (`pnpm --filter @trivia/engine test`).
+  Git recorded the moves as renames: `git log --follow` works.
+
+**Gate on `main` (all green):**
+- `cargo test --workspace` 229/229 (16 suites); clippy `-D warnings` clean.
+- Vitest: plugin 68, designer 400 (including 6 architecture rules), contract-sync 76.
+- napi crash suite 30/30, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 36/36, twice in a row (stable).
-- **Claude in Chrome, validated by hand:**
-  - the Step 3 flow: one attribute written, HMR without a reload, byte-identical undo;
-  - drag-move followed by ⌘Z (the selection is dropped, not retargeted);
-  - a click during an edit's HMR, which is deferred and selects;
-  - no console errors.
+- Playwright 36/36, twice in a row.
+- Not re-done in session 2: the Claude in Chrome manual pass. Session 1's is described below,
+  and Playwright covers the same flows.
 
-  GIFs are in the user's `~/Downloads/trivia-*.gif`.
-
-**Review:**
-- An adversarial review of 4 lenses × 2 skeptics found 20 issues; 18 were confirmed.
-- Every confirmed finding is fixed, each with a regression test that failed first. A fresh verifier
-  re-ran the reviewer's original reproduction against every fix.
-- Remaining residuals are in §7.
-
-**Brief acceptance:**
-- Step 1 (locators on every element of a Vite+shadcn app): met.
-- Step 2 (engine tests: comments kept, Button injected into CardContent, auto-import, byte
-  preservation): met.
-- Step 3 (canvas → inspector → `variant=outline` on disk → HMR): met.
+**Brief acceptance:** Steps 1–3 were met in session 1 (validated by hand in Chrome; GIFs in
+the user's `~/Downloads/trivia-*.gif`).
 
 **Not built yet:**
 - the designer Data Explorer and drag-to-bind;
@@ -108,6 +115,7 @@ writes `useQuery` hooks against it.
 | Two-phase editing (Onlook): preview real CSS during a gesture, write Tailwind classes on commit | Tailwind JIT has no CSS for classes that aren't in the source yet. |
 | Data provider: OpenAPI → hey-api 0.99.0 (pinned) → `useQuery`; static manifest; zero proprietary runtime | Rejects `@tangojs/boot` and Refine's runtime. The generated client is bundled, so the only runtime dependency is `@tanstack/react-query`. |
 | pnpm workspace; package names `trivia_*` / `@trivia/*` | The user renamed `tango_*` to `trivia_*`. |
+| Packages by deployable at the top, feature slices inside (`docs/architecture.md`) | The user asked for vertical slices. One feature spans Rust, Node and React, so slicing across packages is impossible. Inside, the designer is `app` → `features` → `shared` (a test enforces it), and engine write ops are one module each. |
 
 ## 5. Catches: code and product
 
@@ -163,37 +171,43 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. Round-2 verifier residuals:
-   - A user file with 50k+ nested elements grows RSS past 6 GB in inspect/applyOps. Cap file size or
-     depth before parsing.
-   - The designer proxy dies on a malformed request target (`GET /\%40x/y` from http-proxy-3). Catch it.
-   - A deferred click can select a different element after the layout shifts (accepted trade-off).
-   - `applyAfterLeaving` bypasses the action bus's in-flight counter.
-   - `api-guard.test.ts` is not covered by `pnpm typecheck` (`tsconfig.node.json`).
-2. Data provider, designer side: a Data Explorer drawer (manifest tree, operations, schema) plus
-   drag-to-bind using `bindQuery`; generate the DataTable component, its columns, and forms; add
-   `@tanstack/react-query` and a QueryClientProvider to the playground; contract drift badges.
-3. An engine op for editing JSX text; cross-file move; `canvas.fitZoom`; a layers panel.
-4. A Tauri shell (the engine is already a plain Rust library).
+1. Data provider, designer side:
+   - a Data Explorer drawer (manifest tree, operations, schema) as a new
+     `features/data-explorer/`, plus drag-to-bind using `bindQuery`;
+   - generate the DataTable component, its columns, and forms;
+   - add `@tanstack/react-query` and a QueryClientProvider to the playground;
+   - contract drift badges.
+2. An engine op for editing JSX text (a new `ops/` module); cross-file move;
+   `canvas.fitZoom`; a layers panel (a new feature).
+3. A Tauri shell (the engine is already a plain Rust library).
 
 ## 8. Repo map
 
-- `crates/trivia_oxc_engine/src/`
-  - `locator.rs`: locators and `annotate`.
-  - `mutator.rs`: `Op` and edits.
-  - `import_manager.rs`, `text.rs` (edit and line helpers), `inspect.rs`, `workspace.rs`
-    (paths, atomic and guarded writes).
-  - `prop_analyzer.rs`, `data_binder.rs`.
-- `crates/trivia_napi/`: the napi binding (JSON envelope API) and package `@trivia/engine`.
+The full layout and its rules are in `docs/architecture.md`. In short:
+
+- `crates/trivia_oxc_engine/src/`:
+  - `locator.rs` (locators, `annotate`, `JsxTable`), `text.rs` (edits, line helpers),
+    `import_manager.rs`, `workspace.rs` (the only I/O);
+  - `inspect.rs` and `prop_analyzer.rs` (reads);
+  - `ops/` (writes): `mod.rs` holds `Op` and the shared machinery, plus `insert.rs`,
+    `update_prop.rs`, `remove.rs`, `move_node.rs` and `bind_query.rs`.
+- `crates/trivia_napi/`: the napi binding (JSON envelope API), package `@trivia/engine`.
 - `packages/vite-plugin-ast-locator/src/`: `transform.ts` (locators), `api.ts` (HTTP),
   `history.ts` (undo), `options.ts` (uiDir/importBase from `components.json`).
-- `packages/designer/src/`:
-  - `canvas/` (overlay, hit testing, drop zones, previews), `inspector/` (props, class manager,
-    `style/` panel);
-  - `registry/` (palette and templates), `toolbar/`, `state/` (zustand store and action bus),
-    `bridge/` (API client and TS types mirroring Rust serde), `lib/tailwind/` (CSS→Tailwind).
-- `packages/contract-sync/`: hey-api codegen, the manifest generator, and REST/Supabase
-  adapters.
+- `packages/designer/`:
+  - `server/` (the API guard);
+  - `src/app/` (shell);
+  - `src/features/`:
+    - `canvas/` (overlay, hit testing, drop zones, previews);
+    - `inspector/` (props, class manager, `style/` panel, `tailwind/` CSS→Tailwind);
+    - `palette/` (catalog and templates);
+    - `toolbar/`;
+  - `src/shared/`:
+    - `engine/` (API client, TS types mirroring Rust serde, session);
+    - `state/` (zustand store, action bus);
+    - `commands/`, `ui/` (shadcn), `canvas.ts`, `template.ts`.
+- `packages/contract-sync/src/`: `adapters/` → `spec/` → `codegen/` → `manifest/`, orchestrated
+  by `sync.ts`.
 - `examples/playground/`: a stock create-vite + shadcn (radix, nova) user app.
 - `e2e/*.spec.ts`: Playwright (`playwright.config.ts`, ports come from env).
 - `references/` (gitignored, read-only): tango, oxc, oxbox, openapi-ts, onlook, refine.
