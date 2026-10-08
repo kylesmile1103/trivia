@@ -195,7 +195,7 @@ fn ops_from_the_api_doc_deserialize() {
             ops.push(op);
         }
     }
-    assert_eq!(ops.len(), 9, "one example per op: {ops:?}");
+    assert_eq!(ops.len(), 14, "one example per op: {ops:?}");
     assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, expected_name: Some(n), .. } if imports.len() == 1 && n == "CardContent"));
     assert!(matches!(&ops[1], Op::InsertChild { expected_name: Some(n), .. } if n == "CardContent"));
     assert!(matches!(&ops[2], Op::UpdateProp { expected_name: Some(n), .. } if n == "Button"));
@@ -204,6 +204,11 @@ fn ops_from_the_api_doc_deserialize() {
     assert!(matches!(&ops[6], Op::BindQuery(b) if b.options_fn == "listCustomersOptions" && b.items_path.as_deref() == Some("items")));
     assert!(matches!(&ops[7], Op::SetText { expected_name: Some(n), text, .. } if n == "Button" && text == "Save changes"));
     assert!(matches!(&ops[8], Op::CreateFile { file, .. } if file == "src/components/forms/customer-form.tsx"));
+    assert!(matches!(&ops[9], Op::InsertElement { index: Some(2), .. }));
+    assert!(matches!(&ops[10], Op::RemoveElement { path } if path.ends_with("#columns[id=segment]")));
+    assert!(matches!(&ops[11], Op::MoveElement { index: 0, .. }));
+    assert!(matches!(&ops[12], Op::SetProperty { prop, value, .. } if prop == "enableSorting" && value == "false"));
+    assert!(matches!(&ops[13], Op::RemoveProperty { prop, .. } if prop == "enableSorting"));
     for placement in ["before", "after", "firstChild", "lastChild"] {
         let text = format!(r#"{{ "op": "move", "source": "a#B#0", "target": "a#B#0", "placement": "{placement}" }}"#);
         assert!(serde_json::from_str::<Op>(&text).is_ok(), "{placement}");

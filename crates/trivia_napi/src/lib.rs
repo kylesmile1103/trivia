@@ -250,6 +250,19 @@ pub fn outline(root: String, file: String) -> String {
     engine_call(move || Workspace::new(&root).and_then(|ws| ws.outline(&file)).and_then(to_value).map_err(Failure::from))
 }
 
+/// The scopes of `file` (project-relative) with their top-level bindings and hook calls,
+/// as value trees: `ScopeValues[]`.
+#[napi]
+pub fn describe_values(root: String, file: String) -> String {
+    engine_call(move || Workspace::new(&root).and_then(|ws| ws.describe_values(&file)).and_then(to_value).map_err(Failure::from))
+}
+
+/// The value at a value path (`<file>#<scope>#<path>`), unwrapped to its literal.
+#[napi]
+pub fn describe_value(root: String, path: String) -> String {
+    engine_call(move || Workspace::new(&root).and_then(|ws| ws.describe_value(&path)).and_then(to_value).map_err(Failure::from))
+}
+
 /// Prop schemas for every component file in `ui_dir`.
 #[napi]
 pub fn components(root: String, ui_dir: String, import_base: String) -> String {

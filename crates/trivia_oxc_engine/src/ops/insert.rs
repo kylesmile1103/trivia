@@ -97,7 +97,7 @@ pub const MAX_SNIPPET_TAGS_AND_BRACKETS: usize = text::MAX_TAGS_AND_BRACKETS;
 /// from outside the process: thousands of levels would overflow the native stack and kill the
 /// host (the user's dev server) instead of failing. So its size and nesting are checked on
 /// the bytes before anything parses them.
-fn check_snippet_size(snippet: &str) -> Result<()> {
+pub(super) fn check_snippet_size(snippet: &str) -> Result<()> {
     if snippet.len() > MAX_SNIPPET_BYTES {
         return Err(EngineError::InvalidSnippet(format!(
             "it is {} bytes long; the limit is {MAX_SNIPPET_BYTES}",

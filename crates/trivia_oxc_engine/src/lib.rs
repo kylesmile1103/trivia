@@ -12,6 +12,7 @@ pub mod locator;
 pub mod ops;
 pub mod prop_analyzer;
 pub mod text;
+pub mod values;
 pub mod workspace;
 
 use oxc_allocator::Allocator;
@@ -26,6 +27,7 @@ pub use inspect::{AttrDetails, AttrKind, NodeDetails, OutlineNode};
 pub use locator::{Insertion, JsxTable, Locator};
 pub use ops::{AcrossOutcome, Op, Outcome, Placement, apply_across, apply_op};
 pub use prop_analyzer::{ComponentSchema, PropKind, PropSchema, PropSource};
+pub use values::{ScopeValues, Value, ValueDesc, ValuePath, describe_value, describe_values};
 pub use workspace::{Applied, Workspace};
 
 /// Parse `source` as the file at `file` (extension picks TS/JSX). Any syntax error fails.

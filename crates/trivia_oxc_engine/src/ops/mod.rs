@@ -23,7 +23,9 @@
 //! * `remove`: `remove`;
 //! * `move_node`: `move` and `moveNode`, with the check that moved code keeps its bindings;
 //! * `move_across`: `move` and `moveNode` between two files (`apply_across`);
-//! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too).
+//! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too);
+//! * `values`: `insertElement`, `removeElement`, `moveElement`, `setProperty` and
+//!   `removeProperty`, on object and array literals addressed by value path (`crate::values`).
 //!
 //! A new op is a new module here plus its `Op` variant.
 
@@ -50,6 +52,7 @@ mod move_node;
 mod remove;
 mod set_text;
 mod update_prop;
+mod values;
 
 pub use insert::{MAX_SNIPPET_BYTES, MAX_SNIPPET_DEPTH, MAX_SNIPPET_TAGS_AND_BRACKETS};
 pub use move_across::{AcrossOutcome, apply_across};
@@ -162,13 +165,45 @@ pub enum Op {
         #[serde(default)]
         if_missing: bool,
     },
+    /// Insert `value` (one expression, as source text) into the array literal at `path`
+    /// (a value path, `crate::values`), before element `index`; appended without one.
+    InsertElement {
+        path: String,
+        #[serde(default)]
+        index: Option<usize>,
+        value: String,
+        #[serde(default)]
+        imports: Vec<ImportSpec>,
+    },
+    /// Remove the array element `path` selects (`[key=value]` or `[i]`); imports whose last
+    /// reference it was are dropped.
+    RemoveElement { path: String },
+    /// Move the array element `path` selects to position `index` (counted after the move).
+    MoveElement { path: String, index: usize },
+    /// Set property `prop` of the object literal at `path` to `value` (one expression, as
+    /// source text): replaced in place when it exists, else appended.
+    SetProperty {
+        path: String,
+        prop: String,
+        value: String,
+        #[serde(default)]
+        imports: Vec<ImportSpec>,
+    },
+    /// Remove property `prop` of the object literal at `path`.
+    RemoveProperty { path: String, prop: String },
 }
 
 impl Op {
     /// The file this op edits.
     pub fn file(&self) -> Result<String> {
-        if let Op::CreateFile { file, .. } = self {
-            return Ok(file.clone());
+        match self {
+            Op::CreateFile { file, .. } => return Ok(file.clone()),
+            Op::InsertElement { path, .. }
+            | Op::RemoveElement { path }
+            | Op::MoveElement { path, .. }
+            | Op::SetProperty { path, .. }
+            | Op::RemoveProperty { path, .. } => return Ok(crate::values::ValuePath::parse(path)?.file),
+            _ => {}
         }
         let primary = match self {
             Op::Insert { target, .. }
@@ -178,7 +213,12 @@ impl Op {
             Op::InsertChild { parent, .. } => parent,
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
             Op::BindQuery(binding) => &binding.target,
-            Op::CreateFile { .. } => unreachable!("returned above"),
+            Op::CreateFile { .. }
+            | Op::InsertElement { .. }
+            | Op::RemoveElement { .. }
+            | Op::MoveElement { .. }
+            | Op::SetProperty { .. }
+            | Op::RemoveProperty { .. } => unreachable!("returned above"),
         };
         Ok(Locator::parse(primary)?.file)
     }
@@ -213,6 +253,15 @@ pub struct Outcome {
 
 /// Apply `op` to `source` (the content of `file`). Pure: no I/O.
 pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
+    // Value edits parse on their own: they address literals, not JSX.
+    match op {
+        Op::InsertElement { path, index, value, imports } => return values::insert_element(source, file, path, *index, value, imports),
+        Op::RemoveElement { path } => return values::remove_element(source, file, path),
+        Op::MoveElement { path, index } => return values::move_element(source, file, path, *index),
+        Op::SetProperty { path, prop, value, imports } => return values::set_property(source, file, path, prop, value, imports),
+        Op::RemoveProperty { path, prop } => return values::remove_property(source, file, path, prop),
+        _ => {}
+    }
     let alloc = Allocator::default();
     let program = parse(&alloc, source, file)?;
     let table = JsxTable::build(&program, file)?;
@@ -255,6 +304,11 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         Op::CreateFile { .. } => Err(EngineError::InvalidOp(
             "createFile writes a new file: apply it through the workspace (applyOps), not to existing text".into(),
         )),
+        Op::InsertElement { .. }
+        | Op::RemoveElement { .. }
+        | Op::MoveElement { .. }
+        | Op::SetProperty { .. }
+        | Op::RemoveProperty { .. } => unreachable!("handled above"),
     }
 }
 

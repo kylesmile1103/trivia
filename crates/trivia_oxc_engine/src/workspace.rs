@@ -190,6 +190,17 @@ impl Workspace {
         inspect::outline(&self.read(file)?, file)
     }
 
+    /// The scopes of `file` with their top-level bindings and hook calls (`crate::values`).
+    pub fn describe_values(&self, file: &str) -> Result<Vec<crate::values::ScopeValues>> {
+        crate::values::describe_values(&self.read(file)?, file)
+    }
+
+    /// The value at a value path, unwrapped to its literal.
+    pub fn describe_value(&self, path: &str) -> Result<crate::values::Value> {
+        let file = crate::values::ValuePath::parse(path)?.file;
+        crate::values::describe_value(&self.read(&file)?, path)
+    }
+
     /// Analyze every `*.tsx` in `ui_dir` (project-relative; a leading `./` and trailing `/`
     /// are accepted). `import_base` is the module prefix (shadcn `components.json` →
     /// `aliases.ui`, e.g. `@/components/ui`).

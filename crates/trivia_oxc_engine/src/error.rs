@@ -7,6 +7,10 @@ pub enum EngineError {
     InvalidLocator(String),
     #[error("no JSX node at `{0}`")]
     NodeNotFound(String),
+    #[error("invalid value path `{0}` (expected `<file>#<scope>#<binding or call()>[.prop][[key=value]][[i]]…`)")]
+    InvalidValuePath(String),
+    #[error("no value at `{path}`: {why}")]
+    ValueNotFound { path: String, why: String },
     #[error("stale locator `{locator}`: expected <{expected}> but found <{found}>; re-select and retry")]
     StaleLocator { locator: String, expected: String, found: String },
     #[error("cannot parse {file}: {message}")]
@@ -37,7 +41,8 @@ impl EngineError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::InvalidLocator(_) => "invalid_locator",
-            Self::NodeNotFound(_) => "node_not_found",
+            Self::NodeNotFound(_) | Self::ValueNotFound { .. } => "node_not_found",
+            Self::InvalidValuePath(_) => "invalid_locator",
             Self::StaleLocator { .. } => "stale_locator",
             Self::Parse { .. } => "parse_error",
             Self::Unsupported(_) => "unsupported",

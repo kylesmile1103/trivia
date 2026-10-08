@@ -59,6 +59,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/selection` | — | `SelectionState` |
 | POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
 | POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
+| GET | `/@trivia/api/refine/pages` | — | `ListPage[]` (every Refine list page under `src/`) |
+| GET | `/@trivia/api/refine/page` | `?file=` | `ListPage[]` (that file's) |
+| POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
 | GET | `/@trivia/api/screenshot/next` | — | `{ id: string \| null }` (long poll) |
 | POST | `/@trivia/api/screenshot` | `{ id, png, width, height }` or `{ id, error }` | `null` |
 
@@ -95,6 +98,36 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `contractChanged` is false when the spec's `schemaHash` is the one the manifest already had,
   and `git` says what the guard found: `"clean"`, `"forced: replaced uncommitted changes in …"` or
   `"not a git work tree: nothing was guarded"`. A contract-sync failure is 422 `unsupported`.
+- `refine/*` is the Refine adapter (`docs/product.md`, `packages/vite-plugin-ast-locator/src/refine`).
+  A **list page** is a component calling `useTable` (`@refinedev/react-table`) with a `columns`
+  array. `ListPage = { file, component, columnsPath, resource, rowType, contract, columns,
+  available }`:
+  - `columns` are as the source has them: `key` (`id`, else `accessorKey`), `label` (a string
+    header or the `<span>` text of a JSX one), `filter` (the refine-ui filter component its
+    header uses), `sortable`, `hasCell`, and the contract `field` it shows;
+  - `available` lists the contract fields not shown yet, each with `shape`
+    (`text|enum|number|date|dateTime|boolean|list|other`), `enum`, `required`, `nullable`;
+  - `resource` is `refineCoreProps.resource`, else the contract resource whose `typeName` is the
+    row type (`useTable<CustomerDto>`), else the page's folder name;
+  - `contract` is the manifest resource it matches (by collection path segment, name, plural or
+    tag).
+
+  `ColumnChange = { action: "add", field, index?, label? } | { action: "remove", column } |
+  { action: "move", column, index }`. Changes apply in order, so a later one may name a column
+  an earlier one added. The plan is value ops (`insertElement`, `removeElement`,
+  `moveElement`) for the caller to apply as one entry (`/batch`). An added column follows
+  Refine's shadcn examples:
+  - its header gets `DataTableSorter` and a filter by type: text →
+    `DataTableFilterDropdownText`, enum → `DataTableFilterCombobox` (multi, the enum's values),
+    number → `DataTableFilterDropdownNumeric`, date → `DataTableFilterDropdownDateRangePicker`;
+  - its cell renders by type: a `Badge` for enums, a locale date, `.toLocaleString()` for
+    numbers, Yes/No for booleans, with `—` for null on nullable fields;
+  - its imports come from `components.json`'s ui alias (`…/badge`) and the `refine-ui` folder
+    beside it. Without refine-ui's data table, headers are plain strings.
+
+  Refused: an unknown field (400 `invalid_op`, listing the resource's fields), a field already
+  shown (409 `conflict`), an unknown column (404 `node_not_found`, listing the columns), and a
+  file with no list page (404).
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
   `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with
@@ -122,6 +155,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   "itemsPath": "items", "dataProp": "data", "loadingProp": "isLoading" }
 { "op": "setText", "target": "<loc>", "expectedName": "Button", "text": "Save changes" }
 { "op": "createFile", "file": "src/components/forms/customer-form.tsx", "content": "export function CustomerForm() {…}" }
+{ "op": "insertElement", "path": "src/pages/customers/list.tsx#CustomerList#columns", "index": 2, "value": "{ id: \"segment\", accessorKey: \"segment\", header: \"Segment\" }", "imports": [] }
+{ "op": "removeElement", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=segment]" }
+{ "op": "moveElement", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=segment]", "index": 0 }
+{ "op": "setProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting", "value": "false", "imports": [] }
+{ "op": "removeProperty", "path": "src/pages/customers/list.tsx#CustomerList#columns[id=email]", "prop": "enableSorting" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -144,6 +182,23 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
   undo deletes it (only if it still holds what was written) and redo writes it again. The
   binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).
+- **Value ops** (`insertElement`, `removeElement`, `moveElement`, `setProperty`,
+  `removeProperty`) edit object and array literals rather than JSX. They address them by
+  **value path** `<file>#<scope>#<head><step>*` (`crate::values`):
+  - `scope` is a top-level function named as locators name it, or `module`;
+  - `head` is a binding at the top of that scope's body (`columns`) or its first call to a
+    function (`useForm()`);
+  - steps are `.prop`, `[key=value]` (the element that is an object whose `key` is that string)
+    and `[i]`.
+
+  On the way, values unwrap to the literal they hold: parentheses and TS `as`/`satisfies`/`!`,
+  a function to what it returns, a call to its first argument. So `columns` reaches the array in
+  `useMemo(() => [...], [])`. `value` is source text for one expression; its imports work as a
+  snippet's do. Layout follows the literal (one item per line with or without a trailing
+  comma, or one line), and inserting then removing an item, or moving it there and back,
+  restores the bytes. Keyed paths are their own stale guard: a missing key is 404
+  `node_not_found`, and a key two elements share is 422 `unsupported`. `removeElement` and
+  `removeProperty` drop imports only the removed code used. `locator` in the result is `null`.
 - `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
   references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
   `attributes[].source` is the text as written.
