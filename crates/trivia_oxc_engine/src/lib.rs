@@ -5,12 +5,11 @@
 //! original text, so whitespace and comments outside the edit are untouched (see `CLAUDE.md`,
 //! rule 1). Every result is re-parsed before it may be written.
 
-pub mod data_binder;
 pub mod error;
 pub mod import_manager;
 pub mod inspect;
 pub mod locator;
-pub mod mutator;
+pub mod ops;
 pub mod prop_analyzer;
 pub mod text;
 pub mod workspace;
@@ -20,12 +19,12 @@ use oxc_ast::ast::Program;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 
-pub use data_binder::{QueryBinding, bind_query};
+pub use ops::bind_query::{QueryBinding, bind_query};
 pub use error::{EngineError, ErrorPayload, Result};
 pub use import_manager::ImportSpec;
 pub use inspect::{AttrDetails, AttrKind, NodeDetails};
 pub use locator::{Insertion, JsxTable, Locator};
-pub use mutator::{Op, Outcome, Placement, apply_op};
+pub use ops::{Op, Outcome, Placement, apply_op};
 pub use prop_analyzer::{ComponentSchema, PropKind, PropSchema, PropSource};
 pub use workspace::{Applied, Workspace};
 

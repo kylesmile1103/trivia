@@ -27,7 +27,7 @@ use trivia_oxc_engine::{self as engine, EngineError, Op, Workspace};
 /// stack is unmapped when the call's thread exits. On macOS an ordinary call's peak RSS is
 /// the same as with 64 MiB. No fixed stack fits arbitrary nesting (400 000 nested brackets
 /// still overflow this one), so text the HTTP API receives also needs a cap before it is
-/// parsed (snippets in `mutator.rs`, `optionsArgs` in `data_binder.rs`).
+/// parsed (snippets in `ops/insert.rs`, `optionsArgs` in `ops/bind_query.rs`).
 const ENGINE_STACK: usize = 512 * 1024 * 1024;
 
 /// Run `work` on a new thread with [`ENGINE_STACK`] of stack and wait for its result. A

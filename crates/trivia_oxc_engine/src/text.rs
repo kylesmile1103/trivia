@@ -379,7 +379,7 @@ pub fn jsx_text_renders(raw: &str) -> bool {
 /// spelling can nest with brackets. A bracket level costs the parser up to about 3.6 KB of
 /// stack in a debug build (`{a:` objects; about 0.5 KB in release), so 1024 of them stay
 /// under 4 MB of the 8 MiB a main thread has, leaving room for the operator chains the byte
-/// limits allow (see `mutator::MAX_SNIPPET_BYTES`).
+/// limits allow (see `ops::MAX_SNIPPET_BYTES`).
 pub const MAX_TAGS_AND_BRACKETS: usize = 1024;
 
 /// The number of `<`, `(`, `[` and `{` bytes in `src` (see [`MAX_TAGS_AND_BRACKETS`]).

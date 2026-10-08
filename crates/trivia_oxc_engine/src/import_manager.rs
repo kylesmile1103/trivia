@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, Result};
 use crate::text::{self, Edit};
-use crate::{mutator, parse};
+use crate::{ops, parse};
 
 /// `import { name } from "source"`, or `import name from "source"` when `default`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -635,7 +635,7 @@ pub fn prune_unused(code: &str, file: &str, names: &BTreeSet<String>) -> Result<
 /// or a blank line where no imports remain (`none_left`), the blank line after it goes too,
 /// so pruning the import an insert added restores the file it was added to.
 fn declaration_removal(code: &str, span: Span, none_left: bool) -> (u32, u32) {
-    let (start, mut end) = mutator::removal_range(code, span);
+    let (start, mut end) = ops::removal_range(code, span);
     let whole_lines = end as usize == code.len() || code[..end as usize].ends_with('\n');
     if whole_lines {
         let before = &code[..start as usize];

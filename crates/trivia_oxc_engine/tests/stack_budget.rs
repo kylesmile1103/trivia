@@ -13,7 +13,7 @@ use serde_json::json;
 use trivia_oxc_engine::{Op, Outcome, QueryBinding, annotate, apply_op, bind_query, inspect::inspect};
 
 const STACK: usize = 8 << 20;
-/// `mutator::MAX_SNIPPET_BYTES`, `data_binder::MAX_ARGS_LEN`, `mutator::MAX_TAGS_AND_BRACKETS`.
+/// `ops::MAX_SNIPPET_BYTES`, `ops::bind_query::MAX_ARGS_LEN`, `text::MAX_TAGS_AND_BRACKETS`.
 const SNIPPET_LIMIT: usize = 4096;
 const ARGS_LIMIT: usize = 4096;
 const BRACKETS_LIMIT: usize = 1024;

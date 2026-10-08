@@ -1,5 +1,5 @@
 // TypeScript mirror of the engine contract (docs/api.md). Keep in sync with the Rust serde
-// types in crates/trivia_oxc_engine/src/{mutator,inspect,prop_analyzer,error}.rs.
+// types in crates/trivia_oxc_engine/src/{ops/mod,ops/bind_query,inspect,prop_analyzer,error}.rs.
 
 export type Placement = 'before' | 'after' | 'firstChild' | 'lastChild'
 
@@ -28,7 +28,7 @@ export type Op =
   | { op: 'moveNode'; source: string; expectedName?: string; parent: string; expectedParentName?: string; index: number }
   | ({ op: 'bindQuery' } & QueryBinding)
 
-/** Bind an element to a TanStack Query factory (engine: data_binder.rs). */
+/** Bind an element to a TanStack Query factory (engine: ops/bind_query.rs). */
 export interface QueryBinding {
   /** Locator of the element to bind, e.g. a <DataTable>. */
   target: string

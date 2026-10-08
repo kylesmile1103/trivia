@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::error::{EngineError, Result};
 use crate::inspect::{self, NodeDetails};
-use crate::mutator::{self, Op, Outcome};
+use crate::ops::{self, Op, Outcome};
 use crate::prop_analyzer::{self, ComponentSchema};
 
 /// A user project on disk. All paths are project-relative with forward slashes.
@@ -74,7 +74,7 @@ impl Workspace {
     pub fn apply(&self, op: &Op) -> Result<Applied> {
         let file = op.file()?;
         let before = self.read(&file)?;
-        let outcome = mutator::apply_op(&before, &file, op)?;
+        let outcome = ops::apply_op(&before, &file, op)?;
         if outcome.changed {
             self.write(&file, &outcome.code, Some(&before))?;
         }

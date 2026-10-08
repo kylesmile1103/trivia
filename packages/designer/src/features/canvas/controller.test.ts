@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // The canvas controller against the real FrameSession, store and action bus; the engine is a
-// fetch stub with positional locators and expected-name guards (mutator.rs), and the app's
+// fetch stub with positional locators and expected-name guards (engine ops/mod.rs), and the app's
 // document is rendered by hand. That makes the window between an edit returning and its HMR
 // rendering explicit: the DOM still carries the locators of the old source, so a locator read
 // from it names whatever sits at that position in the new one.
@@ -109,7 +109,7 @@ class FakeEngine {
     return { file: FILE, changed: true, locator: placed === null ? null : at(`0.${placed}`), history }
   }
 
-  /** mutator.rs `resolve_expected`: a locator that now names another element is a 409. */
+  /** The engine's `resolve_expected` (locator.rs): a locator that now names another element is a 409. */
   private guard(locator: string, expected: string | undefined): void {
     const actual = this.nameAt(locator)
     if (expected !== undefined && actual !== expected) {

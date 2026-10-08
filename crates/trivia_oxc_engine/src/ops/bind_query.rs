@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{EngineError, Result};
 use crate::import_manager::{self, ImportSpec};
 use crate::locator::{self, AttrValue, JsxNode, JsxTable, Locator, NodeKind};
-use crate::mutator::Outcome;
+use super::Outcome;
 use crate::parse;
 use crate::text::{self, Edit};
 
@@ -56,7 +56,7 @@ const USE_QUERY: &str = "useQuery";
 const MAX_ARGS_DEPTH: usize = 256;
 /// Also bounds the nesting brackets don't show (`a = b = …`, `x => y => …`, `!!…`): at most
 /// one level per byte, which at the semantic pass's 1.2 KB per level (debug build) is about
-/// 5 MB, within an 8 MiB main-thread stack (see `mutator::MAX_SNIPPET_BYTES`).
+/// 5 MB, within an 8 MiB main-thread stack (see `ops::MAX_SNIPPET_BYTES`).
 const MAX_ARGS_LEN: usize = 4096;
 
 /// Bind `target` to `useQuery({ ...<options_fn>(<options_args>) })`.
@@ -1193,11 +1193,11 @@ fn reuse_hook(
 // ---------------------------------------------------------------------------------------
 
 /// Set `name={expr}` for each prop: replace an existing value (string, expression,
-/// element or bare shorthand) or add the attribute, placed like `mutator`'s `UpdateProp`
+/// element or bare shorthand) or add the attribute, placed like `UpdateProp` (`update_prop.rs`)
 /// (own line with the same indent when attributes are one per line).
 ///
 /// Kept private on purpose: `UpdateProp` only takes JSON literals today. Once it can take raw
-/// expression values this can fold into `mutator.rs`.
+/// expression values this can fold into `update_prop.rs`.
 fn prop_edits(src: &str, node: &JsxNode, props: &[(&str, String)]) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut added = Vec::new();
