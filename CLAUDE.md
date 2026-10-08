@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **New session? Start with `docs/HANDOFF.md`.** It covers the current status, the exact next steps (unmerged `swarm/fix2-*` branches, the push conditions, the email rewrite), the decisions, and the catches.
+> **New session? Start with `docs/HANDOFF.md`.** It covers the current status, the decisions, the catches, and the prioritized backlog.
 
 ## What Trivia is
 

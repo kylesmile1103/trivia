@@ -11,51 +11,48 @@ Briefs and contracts:
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
 <!-- STATUS:BEGIN -->
-## 1. Status (2026-10-08, end of session 1, cut short by a usage limit)
+## 1. Status (2026-10-08, end of session 1)
 
-**NOT pushed.** `origin` = git@github.com:kylesmile1103/trivia.git. The user authorized ONE push of `main`
-once all agent work is merged and ALL tests pass. Before that push, rewrite the old commits' email (below).
+`main` is pushed to `origin` (git@github.com:kylesmile1103/trivia.git) after a full green gate. Every
+commit's author and committer email is `kylesmile1103@gmail.com`; the history was rewritten once,
+before the first push, and `.git/hooks/pre-push` refuses the work email.
 
-`main` = f208e7b + this handoff commit. All 9 builder branches are merged, and review-fix round 1 is merged.
-Last full gate on f208e7b:
-- Rust 213/213 tests, clippy clean.
-- plugin 67, designer 352, contract-sync 76; typecheck clean; the napi deep-nesting test survives.
-- Playwright 32/33. The one failure, `e2e/inspector.spec.ts:347` (a click right after an edit gets
-  swallowed), is fixed on `swarm/fix2-canvas`.
+All work is merged: 9 builder branches, review-fix round 1 (5 fixers) and round 2 (3 fixers). The
+`swarm/*` branches are local leftovers. They were never pushed and still carry pre-rewrite SHAs, so
+don't merge them again.
 
-**To do next, in order:**
-1. Merge `swarm/fix2-engine` (fbcc684), `swarm/fix2-security` (81bfb50) and `swarm/fix2-canvas` (b4fb65d)
-   into main. Round 2 of review fixes:
-   - engine: path-aware import reuse; `bindQuery` refuses reassigned locals; a 4 KiB snippet cap plus a
-     1024 tags-and-brackets cap, measured against an 8 MiB stack.
-   - security: a loopback/Origin guard in the designer's own dev server (`api-guard.ts`); `*.localhost`
-     allowed; the napi engine thread stack raised.
-   - canvas: deferred clicks instead of swallowed ones; a hard cap on the busy window; no selection
-     yank-back.
+**Final gate on `main`:**
+- `cargo test --workspace` 228/228 (16 suites); `cargo clippy --workspace --all-targets -D warnings` clean.
+- plugin 68, designer 389, contract-sync 76 (vitest).
+- napi crash suite 25/25 (`pnpm --filter @trivia/engine test`).
+- `pnpm typecheck` clean; designer oxlint has 0 errors.
+- Playwright 36/36, twice in a row (stable).
+- **Claude in Chrome, validated by hand:**
+  - the Step 3 flow: one attribute written, HMR without a reload, byte-identical undo;
+  - drag-move followed by ⌘Z (the selection is dropped, not retargeted);
+  - a click during an edit's HMR, which is deferred and selects;
+  - no console errors.
 
-   The canvas verifier is green. The engine and security verifiers went red only on the same
-   inspector:347 test, which fails on main and is fixed by fix2-canvas. The engine verifier also marked
-   one item not OK; read its report in the workflow journal (wf_ce0df8e1-e54) before merging.
-2. Run the full gate: `cargo test --workspace`, clippy `-D warnings`, `pnpm build:engine && pnpm build:plugin`,
-   every `pnpm --filter … test`, `pnpm typecheck`, `pnpm --filter @trivia/engine test`, `pnpm exec playwright test`.
-3. Run a Claude in Chrome pass (`/chrome` to pick the browser): the Step 3 flow, drag-move plus ⌘Z, and a
-   click right after an edit.
-4. Rewrite the email on every commit: `git filter-branch --env-filter` mapping the work email
-   to `kylesmile1103@gmail.com` (author and committer) on main. Check with
-   `git log --format='%ae %ce' | sort -u`, then delete `refs/original`. The `.git/hooks/pre-push` guard
-   refuses the push otherwise.
-5. `git push -u origin main`, only if everything is green.
+  GIFs are in the user's `~/Downloads/trivia-*.gif`.
 
-**What exists and was verified:**
-- Engine: locators; insert/insertChild/updateProp/remove/move/moveNode/bindQuery as byte-range edits;
-  import add/prune; prop analyzer; data binder; workspace with atomic, guarded writes.
-- Vite plugin: locators, plus the HTTP API with history, batches and caller checks.
-- Designer: canvas, inspector, style panel, palette, toolbar.
-- contract-sync: hey-api 0.99 plus the manifest.
-- Brief acceptance Steps 1–3: met, and validated by hand in Chrome (GIFs in the user's ~/Downloads).
+**Review:**
+- An adversarial review of 4 lenses × 2 skeptics found 20 issues; 18 were confirmed.
+- Every confirmed finding is fixed, each with a regression test that failed first. A fresh verifier
+  re-ran the reviewer's original reproduction against every fix.
+- Remaining residuals are in §7.
 
-**Not built yet:** the designer Data Explorer UI and drag-to-bind, DataTable/AutoForm generation, and the
-playground's `@tanstack/react-query` dependency and QueryClientProvider.
+**Brief acceptance:**
+- Step 1 (locators on every element of a Vite+shadcn app): met.
+- Step 2 (engine tests: comments kept, Button injected into CardContent, auto-import, byte
+  preservation): met.
+- Step 3 (canvas → inspector → `variant=outline` on disk → HMR): met.
+
+**Not built yet:**
+- the designer Data Explorer and drag-to-bind;
+- DataTable and AutoForm generation;
+- the playground's `@tanstack/react-query` dependency and QueryClientProvider.
+
+`contract-sync` and `bindQuery` exist and are tested; see `docs/data-provider.md`.
 <!-- STATUS:END -->
 
 ## 2. Run and test
@@ -166,19 +163,18 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. Finish Status step 1–5 above: merge round 2, run the gate, the Chrome pass, the email rewrite, the push.
-2. Round-2 verifier residuals:
+1. Round-2 verifier residuals:
    - A user file with 50k+ nested elements grows RSS past 6 GB in inspect/applyOps. Cap file size or
      depth before parsing.
    - The designer proxy dies on a malformed request target (`GET /\%40x/y` from http-proxy-3). Catch it.
    - A deferred click can select a different element after the layout shifts (accepted trade-off).
    - `applyAfterLeaving` bypasses the action bus's in-flight counter.
    - `api-guard.test.ts` is not covered by `pnpm typecheck` (`tsconfig.node.json`).
-3. Data provider, designer side: a Data Explorer drawer (manifest tree, operations, schema) plus
+2. Data provider, designer side: a Data Explorer drawer (manifest tree, operations, schema) plus
    drag-to-bind using `bindQuery`; generate the DataTable component, its columns, and forms; add
    `@tanstack/react-query` and a QueryClientProvider to the playground; contract drift badges.
-4. An engine op for editing JSX text; cross-file move; `canvas.fitZoom`; a layers panel.
-5. A Tauri shell (the engine is already a plain Rust library).
+3. An engine op for editing JSX text; cross-file move; `canvas.fitZoom`; a layers panel.
+4. A Tauri shell (the engine is already a plain Rust library).
 
 ## 8. Repo map
 
