@@ -34,22 +34,34 @@ function answered(): void {
   if (inFlight === 0) for (const listener of [...idleListeners]) listener()
 }
 
-function report(error: unknown): void {
+/** Toast `error`; `edit` names the edit when the user is no longer looking at it. */
+function report(error: unknown, edit?: string): void {
   const message = error instanceof ApiError ? error.message : String(error)
-  toast.error(message)
+  toast.error(edit === undefined ? message : `Couldn’t apply “${edit}”: ${message}`)
+}
+
+export interface DispatchOptions {
+  /**
+   * Select what the edit produced (`followSelection`; the default). False for an edit committed
+   * after the user selected something else (the inspector's leave-commit, inspector/leave.ts):
+   * following it would pull the selection back from where they just put it. Its error toast
+   * then names the edit.
+   */
+  follow?: boolean
 }
 
 /** Apply one op (one undo entry). Selects the affected node afterwards, unless the user moved on (`followSelection`). */
-export async function dispatch(op: Op, label: string): Promise<ApplyResult | null> {
-  return run(() => engine.apply(op, label), [op])
+export async function dispatch(op: Op, label: string, { follow = true }: DispatchOptions = {}): Promise<ApplyResult | null> {
+  return run(() => engine.apply(op, label), [op], follow ? null : label)
 }
 
 /** Apply several ops as one transaction (one undo entry), e.g. a gesture. */
 export async function dispatchBatch(ops: Op[], label: string): Promise<ApplyResult | null> {
-  return run(() => engine.batch(ops, label), ops)
+  return run(() => engine.batch(ops, label), ops, null)
 }
 
-async function run(call: () => Promise<ApplyResult>, ops: readonly Op[]): Promise<ApplyResult | null> {
+/** `left`: the label of an edit the user has left behind (`follow: false`), else null. */
+async function run(call: () => Promise<ApplyResult>, ops: readonly Op[], left: string | null): Promise<ApplyResult | null> {
   const sentAt = performance.now()
   const selectedBefore = designer.getState().selected
   inFlight++
@@ -58,10 +70,10 @@ async function run(call: () => Promise<ApplyResult>, ops: readonly Op[]): Promis
     // A new `history` tells the canvas an HMR is on its way; an unchanged result writes
     // nothing and adds no entry (docs/api.md), so there is nothing to wait for.
     if (result.changed) designer.getState().setHistory(result.history, { files: filesOf(result.file, ops), sentAt })
-    followSelection(result, ops.at(-1), selectedBefore)
+    if (left === null) followSelection(result, ops.at(-1), selectedBefore)
     return result
   } catch (error) {
-    report(error)
+    report(error, left ?? undefined)
     return null
   } finally {
     answered()

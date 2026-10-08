@@ -12,7 +12,8 @@ vi.mock('sonner', () => {
   return { toast: Object.assign(say('message'), { error: say('error'), info: say('info'), success: say('success'), warning: say('warning') }) }
 })
 
-import type { ApplyResult, HistoryState, Op } from '@/bridge/types'
+import type { ApplyResult, HistoryState, NodeDetails, Op } from '@/bridge/types'
+import { commitProp } from '@/inspector/commit'
 import { dispatch, isApplying, onIdle } from '@/state/actions'
 import { designer } from '@/state/store'
 
@@ -157,5 +158,40 @@ describe('what the canvas learns about an edit', () => {
     } finally {
       stop()
     }
+  })
+})
+
+describe('an inspector edit committed after the user selected something else', () => {
+  const details = { locator: at('0.0.1'), name: 'Button' } as NodeDetails
+
+  it('is an edit in flight like any other, and tells the canvas which file it wrote', async () => {
+    designer.getState().select(at('0.2'))
+    const done = commitProp(details, 'variant', 'outline')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0]!.op).toMatchObject({ op: 'updateProp', target: at('0.0.1'), expectedName: 'Button' })
+    expect(isApplying()).toBe(true)
+    pending[0]!.answer({ locator: at('0.0.1') })
+    expect(await done).toBe(true)
+    expect(isApplying()).toBe(false)
+    expect(designer.getState().lastEdit?.files).toEqual([FILE])
+  })
+
+  it('leaves the selection where the user put it', async () => {
+    designer.getState().select(at('0.2'))
+    const done = commitProp(details, 'variant', 'outline')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0]!.answer({ locator: at('0.0.1') })
+    await done
+    expect(designer.getState().selected).toBe(at('0.2'))
+  })
+
+  it('names the edit when it is refused, since the user is looking elsewhere', async () => {
+    designer.getState().select(at('0.2'))
+    const done = commitProp(details, 'variant', 'outline', 'Set Button.variant')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0]!.refuse()
+    expect(await done).toBe(false)
+    expect(isApplying()).toBe(false)
+    expect(toasts).toEqual(['error: Couldn’t apply “Set Button.variant”: expected <Button>'])
   })
 })
