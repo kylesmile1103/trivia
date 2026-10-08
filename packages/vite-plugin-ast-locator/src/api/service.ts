@@ -3,8 +3,11 @@
 // interleave their read-modify-write of a file, and land in one undo history, whoever sent
 // them.
 
+import fsp from 'node:fs/promises'
+import path from 'node:path'
+
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
-import type { ApplyResult, Health, HistoryResult, HistoryState } from '../types.js'
+import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
 import { type Selected, type SelectionState, SelectionStore, rebase } from './selection.js'
@@ -20,6 +23,8 @@ export interface ServiceOptions {
   engine: EngineBinding
   /** Undo entries kept (docs/api.md: 100). */
   historyLimit?: number
+  /** Project-relative path of contract-sync's manifest. Default "trivia.manifest.json". */
+  manifestPath?: string
 }
 
 /** Who sent an edit: the designer (or another HTTP client), or an agent through MCP. */
@@ -62,6 +67,44 @@ export class EngineService {
 
   history(): HistoryState {
     return this.#history.state()
+  }
+
+  /** contract-sync's manifest, and whether its spec changed since the code was generated. */
+  async manifest(): Promise<ManifestState> {
+    const file = path.join(this.#options.root, this.#options.manifestPath ?? 'trivia.manifest.json')
+    let text: string
+    try {
+      text = await fsp.readFile(file, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { manifest: null, drift: null }
+      throw new ApiError('io_error', `cannot read ${path.basename(file)}: ${(error as Error).message}`)
+    }
+    let manifest: { schemaHash?: unknown; source?: { location?: unknown } }
+    try {
+      manifest = JSON.parse(text) as typeof manifest
+    } catch (error) {
+      throw new ApiError('io_error', `${path.basename(file)} is not valid JSON (${(error as Error).message}); re-run contract-sync`)
+    }
+    return { manifest, drift: await this.#drift(manifest) }
+  }
+
+  /**
+   * Hash the spec the manifest names with contract-sync's own canonical hash (so formatting
+   * alone is no drift). Unknown for a URL (not fetched on every look) or a spec that is gone.
+   */
+  async #drift(manifest: { schemaHash?: unknown; source?: { location?: unknown } }): Promise<Drift> {
+    const source = typeof manifest.source?.location === 'string' ? manifest.source.location : null
+    const manifestHash = typeof manifest.schemaHash === 'string' ? manifest.schemaHash : null
+    const unknown: Drift = { status: 'unknown', source, manifestHash, specHash: null }
+    if (source === null || /^https?:\/\//i.test(source)) return unknown
+    try {
+      // Loaded on first use: contract-sync brings hey-api, which the dev server needs only here.
+      const { loadSpec, schemaHash } = await import('@trivia/contract-sync')
+      const specHash = schemaHash((await loadSpec(source, { cwd: this.#options.root })).spec)
+      return { status: specHash === manifestHash ? 'current' : 'changed', source, manifestHash, specHash }
+    } catch {
+      return unknown
+    }
   }
 
   selection(): SelectionState {

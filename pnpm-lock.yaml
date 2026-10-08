@@ -370,6 +370,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.1
         version: 1.30.1(zod@4.6.5)
+      '@trivia/contract-sync':
+        specifier: workspace:*
+        version: link:../contract-sync
       '@trivia/engine':
         specifier: workspace:*
         version: link:../../crates/trivia_napi

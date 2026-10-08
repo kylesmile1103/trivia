@@ -5,7 +5,7 @@
   "packageManager": "pnpm@12.9.1",
   "scripts": {
     "build:engine": "pnpm --filter @trivia/engine build",
-    "build:plugin": "pnpm --filter @trivia/vite-plugin-ast-locator build",
+    "build:plugin": "pnpm --filter @trivia/contract-sync build && pnpm --filter @trivia/vite-plugin-ast-locator build",
     "dev:playground": "pnpm build:engine && pnpm build:plugin && pnpm --filter playground dev",
     "dev:designer": "pnpm --filter @trivia/designer dev",
     "test": "cargo test --workspace && pnpm build:engine && pnpm -r --if-present test",

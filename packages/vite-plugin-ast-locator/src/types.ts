@@ -56,3 +56,19 @@ export interface FileChange {
   before: string | null
   after: string | null
 }
+
+/** Whether the spec still hashes to what the generated code was made from (GET /manifest). */
+export interface Drift {
+  /** current: same spec; changed: re-run contract-sync; unknown: a URL source, or the spec is gone. */
+  status: 'current' | 'changed' | 'unknown'
+  /** The manifest's `source.location`. */
+  source: string | null
+  manifestHash: string | null
+  specHash: string | null
+}
+
+export interface ManifestState {
+  /** trivia.manifest.json (contract-sync's TriviaManifest), or null when the project has none. */
+  manifest: unknown
+  drift: Drift | null
+}

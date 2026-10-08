@@ -25,7 +25,17 @@ export const from = (address: string, headers: Record<string, string> = {}): Rec
 
 export const PLAYGROUND = path.resolve(import.meta.dirname, '../../../examples/playground')
 
-const COPIED = ['src', 'index.html', 'components.json', 'package.json', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
+const COPIED = [
+  'src',
+  'openapi',
+  'trivia.manifest.json',
+  'index.html',
+  'components.json',
+  'package.json',
+  'tsconfig.json',
+  'tsconfig.app.json',
+  'tsconfig.node.json',
+]
 
 /** A throwaway copy of the playground (sources only; node_modules is a symlink). */
 export function copyPlayground(): string {

@@ -69,6 +69,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
       },
     ],
     ['/history', { GET: (): HistoryState => service.history() }],
+    ['/manifest', { GET: () => service.manifest() }],
     [
       '/selection',
       {

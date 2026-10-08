@@ -55,6 +55,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | POST | `/@trivia/api/undo` | `{}` | `HistoryResult` |
 | POST | `/@trivia/api/redo` | `{}` | `HistoryResult` |
 | GET | `/@trivia/api/history` | — | `HistoryState` |
+| GET | `/@trivia/api/manifest` | — | `{ manifest: TriviaManifest \| null, drift: Drift \| null }` |
 | GET | `/@trivia/api/selection` | — | `SelectionState` |
 | POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
 
@@ -68,6 +69,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null }`.
+- `manifest` is the project's `trivia.manifest.json` (`docs/data-provider.md`), null when it has
+  none. `Drift = { status: "current" | "changed" | "unknown", source, manifestHash, specHash }`
+  compares the manifest's `schemaHash` with contract-sync's canonical hash of the spec at
+  `source.location`, so formatting alone is not drift. It is `unknown` for a URL source (not
+  fetched on every request) or a spec file that is gone.
 - `OutlineNode = { locator, name, line, isDirect, text?, children: OutlineNode[] }`: every JSX
   tree of the file, component by component in source order (`text` as in `NodeDetails`).
 - `SelectionState = { selection: { locator, name } | null, version, by: "designer" | "agent" | null }`:

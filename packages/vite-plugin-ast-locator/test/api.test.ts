@@ -373,6 +373,36 @@ describe('request rules', () => {
   })
 })
 
+describe('manifest', () => {
+  it('serves trivia.manifest.json, current with its spec', async () => {
+    const r = await get(socket, '/manifest')
+    expect(r.status).toBe(200)
+    const { manifest, drift } = r.body.data
+    expect(manifest.resources.map((resource: { name: string }) => resource.name)).toEqual(['Customer', 'Health'])
+    expect(drift).toEqual({ status: 'current', source: 'openapi/customers.openapi.json', manifestHash: manifest.schemaHash, specHash: manifest.schemaHash })
+  })
+
+  it('says when the spec changed since the code was generated (drift)', async () => {
+    const file = 'openapi/customers.openapi.json'
+    const spec = JSON.parse(read(file)) as { info: { version: string } }
+    spec.info.version = '9.9.9'
+    write(`${JSON.stringify(spec, null, 2)}\n`, file)
+    const { drift } = (await get(socket, '/manifest')).body.data
+    expect(drift.status).toBe('changed')
+    expect(drift.specHash).not.toBe(drift.manifestHash)
+    // Reformatting alone is no drift: the hash is of the canonical JSON.
+    write(JSON.stringify({ ...spec, info: { ...spec.info, version: '1.4.0' } }), file)
+    expect((await get(socket, '/manifest')).body.data.drift.status).toBe('current')
+  })
+
+  it('is null without a manifest, and drift is unknown when the spec is gone', async () => {
+    fs.rmSync(path.join(root, 'openapi/customers.openapi.json'))
+    expect((await get(socket, '/manifest')).body.data.drift).toMatchObject({ status: 'unknown', specHash: null })
+    fs.rmSync(path.join(root, 'trivia.manifest.json'))
+    expect((await get(socket, '/manifest')).body.data).toEqual({ manifest: null, drift: null })
+  })
+})
+
 describe('selection', () => {
   it('starts empty, and keeps what the designer last posted', async () => {
     expect((await get(socket, '/selection')).body.data).toEqual({ selection: null, version: 0, by: null })
