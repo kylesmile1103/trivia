@@ -5,7 +5,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { ApiError } from '../engine.js'
-import { parseColumnChanges, parseFieldChanges } from '../refine/index.js'
+import { parseColumnChanges, parseFieldChanges, parsePreviewRequest } from '../refine/index.js'
 import type { ErrorCode, Health, HistoryState } from '../types.js'
 import { type CallerRules, checkCaller } from './guard.js'
 import { type EngineService, type Json, isObject } from './service.js'
@@ -97,6 +97,9 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ],
     ['/refine/drift', { GET: () => service.refine.drift() }],
     ['/refine/resources', { GET: () => service.refine.resources() }],
+    // The inferencer (docs/product.md, slice 6): a page from the contract to preview, then eject.
+    ['/refine/preview', { POST: (_url, body) => service.refine.preview(parsePreviewRequest(body)) }],
+    ['/refine/eject', { POST: (_url, body) => service.refine.planEject(parsePreviewRequest(body)) }],
     [
       '/refine/pages/plan',
       {

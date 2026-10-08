@@ -3,6 +3,7 @@
 // the engine HTTP API at /@trivia/api (docs/api.md).
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import type { Plugin } from 'vite'
 
@@ -11,6 +12,7 @@ import { EngineService } from './api/service.js'
 import { createMcpMiddleware } from './mcp/server.js'
 import { type EngineBinding, loadEngine } from './engine.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
+import { PREVIEW_PREFIX } from './refine/index.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
 
 export { API_BASE } from './api/http.js'
@@ -47,6 +49,13 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let engine: EngineBinding | undefined
   let paths: ProjectPaths | undefined
   let roots: string[] = []
+  let service: EngineService | undefined
+  // The inferencer's previews (docs/product.md, slice 6) are modules at `/@trivia/preview/<id>.tsx`
+  // that never exist on disk. They resolve to a path in the project's src/ (so the project's
+  // aliases, JSX transform and React refresh apply to them like to its own files) and their
+  // code comes from the Refine adapter.
+  let previewDir = ''
+  const isPreview = (id: string) => previewDir !== '' && id.split('?', 1)[0]!.startsWith(previewDir)
 
   return {
     name: 'trivia:ast-locator',
@@ -60,11 +69,28 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       roots = [...new Set([config.root, realpath(config.root)])]
       paths = resolveProjectPaths(config.root, config.resolve.alias, options)
       for (const warning of paths.warnings) config.logger.warn(`[trivia] ${warning}`)
+      previewDir = path.join(config.root, 'src', '.trivia-preview') + path.sep
+    },
+
+    resolveId(id) {
+      if (service === undefined) return null
+      if (id.startsWith(PREVIEW_PREFIX)) return path.join(previewDir, id.slice(PREVIEW_PREFIX.length).split('?', 1)[0]!)
+      // Vite resolves a module's own id again (its HMR self-accept): it is still a preview.
+      return isPreview(id) ? id : null
+    },
+
+    async load(id) {
+      if (service === undefined || !isPreview(id)) return null
+      const name = path.basename(id.split('?', 1)[0]!, '.tsx')
+      const code = await service.refine.previewModule(name)
+      return code ?? `throw new Error(${JSON.stringify(`no Trivia preview ${name}: the dev server restarted since it was asked for; reload the page`)});\n`
     },
 
     transform: {
       filter: { id: { include: JSX_ID, exclude: [NODE_MODULES, VIRTUAL_ID] } },
       handler(code, id) {
+        // A preview's elements belong to no file yet: there is nothing to select and edit.
+        if (isPreview(id)) return null
         const file = moduleFile(id, roots)
         const binding = engine
         if (file === null || binding === undefined) return null
@@ -92,7 +118,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       }
       // Registered directly (not returned as a post hook), so it runs before Vite's own
       // transform and SPA-fallback middlewares.
-      const service = new EngineService({
+      service = new EngineService({
         root: server.config.root,
         uiDir: paths.uiDir,
         importBase: paths.importBase,
@@ -103,6 +129,20 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       const rules = { logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }
       server.middlewares.use(createApiMiddleware({ service, ...rules }))
       if (options.mcp !== false) server.middlewares.use(createMcpMiddleware({ service, ...rules }))
+      // A sync rewrites the manifest: previews generated from the old one are stale.
+      const manifestFile = path.join(server.config.root, 'trivia.manifest.json')
+      server.watcher.on('change', (file) => {
+        if (path.resolve(file) !== manifestFile) return
+        const graph = server.environments.client.moduleGraph
+        let stale = false
+        for (const mod of graph.idToModuleMap.values()) {
+          if (mod.id !== null && isPreview(mod.id)) {
+            graph.invalidateModule(mod)
+            stale = true
+          }
+        }
+        if (stale) server.environments.client.hot.send({ type: 'full-reload' })
+      })
     },
   }
 }

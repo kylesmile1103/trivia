@@ -333,6 +333,11 @@ Shipped in three parts, each through the full gate:
   - 6a, engine `replaceElement`: done (2026-10-09). It swaps one element for another where it
     stands, including inside `element={…}`. Imports come and go as with insert and remove, and
     the selection rebases. It's exposed over HTTP, MCP and the designer's op types.
+  - 6b, plugin previews and eject: done (2026-10-09). `POST /refine/preview` and
+    `/refine/eject` work on the slice-4 generator, which now takes `hideFields` and `title`.
+    Preview modules are served at `/@trivia/preview/<id>.tsx`, unstamped, and invalidated on a
+    sync. Tests: `test/refine-inferencer.test.ts` (no records anywhere; the spec's FormField
+    fixture under `tsc`; eject with undo).
 - Known limits of slices 1–5:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.

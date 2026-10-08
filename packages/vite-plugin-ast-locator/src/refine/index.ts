@@ -2,6 +2,7 @@
 // descriptions and the contract manifest, and plans their edits as engine ops. It knows Refine;
 // the engine does not. The HTTP routes (/refine/*) and the MCP tools use it.
 
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -14,7 +15,7 @@ import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
 import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { alignOps, hasDiff, ruleDiff } from './rules.js'
-import { PAGE_KINDS, type PageKind, pageFiles, supportedKinds } from './scaffold.js'
+import { PAGE_KINDS, type PageFile, type PageKind, type ScaffoldContext, pageFiles, supportedKinds, withoutFields } from './scaffold.js'
 import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
@@ -60,6 +61,35 @@ export function parseFieldChanges(value: unknown): FieldChange[] {
   })
 }
 
+/** A preview or eject request from a request body, checked. */
+export function parsePreviewRequest(body: Record<string, unknown>): PreviewRequest & { locator?: string } {
+  const { resource, kind, hide, title, file, locator } = body
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === 'string')
+  const optional = (v: unknown) => v === undefined || (typeof v === 'string' && v !== '')
+  if (
+    typeof resource !== 'string' ||
+    resource === '' ||
+    !PAGE_KINDS.includes(kind as PageKind) ||
+    (hide !== undefined && !strings(hide)) ||
+    !optional(title) ||
+    !optional(file) ||
+    !optional(locator)
+  ) {
+    throw new ApiError(
+      'invalid_op',
+      'body must be { resource: string, kind: "list" | "create" | "edit" | "show", hide?: string[], title?: string, file?: string, locator?: string }',
+    )
+  }
+  return {
+    resource,
+    kind: kind as PageKind,
+    ...(hide ? { hide: hide as string[] } : {}),
+    ...(title ? { title: title as string } : {}),
+    ...(file ? { file: file as string } : {}),
+    ...(locator ? { locator: locator as string } : {}),
+  }
+}
+
 /** A change to a list page's columns. */
 export type ColumnChange =
   | { action: 'add'; field: string; index?: number; label?: string }
@@ -100,6 +130,41 @@ export interface ResourcePages {
   /** Pages its contract operations support. */
   possible: PageKind[]
 }
+
+/** A page the inferencer asks for (docs/product.md, slice 6). */
+export interface PreviewRequest {
+  /** The Refine resource (`customers`) or the contract's (`Customer`). */
+  resource: string
+  kind: PageKind
+  /** Contract fields to leave out. */
+  hide?: string[]
+  /** The view header's title. */
+  title?: string
+  /** Where eject writes it (project-relative, under src/); default: next to the other pages. */
+  file?: string
+}
+
+/** A page generated from the contract for the inferencer to preview and eject. */
+export interface InferredPage {
+  /** The contract resource (`Customer`) and its Refine name (`customers`). */
+  resource: string
+  name: string
+  kind: PageKind
+  /** The component the file exports (`CustomerList`) and its import path. */
+  component: string
+  importPath: string
+  /** Where eject writes it, and whether a file is there already (eject then refuses). */
+  file: string
+  exists: boolean
+  /** The route Refine conventionally gives it. */
+  route: string
+  /** The module the inferencer imports to render it: this code, compiled by Vite. */
+  module: string
+  code: string
+}
+
+/** Where the plugin serves previews (`/@trivia/preview/<id>.tsx`). */
+export const PREVIEW_PREFIX = '/@trivia/preview/'
 
 /** Where the app registers resources and routes. */
 interface AppShell {
@@ -162,6 +227,8 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'build'])
 
 export class RefineAdapter {
   readonly #host: RefineHost
+  /** The pages the inferencer asked to preview, by module id. */
+  readonly #previews = new Map<string, PreviewRequest>()
 
   constructor(host: RefineHost) {
     this.#host = host
@@ -221,21 +288,8 @@ export class RefineAdapter {
     }
     if (wanted.length === 0) throw new ApiError('conflict', `${name} already has every page its contract supports (${existing.join(', ')})`)
 
-    const { root, uiDir, importBase } = this.#host
-    const parentDir = path.posix.dirname(uiDir)
-    const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
-    const hasRefineUi = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'views'))
-    const pagesDir = await this.#pagesDir()
-    const srcImport = parentImport.slice(0, parentImport.lastIndexOf('/')) || '@'
-    const files = pageFiles(resource, wanted, {
-      ui: importBase,
-      refineUi: hasRefineUi ? `${parentImport}/refine-ui` : null,
-      typesImport: manifest!.modules.types?.importPath ?? '@/api/generated/types.gen',
-      pagesDir,
-      pagesImport: `${srcImport}/${pagesDir.split('/').slice(1).join('/')}`,
-      textarea: this.#hasUi('textarea'),
-      style: await this.#projectStyle(),
-    })
+    const { root } = this.#host
+    const files = pageFiles(resource, wanted, await this.#scaffoldContext())
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
     }
@@ -634,6 +688,114 @@ export class RefineAdapter {
     return this.#hasUi('form') ? 'form' : 'field'
   }
 
+  /**
+   * A page generated from the contract, as the inferencer previews it: the same generator as
+   * `planPages`, with the request's options. Registers the request so that `previewModule`
+   * can serve its code under `module` (docs/product.md, slice 6).
+   */
+  async preview(request: PreviewRequest): Promise<InferredPage> {
+    const page = await this.#inferred(request)
+    // Keyed by the contract's name: `customers` and `Customer` are one page.
+    const key = normalized({ ...request, resource: page.resource })
+    const id = createHash('sha256').update(JSON.stringify(key)).digest('hex').slice(0, 16)
+    this.#previews.set(id, key)
+    return { ...page, module: `${PREVIEW_PREFIX}${id}.tsx` }
+  }
+
+  /**
+   * The code of the preview module `id` (`PREVIEW_PREFIX` + id + `.tsx`), generated afresh from
+   * the contract as it now is; null for an id no preview registered. When the contract can no
+   * longer give the page, the module throws why, for the inferencer to show.
+   */
+  async previewModule(id: string): Promise<string | null> {
+    const request = this.#previews.get(id)
+    if (!request) return null
+    try {
+      return (await this.#inferred(request)).code
+    } catch (error) {
+      return `throw new Error(${JSON.stringify(error instanceof Error ? error.message : String(error))});\n`
+    }
+  }
+
+  /**
+   * The ops that eject an inferred page: write its file and, given the inferencer's own
+   * locator, put the page's component where the inferencer was (one undo entry).
+   */
+  async planEject(request: PreviewRequest & { locator?: string }): Promise<Plan> {
+    const page = await this.#inferred(request)
+    if (page.exists) throw new ApiError('conflict', `${page.file} already exists; Trivia doesn't overwrite files (pass another ejectPath)`)
+    const ops: Plan['ops'] = [{ op: 'createFile', file: page.file, content: page.code }]
+    const warnings: string[] = []
+    const element = `<${page.component} />`
+    if (request.locator) {
+      const name = (this.#host.inspect(request.locator) as { name?: string }).name
+      ops.push({ op: 'replaceElement', target: request.locator, ...(name ? { expectedName: name } : {}), snippet: element, imports: [{ name: page.component, source: page.importPath }] })
+    } else {
+      warnings.push(`Trivia doesn't know where the inferencer is rendered: replace it with ${element} (import { ${page.component} } from "${page.importPath}")`)
+    }
+    return { ops, label: `Eject ${page.component} to ${page.file}`, ...(warnings.length > 0 ? { warnings } : {}) }
+  }
+
+  async #inferred(request: PreviewRequest): Promise<Omit<InferredPage, 'module'>> {
+    if (!PAGE_KINDS.includes(request.kind)) throw new ApiError('invalid_op', `unknown page kind \`${request.kind}\` (list, create, edit or show)`)
+    const manifest = await this.#manifest()
+    const resource = contractResource(manifest, request.resource, null)
+    if (!resource) {
+      throw new ApiError(
+        'node_not_found',
+        `the contract has no resource \`${request.resource}\` (it has ${manifest?.resources.map((r) => `${r.name} (${refineName(r)})`).join(', ') ?? 'none: run contract-sync'})`,
+      )
+    }
+    if (!supportedKinds(resource).includes(request.kind)) {
+      throw new ApiError('unsupported', `${resource.name}'s contract has no operation for a ${request.kind} page`)
+    }
+    const context = await this.#scaffoldContext()
+    const [page] = pageFiles(withoutFields(resource, request.hide ?? []), [request.kind], { ...context, ...(request.title ? { title: request.title } : {}) }) as [PageFile]
+    let { file, importPath } = page
+    if (request.file !== undefined) {
+      if (!/^src\/(?:[\w.@-]+\/)*[\w.@-]+\.tsx$/.test(request.file) || request.file.split('/').some((p) => p === '..' || p === '.')) {
+        throw new ApiError('invalid_op', `ejectPath must be a .tsx file under src/, e.g. src/pages/${refineName(resource)}/${request.kind}.tsx (got ${request.file})`)
+      }
+      file = request.file
+      importPath = `${this.#srcImport()}/${file.slice('src/'.length, -'.tsx'.length)}`
+    }
+    return {
+      resource: resource.name,
+      name: refineName(resource),
+      kind: request.kind,
+      component: page.component,
+      importPath,
+      file,
+      exists: fs.existsSync(path.join(this.#host.root, file)),
+      route: page.route,
+      code: page.content,
+    }
+  }
+
+  /** Where the project keeps what generated pages import (shadcn layout: ui/ and refine-ui/ side by side). */
+  async #scaffoldContext(): Promise<ScaffoldContext> {
+    const { root, uiDir, importBase } = this.#host
+    const parentDir = path.posix.dirname(uiDir)
+    const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
+    const hasRefineUi = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'views'))
+    const pagesDir = await this.#pagesDir()
+    return {
+      ui: importBase,
+      refineUi: hasRefineUi ? `${parentImport}/refine-ui` : null,
+      typesImport: (await this.#manifest())?.modules.types?.importPath ?? '@/api/generated/types.gen',
+      pagesDir,
+      pagesImport: `${this.#srcImport()}/${pagesDir.split('/').slice(1).join('/')}`,
+      textarea: this.#hasUi('textarea'),
+      style: await this.#projectStyle(),
+    }
+  }
+
+  /** The import prefix of `src/` (`@`), from shadcn's ui alias (`@/components/ui`). */
+  #srcImport(): string {
+    const parentImport = this.#host.importBase.slice(0, this.#host.importBase.lastIndexOf('/'))
+    return parentImport.slice(0, parentImport.lastIndexOf('/')) || '@'
+  }
+
   /** The ops for one column change on the list page in `file` (its `component`, when it has several). */
   async planColumns(file: string, component: string | undefined, changes: ColumnChange[]): Promise<Plan> {
     if (changes.length === 0) throw new ApiError('invalid_op', 'changes must not be empty')
@@ -785,5 +947,16 @@ export class RefineAdapter {
     }
     await walk('src')
     return found
+  }
+}
+
+/** A request with its options in one spelling, so equal requests share a module id. */
+function normalized(request: PreviewRequest): PreviewRequest {
+  return {
+    resource: request.resource,
+    kind: request.kind,
+    ...(request.hide && request.hide.length > 0 ? { hide: [...new Set(request.hide)].sort() } : {}),
+    ...(request.title ? { title: request.title } : {}),
+    ...(request.file ? { file: request.file } : {}),
   }
 }

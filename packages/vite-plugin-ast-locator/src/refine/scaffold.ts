@@ -27,6 +27,21 @@ export interface ScaffoldContext {
   textarea?: boolean
   /** How forms write fields (`fields.ts` FormStyle); default `field`. */
   style?: FormStyle
+  /** The view header's title; default: the resource's (lists) or Refine's own (the rest). */
+  title?: string
+}
+
+/** `resource` without the fields named in `hide`: in its entity and in its request bodies. */
+export function withoutFields(resource: ManifestResource, hide: readonly string[]): ManifestResource {
+  if (hide.length === 0) return resource
+  const keep = <T extends { name: string }>(fields: T[]): T[] => fields.filter((f) => !hide.includes(f.name))
+  const body = <O extends { requestBody: { fields: ManifestField[] | null } | null } | null>(op: O): O =>
+    op && op.requestBody?.fields ? { ...op, requestBody: { ...op.requestBody, fields: keep(op.requestBody.fields) } } : op
+  return {
+    ...resource,
+    entity: resource.entity ? { ...resource.entity, fields: keep(resource.entity.fields) } : null,
+    operations: { ...resource.operations, create: body(resource.operations.create), update: body(resource.operations.update) },
+  }
 }
 
 export interface PageFile {
@@ -103,6 +118,9 @@ const indent = (text: string, by: number) =>
     .split('\n')
     .map((line) => (line ? ' '.repeat(by) + line : line))
     .join('\n')
+
+/** `text` as a JSX attribute value: `"…"`, or `{"…"}` when it holds what a JSX string can't escape. */
+const attr = (text: string) => (/^[^"\\\n{}<>&]*$/.test(text) ? `"${text}"` : `{${JSON.stringify(text)}}`)
 
 const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
 
@@ -199,7 +217,7 @@ ${columns.map((c) => `${indent(c, 6)},`).join('\n')}
 
   return (
     <ListView>
-      <ListViewHeader title="${humanize(name)}" />
+      <ListViewHeader title=${attr(context.title ?? humanize(name))} />
       <DataTable table={table} />
     </ListView>
   );
@@ -294,7 +312,7 @@ ${pieces.map((p) => `      ${key(p.name)}: ${p.defaultValue},`).join('\n')}
 
   return (
     <${View}>
-      <${View}Header />
+      <${View}Header${context.title ? ` title=${attr(context.title)}` : ''} />
 ${formJsx}
     </${View}>
   );
@@ -348,7 +366,7 @@ export function ${component}() {
 
   return (
     <ShowView>
-      <ShowViewHeader />
+      <ShowViewHeader${context.title ? ` title=${attr(context.title)}` : ''} />
       <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
 ${rows.join('\n')}
       </dl>

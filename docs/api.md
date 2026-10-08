@@ -248,6 +248,27 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   It is one undo entry, and undo deletes the files. Refused: an unknown resource (404), a kind
   its contract can't support (422), a page it already has or an existing file (409; nothing is
   overwritten), and an app without `<Refine resources>` (422).
+- `refine/preview` and `refine/eject` serve `@trivia/openapi-inferencer` (`docs/product.md`,
+  slice 6). Both take `{ resource, kind, hide?, title?, file? }`: a manifest or Refine resource
+  name, a page kind, fields to leave out, the header's title, and where eject writes the page
+  (under `src/`, default as `refine/pages/plan` would).
+  - `refine/preview` answers `InferredPage = { resource, name, kind, component, importPath,
+    file, exists, route, module, code }`.
+    - `code` is what `refine/pages/plan` would write for that page, from the contract alone.
+    - `module` (`/@trivia/preview/<id>.tsx`) is the same code as a module of the app's dev
+      server, generated afresh on each load. Vite compiles it like a file of the project's
+      `src/`, with its aliases, components and React refresh, so the inferencer imports and
+      renders it. Its elements get no locators: they belong to no file yet.
+    - When the manifest changes, previews are invalidated and the page reloads.
+  - `refine/eject` also takes `locator`, the inferencer element's own locator, and returns a plan:
+    - a `createFile` of `code`;
+    - a `replaceElement` that puts `<Component />` and its import where the inferencer was.
+    - Without a locator, it returns the `createFile` and a `warnings` line saying what to swap.
+    - Refused: an existing file (409; pass another `file`), an unknown resource (404), a kind
+      the contract can't support (422).
+
+  Agents use `trivia_add_pages`, which writes and routes pages without an inferencer: there is
+  no MCP tool for these two.
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
   `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with
