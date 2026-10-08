@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { History } from '../src/history.js'
+import { History } from '../src/api/history.js'
 import { copyPlayground, from, get, post, request, startServer, type TestServer } from './helpers.js'
 
 const DASHBOARD = 'src/pages/Dashboard.tsx'

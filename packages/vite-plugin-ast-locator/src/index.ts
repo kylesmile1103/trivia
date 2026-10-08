@@ -6,12 +6,13 @@ import fs from 'node:fs'
 
 import type { Plugin } from 'vite'
 
-import { createApiMiddleware } from './api.js'
+import { createApiMiddleware } from './api/http.js'
+import { EngineService } from './api/service.js'
 import { type EngineBinding, loadEngine } from './engine.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
 
-export { API_BASE } from './api.js'
+export { API_BASE } from './api/http.js'
 export type * from './types.js'
 
 export interface AstLocatorOptions {
@@ -85,17 +86,15 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       }
       // Registered directly (not returned as a post hook), so it runs before Vite's own
       // transform and SPA-fallback middlewares.
+      const service = new EngineService({
+        root: server.config.root,
+        uiDir: paths.uiDir,
+        importBase: paths.importBase,
+        version: pkg.version,
+        engine,
+      })
       server.middlewares.use(
-        createApiMiddleware({
-          root: server.config.root,
-          uiDir: paths.uiDir,
-          importBase: paths.importBase,
-          version: pkg.version,
-          engine,
-          logger: server.config.logger,
-          allowRemote,
-          allowedHosts: server.config.server.allowedHosts,
-        }),
+        createApiMiddleware({ service, logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }),
       )
     },
   }

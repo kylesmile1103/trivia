@@ -2,7 +2,7 @@
 // process: it is lost on restart, and it never inverts ops — undo writes `before` back,
 // guarded by the engine so an edit made outside the designer is never overwritten.
 
-import type { FileChange, HistoryState } from './types.js'
+import type { FileChange, HistoryState } from '../types.js'
 
 export interface HistoryEntry {
   label: string
