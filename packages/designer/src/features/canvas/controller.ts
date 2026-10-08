@@ -12,6 +12,7 @@ import type { CanvasApi } from '@/shared/canvas'
 import { ApiError } from '@/shared/engine/client'
 import type { ImportSpec, NodeDetails, Placement } from '@/shared/engine/types'
 import { dispatch, isApplying, onIdle } from '@/shared/state/actions'
+import { ZOOM_MIN } from '@/shared/state/zoom'
 import { type DesignerState, designer } from '@/shared/state/store'
 import { TEMPLATE_MIME, type Template } from '@/shared/template'
 
@@ -171,12 +172,15 @@ export class CanvasController {
     previewClassName: (locator, previous, next) => this.previews.className(locator, previous, next),
     previewStyle: (locator, style) => this.previews.style(locator, style),
     clearPreviews: () => this.previews.clear(),
+    fitZoom: () => this.fitZoom(),
   }
 
+  private readonly iframe: HTMLIFrameElement
   private readonly overlay: HTMLElement
   private readonly onView: (view: CanvasView) => void
 
   constructor(iframe: HTMLIFrameElement, overlay: HTMLElement, onView: (view: CanvasView) => void) {
+    this.iframe = iframe
     this.overlay = overlay
     this.onView = onView
     this.session = new FrameSession(iframe, {
@@ -811,6 +815,41 @@ export class CanvasController {
       remove: m.remove,
     }
     this.publish({ status, bounds, hover, selection, moving, updating: this.stale, drop, cursor, menu })
+  }
+
+  /**
+   * The largest zoom, at most 100%, at which the app's whole page fits the canvas without
+   * scrolling (null without a document). Zoom is browser zoom: the app lays out at the canvas
+   * size divided by the zoom, so a smaller zoom also makes it wider (and often shorter). Each
+   * candidate is measured by laying the app out at that size, all within this task, so nothing
+   * is painted until the iframe has its size back.
+   */
+  private fitZoom(): number | null {
+    const doc = this.session.doc
+    if (!doc) return null
+    const area = this.overlay.getBoundingClientRect()
+    const style = this.iframe.style
+    const saved = { width: style.width, height: style.height }
+    const fits = (zoom: number) => {
+      style.width = `${area.width / zoom}px`
+      style.height = `${area.height / zoom}px`
+      return doc.documentElement.scrollHeight * zoom <= area.height + 0.5
+    }
+    try {
+      if (fits(1)) return 1
+      if (!fits(ZOOM_MIN)) return ZOOM_MIN
+      let lo = ZOOM_MIN
+      let hi = 1
+      for (let i = 0; i < 10; i++) {
+        const mid = (lo + hi) / 2
+        if (fits(mid)) lo = mid
+        else hi = mid
+      }
+      return Math.floor(lo * 100) / 100
+    } finally {
+      style.width = saved.width
+      style.height = saved.height
+    }
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {

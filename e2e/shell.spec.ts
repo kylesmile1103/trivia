@@ -305,3 +305,28 @@ test('losing the engine mid-session flags the toolbar, and it recovers on its ow
   await expect(page.getByRole('button', { name: `Connected to localhost:${appPort}. Reload` })).toBeVisible()
   await expect(page.getByText('Reconnected to the engine')).toBeVisible()
 })
+
+test('zoom to fit shows the whole page without scrolling, and never zooms past 100%', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 300 }) // too short for the Dashboard
+  await open(page)
+  const level = page.getByRole('button', { name: 'Zoom level' })
+  const overflow = () =>
+    page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>('iframe[title="App canvas"]')!
+      const doc = frame.contentDocument!
+      return doc.documentElement.scrollHeight - doc.defaultView!.innerHeight
+    })
+  await expect.poll(overflow).toBeGreaterThan(0)
+  await page.keyboard.press('Shift+Digit1')
+  await expect(level).not.toHaveText('100%')
+  const percent = Number((await level.textContent())!.replace('%', ''))
+  expect(percent).toBeGreaterThanOrEqual(25)
+  expect(percent).toBeLessThan(100)
+  await expect.poll(overflow).toBeLessThanOrEqual(0)
+
+  // A page that already fits is shown at 100%, not blown up.
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  await page.keyboard.press('ControlOrMeta+=')
+  await page.keyboard.press('Shift+Digit1')
+  await expect(level).toHaveText('100%')
+})
