@@ -1,6 +1,7 @@
 // The MCP endpoint (docs/mcp.md) through the official SDK client, against a real dev server on
 // a copy of the playground: what an agent in Claude Code sees and does.
 
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -70,6 +71,8 @@ describe('tools', () => {
       'trivia_inspect',
       'trivia_list_components',
       'trivia_outline',
+      'trivia_screenshot',
+      'trivia_sync_openapi',
       'trivia_undo',
     ])
     const apply = tools.find((t) => t.name === 'trivia_apply')!
@@ -79,6 +82,7 @@ describe('tools', () => {
       'trivia_inspect',
       'trivia_list_components',
       'trivia_outline',
+      'trivia_screenshot',
     ])
   })
 })
@@ -248,3 +252,81 @@ describe('who may call it', () => {
     }
   })
 })
+
+// A 1×1 PNG, as the designer would post one.
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+describe('trivia_screenshot', () => {
+  it('returns the PNG the open designer posts for it', async () => {
+    const next = get(server.socket, '/screenshot/next') // the designer's long-poll
+    const shot = call('trivia_screenshot')
+    const { body } = await next
+    expect(typeof body.data.id).toBe('string')
+    const posted = await post(server.socket, '/screenshot', { id: body.data.id, png: `data:image/png;base64,${PIXEL}`, width: 1, height: 1 })
+    expect(posted.status).toBe(200)
+    const r = await shot
+    expect(r.isError).toBeFalsy()
+    expect(r.content[0]).toEqual({ type: 'image', data: PIXEL, mimeType: 'image/png' })
+    expect(text(r)).toContain('1×1')
+  })
+
+  it('goes to a designer still open, not one that hung up', async () => {
+    const closed = new AbortController()
+    const gone = request(server.socket, '/@trivia/api/screenshot/next', { signal: closed.signal }).catch(() => null)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    closed.abort() // that designer tab was closed mid-poll
+    await gone
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const next = get(server.socket, '/screenshot/next')
+    const shot = call('trivia_screenshot')
+    const { body } = await next
+    await post(server.socket, '/screenshot', { id: body.data.id, png: PIXEL, width: 1, height: 1 })
+    expect((await shot).isError).toBeFalsy()
+  })
+
+  it('says so when no designer is open to take it', async () => {
+    const quick = await startServer(root, { screenshotTimeoutMs: 200 })
+    try {
+      const client = new Client({ name: 'trivia-test', version: '0.0.0' })
+      await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/@trivia/mcp'), { fetch: socketFetch(quick.socket) }) as unknown as Transport)
+      const r = (await client.callTool({ name: 'trivia_screenshot', arguments: {} })) as ToolResult
+      await client.close()
+      expect(r.isError).toBe(true)
+      expect(text(r)).toContain('no Trivia designer is open')
+    } finally {
+      await quick.close()
+    }
+  })
+})
+
+describe('trivia_sync_openapi', () => {
+  it('regenerates from the manifest\'s spec, so a changed spec is current again', async () => {
+    const spec = path.join(root, 'openapi/customers.openapi.json')
+    fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('"version": "1.4.0"', '"version": "1.5.0"'))
+    expect((await get(server.socket, '/manifest')).body.data.drift.status).toBe('changed')
+    const r = await call('trivia_sync_openapi')
+    expect(r.isError).toBeFalsy()
+    expect(r.structuredContent).toMatchObject({ source: 'openapi/customers.openapi.json', outputDir: 'src/api/generated', resources: ['Customer', 'Health'] })
+    expect(r.structuredContent.git).toContain('not a git work tree')
+    expect((await get(server.socket, '/manifest')).body.data.drift.status).toBe('current')
+    expect(fs.existsSync(path.join(root, 'src/api/generated/zod.gen.ts'))).toBe(true) // the manifest had zod
+  }, 60_000)
+
+  it('refuses to replace uncommitted changes to the generated code, unless forced', async () => {
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], { cwd: root })
+    git('init', '-q')
+    git('add', '-A')
+    git('commit', '-qm', 'base')
+    const index = path.join(root, 'src/api/generated/index.ts')
+    fs.appendFileSync(index, '// hand edit\n')
+    const refused = await call('trivia_sync_openapi')
+    expect(refused.isError).toBe(true)
+    expect(text(refused)).toMatch(/^conflict: regenerating would replace uncommitted changes in src\/api\/generated\/index\.ts/)
+    expect(fs.readFileSync(index, 'utf8')).toContain('// hand edit')
+    const forced = await call('trivia_sync_openapi', { force: true })
+    expect(forced.isError).toBeFalsy()
+    expect(forced.structuredContent.git).toBe('forced: replaced uncommitted changes in src/api/generated/index.ts')
+    expect(fs.readFileSync(index, 'utf8')).not.toContain('// hand edit')
+  }, 60_000)
+})
+

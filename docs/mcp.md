@@ -45,6 +45,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_inspect` (read-only) | `{ locator }` | `{ node: NodeDetails & { component } }` |
 | `trivia_outline` (read-only) | `{ file }` | `{ trees: OutlineNode[] }` (and an indented text tree) |
 | `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
+| `trivia_screenshot` (read-only) | — | an image block: the canvas as a PNG (no structured result) |
+| `trivia_sync_openapi` | `{ input?, zod?, force? }` | `SyncResult` |
 | `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
 | `trivia_undo` | `{ label }` | `HistoryResult` |
 
@@ -61,6 +63,19 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 - `trivia_undo` undoes the newest entry of the shared history only if its label is the one
   given (the agent passes `history.undoLabel` from its last result). The user's own edits are
   never undone by mistake.
+- `trivia_screenshot` returns what the user sees on the Trivia canvas, so the agent can check
+  its edit: one `image` block (`image/png`, the canvas width, at most 4000 px of its height)
+  and a text line with its size. The plugin has no browser; it asks the open designer
+  (`GET /@trivia/api/screenshot/next`, `docs/api.md`), which renders the canvas document with
+  `html-to-image` (`packages/designer/src/features/canvas/controller.ts`, `capture`). With no
+  designer open it fails after 15 s (`screenshotTimeoutMs`), and the error says to ask the user
+  to open it. Like any DOM-to-SVG capture it is close but not pixel-exact: `::placeholder`
+  styles are not copied, so a placeholder shows in the text colour.
+- `trivia_sync_openapi` regenerates the typed API client (TanStack Query hooks, zod schemas)
+  and `trivia.manifest.json` from the OpenAPI spec, by default the one the manifest names, so
+  an agent can pick up a backend change before building data UI. It overwrites generated files
+  wholesale, so **it is refused when they have uncommitted changes** (commit first, or pass
+  `force: true`); the result's `git` says what the guard found. It is not in the undo history.
 - Refusals come back as tool errors (`isError`): `<code>: <message>` and, for the codes an
   agent can act on, what to do next (`stale_locator`: read the selection again and retry).
 
@@ -81,9 +96,4 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 
 Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
 `packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
-loop in a browser).
-
-## Not yet
-
-- A screenshot tool so the agent can see the result, and `trivia_sync_openapi` for contract
-  sync.
+loop in a browser, and a screenshot taken by the real designer).

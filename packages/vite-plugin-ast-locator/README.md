@@ -29,6 +29,7 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 | `importBase` | `components.json` `aliases.ui`, else `@/components/ui` |
 | `api` | `true`; `false` serves no API and no MCP endpoint (locators only) |
 | `mcp` | `true`: the MCP endpoint at `/@trivia/mcp` (with `api`); `false` turns it off |
+| `screenshotTimeoutMs` | `15000`: how long `trivia_screenshot` waits for an open designer to capture the canvas |
 | `allowRemote` | `false`: the API answers loopback clients only. **`true` is dangerous**: with `vite --host` or Docker, anyone who can reach the dev server can rewrite your source files |
 
 ## Behaviour worth knowing

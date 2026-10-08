@@ -68,5 +68,8 @@ export const engine = {
   history: () => request<HistoryState>('/history'),
   selection: () => request<SelectionState>('/selection'),
   manifest: () => request<ManifestState>('/manifest'),
+  nextScreenshot: () => request<{ id: string | null }>('/screenshot/next'),
+  postScreenshot: (answer: { id: string; png: string; width: number; height: number } | { id: string; error: string }) =>
+    post<null>('/screenshot', answer),
   select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
 }

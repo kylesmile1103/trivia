@@ -13,7 +13,7 @@ Briefs and contracts:
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
 <!-- STATUS:BEGIN -->
-## 1. Status (2026-10-08, end of session 2)
+## 1. Status (2026-10-09, session 3)
 
 `main` is pushed to `origin` (github.com/kylesmile1103/trivia), including the setText op, the
 MCP endpoint, the designer's selection sync and their docs. Every commit email is `kylesmile1103@gmail.com`;
@@ -58,13 +58,28 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   - Track 2 (forms with zod + react-hook-form + shadcn `Field`, which replaces the deprecated
     `Form`) is the next product milestone.
 
+**Session 3** (the user asked to clear the backlog; each item was gated, committed and pushed):
+- Designer: a right-click menu on the canvas (structure edits), zoom to fit (⇧1), a Layers
+  panel (`features/layers`, from `trivia_outline`'s tree), and moving elements between files
+  (engine `ops/move_across.rs`: imports come along, a reference that can't is refused).
+- Engine: `createFile` (with `ifMissing`), history entries that create or delete files, and
+  the CustomerCard preservation case pinned as a fixture.
+- Data UI (Track 2): contract-sync `--zod` and request-body fields; a customers API in the
+  playground (`mock-api.ts`); `GET /manifest` with drift; the designer's **Data** tab inserts a
+  table bound to a list query, or a create form (react-hook-form + zodResolver + shadcn
+  `Field`) from the API contract (`docs/data-provider.md`).
+- MCP: `trivia_outline`, `bindQuery` for agents, `trivia_sync_openapi` (refused over
+  uncommitted generated code unless `force`) and `trivia_screenshot`: the open designer
+  captures its canvas with `html-to-image` over a long poll. A closed designer tab's
+  long-poll used to take requests and never answer; dropped on hang-up, with a test.
+
 **Gate on `main` (all green):**
-- `cargo test --workspace` 243/243 (17 suites); clippy `-D warnings` clean.
-- Vitest: plugin 94, designer 411 (including 6 architecture rules), contract-sync 76.
-- napi crash suite 30/30, with RSS bounds.
+- `cargo test --workspace` 262 passed; clippy `-D warnings` clean.
+- Vitest: plugin 112, designer 444 (including 6 architecture rules), contract-sync 79.
+- napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 37/37, twice in a row.
-- Not re-done in session 2: the Claude in Chrome manual pass. Session 1's is described below,
+- Playwright 44/44, twice in a row.
+- Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows. No real Claude Code session has used the MCP endpoint
   yet: the SDK client in the tests stands in for it.
 
@@ -192,8 +207,7 @@ writes `useQuery` hooks against it.
 1. **Try point and ask in a real Claude Code session**
    (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
    real agent trips on (tool descriptions, error hints).
-2. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
-3. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
+2. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
    designer's localhost URL and stay same-origin, so no bridge is needed.
 
 ## 8. Repo map

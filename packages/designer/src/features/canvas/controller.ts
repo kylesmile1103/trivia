@@ -35,6 +35,8 @@ import { NodeInfo } from './node-info'
 import { PREVIEW_ATTR, PREVIEW_STYLE_ID, Previews } from './previews'
 
 const DRAG_THRESHOLD_PX = 4
+/** Tallest page a screenshot covers (px of the app). */
+const MAX_CAPTURE_HEIGHT = 4000
 /** A page that renders nothing annotated this long after load is reported, not waited on. */
 const LOCATOR_GRACE_MS = 1500
 
@@ -174,6 +176,7 @@ export class CanvasController {
     previewStyle: (locator, style) => this.previews.style(locator, style),
     clearPreviews: () => this.previews.clear(),
     fitZoom: () => this.fitZoom(),
+    capture: () => this.capture(),
     layers: () => {
       const doc = this.session.doc
       const uiDir = designer.getState().health?.uiDir
@@ -858,6 +861,23 @@ export class CanvasController {
       style.width = saved.width
       style.height = saved.height
     }
+  }
+
+  /**
+   * The app's page as a PNG, for agents (trivia_screenshot): its document rendered at its own
+   * width, up to 4000 px of its height, without the designer's overlay.
+   */
+  private async capture(): Promise<{ png: string; width: number; height: number } | null> {
+    const doc = this.session.doc
+    const view = doc?.defaultView
+    if (!doc || !view) return null
+    const root = doc.documentElement
+    const width = root.clientWidth
+    const height = Math.min(root.scrollHeight, MAX_CAPTURE_HEIGHT)
+    const { toPng } = await import('html-to-image')
+    const background = view.getComputedStyle(doc.body).backgroundColor
+    const png = await toPng(root, { width, height, pixelRatio: 1, ...(background ? { backgroundColor: background } : {}) })
+    return { png, width, height }
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {

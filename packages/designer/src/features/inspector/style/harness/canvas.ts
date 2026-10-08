@@ -71,6 +71,7 @@ export function createHarnessCanvas(frame: HTMLIFrameElement): HarnessCanvas {
   return {
     elements,
     layers: () => [], // the harness has no layers panel
+    capture: async () => null,
 
     previewClassName(locator, previous, next) {
       for (const el of elements(locator)) {

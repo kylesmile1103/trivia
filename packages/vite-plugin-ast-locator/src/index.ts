@@ -30,6 +30,8 @@ export interface AstLocatorOptions {
   api?: boolean
   /** Serve the MCP endpoint for agents at /@trivia/mcp (docs/mcp.md). Default: true (with `api`). */
   mcp?: boolean
+  /** How long trivia_screenshot waits for an open designer to take the screenshot (ms). Default 15 000. */
+  screenshotTimeoutMs?: number
   /**
    * **Dangerous.** Let clients on other machines call the engine API. It rewrites source files,
    * so with `vite --host` (or Docker, or `server.host`) anyone who can reach the dev server
@@ -96,6 +98,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         importBase: paths.importBase,
         version: pkg.version,
         engine,
+        ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),
       })
       const rules = { logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }
       server.middlewares.use(createApiMiddleware({ service, ...rules }))

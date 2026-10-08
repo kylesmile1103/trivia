@@ -30,6 +30,8 @@ const STATUS: Record<ErrorCode, number> = {
 }
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024
+/** A canvas PNG, base64: a tall page at its full width runs to several MB. */
+const MAX_SCREENSHOT_BYTES = 24 * 1024 * 1024
 
 export interface ApiOptions extends CallerRules {
   service: EngineService
@@ -40,7 +42,8 @@ export interface ApiOptions extends CallerRules {
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void
 
 type Method = 'GET' | 'POST'
-type Route = Partial<Record<Method, (url: URL, body: Json) => unknown>>
+/** `signal` aborts when the caller hangs up before the answer is sent. */
+type Route = Partial<Record<Method, (url: URL, body: Json, signal: AbortSignal) => unknown>>
 
 export function createApiMiddleware(options: ApiOptions): Middleware {
   const { service } = options
@@ -70,6 +73,33 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ],
     ['/history', { GET: (): HistoryState => service.history() }],
     ['/manifest', { GET: () => service.manifest() }],
+    [
+      '/sync',
+      {
+        POST: (_url, body) => {
+          const { input, zod, force } = body
+          if ((input !== undefined && typeof input !== 'string') || (zod !== undefined && typeof zod !== 'boolean') || (force !== undefined && typeof force !== 'boolean')) {
+            throw new ApiError('invalid_op', 'body must be { input?: string, zod?: boolean, force?: boolean }')
+          }
+          return service.syncContract({ ...(input !== undefined ? { input } : {}), ...(zod !== undefined ? { zod } : {}), ...(force !== undefined ? { force } : {}) })
+        },
+      },
+    ],
+    ['/screenshot/next', { GET: (_url, _body, signal) => service.nextScreenshot(undefined, signal) }],
+    [
+      '/screenshot',
+      {
+        POST: (_url, body) => {
+          const { id, png, width, height, error } = body
+          if (typeof id !== 'string') throw new ApiError('invalid_op', 'body must be { id, png, width, height } or { id, error }')
+          if (typeof error === 'string') service.fulfillScreenshot(id, { error })
+          else if (typeof png === 'string' && typeof width === 'number' && typeof height === 'number') {
+            service.fulfillScreenshot(id, { png: png.replace(/^data:image\/png;base64,/, ''), width, height })
+          } else throw new ApiError('invalid_op', 'body must be { id, png, width, height } or { id, error }')
+          return null
+        },
+      },
+    ],
     [
       '/selection',
       {
@@ -110,7 +140,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ['/redo', { POST: () => service.redo() }],
   ])
 
-  const dispatch = async (req: IncomingMessage, url: URL): Promise<unknown> => {
+  const dispatch = async (req: IncomingMessage, url: URL, signal: AbortSignal): Promise<unknown> => {
     checkCaller(req, options)
     const name = url.pathname.slice(API_BASE.length)
     const route = routes.get(name)
@@ -121,16 +151,20 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
       const allowed = Object.keys(route).join(' or ')
       throw new ApiError('invalid_op', `${url.pathname} takes ${allowed}, not ${req.method ?? 'an unknown method'}`)
     }
-    if (method === 'GET') return handle(url, {})
+    if (method === 'GET') return handle(url, {}, signal)
     if (!isJsonContentType(req.headers['content-type'])) {
       throw new ApiError('invalid_op', `${url.pathname} requires content-type: application/json`)
     }
-    return handle(url, await readBody(req))
+    return handle(url, await readBody(req, name === '/screenshot' ? MAX_SCREENSHOT_BYTES : MAX_BODY_BYTES), signal)
   }
 
   const respond = async (req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> => {
+    const hangUp = new AbortController()
+    res.on('close', () => {
+      if (!res.writableEnded) hangUp.abort()
+    })
     try {
-      send(res, 200, { ok: true, data: await dispatch(req, url) })
+      send(res, 200, { ok: true, data: await dispatch(req, url, hangUp.signal) })
     } catch (error) {
       let failure: ApiError
       if (error instanceof ApiError) {
@@ -165,15 +199,15 @@ function isJsonContentType(header: string | undefined): boolean {
   return header?.split(';')[0]?.trim().toLowerCase() === 'application/json'
 }
 
-async function readBody(req: IncomingMessage): Promise<Json> {
+async function readBody(req: IncomingMessage, max: number): Promise<Json> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req as AsyncIterable<Buffer>) {
     size += chunk.length
     // Past the cap, keep draining (without buffering) so the error response can still be sent.
-    if (size <= MAX_BODY_BYTES) chunks.push(chunk)
+    if (size <= max) chunks.push(chunk)
   }
-  if (size > MAX_BODY_BYTES) throw new ApiError('invalid_op', `request body exceeds ${MAX_BODY_BYTES} bytes`)
+  if (size > max) throw new ApiError('invalid_op', `request body exceeds ${max} bytes`)
   let value: unknown
   try {
     value = JSON.parse(Buffer.concat(chunks).toString('utf8'))

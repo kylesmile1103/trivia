@@ -58,6 +58,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/manifest` | — | `{ manifest: TriviaManifest \| null, drift: Drift \| null }` |
 | GET | `/@trivia/api/selection` | — | `SelectionState` |
 | POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
+| POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
+| GET | `/@trivia/api/screenshot/next` | — | `{ id: string \| null }` (long poll) |
+| POST | `/@trivia/api/screenshot` | `{ id, png, width, height }` or `{ id, error }` | `null` |
 
 - `apply` and `batch` each create **one** history entry (a batch is a transaction: if any op
   fails, files already changed by earlier ops in the batch are restored and the error returned).
@@ -81,6 +84,23 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   (`name` is the tag name it saw there). Repeating the current selection changes nothing;
   every change bumps `version`. Edits through this API never move it; an agent's edit through
   the MCP endpoint does (`by: "agent"`).
+- `sync` re-runs contract-sync (`docs/data-provider.md`) in the edit queue: the spec is `input`
+  (a project-relative path or URL), by default the manifest's `source.location`; the output
+  directory is the manifest's `modules.outputDir` (default `src/api/generated`); `zod` defaults
+  to what the manifest had (true without one). **Git guard:** when the output directory or
+  the manifest has uncommitted changes (`git status --porcelain`, untracked files included),
+  it is refused with 409 `conflict` naming them, unless `force: true`. Outside a git work tree
+  nothing is guarded. Regeneration is not an undo entry; git is its undo.
+  `SyncResult = { source, outputDir, files, schemaHash, resources: string[], git }`, where `git`
+  says what the guard found: `"clean"`, `"forced: replaced uncommitted changes in …"` or
+  `"not a git work tree: nothing was guarded"`. A contract-sync failure is 422 `unsupported`.
+- `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
+  (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
+  `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with
+  a PNG of the canvas (base64; a `data:image/png;base64,` prefix is stripped) or why it couldn't
+  take one. A poll whose caller hangs up is dropped at once, so a closed designer tab never
+  takes a request. `screenshot` accepts bodies up to 24 MB; an id nobody is waiting for any more
+  is 400 `invalid_op`.
 
 ## Ops (`Op`, tagged by `op`)
 

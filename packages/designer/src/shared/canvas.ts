@@ -31,6 +31,8 @@ export interface CanvasApi {
   clearPreviews(): void
   /** The rendered app's element tree, as selection sees it (usage sites, nested as rendered). */
   layers(): Layer[]
+  /** A PNG (data URL) of the app's whole page, up to 4000 px tall; null without a page. */
+  capture(): Promise<{ png: string; width: number; height: number } | null>
   /**
    * The zoom at which the whole canvas frame fits the visible canvas area, for the toolbar's
    * "Zoom to fit". Optional: a canvas whose frame always fills its area at 100% can omit it
@@ -45,6 +47,7 @@ const noop: CanvasApi = {
   previewStyle: () => {},
   clearPreviews: () => {},
   layers: () => [],
+  capture: async () => null,
 }
 
 let current: CanvasApi = noop
@@ -55,6 +58,7 @@ export const canvas: CanvasApi = {
   previewStyle: (l, s) => current.previewStyle(l, s),
   clearPreviews: () => current.clearPreviews(),
   layers: () => current.layers(),
+  capture: () => current.capture(),
   fitZoom: () => current.fitZoom?.() ?? null,
 }
 

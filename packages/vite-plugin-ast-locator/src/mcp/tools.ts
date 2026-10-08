@@ -252,6 +252,60 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
   )
 
   server.registerTool(
+    'trivia_screenshot',
+    {
+      title: 'See the canvas',
+      description:
+        'A PNG of the user\'s app as the Trivia designer\'s canvas renders it (the whole page, up to 4000 px tall), to ' +
+        'check what an edit looks like. Needs the designer open in a browser; it takes a few seconds.',
+      annotations: reads,
+    },
+    async (): Promise<CallToolResult> => {
+      try {
+        const shot = await service.screenshot()
+        return {
+          content: [
+            { type: 'image', data: shot.png, mimeType: 'image/png' },
+            { type: 'text', text: `The canvas, ${shot.width}×${shot.height} px.` },
+          ],
+        }
+      } catch (error) {
+        if (error instanceof ApiError) return { isError: true, content: [{ type: 'text', text: `${error.code}: ${error.message}` }] }
+        throw error
+      }
+    },
+  )
+
+  server.registerTool(
+    'trivia_sync_openapi',
+    {
+      title: 'Regenerate the API client',
+      description:
+        'Re-run contract-sync: regenerate the typed TanStack Query client (and zod schemas) and trivia.manifest.json ' +
+        'from the OpenAPI spec, by default the one the manifest names. Refused when the generated code has uncommitted ' +
+        'changes it would replace (commit first, or pass force). Not in the undo history: git is the undo.',
+      inputSchema: {
+        input: z.string().optional().describe('Spec path (project-relative) or URL; default: the manifest\'s source'),
+        zod: z.boolean().optional().describe('Generate zod schemas (needed for forms); default: as before'),
+        force: z.boolean().optional().describe('Replace uncommitted changes to the generated code'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    ({ input, zod, force }) =>
+      run(async () => {
+        const result = await service.syncContract({
+          ...(input !== undefined ? { input } : {}),
+          ...(zod !== undefined ? { zod } : {}),
+          ...(force !== undefined ? { force } : {}),
+        })
+        return {
+          data: { ...result },
+          summary: `Regenerated ${result.files} files in ${result.outputDir} from ${result.source}: ${result.resources.join(', ')}.`,
+        }
+      }),
+  )
+
+  server.registerTool(
     'trivia_undo',
     {
       title: 'Undo an edit',

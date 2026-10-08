@@ -103,6 +103,8 @@ export interface RequestOptions {
   headers?: Record<string, string>
   /** false sends no Host header at all (Node adds one by default). */
   setHost?: boolean
+  /** Hangs up mid-request when it aborts. */
+  signal?: AbortSignal
 }
 
 export function request(socket: string, url: string, options: RequestOptions = {}): Promise<Reply> {
@@ -114,7 +116,8 @@ export function request(socket: string, url: string, options: RequestOptions = {
     ...options.headers,
   }
   return new Promise((resolve, reject) => {
-    const req = http.request({ socketPath: socket, path: url, method, headers, setHost: options.setHost ?? true }, (res) => {
+    const target = { socketPath: socket, path: url, method, headers, setHost: options.setHost ?? true }
+    const req = http.request(options.signal ? { ...target, signal: options.signal } : target, (res) => {
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
       res.on('end', () => {

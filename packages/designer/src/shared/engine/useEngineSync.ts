@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react'
 import { watchFrameWindows } from '@/shared/lib/keyboard'
 import { useDesigner } from '@/shared/state/store'
 
+import { startScreenshotRelay } from './screenshot-relay'
 import { startSelectionSync } from './selection-sync'
 import { connect, syncHistory, useSession } from './session'
 
@@ -28,6 +29,8 @@ export function useEngineSync(): void {
 
   // Point-and-ask (docs/mcp.md): the plugin keeps the selection for agents.
   useEffect(() => (status === 'connected' ? startSelectionSync() : undefined), [status])
+  // trivia_screenshot: the plugin has no browser, so the designer takes the pictures.
+  useEffect(() => (status === 'connected' ? startScreenshotRelay() : undefined), [status])
 
   useEffect(() => {
     if (status === 'connecting') return

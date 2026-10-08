@@ -96,3 +96,37 @@ test('an agent edits what the user selected, and the selection follows its eleme
   expect(fs.readFileSync(DASHBOARD_FILE, 'utf8')).toBe(original)
   await expect(app(page).getByRole('button', { name: 'Save changes' })).toBeVisible()
 })
+
+test('trivia_screenshot returns the canvas as the open designer renders it', async ({ page }) => {
+  await page.goto('/__trivia/')
+  await expect(page.frameLocator('iframe[title="App canvas"]').getByRole('button', { name: 'Save changes' })).toBeVisible()
+  await connectAgent()
+  const r = (await agent!.callTool({ name: 'trivia_screenshot', arguments: {} })) as {
+    isError?: boolean
+    content: Array<{ type: string; data?: string; mimeType?: string; text?: string }>
+  }
+  expect(r.isError, r.content.map((c) => c.text).join('\n')).toBeFalsy()
+  const image = r.content[0]!
+  expect(image.type).toBe('image')
+  expect(image.mimeType).toBe('image/png')
+  // Decode it in the browser: the page's real pixels, not a blank sheet.
+  const stats = await page.evaluate(async (data) => {
+    const img = new Image()
+    img.src = `data:image/png;base64,${data}`
+    await img.decode()
+    const c = document.createElement('canvas')
+    c.width = img.width
+    c.height = img.height
+    const ctx = c.getContext('2d')!
+    ctx.drawImage(img, 0, 0)
+    const pixels = ctx.getImageData(0, 0, c.width, c.height).data
+    const colors = new Set<number>()
+    for (let i = 0; i < pixels.length; i += 4 * 97) colors.add((pixels[i]! << 16) | (pixels[i + 1]! << 8) | pixels[i + 2]!)
+    return { width: img.width, height: img.height, colors: colors.size }
+  }, image.data!)
+  const frameWidth = await page.evaluate(() => document.querySelector<HTMLIFrameElement>('iframe[title="App canvas"]')!.contentDocument!.documentElement.clientWidth)
+  expect(stats.width).toBe(frameWidth)
+  expect(stats.height).toBeGreaterThan(200)
+  expect(stats.colors).toBeGreaterThan(5) // text, borders, the dark Save button
+  expect(r.content[1]?.text).toBe(`The canvas, ${stats.width}×${stats.height} px.`)
+})

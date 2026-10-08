@@ -8,8 +8,10 @@ import path from 'node:path'
 
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
+import { uncommitted } from './git.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
+import { type Screenshot, ScreenshotRelay } from './screenshots.js'
 import { type Selected, type SelectionState, SelectionStore, rebase } from './selection.js'
 
 export type Json = Record<string, unknown>
@@ -25,6 +27,27 @@ export interface ServiceOptions {
   historyLimit?: number
   /** Project-relative path of contract-sync's manifest. Default "trivia.manifest.json". */
   manifestPath?: string
+  /** How long a screenshot request waits for an open designer (ms). Default 15 000. */
+  screenshotTimeoutMs?: number
+}
+
+export interface SyncOptions {
+  /** Spec path or URL; default: the manifest's `source.location`. */
+  input?: string
+  /** Generate zod schemas; default: as the manifest was (true without one). */
+  zod?: boolean
+  /** Regenerate even over uncommitted changes to the generated code. */
+  force?: boolean
+}
+
+export interface SyncResult {
+  source: string
+  outputDir: string
+  files: number
+  schemaHash: string
+  resources: string[]
+  /** What the git guard found: "clean", what `force` replaced, or that the project isn't a git work tree. */
+  git: string
 }
 
 /** Who sent an edit: the designer (or another HTTP client), or an agent through MCP. */
@@ -38,6 +61,7 @@ export class EngineService {
   readonly #history: History
   readonly #queue = new SerialQueue()
   readonly #selection = new SelectionStore()
+  readonly #screenshots = new ScreenshotRelay()
 
   constructor(options: ServiceOptions) {
     this.#options = options
@@ -86,6 +110,76 @@ export class EngineService {
       throw new ApiError('io_error', `${path.basename(file)} is not valid JSON (${(error as Error).message}); re-run contract-sync`)
     }
     return { manifest, drift: await this.#drift(manifest) }
+  }
+
+  /**
+   * Re-run contract-sync (`docs/data-provider.md`) with the manifest's own source, output and
+   * zod setting, in the edit queue. Refused (`conflict`) when the generated code or the manifest
+   * has uncommitted changes it would replace, unless `force`. Not in Trivia's undo history.
+   */
+  async syncContract(options: SyncOptions = {}): Promise<SyncResult> {
+    return this.#queue.run(async () => {
+      const root = this.#options.root
+      const { manifest } = await this.manifest()
+      const current = manifest as { source?: { location?: string }; modules?: { outputDir?: string; zod?: unknown } } | null
+      const input = options.input ?? current?.source?.location
+      if (!input) {
+        throw new ApiError('invalid_op', 'no spec to generate from: pass input (a spec path or URL); this project has no trivia.manifest.json to take it from')
+      }
+      const outputDir = current?.modules?.outputDir ?? 'src/api/generated'
+      const manifestPath = this.#options.manifestPath ?? 'trivia.manifest.json'
+      const dirty = await uncommitted(root, [outputDir, manifestPath])
+      if (dirty !== null && dirty.length > 0 && !options.force) {
+        throw new ApiError(
+          'conflict',
+          `regenerating would replace uncommitted changes in ${dirty.join(', ')}; commit them first (or pass force: true to replace them)`,
+        )
+      }
+      const contractSync = await import('@trivia/contract-sync')
+      let result: Awaited<ReturnType<typeof contractSync.syncContract>>
+      try {
+        result = await contractSync.syncContract({
+          input,
+          cwd: root,
+          outputDir,
+          manifestPath,
+          zod: options.zod ?? (current ? current.modules?.zod != null : true),
+        })
+      } catch (error) {
+        if (error instanceof contractSync.ContractSyncError) {
+          throw new ApiError('unsupported', `contract-sync failed (${error.code}): ${error.message}${error.hint ? ` (${error.hint})` : ''}`)
+        }
+        throw error
+      }
+      return {
+        source: input,
+        outputDir,
+        files: result.files.length,
+        schemaHash: result.manifest.schemaHash,
+        resources: result.manifest.resources.map((r) => r.name),
+        git:
+          dirty === null
+            ? 'not a git work tree: nothing was guarded'
+            : dirty.length === 0
+              ? 'clean'
+              : `forced: replaced uncommitted changes in ${dirty.join(', ')}`,
+      }
+    })
+  }
+
+  /** A PNG of the designer's canvas, from the open designer (see ScreenshotRelay). */
+  screenshot(): Promise<Screenshot> {
+    return this.#screenshots.request(this.#options.screenshotTimeoutMs ?? 15_000)
+  }
+
+  /** The designer's long-poll for screenshot requests; `signal` aborts when it hangs up. */
+  nextScreenshot(timeoutMs = 25_000, signal?: AbortSignal): Promise<{ id: string | null }> {
+    return this.#screenshots.next(timeoutMs, signal)
+  }
+
+  /** The designer's answer to a screenshot request. */
+  fulfillScreenshot(id: string, answer: { png: string; width: number; height: number } | { error: string }): void {
+    this.#screenshots.fulfill(id, answer)
   }
 
   /**
