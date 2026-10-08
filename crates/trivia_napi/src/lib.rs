@@ -16,14 +16,19 @@ use serde_json::{Value, json};
 use trivia_oxc_engine::{self as engine, EngineError, Op, Workspace};
 
 /// Stack for each engine call. OXC's parser and the engine's AST walks recurse once per
-/// nesting level of the source (about 1.5 KB per bracket level and 0.5 KB per JSX element in
-/// a release build). On the JS main thread (8 MiB, shared with V8) a file nested about
-/// 18 000 elements or 5 000 brackets deep overflowed it, and a stack overflow cannot be
-/// caught: it killed the user's dev server. This is 8 times that (about 43 000 brackets);
-/// only the pages a call touches are committed. No fixed stack fits arbitrary nesting, so
-/// text the HTTP API receives still needs a cap before it is parsed (as `optionsArgs` has in
-/// `data_binder.rs`).
-const ENGINE_STACK: usize = 64 * 1024 * 1024;
+/// nesting level of the source, also through operator chains with no bracket at all
+/// (release build, darwin-arm64: 1.3 to 2.6 KB per bracket level, 0.7 to 1.3 KB per ternary
+/// or arrow, 0.5 KB per JSX element). A stack overflow cannot be caught: it kills the user's
+/// dev server. The JS main thread (8 MiB, shared with V8) overflowed at about 5 000 brackets
+/// or 18 000 elements, and a 64 MiB thread at 50 000 brackets or 100 000 ternaries; this
+/// holds 200 000 brackets and 400 000 ternaries (`test/deep-nesting.mjs`).
+///
+/// It is address space, not memory: only the pages a call touches are committed, and the
+/// stack is unmapped when the call's thread exits. On macOS an ordinary call's peak RSS is
+/// the same as with 64 MiB. No fixed stack fits arbitrary nesting (400 000 nested brackets
+/// still overflow this one), so text the HTTP API receives also needs a cap before it is
+/// parsed (snippets in `mutator.rs`, `optionsArgs` in `data_binder.rs`).
+const ENGINE_STACK: usize = 512 * 1024 * 1024;
 
 /// Run `work` on a new thread with [`ENGINE_STACK`] of stack and wait for its result. A
 /// panic comes back as `Err` with its message.
