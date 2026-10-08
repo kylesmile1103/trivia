@@ -116,13 +116,16 @@ function subjectOf(op: Op): string | null {
   }
 }
 
-/** Every file the ops write: an op edits the file its locators name (moves never cross files). */
+/** Every file the ops write: each op's own file, and a move's destination file (it may be another). */
 function filesOf(resultFile: string, ops: readonly Op[]): string[] {
   const files = new Set([resultFile])
   for (const op of ops) {
-    const locator = op.op === 'insertChild' ? op.parent : op.op === 'move' || op.op === 'moveNode' ? op.source : op.target
-    const file = locatorFile(locator)
-    if (file) files.add(file)
+    const locators =
+      op.op === 'insertChild' ? [op.parent] : op.op === 'move' ? [op.source, op.target] : op.op === 'moveNode' ? [op.source, op.parent] : [op.target]
+    for (const locator of locators) {
+      const file = locatorFile(locator)
+      if (file) files.add(file)
+    }
   }
   return [...files]
 }

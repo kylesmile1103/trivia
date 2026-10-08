@@ -24,7 +24,7 @@ pub use error::{EngineError, ErrorPayload, Result};
 pub use import_manager::ImportSpec;
 pub use inspect::{AttrDetails, AttrKind, NodeDetails, OutlineNode};
 pub use locator::{Insertion, JsxTable, Locator};
-pub use ops::{Op, Outcome, Placement, apply_op};
+pub use ops::{AcrossOutcome, Op, Outcome, Placement, apply_across, apply_op};
 pub use prop_analyzer::{ComponentSchema, PropKind, PropSchema, PropSource};
 pub use workspace::{Applied, Workspace};
 

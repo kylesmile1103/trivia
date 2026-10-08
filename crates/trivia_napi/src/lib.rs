@@ -167,19 +167,37 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                 f
             };
             let op: Op = serde_json::from_value(raw).map_err(|e| step(EngineError::InvalidOp(e.to_string())))?;
-            let file = op.file().map_err(step)?;
-            let slot = match files.iter().position(|w| w.file == file) {
-                Some(slot) => slot,
-                None => {
-                    let text = ws.read(&file).map_err(step)?;
-                    files.push(Working { file: file.clone(), before: text.clone(), current: text });
-                    files.len() - 1
-                }
-            };
-            let mut outcome = engine::apply_op(&files[slot].current, &file, &op).map_err(step)?;
-            if outcome.changed {
-                files[slot].current = std::mem::take(&mut outcome.code);
+            let mut slots = Vec::new();
+            for file in op.files().map_err(step)? {
+                let slot = match files.iter().position(|w| w.file == file) {
+                    Some(slot) => slot,
+                    None => {
+                        let text = ws.read(&file).map_err(step)?;
+                        files.push(Working { file: file.clone(), before: text.clone(), current: text });
+                        files.len() - 1
+                    }
+                };
+                slots.push(slot);
             }
+            let outcome = match slots[..] {
+                [slot] => {
+                    let mut outcome = engine::apply_op(&files[slot].current, &files[slot].file, &op).map_err(step)?;
+                    if outcome.changed {
+                        files[slot].current = std::mem::take(&mut outcome.code);
+                    }
+                    outcome
+                }
+                // A move to another file edits both (`apply_across`).
+                [from, to] => {
+                    let across = engine::apply_across(&files[from].current, &files[from].file, &files[to].current, &files[to].file, &op)
+                        .map_err(step)?;
+                    files[from].current = across.from;
+                    let mut outcome = across.to;
+                    files[to].current = std::mem::take(&mut outcome.code);
+                    outcome
+                }
+                _ => unreachable!("an op edits one or two files"),
+            };
             last = Some(outcome);
         }
         let last = last.expect("ops is non-empty");

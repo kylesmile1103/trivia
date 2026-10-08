@@ -362,11 +362,11 @@ test('dragging the Cancel button into CardContent moves it in source; selection 
   await page.mouse.move(start.x + 6, start.y - 6, { steps: 2 })
   await expect(page.locator('[data-canvas-box="selection"]')).toHaveClass(/border-dashed/)
 
-  // Over the page padding (App.tsx's <main>): another file, refused with a reason.
+  // Over the page padding (App.tsx's <main>): another file, a drop like any other.
   const card = await box(app(page).locator('[data-slot="card"]'))
   await page.mouse.move(card.x + card.width / 2, card.y + card.height + 40, { steps: 4 })
-  await expect(page.locator('[data-canvas-drop="refused"]')).toHaveText('Moving between files is not supported yet')
-  await expect(page.locator('[data-canvas-drop="inside"], [data-canvas-drop^="line"]')).toHaveCount(0)
+  await expect(page.locator('[data-canvas-drop="inside"]')).toBeVisible()
+  await expect(page.getByTestId('canvas-drop-label')).toHaveText('Inside main')
   // Over a .map() badge: it can't anchor before/after, so the drop goes inside its container.
   const pro = await box(app(page).getByText('Pro', { exact: true }))
   await page.mouse.move(pro.x + 4, pro.y + 4, { steps: 4 })
@@ -585,3 +585,31 @@ test('the right-click menu moves an element down and deletes one, and both undo 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
   await expect.poll(dashboard).toBe(original)
 })
+
+test('dragging Save out of the page into App.tsx moves it between files, and one undo restores both', async ({ page }) => {
+  await openCanvas(page)
+  const APP_FILE = fileURLToPath(new URL('../examples/playground/src/App.tsx', import.meta.url))
+  const appBefore = fs.readFileSync(APP_FILE, 'utf8')
+  try {
+    const save = center(await box(app(page).getByRole('button', { name: 'Save changes' })))
+    const card = await box(app(page).locator('[data-slot="card"]'))
+    await page.mouse.move(save.x, save.y)
+    await page.mouse.down()
+    await page.mouse.move(save.x + 6, save.y + 6, { steps: 2 })
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height + 40, { steps: 6 })
+    await expect(page.getByTestId('canvas-drop-label')).toHaveText('Inside main')
+    await page.mouse.up()
+    await expect.poll(() => fs.readFileSync(APP_FILE, 'utf8')).toContain('      <Button>Save changes</Button>\n    </main>')
+    expect(fs.readFileSync(APP_FILE, 'utf8')).toContain('import { Button } from "@/components/ui/button"')
+    expect(dashboard()).toBe(original.replace('          <Button>Save changes</Button>\n', ''))
+    await expect(app(page).getByRole('button', { name: 'Save changes' })).toBeVisible() // rendered in its new place
+
+    await expect(page.getByTestId('canvas-overlay')).not.toHaveAttribute('aria-busy')
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+    await expect.poll(dashboard).toBe(original)
+    await expect.poll(() => fs.readFileSync(APP_FILE, 'utf8')).toBe(appBefore)
+  } finally {
+    if (fs.readFileSync(APP_FILE, 'utf8') !== appBefore) fs.writeFileSync(APP_FILE, appBefore)
+  }
+})
+

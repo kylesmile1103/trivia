@@ -19,7 +19,7 @@ import {
   unionRect,
   usageParent,
 } from './dom'
-import { isRootLocator, isSameOrInside, locatorFile } from './locator'
+import { isRootLocator, isSameOrInside } from './locator'
 
 export type DragSubject = { kind: 'palette' } | { kind: 'node'; locator: string }
 
@@ -81,10 +81,8 @@ export function computeDrop(ctx: DropContext): DropResult | null {
 
   if (ctx.subject.kind === 'node') {
     const source = ctx.subject.locator
+    // Into another file too: the engine brings the element's imports along, or says why not.
     if (isSameOrInside(plan.target, source)) return null
-    if (locatorFile(plan.target) !== locatorFile(source)) {
-      return { ok: false, reason: 'Moving between files is not supported yet' }
-    }
   }
   return { ok: true, plan }
 }

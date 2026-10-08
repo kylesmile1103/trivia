@@ -161,7 +161,15 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   limit about 2 900 elements deep. Of 1 036 real files measured, the largest held 1 448 and the
   deepest nested 14 levels. Each top-level component numbers its own roots, so moving deep
   markup into components of its own lowers the count.
-- Cross-file `move` is not supported yet (422).
+- A `move` or `moveNode` whose destination is in another file edits both files, as one
+  transaction and one undo entry (through `apply`/`batch`; the binding's single-op `applyOp`
+  refuses it). The element's bytes move as within a file. Each name it imports comes along:
+  the destination gets the same import, merged into one it already has, with a relative source
+  rewritten for its directory. The source file drops imports that nothing uses any more.
+  Refused with 422 `unsupported`, naming the identifier: anything the other file can't see
+  (a prop, a local, a module-level declaration, `this`), an import under another name
+  (`{ a as b }`) or a namespace import, and a global the destination declares locally where
+  it lands. `ApplyResult.file` and `locator` are the destination's.
 - A `move`/`moveNode` must not change what the moved code refers to: every identifier it uses
   but does not declare must resolve to the same binding where it lands, or stay a global
   there, and `this` must keep its function. Moving `<span>{item.name}</span>` out of

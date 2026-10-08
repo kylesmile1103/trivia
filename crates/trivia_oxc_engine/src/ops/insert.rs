@@ -40,7 +40,7 @@ impl Doc<'_, '_> {
     /// Refuse an insert whose requested imports would be shadowed where the snippet lands
     /// (next to or inside `dest`): a `<Button>` placed in a scope that declares its own
     /// `Button` would render that one, not the import.
-    fn check_not_shadowed(&self, dest: usize, used: &[ImportSpec]) -> Result<()> {
+    pub(super) fn check_not_shadowed(&self, dest: usize, used: &[ImportSpec]) -> Result<()> {
         let semantic = SemanticBuilder::new().with_build_nodes(true).build(self.program).semantic;
         let scoping = semantic.scoping();
         let dest = self.jsx_ast_node(semantic.nodes(), dest)?;

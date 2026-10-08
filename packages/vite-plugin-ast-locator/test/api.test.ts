@@ -198,6 +198,24 @@ describe('apply, undo, redo', () => {
   })
 })
 
+describe('a move between files', () => {
+  it('writes both files as one undo entry, and undo restores both byte for byte', async () => {
+    const app = read('src/App.tsx')
+    const r = await post(socket, '/apply', {
+      op: { op: 'move', source: SAVE, expectedName: 'Button', target: 'src/App.tsx#App#0.0', expectedTargetName: 'Dashboard', placement: 'after' },
+    })
+    expect(r.status).toBe(200)
+    expect(r.body.data).toMatchObject({ file: 'src/App.tsx', changed: true, locator: 'src/App.tsx#App#0.1', history: { undoLabel: 'Move <Button>' } })
+    expect(read('src/App.tsx')).toContain('      <Dashboard />\n      <Button>Save changes</Button>\n    </main>')
+    expect(read('src/App.tsx')).toContain('import { Button } from "@/components/ui/button"')
+    expect(read()).toBe(original.replace('          <Button>Save changes</Button>\n', ''))
+
+    await post(socket, '/undo')
+    expect(read()).toBe(original)
+    expect(read('src/App.tsx')).toBe(app)
+  })
+})
+
 describe('batch', () => {
   it('is one history entry, even across files', async () => {
     const appBefore = read('src/App.tsx')

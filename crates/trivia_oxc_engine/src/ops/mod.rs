@@ -22,6 +22,7 @@
 //! * `set_text`: `setText`;
 //! * `remove`: `remove`;
 //! * `move_node`: `move` and `moveNode`, with the check that moved code keeps its bindings;
+//! * `move_across`: `move` and `moveNode` between two files (`apply_across`);
 //! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too).
 //!
 //! A new op is a new module here plus its `Op` variant.
@@ -44,12 +45,14 @@ use crate::text::{self, Edit};
 
 pub mod bind_query;
 mod insert;
+mod move_across;
 mod move_node;
 mod remove;
 mod set_text;
 mod update_prop;
 
 pub use insert::{MAX_SNIPPET_BYTES, MAX_SNIPPET_DEPTH, MAX_SNIPPET_TAGS_AND_BRACKETS};
+pub use move_across::{AcrossOutcome, apply_across};
 
 /// Where to put a node relative to a target node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -166,6 +169,21 @@ impl Op {
         };
         Ok(Locator::parse(primary)?.file)
     }
+
+    /// Every file this op edits: its own, and for a move whose destination is elsewhere, that
+    /// file too (`apply_across`).
+    pub fn files(&self) -> Result<Vec<String>> {
+        let first = self.file()?;
+        let destination = match self {
+            Op::Move { target, .. } => Some(Locator::parse(target)?.file),
+            Op::MoveNode { parent, .. } => Some(Locator::parse(parent)?.file),
+            _ => None,
+        };
+        Ok(match destination {
+            Some(other) if other != first => vec![first, other],
+            _ => vec![first],
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -264,7 +282,7 @@ impl Doc<'_, '_> {
         let loc = Locator::parse(s)?;
         if loc.file != self.file {
             return Err(EngineError::Unsupported(format!(
-                "`{s}` is in {} but this edit targets {}; cross-file edits are not supported yet",
+                "`{s}` is in {} but this edit is applied to {}; only a move spans two files, through applyOps",
                 loc.file, self.file
             )));
         }

@@ -191,10 +191,10 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-2. **Try point and ask in a real Claude Code session**
+1. **Try point and ask in a real Claude Code session**
    (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
    real agent trips on (tool descriptions, error hints).
-3. **Data UI** (Track 2 plus the old item 1):
+2. **Data UI** (Track 2 plus the old item 1):
    - the playground's QueryClientProvider;
    - a Data Explorer as `features/data-explorer/`, with drag-to-bind via `bindQuery`;
    - DataTable generation;
@@ -203,9 +203,8 @@ writes `useQuery` hooks against it.
      `nullable`. Forms are generated as their own file plus one inserted `<XForm />`;
    - a `git status --porcelain` guard before any multi-file generation (refuse and list the
      dirty files; never auto-stash).
-4. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
-5. Engine: a cross-file move.
-6. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
+3. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
+4. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
    designer's localhost URL and stay same-origin, so no bridge is needed.
 
 ## 8. Repo map
