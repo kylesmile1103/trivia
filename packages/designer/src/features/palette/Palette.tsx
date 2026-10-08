@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 
 import { PALETTE_SEARCH_ID } from '@/shared/commands/search'
 import { loadComponents, useSession } from '@/shared/engine/session'
+import { endTemplateDrag, insertIntoSelection, placementFor, startTemplateDrag } from '@/shared/insert'
 import { cn } from '@/shared/lib/utils'
 import { useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
@@ -16,7 +17,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 import { type Family, type PaletteItem, buildCatalog, countComponents, filterCatalog } from './catalog'
 import { iconFor } from './icons'
-import { endTemplateDrag, insertIntoSelection, placementFor, startTemplateDrag } from './insert'
 
 export function Palette() {
   const components = useDesigner((s) => s.components)

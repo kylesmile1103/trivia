@@ -1,0 +1,11 @@
+{
+  // Tests under src/ that run in Node (`*.node.test.ts`: files, child processes): the app's
+  // settings and path aliases, plus Node's types.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node-tests.tsbuildinfo",
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/**/*.node.test.ts"],
+  "exclude": []
+}

@@ -72,9 +72,7 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
 the user's `~/Downloads/trivia-*.gif`).
 
 **Not built yet:**
-- the designer Data Explorer and drag-to-bind;
-- DataTable and form generation;
-- the playground's `@tanstack/react-query` dependency and QueryClientProvider.
+- edit forms (an update body plus loading the row) and nested-object fields in generated forms.
 
 `contract-sync` and `bindQuery` exist and are tested; see `docs/data-provider.md`.
 <!-- STATUS:END -->
@@ -194,17 +192,8 @@ writes `useQuery` hooks against it.
 1. **Try point and ask in a real Claude Code session**
    (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
    real agent trips on (tool descriptions, error hints).
-2. **Data UI** (Track 2 plus the old item 1):
-   - the playground's QueryClientProvider;
-   - a Data Explorer as `features/data-explorer/`, with drag-to-bind via `bindQuery`;
-   - DataTable generation;
-   - forms: hey-api's built-in `zod` plugin (no second generator) feeding react-hook-form
-     with shadcn `Field` + `Controller`. Asterisks come from OpenAPI `required`, not
-     `nullable`. Forms are generated as their own file plus one inserted `<XForm />`;
-   - a `git status --porcelain` guard before any multi-file generation (refuse and list the
-     dirty files; never auto-stash).
-3. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
-4. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
+2. MCP follow-ups: a screenshot tool ("agent builds, you watch") and `trivia_sync_openapi`.
+3. A Tauri shell. The engine is already a plain Rust library, and the shell can load the
    designer's localhost URL and stay same-origin, so no bridge is needed.
 
 ## 8. Repo map

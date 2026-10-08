@@ -1,12 +1,13 @@
-// Palette → source: click-to-insert and the drag payload the canvas drop handler reads.
+// Template → source, for the palette and the Data panel: click-to-insert into the selection,
+// and the drag payload the canvas drop handler reads.
 
 import { toast } from 'sonner'
 
 import { engine } from '@/shared/engine/client'
 import type { NodeDetails, Placement } from '@/shared/engine/types'
-import { dispatch } from '@/shared/state/actions'
+import { dispatch, dispatchBatch } from '@/shared/state/actions'
 import { designer } from '@/shared/state/store'
-import { TEMPLATE_MIME, type Template } from '@/shared/template'
+import { TEMPLATE_MIME, type Template, templateOps } from '@/shared/template'
 
 /** HTML void elements: inserting children into them produces invalid markup. */
 const VOID_TAGS = new Set([
@@ -40,12 +41,12 @@ export async function insertIntoSelection(template: Template): Promise<void> {
   }
   const placement = placementFor(node, componentsByName[node.name]?.acceptsChildren)
   const where = placement === 'after' ? 'after' : 'into'
-  await dispatch(
-    // The name the user saw selected: if the selection's position has since moved to another
-    // node, the engine refuses (409) instead of inserting next to the wrong one.
-    { op: 'insert', target: selected, expectedName: node.name, placement, snippet: template.snippet, imports: template.imports },
-    `Insert ${template.label} ${where} <${node.name}>`,
-  )
+  // The name the user saw selected: if the selection's position has since moved to another
+  // node, the engine refuses (409) instead of inserting next to the wrong one.
+  const ops = templateOps(template, { target: selected, expectedName: node.name, placement, childCount: node.children.length })
+  const label = `Insert ${template.label} ${where} <${node.name}>`
+  const [only] = ops
+  await (ops.length === 1 && only ? dispatch(only, label) : dispatchBatch(ops, label))
 }
 
 /** Start a palette drag: the store says what is being dragged, dataTransfer carries it. */

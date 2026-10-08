@@ -22,6 +22,7 @@ src/
   app/               composition root: main.tsx, the shell (App.tsx), the left panel's tabs, the connect screen
   features/          vertical slices; each exposes its public API from index.ts
     canvas/          iframe, overlay, hit-testing, selection, drag-move, drop zones, previews
+    data-explorer/   the project's API (trivia.manifest.json): bound tables and create forms (Data tab)
     inspector/       props, class manager, style panel (style/), CSS→Tailwind (tailwind/)
     layers/          the rendered app's element tree (Layers tab)
     palette/         the user's components as insertable templates
@@ -31,7 +32,8 @@ src/
     state/           the zustand store and the action bus (every edit goes through it)
     commands/        global commands and keyboard shortcuts
     canvas.ts        the canvas API contract (installed by features/canvas): previews, fit zoom, layers
-    template.ts      the palette → canvas drag contract
+    template.ts      what the palette and Data tab insert, and the ops one insert runs (templateOps)
+    insert.ts        click-to-insert into the selection, and the template drag payload
     components/      the designer's own shared components
     ui/              shadcn/ui (components.json points `npx shadcn add` here)
     lib/             small helpers (cn, env, keyboard)

@@ -52,6 +52,13 @@ const imports: Import[] = sources(SRC).flatMap((file) =>
   }),
 )
 
+/**
+ * Whether `to` is designer code: under one of the layers. Strings that only look like imports
+ * (the user's `@/api/...` in a code generator's test) name no designer module, and an import of
+ * a path that doesn't exist fails the typecheck instead.
+ */
+const isLayered = (to: string) => LAYERS.includes(to.split('/')[0] ?? '')
+
 const show = (list: Import[]) => list.map((i) => `${i.from}: '${i.spec}'`)
 
 describe('the designer layout', () => {
@@ -68,7 +75,7 @@ describe('the designer layout', () => {
   })
 
   it('keeps shared/ free of features and of the app', () => {
-    const up = imports.filter((i) => unitOf(i.from) === 'shared' && unitOf(i.to) !== 'shared')
+    const up = imports.filter((i) => unitOf(i.from) === 'shared' && isLayered(i.to) && unitOf(i.to) !== 'shared')
     expect(show(up)).toEqual([])
   })
 
@@ -76,7 +83,7 @@ describe('the designer layout', () => {
     const across = imports.filter((i) => {
       const from = unitOf(i.from)
       const to = unitOf(i.to)
-      return from.startsWith('features/') && to !== from && to !== 'shared'
+      return from.startsWith('features/') && isLayered(i.to) && to !== from && to !== 'shared'
     })
     expect(show(across)).toEqual([])
   })

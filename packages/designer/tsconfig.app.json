@@ -34,6 +34,7 @@
     "src"
   ],
   "exclude": [
-    "src/architecture.test.ts"
+    "src/architecture.test.ts",
+    "src/**/*.node.test.ts"
   ]
 }

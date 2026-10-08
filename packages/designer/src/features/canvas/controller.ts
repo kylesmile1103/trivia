@@ -10,11 +10,11 @@ import { toast } from 'sonner'
 
 import type { CanvasApi } from '@/shared/canvas'
 import { ApiError } from '@/shared/engine/client'
-import type { ImportSpec, NodeDetails, Placement } from '@/shared/engine/types'
-import { dispatch, isApplying, onIdle } from '@/shared/state/actions'
+import type { ImportSpec, NodeDetails, Op, Placement } from '@/shared/engine/types'
+import { dispatch, dispatchBatch, isApplying, onIdle } from '@/shared/state/actions'
 import { ZOOM_MIN } from '@/shared/state/zoom'
 import { type DesignerState, designer } from '@/shared/state/store'
-import { TEMPLATE_MIME, type Template } from '@/shared/template'
+import { TEMPLATE_MIME, type Template, templateOps } from '@/shared/template'
 
 import {
   type Point,
@@ -526,11 +526,13 @@ export class CanvasController {
 
   private async insertTemplate(template: Template, target: string, placement: Placement, since: number): Promise<void> {
     const names = await this.expectedNames([target], since, `${template.label} was not inserted`)
-    if (names === null) return
-    await dispatch(
-      { op: 'insert', target, expectedName: names[0], placement, snippet: template.snippet, imports: template.imports },
-      `Insert ${template.label}`,
-    )
+    const [expectedName] = names ?? []
+    if (expectedName === undefined) return
+    // expectedNames looked the target up: its children say where a last child lands (a bind's target).
+    const childCount = this.detailsFor(target)?.children.length ?? 0
+    const ops = templateOps(template, { target, expectedName, placement, childCount })
+    const [only] = ops
+    await (ops.length === 1 && only ? dispatch(only, `Insert ${template.label}`) : dispatchBatch(ops, `Insert ${template.label}`))
   }
 
   private acceptsTemplate(e: DragEvent): boolean {
@@ -1017,5 +1019,10 @@ function parseTemplate(raw: string | undefined): Template | null {
   ) {
     return null
   }
-  return { component: t.component, label: t.label, snippet: t.snippet, imports: t.imports }
+  const template: Template = { component: t.component, label: t.label, snippet: t.snippet, imports: t.imports }
+  // A Data panel template: its extra ops (the engine validates them like any other) and binding.
+  const isOp = (op: unknown) => typeof op === 'object' && op !== null && typeof (op as { op?: unknown }).op === 'string'
+  if (Array.isArray(t.before) && t.before.every(isOp)) template.before = t.before as Op[]
+  if (typeof t.bind === 'object' && t.bind !== null) template.bind = t.bind as Template['bind'] & object
+  return template
 }

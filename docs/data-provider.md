@@ -379,6 +379,43 @@ Set the target element's props:
 shapes from the manifest. `tsc` must accept them for every fixture, so it is the binder's
 executable reference.
 
+## Designer: the Data tab
+
+`packages/designer/src/features/data-explorer` reads the manifest through `GET /manifest`
+(`docs/api.md`) and lists each resource: its CRUD operations, its fields (required ones marked
+`*`) and two actions. Click inserts into the selection; drag drops onto the canvas. Either is one
+batch, so one undo entry:
+
+- **Table** (needs a list operation):
+  1. `createFile` `src/components/data-table.tsx` with `ifMissing`, so it is written once and never
+     overwritten. It is a generic `DataTable<Row>` built on the user's shadcn `Table`, or plain
+     elements without one. `columns` keys are typed by the rows.
+  2. `insert` `<DataTable columns={[…]} />`, with up to five scalar fields of the entity.
+  3. `bindQuery` on the inserted element with the list operation's `queryOptionsFn` and
+     `listItemsPath`, so `data={customerData?.items ?? []}` and `isLoading` come from `useQuery`.
+     The element's locator is computed from where it lands (`shared/template.ts`
+     `insertedLocator`); the bind's tag-name guard refuses the batch if that were wrong.
+- **Create form** (needs a create operation, `--zod`, and shadcn `field`, `input` and `button`):
+  1. `createFile` (`ifMissing`) `src/components/forms/<resource>-create-form.tsx`. It uses
+     react-hook-form with `zodResolver(<requestBody.zodSchema>)`, one `Controller` + shadcn
+     `Field` per scalar field of the body, and `<form noValidate>`, so zod is the only
+     validator. Required fields get an asterisk (from OpenAPI `required`, not `nullable`).
+     Inputs follow the field: `email`, `date` and `url` input types; numbers through
+     `valueAsNumber`; string enums as a shadcn `Select`; booleans as a `Checkbox`. An optional
+     field left empty is sent as absent. Object and array fields are listed as comments to fill
+     in by hand.
+  2. The form submits through `useMutation(<mutationFn>())`. On success it resets and
+     invalidates the list query (`<queryKeyFn>()`), so a bound table refreshes.
+  3. `insert` `<CustomerCreateForm />`.
+- A **"Spec changed"** badge shows when the manifest's drift is `changed`.
+
+Every name in the generated code comes from the manifest or the user's component library. The
+generators (`codegen.ts`) are unit-tested. `codegen.node.test.ts` writes their output and a
+bound page into a copy of the playground and runs the real `tsc` on it, with a negative control.
+`e2e/data.spec.ts` inserts a table (real rows from the playground's mock API) and a form, then
+submits it. Not generated yet: edit forms (an update body plus loading the row) and
+nested-object fields.
+
 ## GraphQL: out of scope
 
 GraphQL Code Generator's [`typescript-react-query`](https://the-guild.dev/graphql/codegen/docs/plugins/typescript-react-query)

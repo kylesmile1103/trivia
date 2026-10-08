@@ -9,6 +9,7 @@ import type {
   Health,
   HistoryResult,
   HistoryState,
+  ManifestState,
   NodeDetails,
   Op,
   SelectionState,
@@ -66,5 +67,6 @@ export const engine = {
   redo: () => post<HistoryResult>('/redo', {}),
   history: () => request<HistoryState>('/history'),
   selection: () => request<SelectionState>('/selection'),
+  manifest: () => request<ManifestState>('/manifest'),
   select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
 }

@@ -1,6 +1,7 @@
-// The left column: the element tree (Layers) and the component library (Components), as
-// tabs. The tab is in the store, so the `/` shortcut can bring the component search up.
+// The left column: the element tree (Layers), the component library (Components) and the
+// project's API (Data), as tabs. The tab is in the store, so the `/` shortcut can bring the component search up.
 
+import { DataPanel } from '@/features/data-explorer'
 import { LayersPanel } from '@/features/layers'
 import { Palette } from '@/features/palette'
 import { designer, type LeftPanel as Tab, useDesigner } from '@/shared/state/store'
@@ -18,12 +19,18 @@ export function LeftPanel() {
           <TabsTrigger value="components" className="flex-none px-2 text-xs">
             Components
           </TabsTrigger>
+          <TabsTrigger value="data" className="flex-none px-2 text-xs">
+            Data
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="layers" className="flex min-h-0 flex-col">
           <LayersPanel />
         </TabsContent>
         <TabsContent value="components" className="flex min-h-0 flex-col">
           <Palette />
+        </TabsContent>
+        <TabsContent value="data" className="flex min-h-0 flex-col">
+          <DataPanel />
         </TabsContent>
       </Tabs>
     </div>

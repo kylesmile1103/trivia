@@ -163,3 +163,80 @@ export interface SelectionState {
   /** Who made the last change: an agent's edit moves the selection with its element. */
   by: 'designer' | 'agent' | null
 }
+
+// ---------------------------------------------------------------------------------------------
+// GET /manifest: contract-sync's trivia.manifest.json, the part the Data panel reads. Mirror of
+// packages/contract-sync/src/manifest/types.ts; keep the two in sync.
+
+export type ManifestFieldType = 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'unknown'
+
+export interface ManifestField {
+  name: string
+  type: ManifestFieldType
+  format: string | null
+  required: boolean
+  nullable: boolean
+  readOnly: boolean
+  enum: Array<string | number | boolean | null> | null
+  description: string | null
+}
+
+export interface ManifestModule {
+  file: string
+  /** Import specifier for user code; null when the output isn't under the import alias. */
+  importPath: string | null
+}
+
+export interface ManifestRequestBody {
+  required: boolean
+  contentType: string | null
+  /** An object body's top-level fields (what a form edits); null otherwise. */
+  fields: ManifestField[] | null
+  /** The zod.gen.ts export validating it; null without `--zod`. */
+  zodSchema: string | null
+}
+
+export interface ManifestOperation {
+  kind: 'list' | 'get' | 'create' | 'update' | 'delete' | 'custom'
+  method: string
+  path: string
+  summary: string | null
+  sdkFn: string
+  queryOptionsFn: string | null
+  queryKeyFn: string | null
+  mutationFn: string | null
+  requestBody: ManifestRequestBody | null
+  /** List operations: where the rows are ("items"), null for a bare array. */
+  listItemsPath?: string | null
+}
+
+export interface ManifestResource {
+  name: string
+  primaryKey: string | null
+  entity: { fields: ManifestField[] } | null
+  operations: Record<'list' | 'get' | 'create' | 'update' | 'delete', ManifestOperation | null>
+  customOperations: ManifestOperation[]
+}
+
+export interface TriviaManifest {
+  source: { location: string; title: string | null }
+  schemaHash: string
+  modules: {
+    outputDir: string
+    queries: ManifestModule
+    zod: ManifestModule | null
+  }
+  resources: ManifestResource[]
+}
+
+export interface Drift {
+  status: 'current' | 'changed' | 'unknown'
+  source: string | null
+  manifestHash: string | null
+  specHash: string | null
+}
+
+export interface ManifestState {
+  manifest: TriviaManifest | null
+  drift: Drift | null
+}
