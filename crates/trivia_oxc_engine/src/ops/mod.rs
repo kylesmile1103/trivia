@@ -19,6 +19,7 @@
 //! insertion, re-parsing and locating the result):
 //! * `insert`: `insert` and `insertChild`, with the checks on the snippet;
 //! * `update_prop`: `updateProp`;
+//! * `set_text`: `setText`;
 //! * `remove`: `remove`;
 //! * `move_node`: `move` and `moveNode`, with the check that moved code keeps its bindings;
 //! * `bind_query`: `bindQuery`, which parses on its own (it edits a function body too).
@@ -45,6 +46,7 @@ pub mod bind_query;
 mod insert;
 mod move_node;
 mod remove;
+mod set_text;
 mod update_prop;
 
 pub use insert::{MAX_SNIPPET_BYTES, MAX_SNIPPET_DEPTH, MAX_SNIPPET_TAGS_AND_BRACKETS};
@@ -106,6 +108,14 @@ pub enum Op {
         prop: String,
         value: Value,
     },
+    /// Replace the plain-text content of `target` (`<Button>Save</Button>`), keeping the line
+    /// breaks and indentation around it (see `set_text`).
+    SetText {
+        target: String,
+        #[serde(default)]
+        expected_name: Option<String>,
+        text: String,
+    },
     /// Remove a node; imports whose last reference it was are dropped.
     Remove {
         target: String,
@@ -146,7 +156,10 @@ impl Op {
     /// The file this op edits.
     pub fn file(&self) -> Result<String> {
         let primary = match self {
-            Op::Insert { target, .. } | Op::UpdateProp { target, .. } | Op::Remove { target, .. } => target,
+            Op::Insert { target, .. }
+            | Op::UpdateProp { target, .. }
+            | Op::SetText { target, .. }
+            | Op::Remove { target, .. } => target,
             Op::InsertChild { parent, .. } => parent,
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
             Op::BindQuery(binding) => &binding.target,
@@ -186,6 +199,10 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         Op::UpdateProp { target, expected_name, prop, value } => {
             let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
             doc.update_prop(target, prop, value)
+        }
+        Op::SetText { target, expected_name, text } => {
+            let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;
+            doc.set_text(target, text)
         }
         Op::Remove { target, expected_name } => {
             let target = table.resolve_expected(&doc.locate(target)?, expected_name.as_deref())?;

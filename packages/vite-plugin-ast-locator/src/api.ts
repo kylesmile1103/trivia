@@ -303,6 +303,8 @@ function describe(op: Json): string {
   switch (op['op']) {
     case 'updateProp':
       return op['value'] === null ? `Remove ${prop}` : `Set ${prop}`
+    case 'setText':
+      return `Set text of ${name}`
     case 'insert':
     case 'insertChild':
       return 'Insert element'

@@ -479,6 +479,62 @@ fn update_prop_then_restore_restores_every_byte() {
     tally.finish("updateProp → restore", 500);
 }
 
+/// Setting the text of every element that holds plain text (or nothing) and setting the old
+/// text back restores the file byte for byte. Two documented exceptions only change the bytes
+/// between the tags: text spelled with character references comes back in its minimal
+/// spelling, and text spanning several lines comes back on one (same runtime string).
+#[test]
+fn set_text_then_restore_restores_every_byte() {
+    let mut tally = Tally::default();
+    for fx in fixture_variants() {
+        let t = table(&fx.src, &fx.file);
+        for (i, node) in t.nodes.iter().enumerate() {
+            let Some(closing) = node.closing else {
+                tally.skip("self-closing (setText opens it)");
+                continue;
+            };
+            let plain = match node.content.as_slice() {
+                [] => true,
+                [only] => only.node.is_none() && !fx.src[only.span.start as usize..only.span.end as usize].starts_with('{'),
+                _ => false,
+            };
+            if !plain || matches!(node.name.as_deref(), Some("textarea")) {
+                tally.skip("not plain text");
+                continue;
+            }
+            let target = loc(&t, i, &fx.file);
+            let original = inspect(&fx.src, &target).unwrap().text.unwrap_or_default();
+            let set = |src: &str, text: &str| {
+                apply(src, &fx.file, &Op::SetText {
+                    target: target.clone(),
+                    expected_name: Some(node.display_name().to_string()),
+                    text: text.into(),
+                })
+            };
+            for probe in ["Probe text", "a < b & {c} > d"] {
+                let what = format!("{}: {target} text {original:?} → {probe:?} → back", fx.label);
+                let changed = set(&fx.src, probe);
+                assert!(changed.changed, "{what}");
+                assert_line_endings(&fx, &changed.code, &what);
+                assert_eq!(inspect(&changed.code, &target).unwrap().text.unwrap_or_default(), probe, "{what}");
+                let restored = set(&changed.code, &original);
+                if restored.code == fx.src {
+                    tally.ok += 1;
+                    continue;
+                }
+                let interior = &fx.src[node.opening.end as usize..closing.start as usize];
+                let respelled = interior.contains('&') || interior.trim().contains('\n');
+                assert!(respelled, "{what}: not restored\n{}", restored.code);
+                let (head, tail) = (&fx.src[..node.opening.end as usize], &fx.src[closing.start as usize..]);
+                assert!(restored.code.starts_with(head) && restored.code.ends_with(tail), "{what}: bytes outside the text changed");
+                assert_eq!(inspect(&restored.code, &target).unwrap().text.unwrap_or_default(), original, "{what}");
+                tally.skip("text respelled (references or line breaks; same runtime string)");
+            }
+        }
+    }
+    tally.finish("setText → restore", 50);
+}
+
 /// Removing any node: line breaks stay consistent, every other node survives in order, and
 /// only imports the removed subtree used (and nothing left uses) are dropped.
 #[test]

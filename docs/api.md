@@ -83,6 +83,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   "optionsFn": "listCustomersOptions", "optionsImport": "@/api/generated/@tanstack/react-query.gen",
   "optionsArgs": "{ query: { page: 1, pageSize: 20 } }", "resource": "Customer",
   "itemsPath": "items", "dataProp": "data", "loadingProp": "isLoading" }
+{ "op": "setText", "target": "<loc>", "expectedName": "Button", "text": "Save changes" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -91,11 +92,19 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   hold raw is written as a reference, e.g. `&quot;`), `{'…'}` / `` {`…`} `` keep their literal
   kind, other `{…}` values keep their braces. Setting the value a prop already has is a no-op
   (`changed: false`). `null` removes every occurrence of a duplicated prop.
+- `setText` replaces an element's plain-text content (`text` is the string React renders).
+  Line breaks and indentation around the text are layout and stay as written; whitespace on
+  the text's own line is content. `{`, `}`, `<`, `>` are written as character references (and
+  `&` as `&amp;` only when it would otherwise decode). A self-closing element is opened
+  (`<Badge />` → `<Badge>New</Badge>`). Refused: content other than plain text (422
+  `unsupported`: elements, `{…}` expressions, comments), void HTML elements (422), a line
+  break in `text`, and text that would render differently where it goes, such as spaces next
+  to a line break (400 `invalid_op`). The text it already has is a no-op (`changed: false`).
 - `NodeDetails` reports runtime values: `attributes[].value` and `text` have HTML character
   references decoded (`"a &amp; b"` → `a & b`) and `text` follows JSX whitespace rules;
   `attributes[].source` is the text as written.
 - Stale-locator guards (optional, recommended): the tag name the caller saw at each locator
-  the op names: `expectedName` for `target` (`insert`, `updateProp`, `remove`, `bindQuery`),
+  the op names: `expectedName` for `target` (`insert`, `updateProp`, `setText`, `remove`, `bindQuery`),
   for `parent` (`insertChild`) and for `source` (`move`, `moveNode`); `expectedTargetName` for
   a move's `target`; `expectedParentName` for a `moveNode`'s `parent`. When the locator now
   resolves to a different tag (a hand edit shifted it), the op fails with 409 `stale_locator`

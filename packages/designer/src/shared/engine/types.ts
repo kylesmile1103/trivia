@@ -23,6 +23,7 @@ export type Op =
   | { op: 'insert'; target: string; expectedName?: string; placement: Placement; snippet: string; imports?: ImportSpec[] }
   | { op: 'insertChild'; parent: string; expectedName?: string; index: number; snippet: string; imports?: ImportSpec[] }
   | { op: 'updateProp'; target: string; expectedName?: string; prop: string; value: JsonValue }
+  | { op: 'setText'; target: string; expectedName?: string; text: string }
   | { op: 'remove'; target: string; expectedName?: string }
   | { op: 'move'; source: string; expectedName?: string; target: string; expectedTargetName?: string; placement: Placement }
   | { op: 'moveNode'; source: string; expectedName?: string; parent: string; expectedParentName?: string; index: number }
