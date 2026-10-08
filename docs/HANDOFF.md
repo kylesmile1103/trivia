@@ -5,8 +5,8 @@ Last updated: 2026-10-08, at the end of the first build session (one lead, with 
 "ultracode" swarms).
 
 Briefs and contracts:
-- `docs/spec.md`: the original brief.
-- `docs/spec-data-provider.md`: the data-provider brief, with verified corrections at its top.
+- `docs/briefs/spec.md`: the original brief.
+- `docs/briefs/data-provider.md`: the data-provider brief, with verified corrections at its top.
 - `docs/api.md`: the engine HTTP contract.
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
@@ -187,12 +187,12 @@ writes `useQuery` hooks against it.
 - `crates/trivia_napi/`: the napi binding (JSON envelope API) and package `@trivia/engine`.
 - `packages/vite-plugin-ast-locator/src/`: `transform.ts` (locators), `api.ts` (HTTP),
   `history.ts` (undo), `options.ts` (uiDir/importBase from `components.json`).
-- `packages/trivia-designer/src/`:
+- `packages/designer/src/`:
   - `canvas/` (overlay, hit testing, drop zones, previews), `inspector/` (props, class manager,
     `style/` panel);
   - `registry/` (palette and templates), `toolbar/`, `state/` (zustand store and action bus),
     `bridge/` (API client and TS types mirroring Rust serde), `lib/tailwind/` (CSS→Tailwind).
-- `packages/trivia-contract-sync/`: hey-api codegen, the manifest generator, and REST/Supabase
+- `packages/contract-sync/`: hey-api codegen, the manifest generator, and REST/Supabase
   adapters.
 - `examples/playground/`: a stock create-vite + shadcn (radix, nova) user app.
 - `e2e/*.spec.ts`: Playwright (`playwright.config.ts`, ports come from env).

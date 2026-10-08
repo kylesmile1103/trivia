@@ -1,8 +1,8 @@
 # Data provider: contract sync and the resource manifest
 
-Status: implemented in `packages/trivia-contract-sync` (`@trivia/contract-sync`). The Rust data
+Status: implemented in `packages/contract-sync` (`@trivia/contract-sync`). The Rust data
 binder (`bind_query`) is specified here and implemented separately. The brief and its verified
-corrections are in `docs/spec-data-provider.md`.
+corrections are in `docs/briefs/data-provider.md`.
 
 ## The idea
 
@@ -70,7 +70,7 @@ client in `client/` and `core/`, `@tanstack/react-query.gen.ts` and `index.ts`.
 
 ## The manifest
 
-The schema is `packages/trivia-contract-sync/manifest.schema.json`
+The schema is `packages/contract-sync/manifest.schema.json`
 (`$id: https://trivia.dev/schemas/manifest.v1.json`, JSON Schema 2020-12), mirrored by
 `src/manifest-types.ts`. Every generated manifest in the tests validates against it, using ajv in
 strict mode. Excerpt (trimmed) from the customers fixture:
@@ -365,7 +365,7 @@ Set the target element's props:
   hey-api keys are `[{ _id, baseUrl, … }]`, and TanStack matches object keys partially, so this
   covers every page and infinite query.
 
-`packages/trivia-contract-sync/test/helpers.ts` (`writeBinderConsumers`) emits exactly these
+`packages/contract-sync/test/helpers.ts` (`writeBinderConsumers`) emits exactly these
 shapes from the manifest. `tsc` must accept them for every fixture, so it is the binder's
 executable reference.
 

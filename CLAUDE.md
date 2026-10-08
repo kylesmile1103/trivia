@@ -11,7 +11,7 @@ onto Rust/OXC + a native Vite dev server + un-wrapped shadcn/ui. In compiler ter
 whitespace and comments a normal AST round-trip throws away — **byte-preserving edits are the product**,
 not a nice-to-have.
 
-The original brief is `docs/spec.md` (verbatim). Where it conflicts with this file, this file wins:
+The original brief is `docs/briefs/spec.md` (verbatim). Where it conflicts with this file, this file wins:
 the sections below record what was verified against the reference code on 2026-10-07.
 
 ## Layout and commands
@@ -20,7 +20,7 @@ the sections below record what was verified against the reference code on 2026-1
 - `crates/trivia_napi` — napi-rs binding, npm package `@trivia/engine` (JSON envelope API).
 - `packages/vite-plugin-ast-locator` — dev-only Vite plugin: injects `data-ast-node` and serves
   the engine HTTP API at `/@trivia/api` (contract: `docs/api.md`).
-- `packages/trivia-designer` — React designer (`@trivia/designer`), served at
+- `packages/designer` — React designer (`@trivia/designer`), served at
   `http://localhost:4400/__trivia/`; proxies everything else to the user's dev server.
 - `examples/playground` — a stock create-vite + shadcn (radix, nova) app used as the "user app".
 
@@ -177,7 +177,7 @@ Paths are relative to `references/tango/packages/`.
   for `annotate`, which keeps one locator implementation). The engine stays a plain Rust library,
   so a Tauri shell can wrap the same designer later without engine changes.
 - **Same origin:** the designer's dev server proxies the user's dev server (HTTP + WebSocket);
-  the designer itself lives under `/__trivia/` (`packages/trivia-designer/vite.config.ts`).
+  the designer itself lives under `/__trivia/` (`packages/designer/vite.config.ts`).
 - **Package manager:** pnpm workspace.
 
 ## Onlook (`references/onlook`) — verified 2026-10-07

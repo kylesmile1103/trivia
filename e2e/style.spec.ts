@@ -1,5 +1,5 @@
 // Style panel end to end, through the StylePanel harness
-// (packages/trivia-designer/src/inspector/style/harness): real playground, real engine, real HMR.
+// (packages/designer/src/inspector/style/harness): real playground, real engine, real HMR.
 //
 //   TRIVIA_APP_PORT=5341 TRIVIA_PORT=4441 pnpm exec playwright test e2e/style.spec.ts
 
