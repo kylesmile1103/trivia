@@ -153,3 +153,12 @@ export interface ApiErrorPayload {
 }
 
 export type Envelope<T> = { ok: true; data: T } | { ok: false; error: ApiErrorPayload }
+
+/** GET/POST /selection (docs/mcp.md): what the designer has selected, as the plugin holds it. */
+export interface SelectionState {
+  selection: { locator: string; name: string } | null
+  /** Bumped on every change. */
+  version: number
+  /** Who made the last change: an agent's edit moves the selection with its element. */
+  by: 'designer' | 'agent' | null
+}

@@ -10,6 +10,7 @@ import { create } from 'zustand'
 import { designer } from '@/shared/state/store'
 
 import { ApiError, engine } from './client'
+import { syncSelection } from './selection-sync'
 
 /** docs/api.md — the endpoint the startup check calls, shown when it fails. */
 const HEALTH_PATH = '/@trivia/api/health'
@@ -159,8 +160,10 @@ async function readHistory(): Promise<void> {
   const history = await engine.history()
   const s = designer.getState()
   // An edit or undo answered while this read was in flight carries newer state; keep it.
-  if (s.history !== before) return
-  if (!sameJson(s.history, history)) s.setHistory(history)
+  if (s.history === before && !sameJson(s.history, history)) s.setHistory(history)
+  // After the history, so the canvas already expects the re-render of an agent's edit when the
+  // selection moves with it. Best effort: a plugin without /selection still syncs history.
+  await syncSelection().catch(() => {})
 }
 
 function sameJson(a: unknown, b: unknown): boolean {

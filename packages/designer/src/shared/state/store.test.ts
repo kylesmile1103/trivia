@@ -57,3 +57,31 @@ describe('selection guard around undo/redo', () => {
     expect(designer.getState().expectedSelectedName).toBeNull()
   })
 })
+
+describe('selection guard after any re-render', () => {
+  beforeEach(() => {
+    const s = designer.getState()
+    s.select(null)
+    s.select(LOC)
+    s.setDetails(details('Button'))
+  })
+
+  it('drops the selection when an edit from elsewhere (an IDE, an agent) put another element at its locator', () => {
+    designer.getState().bumpRevision() // HMR rendered a change the designer didn't make
+    expect(designer.getState().expectedSelectedName).toBe('Button')
+    designer.getState().setDetails(details('Badge')) // the inspector's refetch
+    expect(designer.getState()).toMatchObject({ selected: null, details: null, expectedSelectedName: null })
+  })
+
+  it('keeps it when the same element is still there', () => {
+    designer.getState().bumpRevision()
+    designer.getState().setDetails(details('Button'))
+    expect(designer.getState()).toMatchObject({ selected: LOC, expectedSelectedName: null })
+  })
+
+  it('has nothing to check before the selection’s details have arrived', () => {
+    designer.getState().select('src/App.tsx#App#0')
+    designer.getState().bumpRevision()
+    expect(designer.getState().expectedSelectedName).toBeNull()
+  })
+})

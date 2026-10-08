@@ -11,6 +11,7 @@ import type {
   HistoryState,
   NodeDetails,
   Op,
+  SelectionState,
 } from './types'
 
 const BASE = '/@trivia/api'
@@ -64,4 +65,6 @@ export const engine = {
   undo: () => post<HistoryResult>('/undo', {}),
   redo: () => post<HistoryResult>('/redo', {}),
   history: () => request<HistoryState>('/history'),
+  selection: () => request<SelectionState>('/selection'),
+  select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
 }

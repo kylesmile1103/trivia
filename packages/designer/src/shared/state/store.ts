@@ -112,7 +112,13 @@ export const useDesigner = create<DesignerState>()((set) => ({
   setZoom: (zoom) => set({ zoom: Math.min(2, Math.max(0.25, zoom)) }),
   setDrag: (drag) => set({ drag, drop: drag ? null : null }),
   setDrop: (drop) => set({ drop }),
-  bumpRevision: () => set((s) => ({ revision: s.revision + 1 })),
+  // A re-render may come from an edit made elsewhere (the user's IDE, an agent): the selected
+  // locator may now name another element, which the next details then reveal (setDetails).
+  bumpRevision: () =>
+    set((s) => ({
+      revision: s.revision + 1,
+      expectedSelectedName: s.expectedSelectedName ?? (s.details !== null && s.details.locator === s.selected ? s.details.name : null),
+    })),
   expectSelectedName: (expectedSelectedName) => set({ expectedSelectedName }),
 }))
 

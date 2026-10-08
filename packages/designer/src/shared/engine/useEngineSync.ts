@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react'
 import { watchFrameWindows } from '@/shared/lib/keyboard'
 import { useDesigner } from '@/shared/state/store'
 
+import { startSelectionSync } from './selection-sync'
 import { connect, syncHistory, useSession } from './session'
 
 /** History is in the dev server's memory, so this is a cheap GET. */
@@ -24,6 +25,9 @@ export function useEngineSync(): void {
   useEffect(() => {
     void connect()
   }, [])
+
+  // Point-and-ask (docs/mcp.md): the plugin keeps the selection for agents.
+  useEffect(() => (status === 'connected' ? startSelectionSync() : undefined), [status])
 
   useEffect(() => {
     if (status === 'connecting') return

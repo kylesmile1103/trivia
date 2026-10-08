@@ -1,8 +1,9 @@
-// The engine API (/@trivia/api) and MCP endpoint (/@trivia/mcp), served by vite-plugin-ast-locator in the user's dev server,
-// rewrite source files, so the plugin answers only this machine (docs/api.md, Envelope). This
-// designer proxies it, and the proxy hides two of the plugin's three checks: it reaches the
-// user's server from loopback whoever its client is, and `changeOrigin` rewrites Host to the
-// target. So the designer makes the same checks itself before its proxy forwards anything.
+// The engine API (/@trivia/api) and the MCP endpoint (/@trivia/mcp), served by
+// vite-plugin-ast-locator in the user's dev server, rewrite source files, so the plugin answers
+// only this machine (docs/api.md, Envelope). This designer proxies them, and the proxy hides
+// two of the plugin's three checks: it reaches the user's server from loopback whoever its
+// client is, and `changeOrigin` rewrites Host to the target. So the designer makes the same
+// checks itself before its proxy forwards anything.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import net from 'node:net'
