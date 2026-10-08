@@ -12,12 +12,14 @@ import { setCanvasApi } from '@/shared/canvas'
 import { cn } from '@/shared/lib/utils'
 import { useDesigner } from '@/shared/state/store'
 
+import { CanvasContextMenu } from './ContextMenu'
 import { OverlayLayer } from './OverlayLayer'
 import { type CanvasStatus, type CanvasView, CanvasController, EMPTY_VIEW } from './controller'
 
 export function Canvas() {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const controllerRef = useRef<CanvasController | null>(null)
   const [view, setView] = useState<CanvasView>(EMPTY_VIEW)
   const mode = useDesigner((s) => s.mode)
   const zoom = useDesigner((s) => s.zoom)
@@ -29,9 +31,11 @@ export function Canvas() {
     if (!iframe || !overlay) return
     const controller = new CanvasController(iframe, overlay, setView)
     const unmount = controller.mount()
+    controllerRef.current = controller
     setCanvasApi(controller.api)
     return () => {
       setCanvasApi(null)
+      controllerRef.current = null
       unmount()
     }
   }, [])
@@ -54,7 +58,7 @@ export function Canvas() {
         tabIndex={0}
         role="application"
         aria-roledescription="design canvas"
-        aria-label="Canvas. Click to select, drag to move, Delete to remove, Arrow Up for the parent, Escape to deselect."
+        aria-label="Canvas. Click to select, drag to move, right-click for actions, Delete to remove, Arrow Up for the parent, Escape to deselect."
         // An edit is rendering: presses, Delete and drops wait for it (controller.ts `stale`).
         aria-busy={view.updating || undefined}
         className={cn(
@@ -65,6 +69,14 @@ export function Canvas() {
       >
         <OverlayLayer view={view} />
       </div>
+      <CanvasContextMenu
+        menu={view.menu}
+        onAction={(action) => void controllerRef.current?.runMenuAction(action)}
+        onClose={() => {
+          controllerRef.current?.closeMenu()
+          overlayRef.current?.focus({ preventScroll: true }) // its keyboard shortcuts again
+        }}
+      />
       <StatusNotice status={view.status} />
     </div>
   )

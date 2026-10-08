@@ -72,7 +72,6 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
 the user's `~/Downloads/trivia-*.gif`).
 
 **Not built yet:**
-- the canvas right-click menu (approved design below, §7);
 - the designer Data Explorer and drag-to-bind;
 - DataTable and form generation;
 - the playground's `@tanstack/react-query` dependency and QueryClientProvider.
@@ -192,15 +191,6 @@ writes `useQuery` hooks against it.
 
 ## 7. Backlog / next steps (in priority order)
 
-1. **The canvas right-click menu** (design approved by the user; no code yet):
-   - In design mode, right-clicking an element selects it and opens a menu at the cursor:
-     Select parent (↑), Move up, Move down, Delete (⌫). The native menu is suppressed.
-   - No menu on empty canvas, while an edit renders (the existing `stale` rule) or in
-     interact mode.
-   - Move up/down use the `move` op (before the previous / after the next sibling, both
-     names guarded). They are disabled at the ends, for roots, and next to `{…}` siblings.
-   - Code: `features/canvas` only (controller `contextmenu` handler and menu view, a
-     `ContextMenu.tsx` on the shadcn `DropdownMenu`). Controller tests first, then an e2e.
 2. **Try point and ask in a real Claude Code session**
    (`claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp`), and fix what a
    real agent trips on (tool descriptions, error hints).

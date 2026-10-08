@@ -60,6 +60,21 @@ export interface CursorChip {
   refused: boolean
 }
 
+/** The right-click menu: where it opened, on what, and why each action is unavailable (null: available). */
+export interface ContextMenuView {
+  /** Bumped per opening, so the menu anchors afresh at each click. */
+  id: number
+  /** Overlay coordinates of the click. */
+  at: Point
+  locator: string
+  name: string
+  moveUp: string | null
+  moveDown: string | null
+  remove: string | null
+}
+
+export type MenuAction = 'selectParent' | 'moveUp' | 'moveDown' | 'remove'
+
 export type CanvasStatus = 'loading' | 'engine' | 'blocked' | 'no-locators' | 'build-error' | 'ready'
 
 export interface CanvasView {
@@ -76,6 +91,7 @@ export interface CanvasView {
   updating: boolean
   drop: DropView | null
   cursor: CursorChip | null
+  menu: ContextMenuView | null
 }
 
 export const EMPTY_VIEW: CanvasView = {
@@ -87,6 +103,16 @@ export const EMPTY_VIEW: CanvasView = {
   updating: false,
   drop: null,
   cursor: null,
+  menu: null,
+}
+
+/** An open right-click menu (client coordinates), and the epoch whose DOM it was read from. */
+interface Menu extends Omit<ContextMenuView, 'at'> {
+  client: Point
+  epoch: number
+  /** Sibling locators the moves aim at. */
+  prev: string | null
+  next: string | null
 }
 
 interface Gesture {
@@ -136,6 +162,9 @@ export class CanvasController {
   private epoch = 0
   private attachedAt = 0
   private view: CanvasView = EMPTY_VIEW
+  private menu: Menu | null = null
+  /** Bumped per right-click; a menu still loading for an older one is dropped. */
+  private menuRequest = 0
 
   readonly api: CanvasApi = {
     elements: (locator) => this.elementsOf(locator).filter(isHTMLElement),
@@ -188,6 +217,7 @@ export class CanvasController {
       ['dragleave', this.onDragLeave],
       ['drop', this.onDrop],
       ['keydown', this.onKeyDown],
+      ['contextmenu', this.onContextMenu],
     ]
     for (const [type, fn, options] of listeners) o.addEventListener(type, fn as EventListener, options)
     // The designer's own layout can move the canvas without resizing the iframe.
@@ -228,6 +258,7 @@ export class CanvasController {
     this.awaitingEdit = false
     this.held = null
     this.epoch++
+    this.closeMenu()
     this.previews.reset()
     this.info.clear()
     designer.getState().bumpRevision()
@@ -238,6 +269,7 @@ export class CanvasController {
     this.awaitingEdit = false
     this.held = null
     this.epoch++
+    this.closeMenu()
     this.info.clear()
     this.previews.clear()
     this.settlePress()
@@ -249,10 +281,14 @@ export class CanvasController {
     if (s.history !== prev.history) {
       this.awaitingEdit = true
       this.epoch++
+      this.closeMenu()
       this.session.expectUpdate(s.lastEdit)
       this.session.scheduleLayout()
     }
     if (s.details && s.details !== prev.details) this.info.seed(s.details)
+    if (this.menu && (s.selected !== this.menu.locator || s.zoom !== prev.zoom || s.mode !== prev.mode || s.drag !== null)) {
+      this.closeMenu()
+    }
     if (s.selected !== prev.selected) {
       this.reveal = s.selected
       if (this.awaitingEdit && this.session.updating && !this.held) this.held = { selection: this.view.selection }
@@ -528,6 +564,7 @@ export class CanvasController {
   // Wheel and keyboard
 
   private readonly onWheel = (e: WheelEvent): void => {
+    this.closeMenu() // the content scrolls out from under it
     const s = designer.getState()
     const doc = this.session.doc
     const t = this.session.transform()
@@ -544,6 +581,98 @@ export class CanvasController {
     let dy = (e.deltaY * unit) / t.scale
     if (e.shiftKey && dx === 0) [dx, dy] = [dy, 0]
     scrollTargetAt(doc, point, dx, dy).scrollBy({ left: dx, top: dy, behavior: 'instant' })
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Right-click menu
+
+  /**
+   * In design mode a right-click selects what is under the cursor, like a press, and opens the
+   * menu there; the browser's own menu never shows over the canvas. Nothing opens over empty
+   * canvas, during a drag, or while an edit renders (the DOM's locators can't be trusted:
+   * `stale`). Interact mode leaves the right-click to the app.
+   */
+  private readonly onContextMenu = (e: MouseEvent): void => {
+    const s = designer.getState()
+    if (s.mode !== 'design') return
+    e.preventDefault()
+    this.closeMenu()
+    if (this.gesture?.dragging || this.stale) return
+    const client = { x: e.clientX, y: e.clientY }
+    const hit = this.hitAt(client)
+    const locator = hit ? locatorOf(hit) : null
+    if (locator === null) return
+    s.select(locator)
+    void this.openMenu(client, locator, this.epoch, ++this.menuRequest)
+  }
+
+  private async openMenu(client: Point, locator: string, since: number, request: number): Promise<void> {
+    let menu: Omit<Menu, 'id' | 'client' | 'epoch'>
+    try {
+      menu = await this.menuFor(locator)
+    } catch (error) {
+      toast.error(`No menu for this element: ${errorMessage(error)}`, { id: REFUSED_TOAST })
+      return
+    }
+    // Something happened meanwhile: another right-click, a click, a re-render.
+    if (request !== this.menuRequest || since !== this.epoch || this.stale || designer.getState().selected !== locator) return
+    this.menu = { ...menu, id: request, client, epoch: since }
+    this.session.scheduleLayout()
+  }
+
+  /** What each menu action can do for `locator`, from the engine's details (DOM: `.map` copies). */
+  private async menuFor(locator: string): Promise<Omit<Menu, 'id' | 'client' | 'epoch'>> {
+    const load = (l: string) => this.detailsFor(l) ?? this.info.load(l)
+    const details = await load(locator)
+    const base = { locator, name: details.name, prev: null, next: null }
+    if (isRootLocator(locator) || details.parent === null) {
+      const why = `it is the root of ${parseLocator(locator)?.scope ?? 'its component'}`
+      return { ...base, moveUp: why, moveDown: why, remove: why }
+    }
+    if (!details.isDirect || this.elementsOf(locator).length > 1) {
+      const why = 'it is rendered from a {…} expression'
+      return { ...base, moveUp: why, moveDown: why, remove: why }
+    }
+    const siblings = (await load(details.parent)).children
+    const i = siblings.indexOf(locator)
+    const neighbour = async (at: string | undefined, end: string, side: string) => {
+      if (at === undefined) return { locator: null, why: end }
+      const d = await load(at)
+      return { locator: at, why: d.isDirect ? null : `the element ${side} it is rendered from a {…} expression` }
+    }
+    const [up, down] = await Promise.all([
+      neighbour(i > 0 ? siblings[i - 1] : undefined, 'it is already first', 'before'),
+      neighbour(siblings[i + 1], 'it is already last', 'after'),
+    ])
+    return { ...base, prev: up.locator, next: down.locator, moveUp: up.why, moveDown: down.why, remove: null }
+  }
+
+  /** Close the right-click menu (the menu itself calls this on Escape and outside clicks). */
+  closeMenu(): void {
+    this.menuRequest++
+    if (this.menu === null) return
+    this.menu = null
+    this.session.scheduleLayout()
+  }
+
+  /** Run a menu action on the element the menu opened on, then close it. */
+  async runMenuAction(action: MenuAction): Promise<void> {
+    const menu = this.menu
+    this.closeMenu()
+    if (menu === null) return
+    if (action === 'selectParent') return this.selectParent(menu.locator)
+    if (menu[action] !== null) return
+    if (action === 'remove') return this.removeNode(menu.locator, menu.epoch)
+    const up = action === 'moveUp'
+    const target = up ? menu.prev : menu.next
+    if (target === null) return
+    const names = await this.expectedNames([menu.locator, target], menu.epoch, 'Nothing was moved')
+    if (names === null) return
+    const [name, targetName] = names
+    await dispatch(
+      { op: 'move', source: menu.locator, expectedName: name, target, expectedTargetName: targetName, placement: up ? 'before' : 'after' },
+      `Move ${name} ${up ? 'up' : 'down'}`,
+    )
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -671,7 +800,17 @@ export class CanvasController {
           : { at, kind: 'insert', subject: s.drag?.kind === 'palette' ? s.drag.template.label : 'Component', target, refused: ds?.ok === false }
     }
 
-    this.publish({ status, bounds, hover, selection, moving, updating: this.stale, drop, cursor })
+    const m = this.menu
+    const menu: ContextMenuView | null = m && {
+      id: m.id,
+      at: { x: m.client.x - o.left, y: m.client.y - o.top },
+      locator: m.locator,
+      name: m.name,
+      moveUp: m.moveUp,
+      moveDown: m.moveDown,
+      remove: m.remove,
+    }
+    this.publish({ status, bounds, hover, selection, moving, updating: this.stale, drop, cursor, menu })
   }
 
   private status(s: DesignerState, doc: Document | null): CanvasStatus {

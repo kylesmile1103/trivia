@@ -52,6 +52,8 @@ class FakeEngine {
   hold: Promise<void> | null = null
   /** While set, an apply is written at once but its reply waits for it (a slow answer). */
   delayReply: Promise<void> | null = null
+  /** Indices of children rendered from a `{…}` expression (`isDirect: false`). */
+  readonly indirect = new Set<number>()
   private entries = 0
 
   private indexOf(locator: string): number {
@@ -75,7 +77,7 @@ class FakeEngine {
       line: 1,
       column: 1,
       isRoot,
-      isDirect: true,
+      isDirect: isRoot || !this.indirect.has(this.indexOf(locator)),
       parent: isRoot ? null : ROOT,
       children: isRoot ? this.children.map((_, i) => at(`0.${i}`)) : [],
       attributes: [],
@@ -325,6 +327,14 @@ function mountCanvas(engine: FakeEngine) {
       pointer('pointerup', to)
       await idle()
     },
+    /** A right-click; true when the browser's own menu was suppressed. */
+    async rightClick(p: Point): Promise<boolean> {
+      const event = new MouseEvent('contextmenu', { button: 2, clientX: p.x, clientY: p.y, bubbles: true, cancelable: true })
+      overlay.dispatchEvent(event)
+      await idle()
+      return event.defaultPrevented
+    },
+    controller,
     async press(key: string) {
       overlay.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
       await idle()
@@ -763,3 +773,115 @@ describe('a full reload while an edit renders (finding 16)', () => {
     expect(c.view().selection?.locator).toBe(at('0.2'))
   })
 })
+
+describe('the right-click menu', () => {
+  it('selects the element under the cursor and opens its menu there', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    expect(await c.rightClick(pointOf(1))).toBe(true)
+    expect(designer.getState().selected).toBe(at('0.1'))
+    expect(c.view().menu).toMatchObject({ at: pointOf(1), locator: at('0.1'), name: 'button', moveUp: null, moveDown: null, remove: null })
+  })
+
+  it('says why an action is unavailable: the ends, the root, and {…} neighbours', async () => {
+    engine.indirect.add(2)
+    const c = await open(['h2', 'button', 'p', 'span'])
+    await c.rightClick(pointOf(0))
+    expect(c.view().menu).toMatchObject({ moveUp: 'it is already first', moveDown: null })
+    await c.rightClick(pointOf(1))
+    expect(c.view().menu?.moveDown).toBe('the element after it is rendered from a {…} expression')
+    await c.rightClick(pointOf(3))
+    expect(c.view().menu).toMatchObject({ moveUp: 'the element before it is rendered from a {…} expression', moveDown: 'it is already last' })
+    await c.rightClick(pointOf(2))
+    expect(c.view().menu).toMatchObject({ moveUp: 'it is rendered from a {…} expression', remove: 'it is rendered from a {…} expression' })
+    await c.rightClick({ x: 300, y: 5 }) // the root <div>, outside every child
+    expect(c.view().menu).toMatchObject({ locator: ROOT, moveUp: 'it is the root of Page', remove: 'it is the root of Page' })
+  })
+
+  it('moves the element down past its next sibling, guarding both names', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.rightClick(pointOf(0))
+    await c.controller.runMenuAction('moveDown')
+    await idle()
+    expect(engine.ops.at(-1)).toEqual({ op: 'move', source: at('0.0'), expectedName: 'h2', target: at('0.1'), expectedTargetName: 'button', placement: 'after' })
+    expect(engine.children).toEqual(['button', 'h2', 'p'])
+    expect(c.view().menu).toBeNull()
+  })
+
+  it('moves the element up before its previous sibling', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.rightClick(pointOf(2))
+    await c.controller.runMenuAction('moveUp')
+    await idle()
+    expect(engine.ops.at(-1)).toEqual({ op: 'move', source: at('0.2'), expectedName: 'p', target: at('0.1'), expectedTargetName: 'button', placement: 'before' })
+    expect(engine.children).toEqual(['h2', 'p', 'button'])
+  })
+
+  it('deletes the element and selects its parent, as Delete and ↑ do', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.rightClick(pointOf(1))
+    await c.controller.runMenuAction('selectParent')
+    await idle()
+    expect(designer.getState().selected).toBe(ROOT)
+    await c.rightClick(pointOf(1))
+    await c.controller.runMenuAction('remove')
+    await idle()
+    expect(engine.ops.at(-1)).toEqual({ op: 'remove', target: at('0.1'), expectedName: 'button' })
+    expect(engine.children).toEqual(['h2', 'p'])
+  })
+
+  it('does not run an unavailable action', async () => {
+    const c = await open(['h2', 'button'])
+    await c.rightClick(pointOf(0))
+    await c.controller.runMenuAction('moveUp')
+    await idle()
+    expect(engine.ops).toEqual([])
+  })
+
+  it('opens nothing on empty canvas, but still keeps the browser menu away', async () => {
+    const c = await open(['h2', 'button'])
+    await c.click(pointOf(0))
+    expect(await c.rightClick({ x: 600, y: 500 })).toBe(true)
+    expect(c.view().menu).toBeNull()
+    expect(designer.getState().selected).toBe(at('0.0'))
+  })
+
+  it('leaves the browser menu to the app in interact mode', async () => {
+    const c = await open(['h2', 'button'])
+    designer.getState().setMode('interact')
+    expect(await c.rightClick(pointOf(0))).toBe(false)
+    expect(c.view().menu).toBeNull()
+  })
+
+  it('opens nothing while an edit renders', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.drag(pointOf(1), pointOf(0, 'top'))
+    expect(c.view().updating).toBe(true)
+    expect(await c.rightClick(pointOf(2))).toBe(true)
+    expect(c.view().menu).toBeNull()
+  })
+
+  it('closes when the app re-renders, so a stale menu never acts', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.rightClick(pointOf(1))
+    expect(c.view().menu).not.toBeNull()
+    engine.children = ['p', 'h2', 'button'] // an edit from elsewhere
+    c.hmr()
+    await quiet()
+    expect(c.view().menu).toBeNull()
+    await c.controller.runMenuAction('remove')
+    await idle()
+    expect(engine.ops).toEqual([])
+  })
+
+  it('closes on Escape (the menu reports it) and when the selection moves on', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.rightClick(pointOf(1))
+    c.controller.closeMenu()
+    await idle()
+    expect(c.view().menu).toBeNull()
+    await c.rightClick(pointOf(1))
+    await c.click(pointOf(2))
+    expect(c.view().menu).toBeNull()
+  })
+})
+

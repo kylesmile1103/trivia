@@ -557,3 +557,31 @@ test('an edit made outside the designer bumps the revision and drops previews (H
   await expect(app(page).locator('style#trivia-preview')).toHaveCount(0)
   await expect(app(page).locator('[data-trivia-preview-id]')).toHaveCount(0)
 })
+
+test('the right-click menu moves an element down and deletes one, and both undo byte for byte', async ({ page }) => {
+  await openCanvas(page)
+  const cancel = app(page).getByRole('button', { name: 'Cancel' })
+  const at = center(await box(cancel))
+  await page.mouse.click(at.x, at.y, { button: 'right' })
+  const menu = page.getByRole('menu', { name: 'Actions for Button' })
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Move up' })).toBeDisabled() // already first
+  await menu.getByRole('menuitem', { name: 'Move down' }).click()
+  await expect(menu).toBeHidden()
+  await expect.poll(dashboard).toContain('<Button>Save changes</Button>\n          <Button variant="ghost">Cancel</Button>')
+  await expect(app(page).getByRole('button', { name: 'Cancel' })).toBeVisible()
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  await expect.poll(dashboard).toBe(original)
+
+  // Delete through the menu, once the canvas shows the undo: until then a right-click opens
+  // nothing (or its action is refused), as the canvas waits for its render.
+  await expect(app(page).locator('[data-slot=card-footer] button').first()).toHaveText('Cancel')
+  await expect(page.getByTestId('canvas-overlay')).not.toHaveAttribute('aria-busy')
+  const save = center(await box(app(page).getByRole('button', { name: 'Save changes' })))
+  await page.mouse.click(save.x, save.y, { button: 'right' })
+  await page.getByRole('menu', { name: 'Actions for Button' }).getByRole('menuitem', { name: 'Delete' }).click()
+  await expect.poll(dashboard).not.toContain('Save changes')
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  await expect.poll(dashboard).toBe(original)
+})
