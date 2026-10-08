@@ -13,10 +13,12 @@ import { type ColumnContext, columnFor, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
 import { formFieldFor, kebab } from './fields.js'
 import { type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
-import { type ListPage, type ScopeValues, contractResource, fieldInfo, listPages } from './page.js'
+import { PAGE_KINDS, type PageKind, pageFiles, supportedKinds } from './scaffold.js'
+import { type ListPage, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
 export type { FormFieldInfo, FormPage } from './form.js'
+export type { PageKind } from './scaffold.js'
 export type { ColumnInfo, FieldInfo, ListPage } from './page.js'
 
 /** A Refine page Trivia can edit: a list (columns) or a form (fields). */
@@ -81,6 +83,26 @@ export function parseColumnChanges(value: unknown): ColumnChange[] {
   })
 }
 
+/** A contract resource, and which of its Refine pages exist. */
+export interface ResourcePages {
+  /** The manifest resource (`Customer`). */
+  resource: string
+  /** Its Refine resource name (`customers`). */
+  name: string
+  /** Pages registered for it in `<Refine resources>`. */
+  existing: PageKind[]
+  /** Pages its contract operations support. */
+  possible: PageKind[]
+}
+
+/** Where the app registers resources and routes. */
+interface AppShell {
+  file: string
+  scope: string
+  resourcesPath: string
+  resources: ValueDesc | undefined
+}
+
 export interface Plan {
   ops: Array<Record<string, unknown>>
   label: string
@@ -98,6 +120,30 @@ export interface RefineHost {
   outline(file: string): unknown[]
   /** An element's details (engine inspect): its attributes are what the adapter reads. */
   inspect(locator: string): unknown
+  /** The value at a value path (engine describeValue). */
+  describeValue?(path: string): unknown
+}
+
+/** The `<Refine resources>` entry named `name`. */
+function entryOf(resources: ValueDesc | undefined, name: string): ValueDesc | undefined {
+  if (resources?.kind !== 'array') return undefined
+  return resources.elements.find((e) => e.kind === 'object' && e.properties.some((p) => p.key === 'name' && p.value.kind === 'string' && p.value.value === name))
+}
+
+/** The page kinds a resource entry registers (`list: "/customers"`…). */
+function registered(resources: ValueDesc | undefined, name: string): PageKind[] {
+  const entry = entryOf(resources, name)
+  if (entry?.kind !== 'object') return []
+  return PAGE_KINDS.filter((k) => entry.properties.some((p) => p.key === k))
+}
+
+function findNode(nodes: OutlineNode[], test: (n: OutlineNode) => boolean): OutlineNode | null {
+  for (const n of nodes) {
+    if (test(n)) return n
+    const inner = findNode(n.children, test)
+    if (inner) return inner
+  }
+  return null
 }
 
 /** Most files a page scan reads. */
@@ -129,6 +175,156 @@ export class RefineAdapter {
       }
     }
     return out
+  }
+
+  /** Every contract resource with the Refine pages it has and could have (docs/product.md, slice 4). */
+  async resources(): Promise<ResourcePages[]> {
+    const manifest = await this.#manifest()
+    if (!manifest) return []
+    const app = await this.#app()
+    return manifest.resources.map((r) => {
+      const name = refineName(r)
+      return { resource: r.name, name, existing: app ? registered(app.resources, name) : [], possible: supportedKinds(r) }
+    })
+  }
+
+  /**
+   * The ops that add `kinds` (default: every kind the contract supports that is not there yet)
+   * of pages for a contract resource: the page files, its `<Refine resources>` entry, and routes.
+   */
+  async planPages(resourceName: string, kinds?: PageKind[]): Promise<Plan> {
+    const manifest = await this.#manifest()
+    const resource = contractResource(manifest, resourceName, null)
+    if (!resource) {
+      throw new ApiError('node_not_found', `the contract has no resource \`${resourceName}\` (it has ${manifest?.resources.map((r) => r.name).join(', ') ?? 'none: run contract-sync'})`)
+    }
+    const app = await this.#app()
+    if (!app) throw new ApiError('unsupported', 'no file under src/ renders <Refine resources={[…]}>: Trivia adds pages to an existing Refine app')
+    const name = refineName(resource)
+    const existing = registered(app.resources, name)
+    const supported = supportedKinds(resource)
+    const wanted = (kinds ?? supported.filter((k) => !existing.includes(k))).filter((k, i, all) => all.indexOf(k) === i)
+    for (const kind of wanted) {
+      if (!PAGE_KINDS.includes(kind)) throw new ApiError('invalid_op', `unknown page kind \`${kind}\` (list, create, edit or show)`)
+      if (!supported.includes(kind)) throw new ApiError('unsupported', `${resource.name}'s contract has no operation for a ${kind} page`)
+      if (existing.includes(kind)) throw new ApiError('conflict', `${name} already has a ${kind} page`)
+    }
+    if (wanted.length === 0) throw new ApiError('conflict', `${name} already has every page its contract supports (${existing.join(', ')})`)
+
+    const { root, uiDir, importBase } = this.#host
+    const parentDir = path.posix.dirname(uiDir)
+    const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
+    const hasRefineUi = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'views'))
+    const pagesDir = await this.#pagesDir()
+    const srcImport = parentImport.slice(0, parentImport.lastIndexOf('/')) || '@'
+    const files = pageFiles(resource, wanted, {
+      ui: importBase,
+      refineUi: hasRefineUi ? `${parentImport}/refine-ui` : null,
+      typesImport: manifest!.modules.types?.importPath ?? '@/api/generated/types.gen',
+      pagesDir,
+      pagesImport: `${srcImport}/${pagesDir.split('/').slice(1).join('/')}`,
+    })
+    for (const f of files) {
+      if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
+    }
+    const ops: Plan['ops'] = files.map((f) => ({ op: 'createFile', file: f.file, content: f.content }))
+
+    // The resource entry: new keys on the existing one, or a new entry.
+    const routes = Object.fromEntries(files.map((f) => [f.kind, f.route]))
+    if (entryOf(app.resources, name)) {
+      for (const kind of PAGE_KINDS.filter((k) => routes[k])) {
+        ops.push({ op: 'setProperty', path: `${app.resourcesPath}[name=${name}]`, prop: kind, value: JSON.stringify(routes[kind]) })
+      }
+    } else {
+      const keys = [`name: ${JSON.stringify(name)}`, ...PAGE_KINDS.filter((k) => routes[k]).map((k) => `${k}: ${JSON.stringify(routes[k])}`)]
+      ops.push({ op: 'insertElement', path: app.resourcesPath, value: `{\n  ${keys.join(',\n  ')},\n}` })
+    }
+
+    // The routes: before the catch-all among the resource routes, else after the last of them.
+    const anchor = this.#routeAnchor(app)
+    if (!anchor) throw new ApiError('unsupported', `${app.file} has no <Route path="…"> to put the new routes next to`)
+    files.forEach((f, i) => {
+      // Before the catch-all, each insert pushes it one further; after the last route, each new
+      // one is the next anchor. Either way the i-th insert names slot index + i.
+      ops.push({
+        op: 'insert',
+        target: `${anchor.parent}.${anchor.index + i}`,
+        expectedName: 'Route',
+        placement: anchor.placement,
+        snippet: `<Route path="${f.route}" element={<${f.component} />} />`,
+        imports: [{ name: f.component, source: f.importPath }],
+      })
+    })
+    return { ops, label: `Add ${wanted.join(', ')} ${wanted.length === 1 ? 'page' : 'pages'} for ${humanize(name)}` }
+  }
+
+  /** The file and component rendering `<Refine resources>`. */
+  async #app(): Promise<AppShell | null> {
+    const { root } = this.#host
+    const candidates: string[] = []
+    const walk = async (dir: string): Promise<void> => {
+      let entries: fs.Dirent[]
+      try {
+        entries = await fsp.readdir(path.join(root, dir), { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const rel = path.posix.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (!entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name) && rel.split('/').length < 4) await walk(rel)
+        } else if (/\.(tsx|jsx)$/.test(entry.name)) {
+          const text = await fsp.readFile(path.join(root, rel), 'utf8').catch(() => '')
+          if (/<Refine[\s>]/.test(text) && /resources=\{/.test(text)) candidates.push(rel)
+        }
+      }
+    }
+    await walk('src')
+    for (const file of candidates.sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
+      const refine = findNode(this.#host.outline(file) as OutlineNode[], (n) => n.name === 'Refine')
+      if (!refine) continue
+      const scope = refine.locator.split('#').at(-2)!
+      const resourcesPath = `${file}#${scope}#<Refine>.resources`
+      let resources: ValueDesc | undefined
+      try {
+        resources = this.#host.describeValue?.(resourcesPath) as ValueDesc | undefined
+      } catch {
+        resources = undefined
+      }
+      return { file, scope, resourcesPath, resources }
+    }
+    return null
+  }
+
+  /** Where new routes go: before `<Route path="*">` next to the resource routes, else after the last route with a path. */
+  #routeAnchor(app: AppShell): { parent: string; index: number; placement: 'before' | 'after' } | null {
+    const outline = this.#host.outline(app.file) as OutlineNode[]
+    const routes: Array<{ locator: string; path: string }> = []
+    const walk = (nodes: OutlineNode[]) => {
+      for (const n of nodes) {
+        if (n.name === 'Route') {
+          const attrs = ((this.#host.inspect(n.locator) as { attributes?: Array<{ name: string; value: unknown }> }).attributes ?? [])
+          const p = attrs.find((a) => a.name === 'path')?.value
+          if (typeof p === 'string') routes.push({ locator: n.locator, path: p })
+        }
+        walk(n.children)
+      }
+    }
+    walk(outline)
+    const resourceRoutes = routes.filter((r) => r.path.startsWith('/'))
+    const last = resourceRoutes.at(-1)
+    if (!last) return null
+    const parent = last.locator.slice(0, last.locator.lastIndexOf('.'))
+    const slot = (loc: string) => Number(loc.slice(loc.lastIndexOf('.') + 1))
+    const catchAll = routes.find((r) => r.path === '*' && r.locator.slice(0, r.locator.lastIndexOf('.')) === parent)
+    return catchAll ? { parent, index: slot(catchAll.locator), placement: 'before' } : { parent, index: slot(last.locator), placement: 'after' }
+  }
+
+  /** The folder pages live in: next to the existing list pages, else src/pages. */
+  async #pagesDir(): Promise<string> {
+    const lists = (await this.pages()).filter((p) => p.kind === 'list')
+    const dir = lists[0]?.file.split('/').slice(0, -2).join('/')
+    return dir || 'src/pages'
   }
 
   /**

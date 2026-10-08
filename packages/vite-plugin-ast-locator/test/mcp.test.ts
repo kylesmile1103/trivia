@@ -66,6 +66,7 @@ describe('tools', () => {
     const client = await connect()
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'trivia_add_pages',
       'trivia_apply',
       'trivia_contract_drift',
       'trivia_edit_columns',

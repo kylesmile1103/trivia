@@ -146,7 +146,15 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
     and **Sync** next to "Spec changed".
   - Tests: a plugin test that changes the spec, syncs, applies every fix and type-checks the
     result; `e2e/refine/drift.spec.ts`.
-- Known limits of slices 1–3:
+- **Slice 4, new resource: done (2026-10-09).**
+  - Engine: value paths reach JSX attributes (`<Refine>.resources`).
+  - Plugin: `src/refine/scaffold.ts` (list, create, edit and show pages, written like the
+    others), with `/refine/resources`, `/refine/pages/plan` and MCP `trivia_add_pages`.
+  - Designer: in a Refine app, each resource in the Data tab shows its pages and offers
+    **Add … pages**. The raw TanStack Table and Create form actions are hidden there.
+  - Tests: plugin tests that add Accounts' missing pages and a new Cards resource from a spec
+    change, type-check them, and undo; `e2e/refine/pages.spec.ts`.
+- Known limits of slices 1–4:
   - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
     drops a selection in that file rather than guess, and so does an agent's edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
@@ -159,6 +167,10 @@ canvas ── designer: Columns panel ┴──── dispatches the ops ──�
   - Drift reads enum options from a column header's source excerpt (600 bytes). A longer header
     gets no enum verdict rather than a wrong one. A rebuilt column or field takes the generated
     shape: custom cells, widgets or messages in it are replaced.
+  - New pages assume refine-ui and shadcn's `field` in their usual places, Refine's route
+    conventions, and an app that renders `<Refine resources={[…]}>` with `<Route path>`s. A
+    list shows the first six scalar fields; object and array body fields are left as comments
+    in forms.
 
 ## Decisions to review (⚑)
 

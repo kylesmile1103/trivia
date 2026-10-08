@@ -49,6 +49,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_edit_columns` | `{ file, component?, changes: ColumnChange[] (1+), label }` | `ApplyResult & { page: ListPage, selection }` |
 | `trivia_edit_fields` | `{ file, component?, changes: FieldChange[] (1+), label }` | `ApplyResult & { page: FormPage, selection }` |
 | `trivia_contract_drift` (read-only) | — | `{ spec, pages: PageDrift[], note? }` |
+| `trivia_add_pages` | `{ resource, pages?: PageKind[], label }` | `ApplyResult & { files, resources }` |
 | `trivia_screenshot` (read-only) | — | an image block: the canvas as a PNG (no structured result) |
 | `trivia_sync_openapi` | `{ input?, zod?, force? }` | `SyncResult & { note? }` |
 | `trivia_apply` | `{ ops: Op[] (1+), label }` | `ApplyResult & { selection: SelectionState }` |
@@ -69,7 +70,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 - `trivia_undo` undoes the newest entry of the shared history only if its label is the one
   given (the agent passes `history.undoLabel` from its last result or from
   `trivia_get_selection`). The user's own edits are never undone by mistake.
-- `trivia_get_page`, `trivia_edit_columns` and `trivia_edit_fields` are the Refine adapter (`docs/product.md`,
+- `trivia_get_page`, `trivia_edit_columns`, `trivia_edit_fields`, `trivia_contract_drift` and
+  `trivia_add_pages` are the Refine adapter (`docs/product.md`,
   `docs/api.md` `refine/*`). `trivia_get_page` reads a file's list and form pages: the selected
   element's file when none is given, every page under `src/` with neither. Each page has its
   columns or fields as the source has them and the contract fields it doesn't have yet.
@@ -80,6 +82,9 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   `trivia_contract_drift` lists where pages no longer match the contract (`docs/api.md`
   `refine/drift`). Each issue's `fix.changes` go to `trivia_edit_columns` or
   `trivia_edit_fields`; a `note` says to sync first when the spec file changed.
+  `trivia_add_pages` generates a contract resource's missing pages (`docs/api.md`
+  `refine/pages/plan`); with neither file nor selection, `trivia_get_page` lists the resources
+  and the pages each has and could have.
   Fixes name columns and fields by key (a `rebuild` finds the position when it is planned), so a
   list read before another fix ran still applies correctly.
   `trivia_apply` also takes the value ops (`insertElement`, `removeElement`, `moveElement`,

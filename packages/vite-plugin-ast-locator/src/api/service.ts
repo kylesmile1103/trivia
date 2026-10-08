@@ -79,6 +79,7 @@ export class EngineService {
       manifest: () => this.manifest(),
       outline: (file) => this.outline(file),
       inspect: (locator) => this.inspect(locator),
+      describeValue: (path) => this.describeValue(path),
     })
   }
 
@@ -107,6 +108,11 @@ export class EngineService {
   describeValues(file: string): unknown[] {
     if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
     return unwrap<unknown[]>(this.#options.engine.describeValues(this.#options.root, file))
+  }
+
+  /** The value at a value path (`<file>#<scope>#<path>`), unwrapped to its literal. */
+  describeValue(path: string): unknown {
+    return unwrap<unknown>(this.#options.engine.describeValue(this.#options.root, path))
   }
 
   history(): HistoryState {

@@ -362,3 +362,13 @@ export interface ContractDrift {
   pages: PageDrift[]
 }
 
+export type PageKind = 'list' | 'create' | 'edit' | 'show'
+
+/** A contract resource and its Refine pages (GET /refine/resources). */
+export interface ResourcePages {
+  resource: string
+  name: string
+  existing: PageKind[]
+  possible: PageKind[]
+}
+

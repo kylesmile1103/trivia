@@ -89,7 +89,8 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   **Slice 2 (form fields) is done too:** a create/edit form's zod rule, default and
   Controller are kept in step, from the request body. **Slice 3 (contract drift):** after a spec
   change, the Data tab (and `trivia_contract_drift`) lists each page's broken references, with a
-  fix each, and offers Sync.
+  fix each, and offers Sync. **Slice 4 (new resource):** a contract resource's missing list,
+  create, edit and show pages, registered in `<Refine resources>` and routed, as one undo entry.
 
   The user was away for the slice-1/2 design calls; they are marked ⚑ in `product.md` for
   review.
@@ -100,11 +101,11 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
   designer now rasterizes the SVG itself (`features/canvas/capture.ts`).
 
 **Gate on `main` (all green):**
-- `cargo test --workspace` 273 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
-- Vitest: plugin 131, designer 444 (including 6 architecture rules), contract-sync 79.
+- `cargo test --workspace` 274 passed; clippy `-D warnings` clean. The shell: 5 tests, clippy clean.
+- Vitest: plugin 135, designer 444 (including 6 architecture rules), contract-sync 79.
 - napi crash suite 33/33, with RSS bounds.
 - `pnpm typecheck` clean; designer oxlint has 0 errors.
-- Playwright 51/51 (playground and refine projects), twice in a row.
+- Playwright 52/52 (playground and refine projects), twice in a row.
 - Not re-done in sessions 2–3: the Claude in Chrome manual pass. Session 1's is described below,
   and Playwright covers the same flows.
 
@@ -246,9 +247,13 @@ writes `useQuery` hooks against it.
 ## 7. Backlog / next steps (in priority order)
 
 The order is the product's (`docs/product.md`, Slices):
-1. **Slice 4, new resource:** list, create, edit and show pages plus the resource entry and
-   routes.
-2. Have the user try it on one of their real internal tools.
+1. **Have the user try it on one of their real internal tools.** Slices 1–4 are done; what
+   breaks on a real codebase decides what comes next. Likely candidates:
+   - pages whose shape the adapter doesn't read (`register()` forms, columns from a helper);
+   - other UI kits (an Ant Design or MUI adapter beside `src/refine/`);
+   - Next.js;
+   - selection that follows JSX renumbered by a value op.
+2. Review the ⚑ decisions in `docs/product.md`.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).

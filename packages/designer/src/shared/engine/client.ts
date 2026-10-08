@@ -14,9 +14,11 @@ import type {
   HistoryResult,
   HistoryState,
   ManifestState,
+  PageKind,
   NodeDetails,
   Op,
   RefinePage,
+  ResourcePages,
   SelectionState,
 } from './types'
 
@@ -84,5 +86,7 @@ export const engine = {
   planFields: (file: string, component: string, changes: FieldChange[]) =>
     post<ColumnPlan>('/refine/fields/plan', { file, component, changes }),
   contractDrift: () => request<ContractDrift>('/refine/drift'),
+  refineResources: () => request<ResourcePages[]>('/refine/resources'),
+  planPages: (resource: string, pages?: PageKind[]) => post<ColumnPlan>('/refine/pages/plan', { resource, ...(pages ? { pages } : {}) }),
   sync: () => post<{ files: number; contractChanged: boolean; git: string }>('/sync', {}),
 }

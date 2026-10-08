@@ -317,8 +317,9 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         'The Refine pages of a file. A list page (a component calling useTable) has its columns as the source has them ' +
         '(key, header label, filter, the contract field it shows); a form page (useForm with a zodResolver) has its fields ' +
         '(label, widget, zod rule). Each lists the contract fields it does not have yet (available, with type and enum ' +
-        'values from the OpenAPI contract). Without a file, the selected element\'s file; with neither, every page in src/. ' +
-        'Use it before trivia_edit_columns or trivia_edit_fields.',
+        'values from the OpenAPI contract). Without a file, the selected element\'s file; with neither, every page in src/ ' +
+        'and each contract resource with the pages it has and could have (for trivia_add_pages). ' +
+        'Use it before trivia_edit_columns, trivia_edit_fields or trivia_add_pages.',
       inputSchema: { file: z.string().min(1).optional().describe('Project-relative file, e.g. "src/pages/customers/list.tsx"') },
       annotations: reads,
     },
@@ -327,12 +328,13 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const selected = service.selection().selection?.locator.split('#')[0]
         const target = file ?? selected
         const pages = target ? await service.refine.page(target) : await service.refine.pages()
+        const resources = target ? undefined : await service.refine.resources()
         const hint =
           pages.length === 0
             ? `${target ?? 'src/'} has no Refine list page (a component calling useTable from @refinedev/react-table).`
             : null
         return {
-          data: { file: target ?? null, pages, ...(hint ? { hint } : {}) },
+          data: { file: target ?? null, pages, ...(resources ? { resources } : {}), ...(hint ? { hint } : {}) },
           summary:
             hint ??
             pages
@@ -371,6 +373,35 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
             (count === 0
               ? 'Every Refine page matches the contract.'
               : d.pages.map((p) => `${p.component} (${p.file}): ${p.issues.map((i) => i.message).join('; ')}`).join('\n')),
+        }
+      }),
+  )
+
+  server.registerTool(
+    'trivia_add_pages',
+    {
+      title: 'Add pages for a resource',
+      description:
+        'Generate the Refine pages a contract resource is missing (list, create, edit, show), written the way the ' +
+        'other pages are (columns, forms and fields from the OpenAPI contract), register them in <Refine resources> and ' +
+        'add their routes, as one entry in the designer\'s undo history (undo deletes the files). Without pages: every ' +
+        'kind the contract supports that the app doesn\'t have yet. trivia_get_page lists the resources and their pages.',
+      inputSchema: {
+        resource: z.string().min(1).describe('The contract resource, e.g. "Account" (or its Refine name, "accounts")'),
+        pages: z.array(z.enum(['list', 'create', 'edit', 'show'])).min(1).optional(),
+        label: z.string().min(1).describe('A few words for the undo menu, e.g. "Add account pages"'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ resource, pages, label }) =>
+      run(async () => {
+        const entry = `${AGENT_LABEL}${label.trim()}`
+        const plan = await service.refine.planPages(resource, pages)
+        const result = await service.batch(plan.ops, entry, { by: 'agent' })
+        const files = plan.ops.filter((o) => o['op'] === 'createFile').map((o) => o['file'] as string)
+        return {
+          data: { ...result, files, resources: await service.refine.resources() },
+          summary: `Applied "${entry}": ${plan.label} (${files.join(', ')}).`,
         }
       }),
   )

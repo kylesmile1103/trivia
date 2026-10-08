@@ -64,6 +64,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
 | POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label }` |
 | GET | `/@trivia/api/refine/drift` | — | `{ spec: Drift \| null, pages: PageDrift[] }` |
+| GET | `/@trivia/api/refine/resources` | — | `ResourcePages[]` |
+| POST | `/@trivia/api/refine/pages/plan` | `{ resource, pages?: PageKind[] }` | `{ ops: Op[], label }` |
 | GET | `/@trivia/api/screenshot/next` | — | `{ id: string \| null }` (long poll) |
 | POST | `/@trivia/api/screenshot` | `{ id, png, width, height }` or `{ id, error }` | `null` |
 
@@ -176,6 +178,32 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   when it is planned, as a remove plus an add at that index with the same label. So a fix read
   before another fix ran still lands in the right place: a removal names its key, and an added
   field appends.
+- `refine/resources` and `refine/pages/plan` add pages (`docs/product.md`, slice 4).
+  `ResourcePages = { resource, name, existing, possible }` for each contract resource:
+  - `name` is its Refine name (the collection path's last segment);
+  - `existing` are the page kinds its `<Refine resources>` entry registers;
+  - `possible` are the kinds its operations support: `list` (list), `create` (create with a
+    body), `edit` (update with a body), `show` (get).
+
+  The app is the `src/` file that renders `<Refine resources={[…]}>`. A plan for `resource`
+  (manifest or Refine name) adds the `pages` kinds asked for, by default every possible one it
+  lacks:
+  - one `createFile` per page, `<pagesDir>/<name>/<kind>.tsx`, beside the existing list pages
+    (else `src/pages`), written as the other pages are:
+    - a list: `useTable`, columns for up to six scalar fields (as slice 1 writes them), and an
+      Edit/Show actions column;
+    - create and edit: a zod schema, `useForm` and a Controller per scalar body field (as
+      slice 2 writes them);
+    - show: `useShow` and a `<dl>` of every field.
+  - `setProperty` on the resource's entry (`<Refine>.resources[name=…]`) for each new route
+    (`/name`, `/name/create`, `/name/edit/:id`, `/name/show/:id`), or an `insertElement` of a
+    new entry;
+  - an `insert` of each `<Route path element>`, before the catch-all `<Route path="*">` beside
+    the resource routes (else after the last of them), with the page's import.
+
+  It is one undo entry, and undo deletes the files. Refused: an unknown resource (404), a kind
+  its contract can't support (422), a page it already has or an existing file (409; nothing is
+  overwritten), and an app without `<Refine resources>` (422).
 - `screenshot/next` and `screenshot` are the designer's half of the MCP `trivia_screenshot` tool
   (`docs/mcp.md`). The plugin has no browser, so the open designer holds a long poll on
   `screenshot/next` (`id: null` after 25 s with no request) and answers each id it gets with
@@ -234,8 +262,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `removeProperty`) edit object and array literals rather than JSX. They address them by
   **value path** `<file>#<scope>#<head><step>*` (`crate::values`):
   - `scope` is a top-level function named as locators name it, or `module`;
-  - `head` is a binding at the top of that scope's body (`columns`) or its first call to a
-    function (`useForm()`);
+  - `head` is a binding at the top of that scope's body (`columns`), its first call to a
+    function (`useForm()`), or its first JSX element with a tag name, followed by an attribute
+    (`<Refine>.resources`: the expression in `resources={…}`);
   - steps are `.prop`, `[key=value]` (the element that is an object whose `key` is that string)
     and `[i]`.
 

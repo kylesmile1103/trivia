@@ -96,6 +96,20 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
       },
     ],
     ['/refine/drift', { GET: () => service.refine.drift() }],
+    ['/refine/resources', { GET: () => service.refine.resources() }],
+    [
+      '/refine/pages/plan',
+      {
+        POST: (_url, body) => {
+          const { resource, pages } = body
+          const kinds = ['list', 'create', 'edit', 'show']
+          if (typeof resource !== 'string' || (pages !== undefined && !(Array.isArray(pages) && pages.every((p) => typeof p === 'string' && kinds.includes(p))))) {
+            throw new ApiError('invalid_op', 'body must be { resource: string, pages?: ("list" | "create" | "edit" | "show")[] }')
+          }
+          return service.refine.planPages(resource, pages as Array<'list' | 'create' | 'edit' | 'show'> | undefined)
+        },
+      },
+    ],
     [
       '/refine/fields/plan',
       {

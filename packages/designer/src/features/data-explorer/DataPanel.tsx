@@ -4,11 +4,12 @@
 // either is one undo entry. A badge says when the spec changed since the code was generated.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRightIcon, FileWarningIcon, FormInputIcon, RefreshCwIcon, TableIcon } from 'lucide-react'
+import { ChevronRightIcon, FilePlusIcon, FileWarningIcon, FormInputIcon, RefreshCwIcon, TableIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { engine } from '@/shared/engine/client'
-import type { ManifestResource, ManifestState } from '@/shared/engine/types'
+import type { ManifestResource, ManifestState, PageKind, ResourcePages } from '@/shared/engine/types'
+import { dispatchBatch } from '@/shared/state/actions'
 import { endTemplateDrag, insertIntoSelection, startTemplateDrag } from '@/shared/insert'
 import { cn } from '@/shared/lib/utils'
 import { useDesigner } from '@/shared/state/store'
@@ -32,6 +33,19 @@ export function DataPanel() {
   /** Bumped on every reload, so the drift list re-reads with the manifest. */
   const [reload, setReload] = useState(0)
   const [syncing, setSyncing] = useState(false)
+  /** In a Refine app: each contract resource's pages (null: not a Refine app, or unknown). */
+  const [refine, setRefine] = useState<Map<string, ResourcePages> | null>(null)
+  const revision = useDesigner((s) => s.revision)
+  useEffect(() => {
+    let live = true
+    engine
+      .refineResources()
+      .then((list) => live && setRefine(list.some((r) => r.existing.length > 0) ? new Map(list.map((r) => [r.resource, r])) : null))
+      .catch(() => live && setRefine(null))
+    return () => {
+      live = false
+    }
+  }, [revision, reload])
 
   const refresh = useCallback(async () => {
     setReload((n) => n + 1)
@@ -88,7 +102,7 @@ export function DataPanel() {
         {ctx && (
           <ul className="grid gap-2" aria-label="Resources">
             {ctx.manifest.resources.map((resource) => (
-              <ResourceRow key={resource.name} resource={resource} ctx={ctx} />
+              <ResourceRow key={resource.name} resource={resource} ctx={ctx} pages={refine?.get(resource.name) ?? null} refine={refine !== null} />
             ))}
           </ul>
         )}
@@ -129,8 +143,34 @@ function Source({ load, onSync, syncing }: { load: Load; onSync: () => void; syn
 
 const KINDS = ['list', 'get', 'create', 'update', 'delete'] as const
 
-function ResourceRow({ resource, ctx }: { resource: ManifestResource; ctx: CodegenContext }) {
+const KIND_LABEL: Record<PageKind, string> = { list: 'List', create: 'Create', edit: 'Edit', show: 'Show' }
+
+function ResourceRow({
+  resource,
+  ctx,
+  pages,
+  refine,
+}: {
+  resource: ManifestResource
+  ctx: CodegenContext
+  /** Its Refine pages, in a Refine app. */
+  pages: ResourcePages | null
+  refine: boolean
+}) {
   const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const missing = pages ? pages.possible.filter((k) => !pages.existing.includes(k)) : []
+  const addPages = async () => {
+    setBusy(true)
+    try {
+      const plan = await engine.planPages(resource.name)
+      await dispatchBatch(plan.ops, plan.label)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
   const table = useMemo(() => tableTemplate(resource, ctx), [resource, ctx])
   const form = useMemo(() => formTemplate(resource, ctx), [resource, ctx])
   const fields = resource.entity?.fields ?? []
@@ -170,10 +210,36 @@ function ResourceRow({ resource, ctx }: { resource: ManifestResource; ctx: Codeg
           ))}
         </ul>
       )}
-      <div className="mt-1.5 flex gap-1">
-        <Action icon={<TableIcon />} label="Table" template={table} />
-        <Action icon={<FormInputIcon />} label="Create form" template={form} />
-      </div>
+      {refine ? (
+        // A Refine app: data goes through Refine's hooks, so Trivia writes Refine pages.
+        <div className="mt-1.5 grid gap-1 pl-4">
+          <div className="flex flex-wrap gap-0.5" aria-label={`${resource.name} pages`}>
+            {(pages?.possible ?? []).map((k) => (
+              <span
+                key={k}
+                className={cn(
+                  'rounded px-1 text-[10px]',
+                  pages?.existing.includes(k) ? 'bg-primary/10 text-foreground' : 'border border-dashed text-muted-foreground',
+                )}
+                title={pages?.existing.includes(k) ? `It has a ${k} page` : `No ${k} page yet`}
+              >
+                {KIND_LABEL[k]}
+              </span>
+            ))}
+          </div>
+          {missing.length > 0 && (
+            <Button variant="outline" size="xs" className="justify-self-start" disabled={busy} onClick={() => void addPages()}>
+              <FilePlusIcon />
+              Add {missing.map((k) => KIND_LABEL[k].toLowerCase()).join(', ')} {missing.length === 1 ? 'page' : 'pages'}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1.5 flex gap-1">
+          <Action icon={<TableIcon />} label="Table" template={table} />
+          <Action icon={<FormInputIcon />} label="Create form" template={form} />
+        </div>
+      )}
     </li>
   )
 }
