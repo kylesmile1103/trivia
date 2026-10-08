@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-import { apiGuard, isApiUpgrade } from './api-guard.ts'
+import { apiGuard, isApiUpgrade } from './server/api-guard.ts'
 
 /**
  * The designer lives under /__trivia/ and proxies every other path — HTTP and WebSocket —

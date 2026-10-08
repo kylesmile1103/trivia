@@ -1,0 +1,765 @@
+// @vitest-environment jsdom
+//
+// The canvas controller against the real FrameSession, store and action bus; the engine is a
+// fetch stub with positional locators and expected-name guards (mutator.rs), and the app's
+// document is rendered by hand. That makes the window between an edit returning and its HMR
+// rendering explicit: the DOM still carries the locators of the old source, so a locator read
+// from it names whatever sits at that position in the new one.
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const toasts = vi.hoisted(() => [] as string[])
+vi.mock('sonner', () => {
+  const say = (kind: string) => (message: unknown, options?: { description?: string }) => {
+    toasts.push(`${kind}: ${String(message)}${options?.description ? ` — ${options.description}` : ''}`)
+  }
+  return {
+    toast: Object.assign(say('message'), { error: say('error'), info: say('info'), success: say('success'), warning: say('warning') }),
+  }
+})
+
+import { engine as client } from '@/shared/engine/client'
+import type { ApplyResult, HistoryState, NodeDetails, Op, Placement } from '@/shared/engine/types'
+import { designer } from '@/shared/state/store'
+import { TEMPLATE_MIME, type Template } from '@/shared/template'
+
+import { type CanvasView, CanvasController, EMPTY_VIEW } from './controller'
+
+const FILE = 'src/Page.tsx'
+const at = (path: string) => `${FILE}#Page#${path}`
+const ROOT = at('0')
+
+class EngineError extends Error {
+  code: string
+  status: number
+
+  constructor(code: string, status: number, message: string) {
+    super(message)
+    this.code = code
+    this.status = status
+  }
+}
+
+/**
+ * The engine reduced to one root <div> whose children are `name#id` strings: the id only lets
+ * a test tell same-named siblings apart; the engine itself sees names, like the real one.
+ */
+class FakeEngine {
+  children: string[] = []
+  /** Every op the designer sent, refused or not. */
+  readonly ops: Op[] = []
+  /** While set, applies wait for it: the edit is on its way to disk. */
+  hold: Promise<void> | null = null
+  /** While set, an apply is written at once but its reply waits for it (a slow answer). */
+  delayReply: Promise<void> | null = null
+  private entries = 0
+
+  private indexOf(locator: string): number {
+    const m = /#0\.(\d+)$/.exec(locator)
+    const i = m ? Number(m[1]) : -1
+    if (i < 0 || i >= this.children.length) throw new EngineError('node_not_found', 404, `no node at ${locator}`)
+    return i
+  }
+
+  nameAt(locator: string): string {
+    return locator === ROOT ? 'div' : nameOf(this.children[this.indexOf(locator)]!)
+  }
+
+  inspect(locator: string): NodeDetails {
+    const isRoot = locator === ROOT
+    return {
+      locator,
+      file: FILE,
+      name: this.nameAt(locator),
+      isFragment: false,
+      line: 1,
+      column: 1,
+      isRoot,
+      isDirect: true,
+      parent: isRoot ? null : ROOT,
+      children: isRoot ? this.children.map((_, i) => at(`0.${i}`)) : [],
+      attributes: [],
+      text: null,
+    }
+  }
+
+  apply(op: Op, label: string): ApplyResult {
+    this.ops.push(op)
+    const list = [...this.children]
+    let placed: number | null = null
+    if (op.op === 'remove') {
+      this.guard(op.target, op.expectedName)
+      list.splice(this.indexOf(op.target), 1)
+    } else if (op.op === 'move') {
+      this.guard(op.source, op.expectedName)
+      this.guard(op.target, op.expectedTargetName)
+      const from = this.indexOf(op.source)
+      const [moved] = list.splice(from, 1)
+      placed = this.slot(list, op.target, op.placement, from)
+      list.splice(placed, 0, moved!)
+    } else if (op.op === 'insert') {
+      this.guard(op.target, op.expectedName)
+      placed = this.slot(list, op.target, op.placement, -1)
+      list.splice(placed, 0, /^<([\w.]+)/.exec(op.snippet)?.[1] ?? '?')
+    } else {
+      throw new EngineError('unsupported', 422, `the fake engine has no ${op.op}`)
+    }
+    this.children = list
+    const history: HistoryState = { canUndo: true, canRedo: false, undoLabel: `${label} #${++this.entries}`, redoLabel: null }
+    return { file: FILE, changed: true, locator: placed === null ? null : at(`0.${placed}`), history }
+  }
+
+  /** mutator.rs `resolve_expected`: a locator that now names another element is a 409. */
+  private guard(locator: string, expected: string | undefined): void {
+    const actual = this.nameAt(locator)
+    if (expected !== undefined && actual !== expected) {
+      throw new EngineError('stale_locator', 409, `expected <${expected}> at ${locator}, found <${actual}>`)
+    }
+  }
+
+  /** Where a node placed relative to `target` lands in `list` (the moved node already taken out at `removed`). */
+  private slot(list: string[], target: string, placement: Placement, removed: number): number {
+    if (target === ROOT) return placement === 'firstChild' ? 0 : list.length
+    let i = this.indexOf(target)
+    if (removed >= 0 && removed < i) i -= 1
+    return placement === 'before' ? i : i + 1
+  }
+}
+
+const nameOf = (child: string) => child.split('#')[0]!
+
+function serve(engine: FakeEngine): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://localhost')
+    const path = url.pathname.replace(/^\/@trivia\/api/, '')
+    const reply = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    try {
+      if (path === '/inspect') return reply({ ok: true, data: engine.inspect(url.searchParams.get('locator') ?? '') })
+      if (path === '/apply') {
+        const { op, label } = JSON.parse(String(init?.body)) as { op: Op; label: string }
+        await engine.hold
+        const result = engine.apply(op, label)
+        await engine.delayReply
+        return reply({ ok: true, data: result })
+      }
+    } catch (error) {
+      if (error instanceof EngineError) return reply({ ok: false, error: { code: error.code, message: error.message } }, error.status)
+      throw error
+    }
+    throw new Error(`the fake engine has no ${path}`)
+  }) as typeof fetch
+}
+
+// ---------------------------------------------------------------------------------------------
+// The app's document. jsdom has no layout: boxes come from data-rect, hit-testing from those.
+
+type FrameWindow = Window & typeof globalThis
+interface AppDocument {
+  win: FrameWindow
+  doc: Document
+  /** The canvas's resource-timing observers on this document (FrameSession watches for hot updates). */
+  resources: Array<(list: { getEntries(): Array<{ name: string; startTime: number; responseEnd: number }> }) => void>
+}
+
+const ROW = 30
+/** Child `i` is drawn as a 200×20 row at y = 10 + 30i (frame, client and overlay coordinates coincide). */
+function pointOf(i: number, part: 'top' | 'middle' | 'bottom' = 'middle') {
+  return { x: 50, y: 10 + ROW * i + (part === 'top' ? 3 : part === 'bottom' ? 17 : 10) }
+}
+
+function rect(x: number, y: number, width: number, height: number): DOMRect {
+  return { x, y, left: x, top: y, width, height, right: x + width, bottom: y + height, toJSON: () => ({}) } as DOMRect
+}
+
+function appDocument(): AppDocument {
+  const host = document.createElement('iframe')
+  document.body.append(host)
+  const win = host.contentWindow as FrameWindow
+  const doc = host.contentDocument!
+  const resources: AppDocument['resources'] = []
+  Object.assign(win, {
+    ResizeObserver: class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+    PerformanceObserver: class {
+      private readonly callback: AppDocument['resources'][number]
+      constructor(callback: AppDocument['resources'][number]) {
+        this.callback = callback
+      }
+      observe() {
+        resources.push(this.callback)
+      }
+      disconnect() {
+        resources.splice(resources.indexOf(this.callback) >>> 0, 1)
+      }
+    },
+  })
+  win.Element.prototype.getBoundingClientRect = function (this: Element) {
+    const [x = 0, y = 0, w = 0, h = 0] = (this.getAttribute('data-rect') ?? '').split(',').map(Number)
+    return rect(x, y, w, h)
+  }
+  const inside = (el: Element, x: number, y: number) => {
+    const r = el.getBoundingClientRect()
+    return x >= r.left && x < r.right && y >= r.top && y < r.bottom
+  }
+  doc.elementsFromPoint = (x: number, y: number) => [...doc.querySelectorAll('[data-rect]')].filter((el) => inside(el, x, y)).reverse()
+  return { win, doc, resources }
+}
+
+/** What the locator plugin and React would render for `children`. */
+function render(app: AppDocument, children: readonly string[]): void {
+  const rows = children.map((child, i) => {
+    const tag = nameOf(child)
+    return `<${tag} data-ast-node="${at(`0.${i}`)}" data-rect="10,${10 + ROW * i},200,20">${child}</${tag}>`
+  })
+  app.doc.body.innerHTML = `<div data-ast-node="${ROOT}" data-rect="0,0,400,${20 + ROW * children.length}">${rows.join('')}</div>`
+}
+
+const tick = (ms = 0) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+/** Let fetches, store updates and the canvas's per-frame layout run. */
+async function idle(): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await frame()
+    await tick()
+  }
+}
+/** Past FrameSession's QUIET_MS after the last mutation, well before MAX_WAIT_MS. */
+async function quiet(): Promise<void> {
+  await tick(250)
+  await idle()
+}
+
+/**
+ * The inspector's useSelectedDetails, reduced: refetch the selection's details when it changes
+ * and on every canvas revision (HMR), latest request wins.
+ */
+function followSelection(): () => void {
+  let latest = 0
+  return designer.subscribe((s, prev) => {
+    if (s.selected === null || (s.selected === prev.selected && s.revision === prev.revision)) return
+    const locator = s.selected
+    const request = ++latest
+    const store = (details: NodeDetails | null) => {
+      if (request === latest && designer.getState().selected === locator) designer.getState().setDetails(details)
+    }
+    client.inspect(locator).then(store, () => store(null))
+  })
+}
+
+function mountCanvas(engine: FakeEngine) {
+  let app = appDocument()
+  render(app, engine.children)
+  // Never attached to the document, so it has no browsing context of its own and never fires a
+  // load event the test didn't send; its document is whichever `app` is current.
+  const iframe = document.createElement('iframe')
+  Object.defineProperty(iframe, 'contentWindow', { get: () => app.win })
+  Object.defineProperty(iframe, 'contentDocument', { get: () => app.doc })
+  Object.defineProperty(iframe, 'offsetWidth', { get: () => 800 })
+  iframe.getBoundingClientRect = () => rect(0, 0, 800, 600)
+  const overlay = document.createElement('div')
+  document.body.append(overlay)
+  Object.assign(overlay, { setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false })
+
+  const views: CanvasView[] = []
+  const controller = new CanvasController(iframe, overlay, (view) => views.push(view))
+  const unmount = controller.mount()
+  const unfollow = followSelection()
+  iframe.dispatchEvent(new Event('load'))
+
+  type Point = { x: number; y: number }
+  const pointer = (type: string, p: Point) =>
+    overlay.dispatchEvent(new PointerEvent(type, { button: 0, clientX: p.x, clientY: p.y, pointerId: 1, bubbles: true }))
+  const dragEvent = (type: string, p: Point, template: Template) => {
+    const event = new MouseEvent(type, { clientX: p.x, clientY: p.y, bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { types: [TEMPLATE_MIME], getData: () => JSON.stringify(template), dropEffect: 'none' },
+    })
+    overlay.dispatchEvent(event)
+  }
+
+  return {
+    view: (): CanvasView => views.at(-1) ?? EMPTY_VIEW,
+    doc: () => app.doc,
+    /** HMR: Vite re-imports the page's module, and React re-renders the app from the source as it is now. */
+    hmr() {
+      this.hotUpdate(FILE)
+      render(app, engine.children)
+    },
+    /**
+     * Vite re-imported `file` (`?t=`), as the app's resource timeline reports it: fetched just now,
+     * requested `requestedAgo` ms earlier. Times are in the app document's own clock. jsdom's
+     * frame has origin "null", which file: URLs share, so the entry is same-origin as Vite's are.
+     */
+    hotUpdate(file: string, requestedAgo = 10) {
+      const now = app.win.performance.now()
+      const entry = { name: `file:///${file}?t=${Date.now()}`, startTime: now - requestedAgo, responseEnd: now }
+      for (const observer of [...app.resources]) observer({ getEntries: () => [entry] })
+    },
+    /** Vite reloads the page instead: a new document renders the source as it is now. */
+    reload: () => {
+      app.win.dispatchEvent(new Event('pagehide'))
+      app = appDocument()
+      render(app, engine.children)
+      iframe.dispatchEvent(new Event('load'))
+    },
+    pointer,
+    async click(p: Point) {
+      pointer('pointerdown', p)
+      pointer('pointerup', p)
+      await idle()
+    },
+    /** Press on `from`, pass the drag threshold, hover `to`. */
+    async grab(from: Point, to: Point) {
+      pointer('pointerdown', from)
+      pointer('pointermove', { x: from.x + 8, y: from.y })
+      await idle()
+      pointer('pointermove', to)
+      await idle()
+    },
+    async drag(from: Point, to: Point) {
+      await this.grab(from, to)
+      pointer('pointerup', to)
+      await idle()
+    },
+    async press(key: string) {
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      await idle()
+    },
+    /** A palette drag: the shell publishes the template, the canvas sees it arrive over the overlay. */
+    async dragTemplateOver(p: Point, template: Template) {
+      designer.getState().setDrag({ kind: 'palette', template })
+      dragEvent('dragover', p, template)
+      await idle()
+    },
+    async dropTemplate(p: Point, template: Template) {
+      dragEvent('drop', p, template)
+      await idle()
+    },
+    unmount() {
+      unfollow()
+      unmount()
+      overlay.remove()
+    },
+  }
+}
+
+const BADGE: Template = {
+  component: 'Badge',
+  label: 'Badge',
+  snippet: '<Badge>New</Badge>',
+  imports: [{ name: 'Badge', source: '@/components/ui/badge' }],
+}
+
+let engine: FakeEngine
+let canvas: ReturnType<typeof mountCanvas> | null = null
+
+beforeEach(() => {
+  engine = new FakeEngine()
+  toasts.length = 0
+  vi.stubGlobal('fetch', serve(engine))
+  designer.setState({
+    health: { root: '/app', uiDir: 'src/components/ui', importBase: '@/components/ui', version: 'test' },
+    selected: null,
+    hovered: null,
+    details: null,
+    drag: null,
+    drop: null,
+    mode: 'design',
+    zoom: 1,
+    expectedSelectedName: null,
+    pressPending: false,
+    history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
+    lastEdit: null,
+  })
+})
+
+afterEach(() => {
+  canvas?.unmount()
+  canvas = null
+  vi.unstubAllGlobals()
+})
+
+async function open(children: string[]) {
+  engine.children = children
+  canvas = mountCanvas(engine)
+  await idle()
+  return canvas
+}
+
+describe('gestures made before an edit has rendered', () => {
+  it('a drag is refused, then moves the node the user grabbed once the app re-rendered', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.drag(pointOf(1), pointOf(0, 'top')) // the <button> before the <h2>
+    expect(engine.ops[0]).toMatchObject({ op: 'move', source: at('0.1'), expectedName: 'button', target: at('0.0'), placement: 'before' })
+    expect(engine.children).toEqual(['button', 'h2', 'p'])
+
+    // HMR hasn't rendered: the <h2> on the canvas is still stamped #0.0, the <button> on disk.
+    await c.drag(pointOf(0), pointOf(2, 'bottom')) // grab the <h2>, drop it after the <p>
+    expect(engine.children).toEqual(['button', 'h2', 'p'])
+    expect(engine.ops).toHaveLength(1)
+    expect(c.view().updating).toBe(true)
+
+    c.hmr()
+    await quiet()
+    expect(c.view().updating).toBe(false)
+    await c.drag(pointOf(1), pointOf(2, 'bottom')) // the same <h2>, now stamped #0.1
+    expect(engine.ops.at(-1)).toEqual({
+      op: 'move',
+      source: at('0.1'),
+      expectedName: 'h2',
+      target: at('0.2'),
+      expectedTargetName: 'p',
+      placement: 'after',
+    })
+    expect(engine.children).toEqual(['button', 'p', 'h2'])
+  })
+
+  it('Delete on a node clicked in that window is refused, and says why', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.drag(pointOf(1), pointOf(0, 'top'))
+    await c.click(pointOf(0)) // the <h2>, still stamped #0.0
+    await c.press('Delete')
+    expect(engine.children).toEqual(['button', 'h2', 'p'])
+    expect(engine.ops).toHaveLength(1)
+    expect(toasts.some((t) => /still updating/.test(t))).toBe(true)
+
+    c.hmr()
+    await quiet()
+    await c.click(pointOf(1))
+    await c.press('Delete')
+    expect(engine.ops.at(-1)).toEqual({ op: 'remove', target: at('0.1'), expectedName: 'h2' })
+    expect(engine.children).toEqual(['button', 'p'])
+  })
+
+  it('a click right after a Delete does not select what slid into the deleted position', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(0))
+    await c.press('Delete')
+    expect(engine.children).toEqual(['button', 'p'])
+    await c.click(pointOf(1)) // the <button> on the canvas, stamped #0.1: the <p> on disk
+    await c.press('Delete')
+    expect(engine.children).toEqual(['button', 'p'])
+    expect(engine.ops).toHaveLength(1)
+
+    c.hmr()
+    await quiet()
+    await c.click(pointOf(0))
+    await c.press('Delete')
+    expect(engine.ops.at(-1)).toEqual({ op: 'remove', target: at('0.0'), expectedName: 'button' })
+    expect(engine.children).toEqual(['p'])
+  })
+
+  it('a second Delete while the first is still on its way is refused', async () => {
+    const c = await open(['button#a', 'button#b', 'p'])
+    await c.click(pointOf(0))
+    let release = () => {}
+    engine.hold = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await c.press('Delete') // same locator, same name: the engine can't tell it now means #b
+    release()
+    engine.hold = null
+    await idle()
+    expect(engine.ops).toHaveLength(1)
+    expect(engine.children).toEqual(['button#b', 'p'])
+  })
+
+  it('an app mutation just before the edit returns does not count as its render', async () => {
+    const c = await open(['li#a', 'li#b', 'li#c'])
+    await c.click(pointOf(0))
+    c.doc().body.setAttribute('data-clock', '12:00') // the app changes on its own (a clock, a spinner) as the edit goes out
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    await quiet() // no HMR yet
+    await c.click(pointOf(1)) // li#b on the canvas, stamped #0.1: li#c on disk, same name
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    expect(engine.ops).toHaveLength(1)
+  })
+
+  it('a stylesheet hot update landing first does not count as the edit rendering', async () => {
+    const c = await open(['li#a', 'li#b', 'li#c'])
+    await c.click(pointOf(0))
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    // Vite applies Tailwind's CSS update in a batch of its own, before the module's.
+    const style = c.doc().createElement('style')
+    style.textContent = '.gap-2 { gap: 0.5rem }'
+    c.doc().head.append(style)
+    await quiet()
+    await c.click(pointOf(1)) // li#b on the canvas, stamped #0.1: li#c on disk
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    expect(engine.ops).toHaveLength(1)
+    expect(c.view().updating).toBe(true)
+  })
+
+  it('a drag that outlives a re-render is refused at the drop', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.grab(pointOf(1), pointOf(0, 'top')) // holding the <button> (#0.1)
+    // Another client reorders the file; its HMR lands mid-drag. #0.1 is now the <h2>.
+    engine.children = ['p', 'h2', 'button']
+    designer.getState().setHistory({ canUndo: true, canRedo: false, undoLabel: 'Edit elsewhere', redoLabel: null })
+    c.hmr()
+    await quiet()
+    c.pointer('pointermove', pointOf(0, 'top'))
+    await idle()
+    expect(c.view().cursor).toMatchObject({ refused: true })
+    c.pointer('pointerup', pointOf(0, 'top'))
+    await idle()
+    expect(engine.ops).toEqual([])
+    expect(engine.children).toEqual(['p', 'h2', 'button'])
+  })
+
+  it('a change the canvas has not heard of yet is caught when the DOM contradicts the engine', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    engine.children = ['button', 'h2', 'p'] // saved in the IDE; no HMR has started
+    await c.click(pointOf(0)) // the <h2> on the canvas, #0.0: a <button> on disk now
+    await c.press('Delete')
+    expect(engine.ops).toEqual([])
+    expect(engine.children).toEqual(['button', 'h2', 'p'])
+    expect(toasts.some((t) => /<h2>.*<button>/.test(t))).toBe(true)
+  })
+})
+
+describe('palette drops', () => {
+  it('name the node they land on, and wait while the app updates', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.dragTemplateOver(pointOf(2, 'bottom'), BADGE)
+    await c.dropTemplate(pointOf(2, 'bottom'), BADGE)
+    expect(engine.ops).toEqual([
+      { op: 'insert', target: at('0.2'), expectedName: 'p', placement: 'after', snippet: BADGE.snippet, imports: BADGE.imports },
+    ])
+    expect(engine.children).toEqual(['h2', 'button', 'p', 'Badge'])
+
+    // Before that insert has rendered, the chip says why a drop would be refused.
+    await c.dragTemplateOver(pointOf(0, 'top'), BADGE)
+    expect(c.view().cursor).toMatchObject({ refused: true, target: expect.stringMatching(/updat/i) })
+    await c.dropTemplate(pointOf(0, 'top'), BADGE)
+    expect(engine.ops).toHaveLength(1)
+  })
+})
+
+/** Milliseconds from now until the canvas stops showing itself busy; Infinity if it hasn't within `limit`. */
+async function untilSettled(c: ReturnType<typeof mountCanvas>, limit: number): Promise<number> {
+  const start = performance.now()
+  while (performance.now() - start < limit) {
+    if (!c.view().updating) return performance.now() - start
+    await tick(10)
+  }
+  return Infinity
+}
+
+describe('a click while the app updates is deferred, not dropped', () => {
+  it('selects what is under the pointer once the edit has rendered', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete') // the <p>: the <h2> above it keeps its place
+    expect(engine.children).toEqual(['h2', 'button'])
+    expect(c.view().updating).toBe(true)
+
+    await c.click(pointOf(0)) // the <h2>, before HMR has rendered
+    expect(designer.getState().selected).toBeNull() // not from the old render
+    expect(designer.getState().pressPending).toBe(true)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.0'))
+    expect(c.view().selection).toMatchObject({ locator: at('0.0'), boxes: [{ y: 10 }] })
+    expect(designer.getState().pressPending).toBe(false)
+    expect(engine.ops).toHaveLength(1) // a selection, never an edit
+  })
+
+  it('waits for an edit that is still on its way, then for its render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.hold = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    expect(designer.getState().selected).toBe(at('0.2'))
+    release()
+    engine.hold = null
+    await idle()
+    expect(designer.getState().selected).toBeNull() // the removal's own follow-up: its node is gone…
+    expect(designer.getState().pressPending).toBe(true) // …and the click still waits
+    expect(c.view().updating).toBe(true)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.0'))
+  })
+
+  it('selects as soon as the edit it waited for is refused (nothing to render)', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.hold = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await c.click(pointOf(1))
+    engine.children = ['h2', 'button', 'div'] // another writer got there first: the engine answers 409
+    release()
+    engine.hold = null
+    await idle()
+    expect(toasts.some((t) => /expected <p>/.test(t))).toBe(true)
+    expect(c.view().updating).toBe(false)
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+
+  it('gives way to a selection made meanwhile', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    designer.getState().select(at('0.1')) // e.g. the inspector's breadcrumbs
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+
+  it('is dropped by Escape', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    await c.press('Escape')
+    expect(designer.getState().pressPending).toBe(false)
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBeNull()
+  })
+
+  it('a later click replaces it', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    await c.click(pointOf(0))
+    await c.click(pointOf(1))
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+})
+
+describe('the canvas is busy for a bounded time after an edit', () => {
+  it('settles at a deadline when the app never stops changing its DOM', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    // A ticker: the app changes its DOM every 20 ms (an animation library, a clock).
+    const ticker = setInterval(() => c.doc().body.setAttribute('data-tick', String(performance.now())), 20)
+    try {
+      await c.click(pointOf(2))
+      await c.press('Delete')
+      const answered = performance.now()
+      c.hmr()
+      await tick(300)
+      expect(c.view().updating).toBe(true) // never quiet: only the deadline ends it
+      await c.click(pointOf(0))
+      expect(await untilSettled(c, 3000)).toBeLessThan(Infinity)
+      expect(performance.now() - answered).toBeLessThan(1000)
+      await idle()
+      expect(designer.getState().selected).toBe(at('0.0'))
+    } finally {
+      clearInterval(ticker)
+    }
+  })
+
+  it('does not settle before the edit’s own hot update has arrived, however much the app changes', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    const ticker = setInterval(() => c.doc().body.setAttribute('data-tick', String(performance.now())), 20)
+    try {
+      await c.click(pointOf(2))
+      await c.press('Delete')
+      await tick(900) // Vite is slow to re-import (it took over a second in a real run)
+      expect(c.view().updating).toBe(true) // the DOM can't show the edit yet
+      const hot = performance.now()
+      c.hmr()
+      expect(await untilSettled(c, 3000)).toBeLessThan(Infinity)
+      expect(performance.now() - hot).toBeLessThan(1000)
+    } finally {
+      clearInterval(ticker)
+    }
+  })
+
+  it('does not take an app change between the answer and the hot update for the edit’s render', async () => {
+    const c = await open(['li#a', 'li#b', 'li#c'])
+    await c.click(pointOf(0))
+    await c.press('Delete')
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    c.doc().body.setAttribute('data-clock', '12:01') // the app ticks once, then is quiet
+    await quiet()
+    await c.click(pointOf(1)) // li#b on the canvas, stamped #0.1: li#c on disk, same name
+    await c.press('Delete')
+    expect(engine.ops).toHaveLength(1)
+    expect(engine.children).toEqual(['li#b', 'li#c'])
+    c.hmr()
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.1')) // the click, on what the canvas shows now
+  })
+
+  it('settles right after the answer when the hot update rendered before it arrived', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete') // written; the answer is slow
+    c.hotUpdate('src/Page.tsx') // Vite re-imported the module…
+    c.hmr() // …and React rendered it, before the designer heard back
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick()
+    expect(await untilSettled(c, 3000)).toBeLessThan(300)
+  })
+
+  it('does not take another file’s hot update for the edit’s render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    c.hotUpdate('src/Other.tsx')
+    c.doc().body.setAttribute('data-other', 'rendered') // that other module's render
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick(400)
+    expect(c.view().updating).toBe(true)
+    c.hmr()
+    expect(await untilSettled(c, 3000)).toBeLessThan(400)
+  })
+
+  it('does not take a hot update requested before the edit was sent for its render', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.click(pointOf(2))
+    let release = () => {}
+    engine.delayReply = new Promise((resolve) => (release = resolve))
+    await c.press('Delete')
+    await tick(60)
+    c.hotUpdate('src/Page.tsx', 1000) // asked for before the edit went out: an earlier change
+    c.doc().body.setAttribute('data-earlier', 'rendered')
+    await quiet()
+    release()
+    engine.delayReply = null
+    await tick(400)
+    expect(c.view().updating).toBe(true)
+  })
+})
+
+describe('a full reload while an edit renders (finding 16)', () => {
+  it('releases the held selection box and the gesture gate', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    await c.drag(pointOf(1), pointOf(0, 'top')) // the <button> before the <h2>: selection → #0.0
+    expect(c.view().selection?.locator).toBe(at('0.1')) // held where the button still is on the canvas
+
+    c.reload() // Vite full-reloads instead of hot-updating
+    await quiet()
+    expect(designer.getState().selected).toBe(at('0.0'))
+    expect(c.view().selection).toMatchObject({ locator: at('0.0'), boxes: [{ y: 10 }] })
+    expect(c.view().updating).toBe(false)
+
+    await c.click(pointOf(2))
+    expect(designer.getState().selected).toBe(at('0.2'))
+    expect(c.view().selection?.locator).toBe(at('0.2'))
+  })
+})

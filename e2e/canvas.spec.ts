@@ -36,8 +36,8 @@ async function openCanvas(page: Page): Promise<void> {
 /** Run `body` in the page with the designer's store module (same module instance the app uses). */
 function storeCall<T>(page: Page, body: string): Promise<T> {
   return page.evaluate(`(async () => {
-    const { designer } = await import('/__trivia/src/state/store.ts')
-    const { canvas } = await import('/__trivia/src/canvas/api.ts')
+    const { designer } = await import('/__trivia/src/shared/state/store.ts')
+    const { canvas } = await import('/__trivia/src/shared/canvas.ts')
     ${body}
   })()`) as Promise<T>
 }

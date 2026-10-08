@@ -4,7 +4,7 @@ The designer talks to the engine over HTTP. `vite-plugin-ast-locator` serves the
 from the **user's** Vite dev server under `/@trivia/api/`, calling the Rust engine through the
 napi binding (`@trivia/engine`). The designer reaches them through its same-origin proxy.
 
-TypeScript mirror of every shape: `packages/designer/src/bridge/types.ts`.
+TypeScript mirror of every shape: `packages/designer/src/shared/engine/types.ts`.
 Rust source of truth: `crates/trivia_oxc_engine/src/{mutator,inspect,prop_analyzer,error}.rs`.
 
 ## Envelope
@@ -37,7 +37,7 @@ read or write, is refused with 403 `forbidden` unless all three hold:
 The designer's proxy passes all three: it connects from loopback, rewrites `Host` to the target
 (`changeOrigin`), and its page's `Origin` is localhost. That hides the proxy's own client from the
 plugin, so the designer makes the same three checks itself before it forwards anything under
-`/@trivia/api/` (`packages/designer/api-guard.ts`), with the same 403 `forbidden`
+`/@trivia/api/` (`packages/designer/server/api-guard.ts`), with the same 403 `forbidden`
 envelope. A designer started with `--host` therefore still serves other machines the user's app,
 but not the API. It also refuses (404) every WebSocket upgrade to `/@trivia/api/`, which has no
 WebSocket endpoint. Any other proxy put in front of the dev server has to do the same.

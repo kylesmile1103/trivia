@@ -1,5 +1,5 @@
 // Wire shapes of the engine HTTP API (docs/api.md) that this plugin produces. The designer's
-// mirror is packages/designer/src/bridge/types.ts; keep the two in sync.
+// mirror is packages/designer/src/shared/engine/types.ts; keep the two in sync.
 
 export type ErrorCode =
   | 'invalid_locator'

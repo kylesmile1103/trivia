@@ -9,8 +9,9 @@
 // is built in parallel with it) gets a stand-in instead: the test injects `<iframe src="/">`
 // (same origin through the designer proxy, so HMR and contentDocument behave as in the canvas)
 // plus a click hook that does what the canvas's selection does: nearest [data-ast-node],
-// climbing out of uiDir, then `window.__trivia.select(locator)` (src/inspector/debug.ts). Prop
-// schemas are likewise loaded through `window.__trivia` when no shell has loaded them. Each
+// climbing out of uiDir, then `window.__trivia.select(locator)`
+// (packages/designer/src/features/inspector/debug.ts). Prop schemas are likewise loaded
+// through `window.__trivia` when no shell has loaded them. Each
 // stand-in is recorded as a test annotation, so the report says which path ran.
 
 import { readFile, writeFile } from 'node:fs/promises'
@@ -22,7 +23,7 @@ const DASHBOARD = path.resolve(import.meta.dirname, '../examples/playground/src/
 const SAVE_BUTTON = '<Button>Save changes</Button>'
 const FOOTER_OPEN = '<CardFooter className="justify-end gap-2">'
 
-/** The slice of `window.__trivia` (src/inspector/debug.ts) these tests use. */
+/** The slice of `window.__trivia` (packages/designer/src/features/inspector/debug.ts) these tests use. */
 interface DebugHandle {
   state(): {
     selected: string | null

@@ -1,5 +1,5 @@
 // Style panel end to end, through the StylePanel harness
-// (packages/designer/src/inspector/style/harness): real playground, real engine, real HMR.
+// (packages/designer/src/features/inspector/style/harness): real playground, real engine, real HMR.
 //
 //   TRIVIA_APP_PORT=5341 TRIVIA_PORT=4441 pnpm exec playwright test e2e/style.spec.ts
 
@@ -42,7 +42,7 @@ async function open(page: Page) {
       writes.push(req.postData() ?? '')
     }
   })
-  await page.goto(`/__trivia/src/inspector/style/harness/index.html?locator=${encodeURIComponent(LOCATOR)}`)
+  await page.goto(`/__trivia/src/features/inspector/style/harness/index.html?locator=${encodeURIComponent(LOCATOR)}`)
   const frame = page.frameLocator('iframe[title="Canvas"]')
   const target = frame.locator(`[data-ast-node="${LOCATOR}"]`)
   await expect(target).toHaveAttribute('class', 'grid gap-2')

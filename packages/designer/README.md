@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# @trivia/designer
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The visual editor. It serves itself under `/__trivia/` and proxies every other path, HTTP and
+WebSocket, to the user's Vite dev server, so the canvas iframe is same-origin with the app
+(CLAUDE.md, rule 7). Every edit goes to the engine API (`/@trivia/api`, served by
+`@trivia/vite-plugin-ast-locator`) as one `Op` (`docs/api.md`).
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+pnpm --filter playground dev                                     # the user app, :5173
+TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev   # :4400/__trivia/
+pnpm --filter @trivia/designer test        # vitest, including src/architecture.test.ts
+pnpm --filter @trivia/designer typecheck
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Layout
+
+Feature slices (see `docs/architecture.md`). Imports point down this list only:
+
+```
+server/              the designer's own dev-server code (Node): the engine API guard
+src/
+  app/               composition root: main.tsx, the shell (App.tsx), the connect screen
+  features/          vertical slices; each exposes its public API from index.ts
+    canvas/          iframe, overlay, hit-testing, selection, drag-move, drop zones, previews
+    inspector/       props, class manager, style panel (style/), CSS→Tailwind (tailwind/)
+    palette/         the user's components as insertable templates
+    toolbar/         history, zoom, mode, theme, connection status
+  shared/            used by any feature, knowing none
+    engine/          the engine API client, its types, and the session that syncs them
+    state/           the zustand store and the action bus (every edit goes through it)
+    commands/        global commands and keyboard shortcuts
+    canvas.ts        the canvas API contract (installed by features/canvas)
+    template.ts      the palette → canvas drag contract
+    components/      the designer's own shared components
+    ui/              shadcn/ui (components.json points `npx shadcn add` here)
+    lib/             small helpers (cn, env, keyboard)
+```
+
+`src/architecture.test.ts` fails when a feature imports another feature, when `shared/`
+imports a feature, or when the app reaches past a feature's `index.ts`.
+
+The palette and the inspector read the **user's** `src/components/ui`, never `shared/ui`.
