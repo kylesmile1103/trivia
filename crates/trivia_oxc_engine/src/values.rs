@@ -689,6 +689,12 @@ fn top_calls<'p, 'a>(body: &ScopeBody<'p, 'a>) -> Vec<(&'p Expression<'a>, Optio
             for stmt in statements.iter() {
                 match stmt {
                     Statement::ExpressionStatement(s) => push(&s.expression, None),
+                    // `return useRoutes([...])`: the call is the component's value.
+                    Statement::ReturnStatement(r) => {
+                        if let Some(argument) = &r.argument {
+                            push(argument, None);
+                        }
+                    }
                     Statement::VariableDeclaration(d) => {
                         for d in &d.declarations {
                             if let Some(init) = &d.init {
@@ -820,7 +826,8 @@ pub struct CallValue {
 pub struct ScopeValues {
     pub scope: String,
     pub bindings: Vec<BindingValue>,
-    /// Calls to hooks (`use…`), in source order.
+    /// Calls to hooks (`use…`) at the top of the body (a statement, a declaration's value, or
+    /// what the scope returns: `return useRoutes([...])`), in source order.
     pub calls: Vec<CallValue>,
 }
 
@@ -1144,6 +1151,25 @@ export const PostEdit = () => {
         let memo = list.calls.iter().find(|c| c.callee == "useMemo").unwrap();
         assert_eq!(memo.type_args, ["ColumnDef<Post>[]"]);
         assert_eq!(scopes[2].calls[0].callee, "useForm");
+    }
+
+    #[test]
+    fn a_hook_call_a_component_returns_is_one_of_its_calls() {
+        const ROUTES: &str = r#"export function AppRoutes() {
+  return useRoutes([{ path: "/", element: <Home /> }]);
+}
+const Inline = () => useRoutes([{ path: "/about" }]);
+"#;
+        let scopes = describe_values(ROUTES, "src/routes.tsx").unwrap();
+        let returned = &scopes.iter().find(|s| s.scope == "AppRoutes").unwrap().calls[0];
+        assert_eq!(returned.callee, "useRoutes");
+        assert_eq!(returned.binding, None);
+        assert_eq!(returned.path, "src/routes.tsx#AppRoutes#useRoutes()");
+        let args = serde_json::to_value(&returned.args).unwrap();
+        assert_eq!(args[0]["elements"][0]["properties"][0]["value"]["value"], "/");
+        assert_eq!(scopes.iter().find(|s| s.scope == "Inline").unwrap().calls[0].callee, "useRoutes");
+        let value = describe_value(ROUTES, "src/routes.tsx#AppRoutes#useRoutes()").unwrap();
+        assert_eq!(serde_json::to_value(&value).unwrap()["kind"], "array");
     }
 
     #[test]
