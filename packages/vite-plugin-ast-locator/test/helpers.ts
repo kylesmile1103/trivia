@@ -86,6 +86,9 @@ export async function startServer(
     Object.defineProperty(req.socket, 'remoteAddress', { value: address, configurable: true })
     vite.middlewares(req, res)
   })
+  // Never reap idle sockets. Tests block this event loop with execFileSync(tsc); under load
+  // that outlasts the 5 s default, and the next request on the pooled socket hung up.
+  httpServer.keepAliveTimeout = 0
   await new Promise<void>((resolve, reject) => {
     httpServer.once('error', reject)
     httpServer.listen(socket, resolve)
