@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "e2e",
+  "projectType": "application",
+  "implicitDependencies": ["designer", "playground", "refine-admin"],
+  "targets": {
+    "e2e": {
+      "command": "playwright test",
+      "dependsOn": [{ "projects": ["plugin"], "target": "build" }],
+      "cache": false
+    }
+  }
+}

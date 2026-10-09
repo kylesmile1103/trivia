@@ -1,0 +1,97 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "neverConnectToCloud": true,
+  "analytics": false,
+  "useDaemonProcess": false,
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*"],
+    "production": [
+      "default",
+      "!{projectRoot}/test/**/*",
+      "!{projectRoot}/tests/**/*",
+      "!{projectRoot}/**/*.test.ts",
+      "!{projectRoot}/**/*.test.tsx",
+      "!{projectRoot}/vitest.config.ts"
+    ],
+    "rust": ["{workspaceRoot}/Cargo.toml", "{workspaceRoot}/Cargo.lock"],
+    "fixtures": ["{workspaceRoot}/examples/**/*", "{workspaceRoot}/docs/**/*"]
+  },
+  "targetDefaults": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist"],
+      "cache": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^production"],
+      "cache": true
+    },
+    "lint": {
+      "inputs": ["default"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^production", "fixtures"],
+      "cache": true
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "continuous": true,
+      "cache": false
+    }
+  },
+  "release": {
+    "projects": ["engine", "oxc-engine", "plugin", "contract-sync", "inferencer", "designer", "shell"],
+    "projectsRelationship": "fixed",
+    "releaseTag": { "pattern": "v{version}" },
+    "version": {
+      "currentVersionResolver": "git-tag",
+      "fallbackCurrentVersionResolver": "disk",
+      "versionActions": "tools/release/version-actions.cjs"
+    },
+    "changelog": {
+      "workspaceChangelog": {
+        "file": "{workspaceRoot}/CHANGELOG.md",
+        "createRelease": "github",
+        "renderer": "{workspaceRoot}/tools/release/changelog-renderer.cjs",
+        "renderOptions": { "authors": false, "applyUsernameToAuthors": false }
+      },
+      "projectChangelogs": false
+    },
+    "conventionalCommits": {
+      "types": {
+        "engine": { "changelog": { "title": "Engine" } },
+        "napi": { "changelog": { "title": "Engine" } },
+        "bindQuery": { "changelog": { "title": "Engine" } },
+        "plugin": { "changelog": { "title": "Plugin" } },
+        "Plugin": { "changelog": { "title": "Plugin" } },
+        "mcp": { "changelog": { "title": "MCP" } },
+        "MCP": { "changelog": { "title": "MCP" } },
+        "designer": { "changelog": { "title": "Designer" } },
+        "canvas": { "changelog": { "title": "Designer" } },
+        "Canvas": { "changelog": { "title": "Designer" } },
+        "refine": { "changelog": { "title": "Refine tools" } },
+        "inferencer": { "changelog": { "title": "Inferencer" } },
+        "contract-sync": { "changelog": { "title": "contract-sync" } },
+        "shell": { "changelog": { "title": "Desktop shell" } },
+        "examples": { "changelog": { "title": "Examples" } },
+        "playground": { "changelog": { "title": "Examples" } },
+        "refine-admin": { "changelog": { "title": "Examples" } },
+        "security": { "changelog": { "title": "Security" } },
+        "e2e": { "changelog": { "title": "Tests" } },
+        "docs": { "changelog": { "title": "Docs" } },
+        "repo": { "changelog": { "title": "Repo" } },
+        "tools": { "changelog": { "title": "Repo" } },
+        "release": { "changelog": false },
+        "__INVALID__": { "changelog": { "title": "Other" } }
+      }
+    },
+    "git": {
+      "commitMessage": "release: v{version}",
+      "tagMessage": "Trivia v{version}"
+    }
+  }
+}

@@ -32,6 +32,16 @@ the sections below record what was verified against the reference code on 2026-1
 - `examples/refine-admin` — a Refine + shadcn back office on an OpenAPI mock: the user app for
   the product direction in `docs/product.md` (day 2 for Refine apps on OpenAPI backends).
 - `e2e/` — Playwright across all of the above.
+- `tools/` — `@trivia/tools`: the package generator (`nx g @trivia/tools:package <name>`) and
+  the release helpers (`tools/release/`, run by `pnpm release`). Plain CommonJS: Nx loads `.ts`
+  there only through swc/ts-node on Node 22.16.
+
+Nx 23.2.1 runs the tasks (`nx.json`). Each package's `package.json` scripts stay the source of
+truth, and Nx adds caching, `dependsOn: ["^build"]` and long-running `dev` targets. Projects have
+short names (`nx.name`): `engine`, `oxc-engine`, `plugin`, `contract-sync`, `inferencer`,
+`designer`, `playground`, `refine-admin`, `shell`, `e2e`, `tools`. A test's cache key includes
+`examples/**` and `docs/**` (the suites read them). When a test starts reading another file
+outside its project, add it to that input, or the cache serves a stale pass.
 
 Where code goes is in `docs/architecture.md`: packages at the top, feature slices inside.
 The designer is `app/` → `features/<name>/` (public API in `index.ts`) → `shared/`. A feature
@@ -39,13 +49,18 @@ never imports another feature, and `src/architecture.test.ts` enforces that. Eng
 are one module each under `crates/trivia_oxc_engine/src/ops/`.
 
 ```sh
-cargo test -p trivia_oxc_engine                      # engine tests
+pnpm dev                                              # refine-admin :5173 + designer :4400/__trivia/
+pnpm dev:playground                                   # playground :5173 + designer (dev:desktop adds the window)
+pnpm check                                            # build, typecheck, lint, test: every project, cached
+pnpm affected                                         # the same for what changed; pnpm e2e for Playwright
+nx test oxc-engine                                    # one project's target (nx = pnpm exec nx)
 cargo test -p trivia_oxc_engine --test acceptance move_  # one test (name filter)
-pnpm build:engine                                     # build the napi addon (needed by the plugin)
-pnpm --filter playground dev                          # user app on :5173
-pnpm --filter @trivia/designer dev                    # designer on :4400/__trivia/ (TRIVIA_TARGET overrides :5173)
-pnpm --filter @trivia/designer typecheck
+pnpm release 0.2.0 --dry-run                          # versions, CHANGELOG.md, tag, GitHub release
 ```
+
+Commit messages start with their area, `<area>: <what changed>` (`engine:`, `plugin:`,
+`designer:`, `MCP:`, `docs:`, `repo:`). The changelog groups by it, and `pnpm release` refuses
+an area missing from `release.conventionalCommits.types` in `nx.json`.
 
 Toolchain: rustc/cargo 1.99.0, node 22.16, pnpm 12.9 (workspace root). OXC 0.153 needs rust ≥ 1.97.
 
@@ -64,8 +79,9 @@ read-only research material — don't build or run tooling from inside them.
   its host doesn't implement the number/buffer N-API calls (keep the API string/JSON in and out, or
   extend `napi.ts`); its threads need `SharedArrayBuffer`, so the page must be cross-origin isolated;
   it pins oxc 0.151.0.
-- `openapi-ts/` — monorepo scaffold to imitate (pnpm workspaces + turbo, Vitest projects, tsdown,
-  oxlint/oxfmt, strict `tsconfig.base.json`). The design to borrow is in
+- `openapi-ts/` — monorepo scaffold (pnpm workspaces + turbo, Vitest projects, tsdown,
+  oxlint/oxfmt, strict `tsconfig.base.json`). Its task runner is not ours: the user chose Nx
+  (2026-10-09). The design to borrow is in
   `packages/codegen-core/src/planner/planner.ts` (`planImports`, ~line 282): imports are *derived
   from symbol references*, never hand-edited. Its own CLAUDE.md pins versions that are already stale.
 
@@ -193,6 +209,15 @@ Paths are relative to `references/tango/packages/`.
 - **Same origin:** the designer's dev server proxies the user's dev server (HTTP + WebSocket);
   the designer itself lives under `/__trivia/` (`packages/designer/vite.config.ts`).
 - **Package manager:** pnpm workspace.
+- **Task runner (2026-10-09):** Nx 23.2.1 over the existing scripts, chosen by the user over
+  Turborepo. One tool covers cached tasks, `pnpm dev` (continuous targets), the project graph,
+  generators and releases. Local only: `neverConnectToCloud`, `analytics: false`, no daemon.
+  pnpm denies nx's install script (`allowBuilds`), which only updates the Nx Cloud client.
+- **Releases (2026-10-09):** one fixed version for every package and crate, tag `v{version}`,
+  current version from the git tag. `tools/release/version-actions.cjs` edits each version in
+  place (`package.json`, `Cargo.toml`, `tauri.conf.json`, `Cargo.lock`) instead of
+  `@monodon/rust`, which re-serializes `Cargo.toml` and needs Nx 22. Nothing is published to npm
+  (`--skip-publish`). `createRelease` makes Nx push the release commit and tag.
 
 ## Onlook (`references/onlook`) — verified 2026-10-07
 

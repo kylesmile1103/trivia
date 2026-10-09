@@ -15,9 +15,12 @@ packages/
                           src/refine/ is the Refine adapter (pages, columns, plans)
   designer/               the React designer, @trivia/designer
   contract-sync/          OpenAPI → hey-api code + trivia.manifest.json, @trivia/contract-sync
+  trivia-inferencer/      @trivia/openapi-inferencer: Refine's inferencer, from the contract
 examples/playground/      the "user app" for the editor's manual and e2e checks
 examples/refine-admin/    a Refine + shadcn back office on an OpenAPI mock: the Refine work's user app
 e2e/                      Playwright, across designer + plugin + engine + playground
+tools/                    @trivia/tools: the package generator and the release helpers (Nx)
+nx.json                   the task runner: caching, task order, dev servers, the release group
 docs/                     contracts (api.md, data-provider.md), this file, HANDOFF.md
 docs/briefs/              the original briefs, verbatim (historical; CLAUDE.md wins)
 references/               gitignored, read-only prior art
@@ -27,6 +30,11 @@ A package's folder is its npm name without the `@trivia/` scope; a crate's is it
 name. Dependencies between packages go one way: designer → (HTTP) → plugin → (napi) →
 engine. contract-sync writes files the engine's `bindQuery` and the designer read
 (`trivia.manifest.json`); nothing imports it at runtime.
+
+Every folder above with a `package.json` or a `project.json` is an Nx project, named without
+the scope (`engine`, `oxc-engine`, `plugin`, …; `pnpm graph` draws them). A new library is
+`nx g @trivia/tools:package <name>`. The crates without a `package.json` (`trivia_oxc_engine`,
+`trivia_shell`) and `e2e/` describe their Cargo and Playwright targets in `project.json`.
 
 ## Designer: app → features → shared
 

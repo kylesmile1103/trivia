@@ -128,12 +128,21 @@ packages/
   vite-plugin-ast-locator/    dev-only Vite plugin: locators, /@trivia/api, /@trivia/mcp, Refine adapter
   designer/                   React designer, @trivia/designer, served at :4400/__trivia/
   contract-sync/              OpenAPI -> hey-api TanStack Query code + trivia.manifest.json
+  trivia-inferencer/          @trivia/openapi-inferencer, Refine's inferencer from the contract
 examples/
   playground/                 stock create-vite + shadcn app used as the "user app"
   refine-admin/               Refine + shadcn back office on an OpenAPI mock
 e2e/                          Playwright across all of the above
+tools/                        @trivia/tools: the package generator and the release helpers
 docs/                         contracts, architecture, product, hand-off notes
+nx.json                       Nx task runner: caching, task order, dev servers, releases
 ```
+
+Nx runs every task. Each package keeps its own `package.json` scripts; `nx.json` adds caching, the
+order tasks run in (a package's dependencies build first) and the long-running `dev` servers. Projects
+have short names: `engine`, `oxc-engine`, `plugin`, `contract-sync`, `inferencer`, `designer`,
+`playground`, `refine-admin`, `shell`, `e2e` and `tools`. `pnpm graph` shows how they depend on each
+other.
 
 Dependencies run one way: designer -> (HTTP) -> plugin -> (napi) -> engine. `contract-sync` writes files
 (`trivia.manifest.json`, generated client code) that the engine's `bindQuery` and the designer read;
@@ -155,31 +164,34 @@ nothing imports it at runtime.
 
 ## Quick start
 
-Run Trivia against the bundled playground app. You need three processes (or one script plus two).
-
 ```sh
-# 1. Install and build the native engine and the Vite plugin
 pnpm install
-pnpm build:engine      # napi addon (crates/trivia_napi -> .node + loader; both gitignored)
-pnpm build:plugin      # contract-sync + vite-plugin-ast-locator -> dist
-
-# 2. Start the user app (plugin + engine API are served from this dev server)
-pnpm --filter playground dev                       # http://localhost:5173
-
-# 3. Start the designer (proxies the app on the same origin)
-TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev
-#    open http://localhost:4400/__trivia/
+pnpm dev               # refine-admin on :5173 and the designer on :4400, in one terminal
+#   open http://localhost:4400/__trivia/
 ```
 
-`pnpm dev:playground` runs steps 1 and the app in one command.
+`pnpm dev` builds what the app needs first (the Rust engine, the plugin, contract-sync), then starts
+both servers side by side. Builds are cached: the engine compiles again only when its Rust changed.
+Stop everything with Ctrl-C.
 
-To try the Refine workflow instead, start `pnpm --filter refine-admin dev` in step 2 (see
-[`examples/refine-admin/README.md`](examples/refine-admin/README.md)).
+| Command | Starts |
+| --- | --- |
+| `pnpm dev` | the Refine example ([`examples/refine-admin`](examples/refine-admin/README.md)) and the designer |
+| `pnpm dev:playground` | the plain shadcn playground and the designer |
+| `pnpm dev:desktop` | the Refine example, the designer and the desktop window |
+
+Both examples use port 5173, so run one at a time. The engine has no server of its own: it is a napi
+addon loaded by the app's Vite dev server, which serves the engine API at `/@trivia/api`.
+
+To run the pieces by hand instead: `pnpm build:plugin`, then `pnpm --filter refine-admin dev` and
+`TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev` in two terminals.
 
 > **Heads up:** end-to-end tests and manual edits modify `examples/**` on disk. Restore with
 > `git checkout -- examples/` and confirm `git status` is clean before committing.
 
 ### Optional: desktop window
+
+`pnpm dev:desktop` opens it next to the servers. On its own:
 
 ```sh
 cargo run --manifest-path crates/trivia_shell/Cargo.toml
@@ -342,18 +354,23 @@ To report a vulnerability, contact the maintainer privately rather than opening 
 
 ```sh
 pnpm install
-pnpm build:engine && pnpm build:plugin
+pnpm check                                   # build, typecheck, lint and test everything (cached)
+pnpm affected                                # the same, only for what your changes touch
+nx test plugin                               # one project's target (builds what it needs first)
+nx run-many -t test -p designer plugin       # one target, several projects
+pnpm graph                                   # the project graph in the browser
 
-cargo test --workspace                                       # engine + binding
-cargo test -p trivia_oxc_engine --test roundtrip             # one suite (~15 s, exhaustive)
+cargo test -p trivia_oxc_engine --test roundtrip             # one Rust suite (~15 s, exhaustive)
 cargo test -p trivia_oxc_engine --test acceptance move_      # filter by test name
-cargo clippy --workspace --all-targets -- -D warnings
-
-pnpm typecheck                                               # every TypeScript package
-pnpm --filter @trivia/designer test
-pnpm --filter @trivia/vite-plugin-ast-locator test           # needs pnpm build:engine
-pnpm --filter @trivia/contract-sync test                     # runs hey-api codegen and real tsc on its output
 ```
+
+`nx` is `pnpm exec nx` (or `npx nx`). Nx caches `build`, `typecheck`, `lint` and `test` in `.nx/`
+(gitignored). A test's cache key includes `examples/**` and `docs/**`, which the suites read. Add
+`--skip-nx-cache` to force a run. Nx Cloud and analytics are off (`nx.json`), and no Nx daemon is left
+running.
+
+New package: `nx g @trivia/tools:package <name>` writes `packages/<name>` set up like
+`contract-sync` (strict tsconfig, vitest, build/typecheck/test scripts) and adds it to the release.
 
 Where code goes:
 
@@ -374,16 +391,22 @@ the project are in [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ## Testing and quality gates
 
+`pnpm check` is the gate without end to end; `pnpm e2e` adds that. By project:
+
 | Layer | Command | What it covers |
 | --- | --- | --- |
-| Engine and binding | `cargo test --workspace` | Acceptance, round-trip, formatting, guards, imports, locators, scope checks, outline, error codes, stack budget. |
-| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | Must be clean. |
-| Plugin | `pnpm --filter @trivia/vite-plugin-ast-locator test` | HTTP API, MCP tools, Refine adapter (including `tsc` on generated pages). |
-| Designer | `pnpm --filter @trivia/designer test` | Unit tests plus architecture rules. |
-| Contract sync | `pnpm --filter @trivia/contract-sync test` | The whole pipeline and the CLI. |
+| Engine | `nx test oxc-engine` | Acceptance, round-trip, formatting, guards, imports, locators, scope checks, outline, error codes, stack budget. |
+| Binding | `nx test engine` | Its Rust tests, then the napi crash suite (deep files, bounded memory). |
+| Lint | `pnpm lint` | Clippy with `-D warnings` on every crate, oxlint on the designer and the examples. |
+| Plugin | `nx test plugin` | HTTP API, MCP tools, Refine adapter (including `tsc` on generated pages). |
+| Designer | `nx test designer` | Unit tests plus architecture rules. |
+| Contract sync | `nx test contract-sync` | The whole pipeline and the CLI. |
+| Inferencer | `nx test inferencer` | The package's hooks and eject requests. |
 | Types | `pnpm typecheck` | All TypeScript packages. |
-| End to end | `pnpm exec playwright test` | Two projects, `playground` and `refine`, which start their own servers. |
-| Desktop shell | `cargo test --manifest-path crates/trivia_shell/Cargo.toml` | The shell's own workspace. |
+| Builds | `pnpm build` | Every package, plus production builds of the designer and the examples. |
+| End to end | `pnpm e2e` | Playwright: two projects, `playground` and `refine`, which start their own servers. |
+| Desktop shell | `nx test shell` | The shell's own Cargo workspace. |
+| Tooling | `nx test tools` | The generator, the release version actions and changelog rules. |
 
 Playwright ports come from the environment so you can run beside a live session:
 
@@ -393,9 +416,27 @@ TRIVIA_REFINE_APP_PORT=5312 TRIVIA_REFINE_PORT=4412 \
   pnpm exec playwright test
 ```
 
-Rebuild the plugin (`pnpm build:plugin`) before Playwright after changing it; the examples run the
-built output. There is no hosted CI configuration in this repository yet, so run the gate locally
-before pushing.
+`pnpm e2e` builds the plugin first; the examples run its built output. There is no hosted CI
+configuration in this repository yet, so run the gate locally before pushing.
+
+### Releases
+
+Every package and crate shares one version, tagged `v<version>`.
+
+```sh
+pnpm release 0.2.0 --dry-run     # preview: versions, CHANGELOG.md entry, GitHub release
+pnpm release 0.2.0               # or: pnpm release minor
+```
+
+A release:
+- bumps each `package.json`, `Cargo.toml`, `tauri.conf.json` and `Cargo.lock` entry in place;
+- writes `CHANGELOG.md` with a section per commit prefix (`engine:`, `designer:`, `MCP:`, …);
+- commits `release: v<version>`, tags, pushes, and creates the GitHub release;
+- never publishes to npm.
+
+It starts from a clean `main`. It refuses to run when a commit since the last release has a prefix
+that `nx.json` doesn't list, because Nx would leave that commit out of the changelog. The GitHub token
+comes from `GH_TOKEN`, `GITHUB_TOKEN` or git's credential helper.
 
 ---
 
@@ -457,10 +498,14 @@ are in real use.
 1. Read [`CLAUDE.md`](CLAUDE.md) and [`docs/architecture.md`](docs/architecture.md) first. The rules are
    load-bearing: never reprint a file, never mix UTF-8 and UTF-16 offsets, never prune unrelated imports.
 2. Keep changes inside the right slice. Add a failing test before fixing a bug.
-3. Run the relevant gate from [Testing and quality gates](#testing-and-quality-gates). Re-run the whole
-   suite after touching docs: `errors.rs` pins one `docs/api.md` example per `Op`.
-4. Leave `examples/**` clean (`git checkout -- examples/`) and do not bypass commit hooks.
-5. Open a pull request describing the behavior change and how you verified it.
+3. Run the relevant gate from [Testing and quality gates](#testing-and-quality-gates) (`pnpm affected`
+   covers what you touched). Re-run the whole suite after touching docs: `errors.rs` pins one
+   `docs/api.md` example per `Op`.
+4. Start each commit message with its area, `<area>: <what changed>` (`engine:`, `plugin:`,
+   `designer:`, `MCP:`, `docs:`, `repo:`, …). The changelog groups commits by it, and `pnpm release`
+   refuses an area that `nx.json` does not list.
+5. Leave `examples/**` clean (`git checkout -- examples/`) and do not bypass commit hooks.
+6. Open a pull request describing the behavior change and how you verified it.
 
 ---
 

@@ -20,6 +20,10 @@ MCP endpoint, the designer's selection sync and their docs. Every commit email i
 `.git/hooks/pre-commit` and `pre-push` refuse the work email. Session 1's leftover `swarm/*`
 and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'s history.
 
+**Nx** runs the tasks (`nx.json`, `CLAUDE.md` "Layout and commands"): `pnpm dev` starts the
+app and the designer together, `pnpm check` is the gate without e2e, and `pnpm release` cuts a
+release. Nx shows only ✔ per task: add `--outputStyle=stream` to see test counts.
+
 **Releases** (GitHub, private repo): `v0.1.0` is this state. Its four milestones are tagged
 after the fact as pre-releases: `v0.1.0-alpha.1` (session 1), `alpha.2` (MCP), `alpha.3`
 (Data tab, desktop shell) and `alpha.4` (Refine slices 1–4). Nothing is published to npm. The
@@ -143,23 +147,17 @@ the user's `~/Downloads/trivia-*.gif`).
 
 ```sh
 pnpm install
-pnpm build:engine            # napi addon (crates/trivia_napi → .node + index.js; both gitignored)
-pnpm build:plugin            # vite-plugin-ast-locator → dist (the playground imports the built plugin)
-pnpm --filter playground dev                 # user app, http://localhost:5173 (plugin + engine API)
-pnpm --filter refine-admin dev               # or the Refine example (docs/product.md), same port
-TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev
+pnpm dev                     # builds engine + plugin (cached), then refine-admin :5173 + designer :4400
+pnpm dev:playground          # the playground instead; pnpm dev:desktop adds the Tauri window
 #   designer: http://localhost:4400/__trivia/ (proxies everything else to the target)
 
-cargo test --workspace                       # engine + binding
+pnpm check                   # the gate without e2e: build, typecheck, lint, test, every project (Nx, cached)
+pnpm affected                # the same, only what changed since main
+pnpm e2e                     # Playwright (builds the plugin first)
+nx test plugin               # one project's target; nx = pnpm exec nx; --skip-nx-cache forces a run
 cargo test -p trivia_oxc_engine --test roundtrip   # one suite (~15 s; exhaustive byte round-trips)
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --manifest-path crates/trivia_shell/Cargo.toml   # the desktop shell (its own workspace)
-cargo run --manifest-path crates/trivia_shell/Cargo.toml    # a window on the designer (:4400)
-pnpm typecheck                               # all TS packages
-pnpm --filter @trivia/vite-plugin-ast-locator test
-pnpm --filter @trivia/designer test          # vitest (unit)
-pnpm --filter @trivia/contract-sync test     # runs hey-api codegen + real tsc on its output
-pnpm exec playwright test                    # e2e: starts the playground + designer itself
+pnpm release 0.2.0 --dry-run # versions, CHANGELOG.md, tag, GitHub release (README "Releases")
+pnpm exec playwright test                    # e2e directly: starts the playground + designer itself
 TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 pnpm exec playwright test e2e/canvas.spec.ts   # other ports, one spec
 # Playwright runs two projects: playground (designer on TRIVIA_PORT) and refine (refine-admin on
 # TRIVIA_REFINE_APP_PORT, its designer on TRIVIA_REFINE_PORT; defaults 5174/4401).

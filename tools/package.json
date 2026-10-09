@@ -1,0 +1,23 @@
+{
+  "name": "@trivia/tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace tooling: the package generator and the release helpers (version actions, changelog renderer, `pnpm release`)",
+  "type": "module",
+  "generators": "./generators.json",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@nx/devkit": "23.2.1",
+    "@nx/js": "23.2.1",
+    "@types/node": "^24.13.3",
+    "nx": "23.2.1",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.3"
+  },
+  "nx": {
+    "name": "tools"
+  }
+}

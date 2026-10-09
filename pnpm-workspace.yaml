@@ -2,3 +2,7 @@ packages:
   - packages/*
   - crates/trivia_napi
   - examples/*
+  - tools
+# nx's install script only updates the Nx Cloud client, which this repo never uses.
+allowBuilds:
+  nx: false

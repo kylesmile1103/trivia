@@ -14,3 +14,6 @@ crates/trivia_napi/index.d.ts
 
 # Agent worktrees and local Claude state
 .claude/
+
+# Nx task cache and workspace data (nx.json)
+.nx/

@@ -1,0 +1,10 @@
+{
+  "name": "@trivia/tools",
+  "generators": {
+    "package": {
+      "factory": "./generators/package/index.cjs",
+      "schema": "./generators/package/schema.json",
+      "description": "A new TypeScript library in packages/<name>, set up like the others and released with them"
+    }
+  }
+}

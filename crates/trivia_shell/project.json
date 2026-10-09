@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "shell",
+  "projectType": "application",
+  "implicitDependencies": ["designer"],
+  "targets": {
+    "dev": {
+      "command": "cargo run --manifest-path crates/trivia_shell/Cargo.toml",
+      "dependsOn": []
+    },
+    "test": {
+      "command": "cargo test --manifest-path crates/trivia_shell/Cargo.toml",
+      "dependsOn": [],
+      "inputs": ["default"]
+    },
+    "lint": {
+      "command": "cargo clippy --manifest-path crates/trivia_shell/Cargo.toml --all-targets -- -D warnings",
+      "inputs": ["default"]
+    }
+  }
+}

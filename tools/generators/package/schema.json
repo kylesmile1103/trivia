@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "TriviaPackage",
+  "title": "A new package in packages/",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Folder and Nx project name (kebab-case); the npm name is @trivia/<name>.",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What is the package called (kebab-case)?"
+    },
+    "description": {
+      "type": "string",
+      "description": "One sentence for package.json and the README.",
+      "default": ""
+    }
+  },
+  "required": ["name"]
+}

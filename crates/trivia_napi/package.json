@@ -20,9 +20,22 @@
   "scripts": {
     "build": "napi build --platform --release --esm",
     "build:debug": "napi build --platform --esm",
-    "test": "node test/deep-nesting.mjs"
+    "test": "cargo test -p trivia_napi && node test/deep-nesting.mjs",
+    "lint": "cargo clippy -p trivia_napi --all-targets -- -D warnings"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.8"
+  },
+  "nx": {
+    "name": "engine",
+    "implicitDependencies": ["oxc-engine"],
+    "targets": {
+      "build": {
+        "inputs": ["production", "^production", "rust"],
+        "outputs": ["{projectRoot}/*.node", "{projectRoot}/index.js", "{projectRoot}/index.d.ts"]
+      },
+      "test": { "dependsOn": ["build"], "inputs": ["default", "^production", "rust"] },
+      "lint": { "inputs": ["default", "^production", "rust"] }
+    }
   }
 }

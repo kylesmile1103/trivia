@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "oxc-engine",
+  "projectType": "library",
+  "targets": {
+    "test": {
+      "command": "cargo test -p trivia_oxc_engine",
+      "inputs": ["default", "rust", "fixtures"]
+    },
+    "lint": {
+      "command": "cargo clippy -p trivia_oxc_engine --all-targets -- -D warnings",
+      "inputs": ["default", "rust"]
+    }
+  }
+}
