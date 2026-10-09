@@ -20,6 +20,12 @@ MCP endpoint, the designer's selection sync and their docs. Every commit email i
 `.git/hooks/pre-commit` and `pre-push` refuse the work email. Session 1's leftover `swarm/*`
 and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'s history.
 
+**Releases** (GitHub, private repo): `v0.1.0` is this state. Its four milestones are tagged
+after the fact as pre-releases: `v0.1.0-alpha.1` (session 1), `alpha.2` (MCP), `alpha.3`
+(Data tab, desktop shell) and `alpha.4` (Refine slices 1–4). Nothing is published to npm. The
+plugin's test server never reaps idle sockets: four Refine tests hung up whenever a parallel
+`tsc` run blocked the event loop past Node's 5 s keep-alive.
+
 **Session 2:**
 - **Round-2 residuals fixed**, each with a regression test that failed first:
   - Deep files: locators grow with the square of nesting (50 000 nested elements took over
