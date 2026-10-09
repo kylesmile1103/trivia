@@ -324,6 +324,21 @@ export class RefineAdapter {
     return { ops, label: `Add ${wanted.join(', ')} ${wanted.length === 1 ? 'page' : 'pages'} for ${humanize(name)}` }
   }
 
+  /** Each `<Refine resources>` action that names a path: its resource, the action and the path. */
+  async resourceRoutes(): Promise<Array<{ resource: string; action: string; path: string }>> {
+    const resources = (await this.#app())?.resources
+    if (resources?.kind !== 'array') return []
+    return resources.elements.flatMap((r) => {
+      if (r.kind !== 'object') return []
+      const name = r.properties.find((p) => p.key === 'name')?.value
+      if (name?.kind !== 'string') return []
+      return ['list', 'create', 'edit', 'show', 'clone'].flatMap((action) => {
+        const value = r.properties.find((p) => p.key === action)?.value
+        return value?.kind === 'string' ? [{ resource: name.value, action, path: value.value }] : []
+      })
+    })
+  }
+
   /** The file and component rendering `<Refine resources>`. */
   async #app(): Promise<AppShell | null> {
     const { root } = this.#host

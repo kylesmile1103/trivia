@@ -264,7 +264,7 @@ shows the edit immediately.
 
 | Tool | Purpose |
 | --- | --- |
-| `trivia_get_selection`, `trivia_inspect`, `trivia_outline`, `trivia_list_components` | Read the selection, a node, a file's element tree, and the component library. |
+| `trivia_get_selection`, `trivia_inspect`, `trivia_outline`, `trivia_list_components`, `trivia_list_routes` | Read the selection, a node, a file's element tree, the component library, and the app's routes with each page's file. |
 | `trivia_apply` | Apply one or more ops as a single undo entry labelled `Agent: ...`. Every stale-locator guard is required. |
 | `trivia_undo` | Undo the newest entry only if its label matches, so a user's own edit is never undone by mistake. |
 | `trivia_screenshot` | The canvas as a PNG, so the agent can check its own edit. |

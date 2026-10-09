@@ -112,8 +112,9 @@ stay in `tests/` (Cargo's convention); unit tests stay in their module.
 - **vite-plugin-ast-locator**: `index.ts` composes `transform.ts` (the locator stamping),
   `api/` (the HTTP routes over `service.ts`, which owns the edit queue, undo history and
   selection, and `guard.ts`, the caller checks) and `mcp/` (the MCP endpoint and its tools,
-  over the same service, behind the same guard). Anything that edits code goes through
-  `EngineService`, so every client shares one queue and one history.
+  over the same service, behind the same guard). `routes/` reads the app's routes from the
+  source (React Router, TanStack Router); `refine/` is the Refine adapter. Anything that edits
+  code goes through `EngineService`, so every client shares one queue and one history.
 - **contract-sync** follows its pipeline (`sync.ts`): `adapters/` (where a spec comes from) →
   `spec/` (the raw contract) → `codegen/` (hey-api, and reading back what it wrote) →
   `manifest/` (classification, naming, the generator and the manifest types).

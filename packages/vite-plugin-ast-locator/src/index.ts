@@ -130,6 +130,13 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         importBase: paths.importBase,
         version: pkg.version,
         engine,
+        // Routes name their pages' modules as the app's own imports resolve (aliases included).
+        resolve: async (specifier, importer) => {
+          const resolved = await server.pluginContainer.resolveId(specifier, path.join(server.config.root, importer))
+          if (!resolved || resolved.external) return null
+          const rel = path.relative(server.config.root, resolved.id.split('?')[0]!)
+          return rel.startsWith('..') || path.isAbsolute(rel) || rel.split(path.sep).includes('node_modules') ? null : rel.split(path.sep).join('/')
+        },
         ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),
       })
       const rules = { logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }

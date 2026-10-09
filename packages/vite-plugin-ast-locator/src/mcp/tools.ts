@@ -280,6 +280,28 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
   )
 
   server.registerTool(
+    'trivia_list_routes',
+    {
+      title: 'List the app\'s routes',
+      description:
+        'Every page a URL reaches, read from the source (React Router <Route>s and route objects, nested <Routes> ' +
+        'joined onto their parent, TanStack Router file and code routes): its URL pattern and params, the component ' +
+        'it renders and that component\'s file, where the route is declared, and in a Refine app the resource and ' +
+        'action. Use it to find the file of the page the user names ("the edit page"), or a route\'s <Route> element.',
+      annotations: reads,
+    },
+    () =>
+      run(async () => {
+        const routes = await service.routes()
+        const lines = routes.map((r) => {
+          const label = r.resource ? ` (${r.resource.name} ${r.resource.action})` : ''
+          return `${r.path}${label}  <${r.component ?? 'lazy'}> ${r.file ?? '(module not resolved)'}`
+        })
+        return { data: { routes }, summary: lines.join('\n') || 'No routes found: the app has no React Router or TanStack Router routes under src/.' }
+      }),
+  )
+
+  server.registerTool(
     'trivia_list_components',
     {
       title: 'List the component library',

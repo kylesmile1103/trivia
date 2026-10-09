@@ -9,6 +9,8 @@ import path from 'node:path'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
 import { type Mention, RefineAdapter } from '../refine/index.js'
+import { type RouteEntry, type RoutesHost, discoverRoutes, fileResolver } from '../routes/index.js'
+import { normalizePath } from '../routes/paths.js'
 import { uncommitted } from './git.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
@@ -30,6 +32,13 @@ export interface ServiceOptions {
   manifestPath?: string
   /** How long a screenshot request waits for an open designer (ms). Default 15 000. */
   screenshotTimeoutMs?: number
+  /** How the app's bundler resolves an import (the plugin passes Vite's); default: relative and `@/` → `src/`. */
+  resolve?: RoutesHost['resolve']
+}
+
+/** A route, with the Refine resource and action that declare its path (`<Refine resources>`). */
+export interface AppRoute extends RouteEntry {
+  resource: { name: string; action: string } | null
 }
 
 export interface SyncOptions {
@@ -114,6 +123,23 @@ export class EngineService {
   /** The value at a value path (`<file>#<scope>#<path>`), unwrapped to its literal. */
   describeValue(path: string): unknown {
     return unwrap<unknown>(this.#options.engine.describeValue(this.#options.root, path))
+  }
+
+  /** The app's routes, read from its source (docs/api.md `GET /routes`). */
+  async routes(): Promise<AppRoute[]> {
+    const { root } = this.#options
+    const found = await discoverRoutes({
+      root,
+      outline: (file) => this.outline(file),
+      inspect: (locator) => this.inspect(locator),
+      describeValues: (file) => this.describeValues(file),
+      resolve: this.#options.resolve ?? fileResolver(root),
+    })
+    const resources = await this.refine.resourceRoutes().catch(() => [])
+    return found.map((route) => {
+      const declared = resources.find((r) => normalizePath(r.path) === normalizePath(route.path))
+      return { ...route, resource: declared ? { name: declared.resource, action: declared.action } : null }
+    })
   }
 
   /** Where `file` still names `name`: member accesses, string literals, object keys, destructured names. */

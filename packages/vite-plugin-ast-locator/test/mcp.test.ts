@@ -75,6 +75,7 @@ describe('tools', () => {
       'trivia_get_selection',
       'trivia_inspect',
       'trivia_list_components',
+      'trivia_list_routes',
       'trivia_outline',
       'trivia_screenshot',
       'trivia_sync_openapi',
@@ -88,6 +89,7 @@ describe('tools', () => {
       'trivia_get_selection',
       'trivia_inspect',
       'trivia_list_components',
+      'trivia_list_routes',
       'trivia_outline',
       'trivia_screenshot',
     ])

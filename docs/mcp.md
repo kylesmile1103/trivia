@@ -45,6 +45,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_inspect` (read-only) | `{ locator }` | `{ node: NodeDetails & { component } }` |
 | `trivia_outline` (read-only) | `{ file }` | `{ trees: OutlineNode[] }` (and an indented text tree) |
 | `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
+| `trivia_list_routes` (read-only) | — | `{ routes: AppRoute[] }` (and a line per route: URL, page component, file) |
 | `trivia_get_page` (read-only) | `{ file? }` | `{ file, pages: ListPage[], hint? }` |
 | `trivia_edit_columns` | `{ file, component?, changes: ColumnChange[] (1+), label }` | `ApplyResult & { page: ListPage, selection }` |
 | `trivia_edit_fields` | `{ file, component?, changes: FieldChange[] (1+), label }` | `ApplyResult & { page: FormPage, selection }` |

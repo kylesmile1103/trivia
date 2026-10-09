@@ -390,10 +390,13 @@ through the full gate.
   `moveNode` at index 0 for inside), the engine's names as guards, and the tree's canvas
   version, so a tree that went stale is refused. `locator.ts` moved to `shared/lib/`, since
   two features read locators now.
-- **B. Routes from the source** (plugin, MCP `trivia_list_routes`): react-router `<Route>`
-  trees and route objects (`createBrowserRouter` and kin, `useRoutes`), nested `<Routes>` in a
-  page joined onto its parent's path, TanStack Router (file-based `createFileRoute` and
-  code-based `createRoute`), with Refine resource labels.
+- **B. Routes from the source: done.** `GET /routes` and MCP `trivia_list_routes`
+  (`packages/vite-plugin-ast-locator/src/routes/`, `docs/api.md` `AppRoute`): React Router
+  `<Route>` trees and route objects (`createBrowserRouter` and kin, `useRoutes`), a page's own
+  `<Routes>` under a splat route joined onto its base, TanStack Router (file-based
+  `createFileRoute`, code-based `createRoute`), and Refine resource labels. Read statically:
+  the engine's outline, inspect and value descriptions, with Vite resolving each page's
+  module. The engine now also lists a hook call a scope returns (`return useRoutes([...])`).
 - **C. A Pages tab** lists them, with a path field; clicking a route loads it in the canvas.
 
 ## Decisions to review (⚑)

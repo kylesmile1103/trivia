@@ -50,6 +50,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/components` | — | `ComponentSchema[]` |
 | GET | `/@trivia/api/inspect` | `?locator=` | `NodeDetails` |
 | GET | `/@trivia/api/outline` | `?file=` (project-relative) | `OutlineNode[]` |
+| GET | `/@trivia/api/routes` | — | `AppRoute[]` (the app's pages, from the source) |
 | POST | `/@trivia/api/apply` | `{ op: Op, label?: string }` | `ApplyResult` |
 | POST | `/@trivia/api/batch` | `{ ops: Op[], label?: string }` | `ApplyResult` (last op's locator) |
 | POST | `/@trivia/api/undo` | `{}` | `HistoryResult` |
@@ -86,6 +87,22 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   fetched on every request) or a spec file that is gone.
 - `OutlineNode = { locator, name, line, isDirect, text?, children: OutlineNode[] }`: every JSX
   tree of the file, component by component in source order (`text` as in `NodeDetails`).
+- `AppRoute = { path, params, index, catchAll, router, component, file, declared: { file, line },
+  locator, resource }`: one per page a URL reaches, read from the source under `src/`
+  (`packages/vite-plugin-ast-locator/src/routes/`).
+  - React Router: `<Route>` trees (in `<Routes>` or alone) and route objects
+    (`createBrowserRouter`/`createHashRouter`/`createMemoryRouter`, `useRoutes`, also in
+    `return useRoutes([...])`). A splat route's page that renders its own `<Routes>` or
+    `useRoutes` has those joined onto the splat's base (`settings/*` + `profile` →
+    `/settings/profile`). TanStack Router: `createFileRoute("<id>")` files and code-based
+    `createRoute({ getParentRoute, path })`.
+  - `path` keeps its router's syntax (`/customers/edit/:id`, `/posts/$postId`); `params` lists
+    what a URL needs (a splat is `*`). A pathless layout, and a route whose index child serves
+    the same URL, are not listed; one entry per URL.
+  - `component` is as named where the route is declared (null for a `lazy` route module);
+    `file` is that component's module as the app's imports resolve it (Vite's resolver), null
+    for a package. `locator` is the `<Route>` element's (JSX routes only).
+  - `resource` is `{ name, action }` when `<Refine resources>` declares that path, else null.
 - `SelectionState = { selection: { locator, name } | null, version, by: "designer" | "agent" | null }`:
   what the designer has selected, for agents (`docs/mcp.md`). The designer posts every change
   (`name` is the tag name it saw there). Repeating the current selection changes nothing;
