@@ -189,6 +189,7 @@ export class CanvasController {
     moveRefusal: (locator) => this.moveRefusal(locator),
     move: (source, target, placement, version) => this.moveTo(source, target, placement, version),
     moveStep: (locator, direction, version) => this.moveStep(locator, direction, version),
+    navigate: (url) => this.iframe.contentWindow?.location.assign(url),
   }
 
   private readonly iframe: HTMLIFrameElement
@@ -281,6 +282,7 @@ export class CanvasController {
     this.closeMenu()
     this.previews.reset()
     this.info.clear()
+    this.notePath()
     designer.getState().bumpRevision()
   }
 
@@ -293,7 +295,19 @@ export class CanvasController {
     this.info.clear()
     this.previews.clear()
     this.settlePress()
+    this.notePath()
     designer.getState().bumpRevision()
+  }
+
+  /**
+   * Where the app is: its URL's path, query and hash, for the Pages tab. Read when a document
+   * attaches, after a hot update, and on every layout pass: a client-side navigation (a link, a
+   * redirect) changes the DOM, which schedules one. The store ignores an unchanged path.
+   */
+  private notePath(): void {
+    const location = this.iframe.contentWindow?.location
+    const path = location && location.href !== 'about:blank' ? `${location.pathname}${location.search}${location.hash}` : null
+    designer.getState().setCanvasPath(path)
   }
 
   private onStore(s: DesignerState, prev: DesignerState): void {
@@ -790,6 +804,7 @@ export class CanvasController {
 
   private measure(): void {
     this.settlePress() // before reading the store: the box then shows what it selected
+    this.notePath() // a client-side navigation re-renders without a hot update: catch it here
     const s = designer.getState()
     const doc = this.session.doc
     const o = this.overlay.getBoundingClientRect()

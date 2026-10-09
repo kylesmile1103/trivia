@@ -77,12 +77,12 @@ async function openDesigner(page: Page): Promise<Designer> {
       const iframe = document.createElement('iframe')
       iframe.src = '/'
       iframe.title = 'Test canvas'
-      // Between the palette (w-60) and the inspector (w-80).
+      // Between the left column (w-68) and the inspector (w-80).
       Object.assign(iframe.style, {
         position: 'fixed',
         top: '0',
-        left: '240px',
-        width: 'calc(100vw - 560px)',
+        left: '272px',
+        width: 'calc(100vw - 592px)',
         height: '100vh',
         border: '0',
         zIndex: '1',

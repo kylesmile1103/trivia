@@ -49,6 +49,11 @@ export interface CanvasApi {
   move(source: string, target: string, placement: MovePlacement, version: number): Promise<void>
   /** Move `locator` one sibling up or down (the right-click menu's Move up / Move down). */
   moveStep(locator: string, direction: 'up' | 'down', version: number): Promise<void>
+  /**
+   * Load `url` (a path in the app: `/customers/edit/42`) in the canvas. A full load, so it works
+   * whatever the app routes with; the store's `canvasPath` follows once it has rendered.
+   */
+  navigate(url: string): void
   /** A PNG (data URL) of the app's whole page, up to 4000 px tall; null without a page. */
   capture(): Promise<{ png: string; width: number; height: number } | null>
   /**
@@ -69,6 +74,7 @@ const noop: CanvasApi = {
   moveRefusal: () => 'the canvas is not open',
   move: async () => {},
   moveStep: async () => {},
+  navigate: () => {},
   capture: async () => null,
 }
 
@@ -84,6 +90,7 @@ export const canvas: CanvasApi = {
   moveRefusal: (l) => current.moveRefusal(l),
   move: (s, t, p, v) => current.move(s, t, p, v),
   moveStep: (l, d, v) => current.moveStep(l, d, v),
+  navigate: (url) => current.navigate(url),
   capture: () => current.capture(),
   fitZoom: () => current.fitZoom?.() ?? null,
 }

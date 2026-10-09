@@ -352,6 +352,24 @@ export interface FormPage {
 /** A Refine page Trivia can edit. */
 export type RefinePage = ListPage | FormPage
 
+/** A page a URL reaches, read from the app's source (docs/api.md `AppRoute`). */
+export interface AppRoute {
+  /** The URL pattern in its router's syntax: `/customers/edit/:id`, `/posts/$postId`. */
+  path: string
+  /** What a URL needs filled in, in order; a splat is `*`. */
+  params: string[]
+  index: boolean
+  catchAll: boolean
+  router: 'react-router' | 'tanstack-router'
+  component: string | null
+  /** The component's module, project-relative; null for a package. */
+  file: string | null
+  declared: { file: string; line: number }
+  locator: string | null
+  /** The Refine resource and action that declare this path. */
+  resource: { name: string; action: string } | null
+}
+
 export type FieldChange =
   | { action: 'add'; field: string; index?: number; label?: string }
   | { action: 'remove'; field: string }

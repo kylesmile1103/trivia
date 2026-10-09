@@ -397,7 +397,15 @@ through the full gate.
   `createFileRoute`, code-based `createRoute`), and Refine resource labels. Read statically:
   the engine's outline, inspect and value descriptions, with Vite resolving each page's
   module. The engine now also lists a hook call a scope returns (`return useRoutes([...])`).
-- **C. A Pages tab** lists them, with a path field; clicking a route loads it in the canvas.
+- **C. A Pages tab: done** (`features/pages`). It lists the routes with their labels, URLs and
+  page files, marks the one the canvas is on (a catch-all only when nothing else matches), and
+  loads a route on click. A route with params asks for them, prefilled from the canvas URL when
+  it is on that route, else with the last value given for that param. The path field shows the
+  canvas URL and opens any path. Loading is a full load of the iframe (`canvas.navigate`), so it
+  works with any router; the canvas notes its URL after each load and re-render
+  (`store.canvasPath`), so in-app navigation moves the mark too.
+  The left column grew from 240 to 272 px so its four tabs fit (at 240 the Data tab slid under
+  the canvas). `e2e/refine/routes.spec.ts` covers it end to end.
 
 ## Decisions to review (⚑)
 

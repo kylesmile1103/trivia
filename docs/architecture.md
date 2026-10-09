@@ -63,7 +63,10 @@ Where a new file goes:
 - Used by one feature: inside that feature, even if it looks general (`features/inspector/
   tailwind/` is the inspector's). Move it to `shared/` when a second feature needs it.
 - A new panel, drawer or tool (the Data Explorer, say): a new `features/<name>/` with an
-  `index.ts`, mounted in `app/` (`features/layers` is one: a tab of `app/LeftPanel.tsx`).
+  `index.ts`, mounted in `app/` (`features/layers` and `features/pages` are tabs of
+  `app/LeftPanel.tsx`). What a feature needs from the canvas goes through `shared/canvas.ts`
+  (the layers panel moves elements with `canvas.move`, the pages panel loads URLs with
+  `canvas.navigate`).
 - Engine API calls and types: `shared/engine/`. Store state and the action bus:
   `shared/state/`. Every write to user code goes through `dispatch` (`shared/state/actions.ts`).
 - shadcn components: `shared/ui/` (components.json points `npx shadcn add` there). The

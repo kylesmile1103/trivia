@@ -29,6 +29,19 @@ ad-hoc signed, Apple silicon), and `pnpm release` attaches the .dmg to each GitH
 v0.2.0 (`crates/trivia_shell/README.md`). The packaged app was checked from Finder: waiting page,
 then the designer, and `trivia_screenshot` answered from it.
 
+**Layers and Pages** (after v0.2.0; the user lifted the editor freeze for them,
+`docs/product.md` "Editor: layers and pages"): Layers rows drag onto rows (before, after,
+inside) and move with Alt+↑/↓; the Pages tab lists the routes from `GET /routes` (React Router,
+TanStack Router, Refine labels; MCP `trivia_list_routes`) and loads one in the canvas.
+- Catch: the gate runs in a scratch git worktree (`git worktree add`), not the main checkout,
+  whenever the user has uncommitted edits in `examples/` or dev servers running there: the e2e
+  suite edits `examples/` and ends with `git checkout -- examples/`, and the plugin tests copy
+  `examples/refine-admin` as it is on disk.
+- Catch: three tests compared against the literal "0.1.0", so the v0.2.0 bump turned `main`
+  red; tests now read the package's own version.
+- Known noise: one e2e run logs `Cannot read properties of null (reading 'useRef')` from Vite
+  (it predates these changes; every test passes). Not investigated yet.
+
 **Releases** (GitHub, private repo): `v0.2.0` adds Nx and the desktop app to `v0.1.0`. The four
 milestones before `v0.1.0` are tagged after the fact as pre-releases: `v0.1.0-alpha.1` (session 1), `alpha.2` (MCP), `alpha.3`
 (Data tab, desktop shell) and `alpha.4` (Refine slices 1–4). Nothing is published to npm. The

@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import type { ComponentSchema, Health, HistoryState, NodeDetails, Placement } from '@/shared/engine/types'
 import type { Template } from '@/shared/template'
 
-export type LeftPanel = 'components' | 'layers' | 'data'
+export type LeftPanel = 'components' | 'layers' | 'pages' | 'data'
 
 export type DragSource =
   | { kind: 'palette'; template: Template }
@@ -54,6 +54,8 @@ export interface DesignerState {
   drop: DropTarget | null
   /** Bumped by the canvas whenever the iframe DOM changes (HMR); consumers re-measure/refetch. */
   revision: number
+  /** Where the canvas is in the app: path, query and hash; null before a document has loaded. */
+  canvasPath: string | null
   /**
    * Set around undo/redo: the tag name of the selected node before the history jump. Locators
    * are positions, so after the jump the same locator can name a different element; when the
@@ -74,6 +76,7 @@ export interface DesignerState {
   setDrag(drag: DragSource | null): void
   setDrop(drop: DropTarget | null): void
   bumpRevision(): void
+  setCanvasPath(path: string | null): void
   expectSelectedName(name: string | null): void
 }
 
@@ -93,6 +96,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
   drag: null,
   drop: null,
   revision: 0,
+  canvasPath: null,
   expectedSelectedName: null,
 
   setHealth: (health) => set({ health }),
@@ -126,6 +130,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
       revision: s.revision + 1,
       expectedSelectedName: s.expectedSelectedName ?? (s.details !== null && s.details.locator === s.selected ? s.details.name : null),
     })),
+  setCanvasPath: (canvasPath) => set((s) => (s.canvasPath === canvasPath ? s : { canvasPath })),
   expectSelectedName: (expectedSelectedName) => set({ expectedSelectedName }),
 }))
 

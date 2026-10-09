@@ -75,6 +75,7 @@ export function createHarnessCanvas(frame: HTMLIFrameElement): HarnessCanvas {
     moveRefusal: () => 'the style harness does not move elements',
     move: async () => {},
     moveStep: async () => {},
+    navigate: () => {}, // the harness renders one fixed page
     capture: async () => null,
 
     previewClassName(locator, previous, next) {

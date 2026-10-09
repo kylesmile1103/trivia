@@ -73,6 +73,7 @@ around the opposite rule.
 | **Visual canvas** | Your running app in a same-origin iframe with a hit-testing overlay, hover and selection boxes, drag to move, drop zones, zoom to fit, and a right-click menu for structure edits. |
 | **Inspector** | Prop editors built from your own `src/components/ui/*` (variants from `cva(...)`, defaults, enum options), a Tailwind class manager and a style panel with two-phase editing (live CSS preview during a gesture, Tailwind classes written on commit). |
 | **Palette and Layers** | Insert any component from your library; a Layers tree of the rendered app, rearranged by dragging rows (before, after, inside) or with Alt+↑/↓; move elements across files with imports carried along. |
+| **Pages** | The app's routes, read from its source (React Router, TanStack Router, Refine labels), each with its page file: click one to load it in the canvas (params asked for, prefilled from the URL), or type any path. |
 | **Engine ops** | `insert`, `insertChild`, `updateProp`, `setText`, `remove`, `move`, `moveNode`, `bindQuery`, `createFile`, plus value ops (`insertElement`, `removeElement`, `moveElement`, `setProperty`, `removeProperty`) for object and array literals. |
 | **Undo / redo** | Guarded before/after snapshots. Byte-exact; refuses with `409 conflict` if a file changed elsewhere. |
 | **Data tab** | Bound tables and create forms from an OpenAPI contract (TanStack Query, react-hook-form, zod, shadcn `Field`). |

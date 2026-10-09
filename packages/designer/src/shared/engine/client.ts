@@ -3,6 +3,7 @@
 
 import type {
   ApiErrorPayload,
+  AppRoute,
   ApplyResult,
   ColumnChange,
   ColumnPlan,
@@ -79,6 +80,7 @@ export const engine = {
   postScreenshot: (answer: { id: string; png: string; width: number; height: number } | { id: string; error: string }) =>
     post<null>('/screenshot', answer),
   select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
+  routes: () => request<AppRoute[]>('/routes'),
   refinePages: () => request<RefinePage[]>('/refine/pages'),
   refinePage: (file: string) => request<RefinePage[]>(`/refine/page?file=${encodeURIComponent(file)}`),
   planColumns: (file: string, component: string, changes: ColumnChange[]) =>
