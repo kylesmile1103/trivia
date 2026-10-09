@@ -70,7 +70,11 @@ export function createHarnessCanvas(frame: HTMLIFrameElement): HarnessCanvas {
 
   return {
     elements,
-    layers: () => [], // the harness has no layers panel
+    layers: () => [], // the harness has no layers panel, so nothing moves through it
+    version: () => 0,
+    moveRefusal: () => 'the style harness does not move elements',
+    move: async () => {},
+    moveStep: async () => {},
     capture: async () => null,
 
     previewClassName(locator, previous, next) {

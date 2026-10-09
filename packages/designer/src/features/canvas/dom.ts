@@ -2,8 +2,7 @@
 // to that DOM or attaches listeners to its elements.
 
 import type { Layer } from '@/shared/canvas'
-
-import { isLibraryLocator } from './locator'
+import { isLibraryLocator } from '@/shared/lib/locator'
 
 export const LOCATOR_ATTR = 'data-ast-node'
 const SELECTOR = `[${LOCATOR_ATTR}]`

@@ -8,11 +8,12 @@
 
 import { toast } from 'sonner'
 
-import type { CanvasApi } from '@/shared/canvas'
+import type { CanvasApi, MovePlacement } from '@/shared/canvas'
 import { ApiError } from '@/shared/engine/client'
 import type { ImportSpec, NodeDetails, Op, Placement } from '@/shared/engine/types'
 import { dispatch, dispatchBatch, isApplying, onIdle } from '@/shared/state/actions'
 import { ZOOM_MIN } from '@/shared/state/zoom'
+import { isRootLocator, parseLocator } from '@/shared/lib/locator'
 import { type DesignerState, designer } from '@/shared/state/store'
 import { TEMPLATE_MIME, type Template, templateOps } from '@/shared/template'
 
@@ -31,7 +32,6 @@ import {
 } from './dom'
 import { type DragSubject, type DropPlan, computeDrop } from './dropzone'
 import { FrameSession, type FrameTransform } from './frame-session'
-import { isRootLocator, parseLocator } from './locator'
 import { NodeInfo } from './node-info'
 import { PREVIEW_ATTR, PREVIEW_STYLE_ID, Previews } from './previews'
 
@@ -185,6 +185,10 @@ export class CanvasController {
       const uiDir = designer.getState().health?.uiDir
       return doc && uiDir ? layerTree(doc, uiDir, (locator, el) => this.nameFor(locator, el)) : []
     },
+    version: () => this.epoch,
+    moveRefusal: (locator) => this.moveRefusal(locator),
+    move: (source, target, placement, version) => this.moveTo(source, target, placement, version),
+    moveStep: (locator, direction, version) => this.moveStep(locator, direction, version),
   }
 
   private readonly iframe: HTMLIFrameElement
@@ -437,15 +441,9 @@ export class CanvasController {
 
   private beginMove(g: Gesture, pointerId: number): void {
     const s = designer.getState()
-    const details = this.detailsFor(g.locator)
     const elements = this.elementsOf(g.locator)
-    const name = details?.name ?? (elements[0] ? guessName(elements[0]) : 'node')
-    // The engine refuses these (docs/api.md); say so up front instead of after the drop.
-    const refusal = isRootLocator(g.locator)
-      ? `it is the root of ${parseLocator(g.locator)?.scope ?? 'its component'}`
-      : (details && !details.isDirect) || elements.length > 1
-        ? 'it is rendered from a {…} expression'
-        : null
+    const name = this.detailsFor(g.locator)?.name ?? (elements[0] ? guessName(elements[0]) : 'node')
+    const refusal = this.moveRefusal(g.locator)
     if (refusal) {
       this.gesture = null
       toast.error(`Can't move <${name}>: ${refusal}.`)
@@ -481,6 +479,54 @@ export class CanvasController {
       },
       `Move ${name}`,
     )
+  }
+
+  /** Why `locator` can't move. The engine refuses these (docs/api.md): say so before the drop. */
+  private moveRefusal(locator: string): string | null {
+    if (isRootLocator(locator)) return `it is the root of ${parseLocator(locator)?.scope ?? 'its component'}`
+    const details = this.detailsFor(locator)
+    if ((details && !details.isDirect) || this.elementsOf(locator).length > 1) return 'it is rendered from a {…} expression'
+    return null
+  }
+
+  /**
+   * Move `source` before/after `target`, or inside it as its first child (`moveNode` at 0), for
+   * a move made outside the canvas (the layers panel). `since` is the epoch its locators were
+   * read at: expectedNames refuses them once the canvas has changed.
+   */
+  private async moveTo(source: string, target: string, placement: MovePlacement, since: number, suffix = ''): Promise<void> {
+    const refusal = this.moveRefusal(source)
+    if (refusal) {
+      toast.error(`Nothing was moved: ${refusal}.`, { id: REFUSED_TOAST })
+      return
+    }
+    const names = await this.expectedNames([source, target], since, 'Nothing was moved')
+    if (names === null) return
+    const [name, targetName] = names
+    await dispatch(
+      placement === 'inside'
+        ? { op: 'moveNode', source, expectedName: name, parent: target, expectedParentName: targetName, index: 0 }
+        : { op: 'move', source, expectedName: name, target, expectedTargetName: targetName, placement },
+      `Move ${name}${suffix}`,
+    )
+  }
+
+  /** Move `locator` past its previous or next sibling, under the right-click menu's rules. */
+  private async moveStep(locator: string, direction: 'up' | 'down', since: number): Promise<void> {
+    let menu: Awaited<ReturnType<CanvasController['menuFor']>>
+    try {
+      menu = await this.menuFor(locator)
+    } catch (error) {
+      toast.error(`Nothing was moved: ${errorMessage(error)}`, { id: REFUSED_TOAST })
+      return
+    }
+    const why = direction === 'up' ? menu.moveUp : menu.moveDown
+    const target = direction === 'up' ? menu.prev : menu.next
+    if (why !== null || target === null) {
+      toast.info(`Can't move <${menu.name}> ${direction}: ${why ?? 'it has no sibling there'}.`, { id: REFUSED_TOAST })
+      return
+    }
+    await this.moveTo(locator, target, direction === 'up' ? 'before' : 'after', since, ` ${direction}`)
   }
 
   private cancelMove(): void {
@@ -684,13 +730,7 @@ export class CanvasController {
     const up = action === 'moveUp'
     const target = up ? menu.prev : menu.next
     if (target === null) return
-    const names = await this.expectedNames([menu.locator, target], menu.epoch, 'Nothing was moved')
-    if (names === null) return
-    const [name, targetName] = names
-    await dispatch(
-      { op: 'move', source: menu.locator, expectedName: name, target, expectedTargetName: targetName, placement: up ? 'before' : 'after' },
-      `Move ${name} ${up ? 'up' : 'down'}`,
-    )
+    await this.moveTo(menu.locator, target, up ? 'before' : 'after', menu.epoch, up ? ' up' : ' down')
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

@@ -49,7 +49,9 @@ the same guarded, byte-preserving operations.
 5. Quick tweaks and point and ask (built: `docs/mcp.md`).
 
 Frozen: general editor features (canvas, inspector, style controls) get fixes, not new
-features, until the jobs above are in use. The Data tab's raw TanStack-hooks path
+features, until the jobs above are in use. The user lifted the freeze on 2026-10-09 for two of
+them, after trying the designer on refine-admin (see "Editor: layers and pages" below):
+moving elements from the Layers tab, and a Pages tab to go between routes. The Data tab's raw TanStack-hooks path
 (`bindQuery`) stays as is. In a Refine app, data goes through Refine's hooks, so Trivia writes
 `useTable`/`useForm` code, never raw TanStack hooks. Generating a Refine data provider from
 OpenAPI is day 1, so it's out.
@@ -373,6 +375,26 @@ Shipped in three parts, each through the full gate:
     conventions, and an app that renders `<Refine resources={[…]}>` with `<Route path>`s. A
     list shows the first six scalar fields; object and array body fields are left as comments
     in forms.
+
+## Editor: layers and pages (asked by the user, 2026-10-09)
+
+The design was agreed with the user before it was built. It ships in three slices, each
+through the full gate.
+
+- **A. Layers tab moves elements: done.** Drag a row onto another: its top quarter is before
+  it, its bottom quarter after it, its middle inside it as the first child. A leaf splits in
+  halves; an open row's bottom edge means inside; a component's root takes only inside
+  (`features/layers/drop.ts`). Alt+↑/↓ moves the focused row past a sibling (the right-click
+  menu's Move up/down rules). The canvas makes every edit through the shared canvas API
+  (`move`, `moveStep`, `moveRefusal`, `version`): the same `move` op as a canvas drag (and
+  `moveNode` at index 0 for inside), the engine's names as guards, and the tree's canvas
+  version, so a tree that went stale is refused. `locator.ts` moved to `shared/lib/`, since
+  two features read locators now.
+- **B. Routes from the source** (plugin, MCP `trivia_list_routes`): react-router `<Route>`
+  trees and route objects (`createBrowserRouter` and kin, `useRoutes`), nested `<Routes>` in a
+  page joined onto its parent's path, TanStack Router (file-based `createFileRoute` and
+  code-based `createRoute`), with Refine resource labels.
+- **C. A Pages tab** lists them, with a path field; clicking a route loads it in the canvas.
 
 ## Decisions to review (⚑)
 

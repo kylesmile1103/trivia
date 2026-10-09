@@ -20,6 +20,9 @@ export interface Layer {
   children: Layer[]
 }
 
+/** Where a moved element lands relative to the element it is dropped on. */
+export type MovePlacement = 'before' | 'after' | 'inside'
+
 export interface CanvasApi {
   /** Iframe DOM elements currently carrying `locator` (several when rendered by .map()). */
   elements(locator: string): HTMLElement[]
@@ -31,6 +34,21 @@ export interface CanvasApi {
   clearPreviews(): void
   /** The rendered app's element tree, as selection sees it (usage sites, nested as rendered). */
   layers(): Layer[]
+  /**
+   * A token for the DOM the canvas shows: it changes whenever locators read from it may stop
+   * describing the source (an edit landed, the app re-rendered). Read it with `layers()` and pass
+   * it back with their locators, so an edit on a tree that has gone stale is refused.
+   */
+  version(): number
+  /** Why `locator` can't be moved (a component's root, rendered from `{…}`), or null. */
+  moveRefusal(locator: string): string | null
+  /**
+   * Move `source` before or after `target`, or inside it as its first child: one undo entry, the
+   * engine's names as guards. Refusals and errors are reported to the user, not thrown.
+   */
+  move(source: string, target: string, placement: MovePlacement, version: number): Promise<void>
+  /** Move `locator` one sibling up or down (the right-click menu's Move up / Move down). */
+  moveStep(locator: string, direction: 'up' | 'down', version: number): Promise<void>
   /** A PNG (data URL) of the app's whole page, up to 4000 px tall; null without a page. */
   capture(): Promise<{ png: string; width: number; height: number } | null>
   /**
@@ -47,6 +65,10 @@ const noop: CanvasApi = {
   previewStyle: () => {},
   clearPreviews: () => {},
   layers: () => [],
+  version: () => 0,
+  moveRefusal: () => 'the canvas is not open',
+  move: async () => {},
+  moveStep: async () => {},
   capture: async () => null,
 }
 
@@ -58,6 +80,10 @@ export const canvas: CanvasApi = {
   previewStyle: (l, s) => current.previewStyle(l, s),
   clearPreviews: () => current.clearPreviews(),
   layers: () => current.layers(),
+  version: () => current.version(),
+  moveRefusal: (l) => current.moveRefusal(l),
+  move: (s, t, p, v) => current.move(s, t, p, v),
+  moveStep: (l, d, v) => current.moveStep(l, d, v),
   capture: () => current.capture(),
   fitZoom: () => current.fitZoom?.() ?? null,
 }

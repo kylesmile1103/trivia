@@ -586,6 +586,32 @@ test('the right-click menu moves an element down and deletes one, and both undo 
   await expect.poll(dashboard).toBe(original)
 })
 
+test('the Layers tab moves elements: a row dragged onto another, and Alt+↓; both undo byte for byte', async ({ page }) => {
+  await openCanvas(page)
+  await page.getByRole('tab', { name: 'Layers' }).click()
+  const tree = page.getByRole('tree', { name: 'Layers' })
+  const cancel = tree.getByRole('treeitem', { name: /^Button Cancel$/ })
+  const save = tree.getByRole('treeitem', { name: /^Button Save changes$/ })
+  await expect(cancel).toBeVisible()
+  const ops = recordOps(page)
+
+  // Save's row onto the top edge of Cancel's: before it, in the source.
+  await save.dragTo(cancel, { targetPosition: { x: 40, y: 2 } })
+  await expect.poll(dashboard).toContain('<Button>Save changes</Button>\n          <Button variant="ghost">Cancel</Button>')
+  expect(ops.at(-1)).toMatchObject({ op: 'move', expectedName: 'Button', expectedTargetName: 'Button', placement: 'before' })
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  await expect.poll(dashboard).toBe(original)
+
+  // Alt+↓ on Cancel's row moves it past Save, and the row keeps the focus.
+  await expect(page.getByTestId('canvas-overlay')).not.toHaveAttribute('aria-busy')
+  await tree.getByRole('treeitem', { name: /^Button Cancel$/ }).click()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect.poll(dashboard).toContain('<Button>Save changes</Button>\n          <Button variant="ghost">Cancel</Button>')
+  await expect(tree.getByRole('treeitem', { name: /^Button Cancel$/ })).toBeFocused()
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  await expect.poll(dashboard).toBe(original)
+})
+
 test('dragging Save out of the page into App.tsx moves it between files, and one undo restores both', async ({ page }) => {
   await openCanvas(page)
   const APP_FILE = fileURLToPath(new URL('../examples/playground/src/App.tsx', import.meta.url))

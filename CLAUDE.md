@@ -220,6 +220,8 @@ Paths are relative to `references/tango/packages/`.
   (`--skip-publish`). `createRelease` makes Nx push the release commit and tag. Then
   `tools/release/desktop.mjs` bundles the Tauri app (`nx run shell:bundle`, CLI 2.11.5) and
   attaches its .dmg: ad-hoc signed (no Developer ID), Apple silicon, so releases run on a Mac.
+  Tests never repeat a package's version: they read its `package.json` (a release bumps it;
+  v0.2.0 broke three tests that said "0.1.0").
 
 ## Onlook (`references/onlook`) — verified 2026-10-07
 

@@ -6,6 +6,7 @@
 // coordinates.
 
 import type { ComponentSchema, NodeDetails, Placement } from '@/shared/engine/types'
+import { isRootLocator, isSameOrInside } from '@/shared/lib/locator'
 
 import {
   type Point,
@@ -19,7 +20,6 @@ import {
   unionRect,
   usageParent,
 } from './dom'
-import { isRootLocator, isSameOrInside } from './locator'
 
 export type DragSubject = { kind: 'palette' } | { kind: 'node'; locator: string }
 
