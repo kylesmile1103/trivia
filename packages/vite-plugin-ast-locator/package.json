@@ -1,6 +1,6 @@
 {
   "name": "@trivia/vite-plugin-ast-locator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Dev-only Vite plugin: stamps data-ast-node locators on JSX and serves the Trivia engine API",

@@ -1,6 +1,6 @@
 {
   "name": "@trivia/openapi-inferencer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A drop-in, contract-driven replacement for Refine's inferencer: pages from the OpenAPI contract, previewed live and ejected to disk by Trivia's dev server",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@trivia/contract-sync",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Turns an OpenAPI/Swagger contract into hey-api generated TanStack Query code plus a static trivia.manifest.json",
   "type": "module",
