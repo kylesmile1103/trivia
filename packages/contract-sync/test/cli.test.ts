@@ -9,6 +9,9 @@ import { main } from '../src/cli.js'
 import type { TriviaManifest } from '../src/manifest/types.js'
 import { fixture, listFiles, makeProject, removeProject } from './helpers.js'
 
+/** The package's own version: a release bumps it, so tests read it rather than repeat it. */
+const VERSION = (JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
+
 function capture(env: Record<string, string | undefined> = {}): CliIo & { out: string[]; err: string[] } {
   const out: string[] = []
   const err: string[] = []
@@ -60,7 +63,7 @@ describe('trivia-contract-sync CLI', () => {
     expect(help.out.join('')).toContain('Usage: trivia-contract-sync --input <path|url>')
     const version = capture()
     expect(await main(['-v'], version)).toBe(0)
-    expect(version.out.join('')).toBe('0.1.0\n')
+    expect(version.out.join('')).toBe(`${VERSION}\n`)
   })
 
   it('exits 2 on usage errors', async () => {

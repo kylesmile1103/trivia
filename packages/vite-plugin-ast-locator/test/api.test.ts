@@ -10,6 +10,8 @@ const DASHBOARD = 'src/pages/Dashboard.tsx'
 const CANCEL = `${DASHBOARD}#Dashboard#0.0.2.0`
 const SAVE = `${DASHBOARD}#Dashboard#0.0.2.1`
 const APP_MAIN = 'src/App.tsx#App#0'
+/** The plugin's own version: a release bumps it, so tests read it rather than repeat it. */
+const VERSION = (JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 
 const setProp = (target: string, prop: string, value: unknown, expectedName = 'Button') => ({
   op: 'updateProp',
@@ -45,7 +47,7 @@ describe('read endpoints', () => {
     expect(r.status).toBe(200)
     expect(r.body).toEqual({
       ok: true,
-      data: { root: fs.realpathSync(root), uiDir: 'src/components/ui', importBase: '@/components/ui', version: '0.1.0' },
+      data: { root: fs.realpathSync(root), uiDir: 'src/components/ui', importBase: '@/components/ui', version: VERSION },
     })
   })
 

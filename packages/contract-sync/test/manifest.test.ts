@@ -14,6 +14,8 @@ import { syncContract } from '../src/sync.js'
 import { PACKAGE_DIR, exportedNames, fixture, makeProject, removeProject } from './helpers.js'
 
 const schema = JSON.parse(await fsp.readFile(path.join(PACKAGE_DIR, 'manifest.schema.json'), 'utf8')) as Record<string, unknown>
+/** The package's own version: a release bumps it, so tests read it rather than repeat it. */
+const VERSION = (JSON.parse(await fsp.readFile(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as { version: string }).version
 // Strict, except that `"type": ["string", "null"]` (standard JSON Schema) is allowed.
 const ajv = new Ajv2020.default({ allErrors: true, strict: true, allowUnionTypes: true })
 const validate = ajv.compile<TriviaManifest>(schema)
@@ -186,7 +188,7 @@ describe('customers.openapi.json (OpenAPI 3.1)', () => {
     })
     expect(manifest.generator).toEqual({
       name: '@trivia/contract-sync',
-      version: '0.1.0',
+      version: VERSION,
       heyApi: '0.99.0',
       plugins: ['@hey-api/client-fetch', '@hey-api/typescript', '@hey-api/sdk', '@tanstack/react-query'],
     })
