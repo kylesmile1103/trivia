@@ -20,9 +20,10 @@
     <main>
       <h1>Waiting for the Trivia designer</h1>
       <p>Nothing answers at <code id="target">the designer's URL</code> yet. This window opens it as soon as it does.</p>
-      <p>Start your app's dev server (with the Trivia Vite plugin), then the designer:</p>
-      <pre>pnpm --filter playground dev
-TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev</pre>
+      <p>In the Trivia repository, start an example app and the designer together:</p>
+      <pre>pnpm dev</pre>
+      <p>Or start your own app's dev server (with the Trivia Vite plugin), then the designer:</p>
+      <pre>TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev</pre>
       <p>Another URL: <code>trivia_shell &lt;url&gt;</code> or <code>TRIVIA_DESIGNER_URL</code>.</p>
     </main>
     <script src="waiting.js"></script>

@@ -78,7 +78,7 @@ around the opposite rule.
 | **Data tab** | Bound tables and create forms from an OpenAPI contract (TanStack Query, react-hook-form, zod, shadcn `Field`). |
 | **Refine tools** | Columns, form fields, contract drift and new-resource pages, each as a single undo entry. |
 | **MCP endpoint** | "Point and ask": select an element, tell your agent what to change, and it edits through the same guarded ops. |
-| **Desktop shell** | An optional Tauri window on the designer. |
+| **Desktop shell** | An optional Tauri window on the designer, also as a macOS app (`.dmg` on each GitHub release). |
 
 ---
 
@@ -191,7 +191,13 @@ To run the pieces by hand instead: `pnpm build:plugin`, then `pnpm --filter refi
 
 ### Optional: desktop window
 
-`pnpm dev:desktop` opens it next to the servers. On its own:
+`pnpm dev:desktop` opens it next to the servers. Or install the app: each
+[GitHub release](https://github.com/kylesmile1103/trivia/releases) from v0.2.0 carries
+`Trivia_<version>_aarch64.dmg` (Apple silicon). It is a window on the designer, so keep `pnpm dev`
+running. It is ad-hoc signed, not notarized, so the first time, allow it in System Settings →
+Privacy & Security → "Open Anyway". To build it yourself: `nx run shell:bundle`.
+
+From source:
 
 ```sh
 cargo run --manifest-path crates/trivia_shell/Cargo.toml
@@ -432,9 +438,11 @@ A release:
 - bumps each `package.json`, `Cargo.toml`, `tauri.conf.json` and `Cargo.lock` entry in place;
 - writes `CHANGELOG.md` with a section per commit prefix (`engine:`, `designer:`, `MCP:`, …);
 - commits `release: v<version>`, tags, pushes, and creates the GitHub release;
+- builds the desktop app and attaches `Trivia_<version>_aarch64.dmg` to the release, with a note
+  on opening it (`pnpm release:desktop v<version>` redoes just this step);
 - never publishes to npm.
 
-It starts from a clean `main`. It refuses to run when a commit since the last release has a prefix
+It starts from a clean `main` on a Mac (the desktop app is bundled on macOS). It refuses to run when a commit since the last release has a prefix
 that `nx.json` doesn't list, because Nx would leave that commit out of the changelog. The GitHub token
 comes from `GH_TOKEN`, `GITHUB_TOKEN` or git's credential helper.
 
@@ -473,8 +481,8 @@ Stated plainly so you can judge fit before investing time.
   Drift reads enum options from the first 600 bytes of a column header. A rebuilt column or field takes
   the generated shape, replacing custom cells or widgets in it. Edit forms (an update body plus loading
   the row) and nested-object form fields are not generated yet.
-- **Desktop shell.** Verified on macOS (WKWebView) only; no Linux or Windows hand test, and no
-  `tauri build` bundle yet.
+- **Desktop shell.** Verified on macOS (WKWebView) only; no Linux or Windows hand test. The packaged
+  app is Apple silicon only, and ad-hoc signed rather than notarized (no Apple Developer ID).
 - **Packages are not published to npm** at this stage; use the workspace.
 
 ---

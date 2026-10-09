@@ -13,6 +13,12 @@
       "dependsOn": [],
       "inputs": ["default"]
     },
+    "bundle": {
+      "command": "tauri build --ci",
+      "options": { "cwd": "crates/trivia_shell" },
+      "dependsOn": [],
+      "cache": false
+    },
     "lint": {
       "command": "cargo clippy --manifest-path crates/trivia_shell/Cargo.toml --all-targets -- -D warnings",
       "inputs": ["default"]

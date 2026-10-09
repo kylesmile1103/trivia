@@ -8,5 +8,13 @@
     "windows": [],
     "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'" }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.png"] }
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.png"],
+    "category": "DeveloperTool",
+    "shortDescription": "A native window on the Trivia designer",
+    "license": "MIT",
+    "macOS": { "signingIdentity": "-" }
+  }
 }

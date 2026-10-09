@@ -17,13 +17,15 @@
     "affected": "nx affected -t build typecheck lint test",
     "e2e": "nx e2e e2e",
     "graph": "nx graph",
-    "release": "node tools/release/release.mjs"
+    "release": "node tools/release/release.mjs",
+    "release:desktop": "node tools/release/desktop.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",
     "@nx/devkit": "23.2.1",
     "@nx/js": "23.2.1",
     "@playwright/test": "1.63.0",
+    "@tauri-apps/cli": "2.11.5",
     "nx": "23.2.1"
   }
 }

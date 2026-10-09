@@ -217,7 +217,9 @@ Paths are relative to `references/tango/packages/`.
   current version from the git tag. `tools/release/version-actions.cjs` edits each version in
   place (`package.json`, `Cargo.toml`, `tauri.conf.json`, `Cargo.lock`) instead of
   `@monodon/rust`, which re-serializes `Cargo.toml` and needs Nx 22. Nothing is published to npm
-  (`--skip-publish`). `createRelease` makes Nx push the release commit and tag.
+  (`--skip-publish`). `createRelease` makes Nx push the release commit and tag. Then
+  `tools/release/desktop.mjs` bundles the Tauri app (`nx run shell:bundle`, CLI 2.11.5) and
+  attaches its .dmg: ad-hoc signed (no Developer ID), Apple silicon, so releases run on a Mac.
 
 ## Onlook (`references/onlook`) — verified 2026-10-07
 

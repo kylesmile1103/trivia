@@ -2,6 +2,7 @@
 //
 // Versions every project in nx.json's "release" together, writes CHANGELOG.md, commits
 // `release: v<version>`, tags, pushes, and creates the GitHub release from the changelog.
+// Then it builds the desktop app and attaches its .dmg to that release (./desktop.mjs; macOS).
 // It never publishes to npm (nothing is published yet). Before Nx runs, it checks:
 // - a clean `main` (so the release commit holds only the release);
 // - that every commit type since the last release tag is one Nx knows;
@@ -13,6 +14,8 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
+import { attachDesktopApp } from './desktop.mjs'
+import { githubToken } from './github.mjs'
 import { unknownCommitTypes } from './preflight.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
@@ -52,16 +55,13 @@ if (unknown.size > 0) {
 }
 
 const env = { ...process.env }
-if (!dryRun && !env.GH_TOKEN && !env.GITHUB_TOKEN) {
-  const credential = spawnSync('git', ['credential', 'fill'], {
-    cwd: root,
-    input: 'protocol=https\nhost=github.com\n\n',
-    encoding: 'utf8',
-    env: { ...env, GIT_TERMINAL_PROMPT: '0' },
-  })
-  const token = /^password=(.+)$/m.exec(credential.stdout ?? '')?.[1]
+if (!dryRun) {
+  const token = githubToken(root)
   if (!token) fail('no GitHub token. Set GH_TOKEN, or let git sign in to github.com once (its credential helper keeps the token).')
   env.GH_TOKEN = token
+}
+if (!dryRun && process.platform !== 'darwin') {
+  fail('the desktop app is bundled on macOS only; release from a Mac.')
 }
 
 const nx = spawnSync(path.join(root, 'node_modules', '.bin', 'nx'), ['release', ...args, '--skip-publish'], {
@@ -69,4 +69,15 @@ const nx = spawnSync(path.join(root, 'node_modules', '.bin', 'nx'), ['release', 
   env,
   stdio: 'inherit',
 })
-process.exit(nx.status ?? 1)
+if (nx.status !== 0) process.exit(nx.status ?? 1)
+
+if (dryRun) {
+  console.log('\nrelease: then it would build the desktop app (nx run shell:bundle) and attach its .dmg.')
+  process.exit(0)
+}
+const tag = git('describe', '--tags', '--exact-match', 'HEAD')
+try {
+  await attachDesktopApp(root, tag)
+} catch (error) {
+  fail(`${tag} is released, but the desktop app is not attached: ${error.message}\nFix that, then run: pnpm release:desktop ${tag}`)
+}

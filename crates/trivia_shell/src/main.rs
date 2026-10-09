@@ -19,8 +19,8 @@ const POLL: Duration = Duration::from_millis(500);
 const USAGE: &str = "usage: trivia_shell [designer-url]
 
 Opens the Trivia designer in a native window. The URL is the first argument, else
-$TRIVIA_DESIGNER_URL, else http://localhost:4400/__trivia/. Start the designer with
-`pnpm --filter @trivia/designer dev` (and the user's app with the Trivia Vite plugin).";
+$TRIVIA_DESIGNER_URL, else http://localhost:4400/__trivia/. In the Trivia repository,
+`pnpm dev` starts an example app and the designer together.";
 
 fn main() {
     let url = match designer_url(std::env::args().skip(1), std::env::var("TRIVIA_DESIGNER_URL").ok()) {
@@ -59,8 +59,10 @@ fn main() {
         .expect("the Trivia shell failed to start its window");
 }
 
-/// The designer's URL from the arguments or the environment, or None for `--help`.
-fn designer_url(mut args: impl Iterator<Item = String>, env: Option<String>) -> Result<Option<Url>, String> {
+/// The designer's URL from the arguments or the environment, or None for `--help`. A
+/// `-psn_…` argument (the process serial number Finder can pass to an app bundle) is not ours.
+fn designer_url(args: impl Iterator<Item = String>, env: Option<String>) -> Result<Option<Url>, String> {
+    let mut args = args.filter(|arg| !arg.starts_with("-psn_"));
     let given = match args.next() {
         Some(flag) if flag == "-h" || flag == "--help" => return Ok(None),
         Some(arg) => {
@@ -131,6 +133,14 @@ mod tests {
         assert_eq!(url(&[], Some(String::new())), DEFAULT_URL);
         assert_eq!(url(&[], None), DEFAULT_URL);
         assert!(designer_url(args(&["--help"]), None).unwrap().is_none());
+    }
+
+    #[test]
+    fn ignores_the_process_serial_number_finder_may_pass() {
+        let url = |a: &[&str], e: Option<String>| designer_url(args(a), e).unwrap().unwrap().to_string();
+        assert_eq!(url(&["-psn_0_1234567"], None), DEFAULT_URL);
+        assert_eq!(url(&["-psn_0_1234567"], Some("http://127.0.0.1:4500/".to_string())), "http://127.0.0.1:4500/");
+        assert_eq!(url(&["-psn_0_1234567", "http://localhost:4411/__trivia/"], None), "http://localhost:4411/__trivia/");
     }
 
     #[test]

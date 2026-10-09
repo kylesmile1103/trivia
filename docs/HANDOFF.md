@@ -24,8 +24,13 @@ and `worktree-wf_*` branches were deleted; each tip's tree was in `origin/main`'
 app and the designer together, `pnpm check` is the gate without e2e, and `pnpm release` cuts a
 release. Nx shows only ✔ per task: add `--outputStyle=stream` to see test counts.
 
-**Releases** (GitHub, private repo): `v0.1.0` is this state. Its four milestones are tagged
-after the fact as pre-releases: `v0.1.0-alpha.1` (session 1), `alpha.2` (MCP), `alpha.3`
+**Desktop app:** `nx run shell:bundle` packages the Tauri shell (`Trivia.app` and a .dmg,
+ad-hoc signed, Apple silicon), and `pnpm release` attaches the .dmg to each GitHub release from
+v0.2.0 (`crates/trivia_shell/README.md`). The packaged app was checked from Finder: waiting page,
+then the designer, and `trivia_screenshot` answered from it.
+
+**Releases** (GitHub, private repo): `v0.2.0` adds Nx and the desktop app to `v0.1.0`. The four
+milestones before `v0.1.0` are tagged after the fact as pre-releases: `v0.1.0-alpha.1` (session 1), `alpha.2` (MCP), `alpha.3`
 (Data tab, desktop shell) and `alpha.4` (Refine slices 1–4). Nothing is published to npm. The
 plugin's test server never reaps idle sockets: four Refine tests hung up whenever a parallel
 `tsc` run blocked the event loop past Node's 5 s keep-alive.
@@ -293,8 +298,9 @@ The order is the product's (`docs/product.md`, Slices):
    (`docs/mcp.md`, the Refine session). The rule half is now one `setCallArgument` on `z.enum`.
    The `<SelectItem>`s and a column's filter options still need their own in-place edit.
 
-Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
-and a `tauri build` bundle; the Data tab's TanStack-path forms (edit forms, nested objects).
+Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build,
+notarizing the macOS app (needs an Apple Developer ID); the Data tab's TanStack-path forms (edit
+forms, nested objects).
 
 ## 8. Repo map
 
