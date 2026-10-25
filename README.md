@@ -359,6 +359,9 @@ To report a vulnerability, contact the maintainer privately rather than opening 
 
 ## Development
 
+> **Documentation workflow test:** This README-only change tests cloud-assisted repository editing;
+> it does not change Trivia's local-first runtime.
+
 ```sh
 pnpm install
 pnpm check                                   # build, typecheck, lint and test everything (cached)
