@@ -103,6 +103,9 @@ public static class EndpointsEmitter
             }
         }
 
+        foreach (CustomOperation operation in entity.Api.Custom ?? [])
+            registrations.Add(CustomOperationEmitter.Registration(entity, operation));
+
         string projection = string.Join(", ", members.Select(member => "entity." + member.Member));
         return Unit(Feature(model, name), ["System", "Microsoft.AspNetCore.Http.HttpResults",
             "Microsoft.AspNetCore.Mvc", "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Storage",

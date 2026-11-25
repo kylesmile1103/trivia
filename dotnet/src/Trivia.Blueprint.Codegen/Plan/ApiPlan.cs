@@ -32,6 +32,9 @@ public static class ApiPlan
             yield return new($"{feature}.g.cs", FileKind.Generated, CSharp.Print(EntityEmitter.Emit(model, entity)));
             yield return new($"{feature}Contracts.g.cs", FileKind.Generated, CSharp.Print(ContractsEmitter.Emit(model, entity)));
             yield return new($"{feature}Endpoints.g.cs", FileKind.Generated, CSharp.Print(EndpointsEmitter.Emit(model, entity)));
+            foreach (CustomOperation operation in entity.Api.Custom ?? [])
+                yield return new($"{feature}.{CustomOperationEmitter.Suffix(operation)}.g.cs", FileKind.Generated,
+                    CSharp.Print(CustomOperationEmitter.Emit(model, entity, operation)));
         }
         yield return new($"{api}/Data/AppDbContext.g.cs", FileKind.Generated, CSharp.Print(DbContextEmitter.Emit(model)));
     }

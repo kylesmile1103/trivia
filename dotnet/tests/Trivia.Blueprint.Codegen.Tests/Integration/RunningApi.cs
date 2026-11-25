@@ -25,16 +25,17 @@ internal sealed class RunningApi : IAsyncDisposable
         string contextNamespace = Regex.Match(contextFile, @"namespace ([\w.]+);").Groups[1].Value;
         string path = Path.Combine(project.ApiDirectory, "Program.cs");
         string program = File.ReadAllText(path);
-        File.WriteAllText(path, "using Microsoft.EntityFrameworkCore;\n" +
-            program.Replace("app.Run();", $$"""
-                if (Environment.GetEnvironmentVariable("TRIVIA_TEST_CREATE_DB") == "1")
-                {
-                    await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
-                    {{contextNamespace}}.AppDbContext db = scope.ServiceProvider.GetRequiredService<{{contextNamespace}}.AppDbContext>();
-                    await db.Database.EnsureCreatedAsync();
-                }
-                app.Run();
-                """, StringComparison.Ordinal));
+        if (!program.Contains("TRIVIA_TEST_CREATE_DB", StringComparison.Ordinal))
+            File.WriteAllText(path, "using Microsoft.EntityFrameworkCore;\n" +
+                program.Replace("app.Run();", $$"""
+                    if (Environment.GetEnvironmentVariable("TRIVIA_TEST_CREATE_DB") == "1")
+                    {
+                        await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
+                        {{contextNamespace}}.AppDbContext db = scope.ServiceProvider.GetRequiredService<{{contextNamespace}}.AppDbContext>();
+                        await db.Database.EnsureCreatedAsync();
+                    }
+                    app.Run();
+                    """, StringComparison.Ordinal));
         _ = await project.BuildAsync();
 
         Dictionary<string, string> environment = new()

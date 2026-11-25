@@ -27,6 +27,9 @@ public static class ContractsEmitter
         ];
         if (entity.Api.Operations.Contains("list"))
             records.Add($"public sealed record {entity.Name}Page(IReadOnlyList<{entity.Name}Response> Items, int Total, int Page, int PageSize);");
+        foreach (CustomOperation operation in entity.Api.Custom ?? [])
+            if (operation.Input is not null)
+                records.Add(CustomOperationEmitter.Contract(model, entity, operation));
         return Unit(Feature(model, entity.Name), ["System", "System.ComponentModel.DataAnnotations",
             "System.Text.Json", "System.Text.Json.Serialization"], [.. records]);
     }

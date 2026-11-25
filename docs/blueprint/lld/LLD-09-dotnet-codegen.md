@@ -120,6 +120,7 @@ src/<App>.Api/
   Features/<Entity>/<Entity>Contracts.g.cs         response and request records
   Features/<Entity>/<Entity>Endpoints.g.cs         the endpoint group, partial
   Features/<Entity>/<Entity>Endpoints.cs           scaffold: hook implementations
+  Features/<Entity>/<Entity>.<Operation>.g.cs      partial custom-operation declaration
   Features/<Entity>/<Entity>.<Operation>.cs        scaffold: one per custom operation
 src/<App>.AppHost/, .ServiceDefaults/, .MigrationService/     scaffold (LLD-10)
 ```
@@ -238,6 +239,12 @@ A custom operation is routed in the generated half and declared as a partial met
 return type, which C# requires to be implemented. Its body lives in its own scaffold file,
 `<Entity>.<Operation>.cs`, created with a stub that returns 501. Adding a custom operation
 later therefore never breaks the build, and the plan's `todo` lists the stub to fill in.
+
+⚑ Put each custom partial declaration in its own `.g.cs` sibling so the project can exclude
+  retired scaffold code from compilation while retaining its bytes. The reserved scaffold
+  filenames in each feature directory compile only while their generated sibling exists.
+  `todo` lists newly proposed scaffold stubs. A route parameter called `id` uses the entity key
+  type, other route parameters are strings, and declared inputs bind from JSON.
 
 Optional per entity: `concurrency: true` adds a row version from PostgreSQL's `xmin`. The
 response then carries `version`, `Update<Entity>Request` requires it, and a mismatch is a 409

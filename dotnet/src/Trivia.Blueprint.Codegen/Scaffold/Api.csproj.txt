@@ -14,4 +14,13 @@
     <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
+  <Target Name="ExcludeRetiredTriviaScaffolds" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <TriviaScaffold Include="Features/*/*.cs" Exclude="Features/*/*.g.cs" />
+      <Compile Remove="%(TriviaScaffold.Identity)"
+        Condition="'%(TriviaScaffold.Identity)' != '' And
+          $([System.Text.RegularExpressions.Regex]::IsMatch('%(TriviaScaffold.Identity)', '^Features[/\\]([A-Z][A-Za-z0-9]*)[/\\]\1(?:Endpoints|\.[A-Z][A-Za-z0-9]*)?\.cs$')) And
+          !Exists('%(TriviaScaffold.RelativeDir)%(TriviaScaffold.Filename).g.cs')" />
+    </ItemGroup>
+  </Target>
 </Project>

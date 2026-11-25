@@ -54,3 +54,8 @@ public sealed record UpdateCustomerRequest
 }
 
 public sealed record CustomerPage(IReadOnlyList<CustomerResponse> Items, int Total, int Page, int PageSize);
+public sealed record ApproveKycCustomerRequest
+{
+    [JsonPropertyName("reason"), MaxLength(500)]
+    public string? Reason { get; init; }
+}

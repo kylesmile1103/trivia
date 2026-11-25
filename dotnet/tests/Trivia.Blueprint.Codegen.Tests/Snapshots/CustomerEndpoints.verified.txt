@@ -17,6 +17,7 @@ public static partial class CustomerEndpoints
         group.MapPost("", CreateAsync).WithName("createCustomer").ProducesValidationProblem().ProducesProblem(409);
         group.MapPut("/{id}", UpdateAsync).WithName("updateCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
         group.MapDelete("/{id}", DeleteAsync).WithName("deleteCustomer").ProducesProblem(404).ProducesProblem(409);
+        group.MapMethods("/{id}/approve-kyc", ["POST"], HandleApproveKycAsync).WithName("approveKycCustomer").ProducesProblem(501).ProducesValidationProblem();
         return group;
     }
 
