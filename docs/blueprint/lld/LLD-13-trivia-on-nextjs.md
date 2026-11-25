@@ -207,6 +207,8 @@ The engine edits files. It does not care which kind of component a file holds. W
   frame watches their stamped nodes for mutations since the edit was sent, then waits for
   the DOM to settle before re-resolving the selection, with the existing bounded wait.
   The iframe still receives its own HMR connection through the app proxy.
+  ⚑ If a document attaches before its first stamped render, the canvas bumps its revision
+  once that render is available so the Layers panel can replace its initial empty tree.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`

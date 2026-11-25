@@ -252,9 +252,9 @@ function followSelection(): () => void {
   })
 }
 
-function mountCanvas(engine: FakeEngine) {
+function mountCanvas(engine: FakeEngine, renderImmediately = true) {
   let app = appDocument()
-  render(app, engine.children)
+  if (renderImmediately) render(app, engine.children)
   // Never attached to the document, so it has no browsing context of its own and never fires a
   // load event the test didn't send; its document is whichever `app` is current.
   const iframe = document.createElement('iframe')
@@ -400,6 +400,21 @@ async function open(children: string[]) {
   await idle()
   return canvas
 }
+
+it('refreshes the Layers snapshot when a loaded document renders its first locators later', async () => {
+  engine.children = ['button']
+  canvas = mountCanvas(engine, false)
+  await idle()
+  expect(canvas.controller.api.layers()).toEqual([])
+  const revision = designer.getState().revision
+
+  canvas.renderFromSource()
+  await idle()
+
+  expect(canvas.view().status).toBe('ready')
+  expect(designer.getState().revision).toBe(revision + 1)
+  expect(canvas.controller.api.layers()[0]).toMatchObject({ locator: ROOT })
+})
 
 describe('gestures made before an edit has rendered', () => {
   it('a drag is refused, then moves the node the user grabbed once the app re-rendered', async () => {
