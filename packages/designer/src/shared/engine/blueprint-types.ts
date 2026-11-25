@@ -300,4 +300,6 @@ export interface BlueprintBackendResult {
   written: boolean
   diagnostics: BlueprintDiagnostic[]
   log: string
+  /** With a migration: the table and column renames it made for `renamedFrom` markers. */
+  renames?: Array<{ kind: 'table' | 'column'; entity: string; field?: string; from: string; oldName: string; newName: string }>
 }

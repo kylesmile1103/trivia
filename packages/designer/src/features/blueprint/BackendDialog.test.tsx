@@ -16,12 +16,14 @@ const summary: BlueprintSummary = {
 
 afterEach(() => vi.restoreAllMocks())
 
-it('FR-DS-06 shows the file table before generation and runs an optional migration after writing', async () => {
+it('FR-DS-06 shows the file table before generation and generates with an optional migration in one call', async () => {
+  const renames = [{ kind: 'column', entity: 'Customer', field: 'displayName', from: 'fullName', oldName: 'customers.full_name', newName: 'customers.display_name' }] as const
   const backend = vi.spyOn(engine.blueprint, 'backend')
     .mockResolvedValueOnce(plan)
-    .mockResolvedValueOnce({ ...plan, written: true })
-    .mockResolvedValueOnce({ ...plan, written: true, files: [{ ...file, path: 'Migrations/Initial.cs' }] })
+    .mockResolvedValueOnce({ ...plan, written: true, files: [file, { ...file, path: 'Migrations/Initial.cs' }], renames: [...renames] })
   vi.spyOn(engine.blueprint, 'summary').mockResolvedValue(summary)
+  // Clearing the migrated rename markers is an undo entry, so the dialog syncs history after a migration.
+  const history = vi.spyOn(engine, 'history').mockResolvedValue({ canUndo: true, canRedo: false, undoLabel: 'Clear migrated rename markers', redoLabel: null })
   const ui = await mount(<BackendDialog modelRev="read" appRev={null} onClose={vi.fn()} />)
   try {
     const dialog = find(globalThis.document.body, '[role="dialog"]')
@@ -31,9 +33,25 @@ it('FR-DS-06 shows the file table before generation and runs an optional migrati
     expect(backend.mock.calls).toEqual([[{ mode: 'plan' }]])
     await typeInto(find<HTMLInputElement>(dialog, 'input'), 'Initial')
     await act(async () => find<HTMLButtonElement>(dialog, 'button[data-confirm]').click())
-    expect(backend.mock.calls).toEqual([[{ mode: 'plan' }], [{ mode: 'write' }], [{ mode: 'write', migration: 'Initial' }]])
+    expect(backend.mock.calls).toEqual([[{ mode: 'plan' }], [{ mode: 'write', migration: 'Initial' }]])
     expect(dialog.textContent).toContain('Migrations/Initial.cs')
+    expect(find(dialog, '[aria-label="Renames"]').textContent).toContain('customers.full_name → customers.display_name')
+    expect(history).toHaveBeenCalled()
     expect(dialog.textContent).toMatch(/Build[\s\S]*Sync[\s\S]*drift/)
+  } finally {
+    await ui.unmount()
+  }
+})
+
+it('FR-DS-06 generates without a migration when no name is given', async () => {
+  const backend = vi.spyOn(engine.blueprint, 'backend').mockResolvedValueOnce(plan).mockResolvedValueOnce({ ...plan, written: true })
+  vi.spyOn(engine.blueprint, 'summary').mockResolvedValue(summary)
+  const ui = await mount(<BackendDialog modelRev="read" appRev={null} onClose={vi.fn()} />)
+  try {
+    const dialog = find(globalThis.document.body, '[role="dialog"]')
+    await act(async () => find<HTMLButtonElement>(dialog, 'button[data-confirm]').click())
+    expect(backend.mock.calls).toEqual([[{ mode: 'plan' }], [{ mode: 'write' }]])
+    expect(dialog.querySelector('[aria-label="Renames"]')).toBeNull()
   } finally {
     await ui.unmount()
   }
