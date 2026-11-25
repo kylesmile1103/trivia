@@ -40,7 +40,9 @@ setInterval(() => {}, 1000)
   child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString() })
   child.stdout.on('data', (chunk: Buffer) => { output += chunk.toString() })
   try {
-    await expect.poll(() => output).toContain('fixture next args ["dev","--hostname","127.0.0.1","--port","5329","--webpack"]')
+    // The launcher loads the native engine and starts the dev service before it spawns next:
+    // more than expect.poll's one-second default on a busy CI runner.
+    await expect.poll(() => output, { timeout: 15_000 }).toContain('fixture next args ["dev","--hostname","127.0.0.1","--port","5329","--webpack"]')
     const mcp = output.match(/Trivia MCP: (http:\/\/127\.0\.0\.1:\d+)\/@trivia\/mcp/)?.[1]
     expect(mcp).toBeDefined()
     expect(await (await fetch(`${mcp}/@trivia/api/health`)).json()).toMatchObject({ ok: true, data: { root } })

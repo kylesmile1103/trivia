@@ -24,7 +24,9 @@ test('FR-TN-04 lists Next route patterns and files, and the Refine columns tool 
   await expect(route('/customers/edit/:id')).toContainText('app/(bank)/customers/edit/[id]/page.tsx')
   await expect(route('/customers')).toContainText('Customers')
   await route('/customers').click()
-  await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible()
+  // Next's dev server compiles a route on its first visit: a Refine table page can take longer
+  // than the default 5 s on a cold CI runner.
+  await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 30_000 })
   await page.getByRole('tab', { name: 'Data' }).click()
   await expect(page.getByRole('list', { name: 'Columns of CustomerList' }).getByRole('listitem')).toHaveCount(5)
   await page.getByRole('button', { name: 'Add column' }).click()
