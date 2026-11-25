@@ -47,7 +47,7 @@ Contract pages use the shared Refine scaffolder. A target supplies:
 ```ts
 interface Target {
   name: 'vite-refine' | 'next-refine'
-  files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...EmittedModule[]]
+  files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
   routeOps(files: readonly RouteRegistration[], anchor: RouteAnchor): Op[]
   hooks: RefineHookMap                                         // router binding differences
   preview(page: string): PreviewPlan
@@ -103,6 +103,12 @@ name. A function-valued prop that would cross is a compiler error at lowering,
 
 Contract pages (`list`, `create`, `edit`, `show`) are one client region: Refine's hooks run on
 the client. Their `page.tsx` is a thin server entry.
+
+⚑ The compiler keeps the primary module API and returns sibling views in `additional`.
+Each sibling passes the same parser and import checks as the entry. The MVP golden inputs
+are the five spec 011 pages and model from commit `a460060`; the fixture changes only the
+app target in its temporary test copy. Its list Refresh action uses Refine's existing
+table query, matching the change in the sibling spec.
 
 A page that is entirely client still gets a server `page.tsx` that renders its view. One
 shape for every page is easier to read and to edit later.

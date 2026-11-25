@@ -9,9 +9,13 @@ import { targetFor, type LoweredPage } from './targets/target.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
 
-export interface EmittedModule {
+export interface PageSource {
   file: string
   code: string
+}
+
+export interface EmittedModule extends PageSource {
+  additional?: PageSource[]
   requires: RegistryItem[]
   component: string
   importPath: string
@@ -67,8 +71,9 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     const generated = generateContract(page, resource, context, context.generateContractPage, target.hooks)
     lowered = { kind: 'contract', page, generated }
   }
-  const [emitted] = target.files(lowered, context.facts)
-  const sources = moduleImports(emitted.code)
+  const [emitted, ...additional] = target.files(lowered, context.facts)
+  const modules = [emitted, ...additional]
+  const sources = modules.flatMap(({ code }) => moduleImports(code))
   if (sources.some((source) => source.startsWith('@trivia/'))) {
     throw new CompileError('unsupported', 'Generated modules cannot import from @trivia.')
   }
@@ -78,9 +83,10 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     const byItem = new Map(requires.map((item) => [item.registry + '/' + item.item, item]))
     emitted.requires = [...byItem].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item)
   }
-  emitted.code = emitted.code.replace(/\r\n?/g, '\n')
+  if (additional.length) emitted.additional = additional
+  for (const module of modules) module.code = module.code.replace(/\r\n?/g, '\n')
   try {
-    context.engine.annotate(emitted.code, emitted.file)
+    for (const module of modules) context.engine.annotate(module.code, module.file)
     if (emitted.handler) context.engine.annotate(emitted.handler.code, emitted.handler.file)
   } catch (error) {
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)

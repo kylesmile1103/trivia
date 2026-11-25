@@ -9,6 +9,7 @@ import { Names } from './lower/names.js'
 import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower/scope.js'
 import { printHook } from './print/module.js'
 import { quote, statement } from './print/style.js'
+import { nextPageFile } from './targets/next-refine/files.js'
 import type { RefineHookMap } from './targets/target.js'
 
 export interface ContractPageInput {
@@ -74,8 +75,11 @@ export function generateContract(
   const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
   const lower = actionLowerer({
-    contract: context.contract, page: page.name, file: facts.pagesDir + '/resource/' + page.kind + '.tsx',
+    contract: context.contract, page: page.name,
+    file: facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx') : facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
+    refetch: (key, path) => page.kind === 'list' && path[1] === 'headerActions' && key === 'list'
+      ? 'table.refineCore.tableQuery.refetch' : undefined,
   })
   const definitions = (group: 'rowActions' | 'headerActions', actions: typeof rowActions) => actions.map((action, index) => {
     const confirm = action.confirm

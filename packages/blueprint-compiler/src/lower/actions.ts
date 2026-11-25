@@ -6,7 +6,6 @@ import type { PrintStyle } from '../facts.js'
 import type { HookIR, ImportIR, StepIR } from '../ir.js'
 import { compareBytes, property, quote, statement } from '../print/style.js'
 import { handlerFile, refineName, relativeModule } from '../targets/paths.js'
-import { queryStatus } from '../targets/vite-refine/refine-hooks.js'
 
 interface ActionContext {
   contract?: TriviaManifest | null | undefined
@@ -16,7 +15,7 @@ interface ActionContext {
   expression(pointer: string): string
   name(preferred: string): string
   setter?(name: string): string | undefined
-  query?(name: string): string | undefined
+  refetch?(name: string, path: PropertyKey[]): string | undefined
   state?: string
   setters?: string
   event?: string
@@ -76,7 +75,7 @@ export function actionLowerer(context: ActionContext) {
           return mutate(resource, step, step.input === undefined ? '{}' : expr('input'), step.id === undefined ? undefined : expr('id'))
         }
         case 'refetch':
-          return { await: true, code: ref(context.query?.(step.query), 'Unknown query ' + step.query) + '.' + queryStatus.refetch + '()' }
+          return { await: true, code: ref(context.refetch?.(step.query, path), 'Unknown query ' + step.query) + '()' }
         case 'toast': {
           const type = step.variant === 'error' ? 'error' : 'success'
           return { code: use('useNotification', 'notification') + '.open?.({ type: ' + str(type) + ', message: ' + expr('message') + ' })' }

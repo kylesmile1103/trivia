@@ -15,7 +15,7 @@
 
 ## Phase 3: User Story 1 - Emit for Next.js (P1)
 
-- [ ] T005 [US1] Golden files for the MVP's contract pages, then `next-refine/files.ts`: a server `page.tsx` and one client view per page
+- [x] T005 [US1] Golden files for the MVP's contract pages, then `next-refine/files.ts`: a server `page.tsx` and one client view per page
 - [ ] T006 [US1] `next-refine/routes.ts`: resource registration by value op on `app/providers.tsx`, no `<Route>` ops
 - [ ] T007 [US1] Eject test into a copy of the template, then `tsc`. `next build` in CI
 - [ ] T008 [US1] Test: compile both fixtures for both targets from the same documents (SC-001)

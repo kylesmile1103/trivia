@@ -30,7 +30,7 @@ export function projectFacts(input: FactInputs = {}): ProjectFacts {
   return {
     target: input.target ?? 'vite-refine',
     aliases,
-    pagesDir: trimSlash(input.pagesDir ?? 'src/pages'),
+    pagesDir: trimSlash(input.pagesDir ?? (input.target === 'next-refine' ? 'app/(app)' : 'src/pages')),
     style: importStyle(input.entrySource ?? ''),
     formStyle: input.formStyle ?? 'Field',
     installed: new Set(input.installed),

@@ -116,11 +116,13 @@ export class EngineService {
     const contract = this.blueprint.contract()
     const app = blueprint.docs[APP_DOC]
     const { project, entrySource, installed } = await this.refine.compileProject()
+    const projectTarget = this.blueprint.hostKind === 'next' ? 'next-refine'
+      : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine'
     const facts = projectFacts({
-      target: this.blueprint.hostKind === 'next' ? 'next-refine'
-        : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine',
+      target: projectTarget,
       aliases: { ...this.blueprint.aliases(), ui: project.ui },
-      pagesDir: project.pagesDir, entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
+      ...(projectTarget === 'vite-refine' || project.appRouter ? { pagesDir: project.pagesDir } : {}),
+      entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
       installed,
     })
     const context: CompileContext = {

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/app.v1.json",
+  "blueprintVersion": 1,
+  "name": "BankAdmin",
+  "targets": {
+    "web": "vite-refine",
+    "api": "dotnet-minimal"
+  },
+  "nav": [
+    {
+      "page": "CustomerList",
+      "label": "Customers"
+    },
+    {
+      "page": "AccountList",
+      "label": "Accounts"
+    }
+  ]
+}

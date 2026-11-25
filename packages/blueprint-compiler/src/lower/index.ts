@@ -164,7 +164,10 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
     contract: context.contract, page: page.name, file, style: facts.style, expression,
     name: (preferred) => names.take(preferred),
     setter: (key) => setters.get(key),
-    query: (key) => query.definitions.get(key)?.name,
+    refetch: (key) => {
+      const definition = query.definitions.get(key)
+      return definition && definition.name + '.' + targetHooks.queryStatus.refetch
+    },
     state: renderObject(stateObject),
     setters: renderObject(setterObject),
   })
