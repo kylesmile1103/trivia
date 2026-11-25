@@ -11,7 +11,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T004 `Model/`: records for `model.v1.json` and `app.v1.json`, `ModelLoader` with the version check. Test: the bank fixture deserializes without loss
+- [x] T004 `Model/`: records for `model.v1.json` and `app.v1.json`, `ModelLoader` with the version check. Test: the bank fixture deserializes without loss
 - [ ] T005 [P] `Mapping/TypeMap` with a test against `model-mapping.json`
 - [ ] T006 Tests for ownership in `PlanWriterTests`: create, update, unchanged, hand-edited generated file refused (exit 2), `--force`, scaffold never rewritten, removed entity, path escape refused, refusal writes nothing
 - [ ] T007 `Plan/`: `FilePlan`, `Hashing` (header and body hash), `PlanWriter` (atomic, all-or-nothing)

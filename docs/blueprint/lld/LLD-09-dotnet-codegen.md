@@ -54,6 +54,11 @@ The tool reads the blueprint through the published JSON Schemas. It refuses a
 `blueprintVersion` it does not know. It validates only what it needs, since the Node side has
 already validated the model, and a diagnostic here uses the same shape as LLD-01's.
 
+⚑ Embed the two published schemas in the tool and evaluate them locally with JsonSchema.Net.
+The app document is optional for model-only input, like the bank fixture. Without it the
+first model namespace segment becomes the app name and authentication defaults to none.
+`modelRev` hashes the input file bytes, matching the blueprint store's disk revision.
+
 ```json
 { "generator": "0.3.0", "modelRev": "sha256:…",
   "files": [{ "path": "src/BackOffice.Api/Features/Customer/Customer.g.cs",
