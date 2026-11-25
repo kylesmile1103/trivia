@@ -8,6 +8,11 @@ export function checkNextRoutes(blueprint: Blueprint): Diagnostic[] {
   for (const [doc, entry] of Object.entries(blueprint.docs)) {
     if (entry.kind !== 'page' || entry.doc === null) continue
     const { route } = entry.doc
+    if (route === '/__blueprint' || route.startsWith('/__blueprint/')) {
+      diagnostics.push({ code: 'invalid_next_route', severity: 'error', doc, pointer: '/route',
+        message: 'Next.js reserves /__blueprint for draft previews.' })
+      continue
+    }
     const segments = route.slice(1).split('/')
     const names = new Set<string>()
     const candidate: Array<[string, string]> = []

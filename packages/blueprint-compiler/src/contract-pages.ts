@@ -86,6 +86,7 @@ export function generateContract(
     contract: context.contract, page: page.name,
     file: facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx') : facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
+    ...(facts.previewDirectory && { handlerPath: facts.previewDirectory + '/handler.ts' }),
     refetch: (key, path) => page.kind === 'list' && path[1] === 'headerActions' && key === 'list'
       ? 'table.refineCore.tableQuery.refetch' : undefined,
   })

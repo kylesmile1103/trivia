@@ -2,6 +2,7 @@ import type { Target } from '../target.js'
 import { queryHooks, queryStatus } from '../vite-refine/refine-hooks.js'
 import { lowerNextCustom } from './custom.js'
 import { files } from './files.js'
+import { nextPreview } from './preview.js'
 import { routeOps } from './routes.js'
 
 export const nextRefine: Target = {
@@ -13,5 +14,5 @@ export const nextRefine: Target = {
     queries: queryHooks, queryStatus, router: { source: 'next/navigation', searchTuple: false },
     initialOptions: (value) => ['initialData: ' + value, 'refetchOnMount: false'],
   },
-  preview: (page) => ({ route: '/__blueprint/' + page, id: page }),
+  preview: nextPreview,
 }

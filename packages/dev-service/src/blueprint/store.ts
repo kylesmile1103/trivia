@@ -144,6 +144,10 @@ export class BlueprintWorkspace implements BlueprintStore {
     return this.#host.preview.blueprints === true
   }
 
+  get previewHost(): DevHost['preview'] {
+    return this.#host.preview
+  }
+
   context(manifests = this.manifests(), contract = this.contract()) {
     const context = validationContext(manifests, contract, this.#engine, deferred)
     const lock = this.readDocumentText(LOCK_FILE)

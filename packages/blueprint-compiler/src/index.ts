@@ -19,3 +19,4 @@ export { resourceOps, routeOps, type RouteRegistration } from './targets/vite-re
 export { targetFor, type Target, type RefineHookMap, type ResourceRegistration } from './targets/target.js'
 export { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
 export { nextBoundaryCheck } from './targets/next-refine/custom.js'
+export { nextPreviewFiles } from './targets/next-refine/preview.js'

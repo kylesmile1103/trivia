@@ -41,7 +41,7 @@ export interface Target {
   files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
   routeOps(plan: RoutePlan): Array<ReturnType<typeof routeOps>[number] | ReturnType<typeof resourceOps>[number]>
   hooks: RefineHookMap
-  preview(page: string): { route: string; id: string }
+  preview(page: string, facts?: ProjectFacts): { route: string; id: string; directory?: string }
 }
 
 export function targetFor(name: ProjectFacts['target']): Target {

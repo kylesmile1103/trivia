@@ -13,6 +13,7 @@ import { LOCK_FILE, projectFacts, readLock, serializeLock, type CompileContext }
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.js'
+import { previewPage, type PreviewResult } from '../blueprint/preview.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { readSummary, summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
@@ -395,7 +396,29 @@ export class EngineService {
     if (changes.length === 0) return null
     this.#history.record({ label, changes, documents: true })
     this.#options.host.preview.invalidateBlueprints?.()
+    this.#dropDeletedPreviews(changes.filter(({ after }) => after === null).map(({ file }) => file))
     return label
+  }
+
+  previewBlueprint(page: string): Promise<PreviewResult> {
+    return this.#queue.run(() => previewPage({ page }, this))
+  }
+
+  #dropDeletedPreviews(files: readonly string[]): void {
+    const prefix = this.blueprint.dir + '/pages/'
+    for (const file of files) {
+      const name = file.startsWith(prefix) && /^([A-Z][A-Za-z0-9]*)\.page\.json$/.exec(file.slice(prefix.length))?.[1]
+      if (name) this.#removePreview(name)
+    }
+  }
+
+  #removePreview(page: string): void {
+    try {
+      this.#options.host.preview.removeBlueprint?.(page)
+    } catch (error) {
+      // The source transaction has already committed. Preserve bytes the preview host no longer owns.
+      console.warn('[trivia] Could not remove preview ' + page + ': ' + (error as Error).message)
+    }
   }
 
   confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
@@ -419,6 +442,9 @@ export class EngineService {
       const plan = await this.planBlueprintEject(pages)
       const entry = label ?? plan.label
       const result = this.#transact(plan.ops, entry, source)
+      for (const [name, record] of Object.entries(plan.lock.pages)) {
+        if (plan.files.includes(record.file)) this.#removePreview(name)
+      }
       return {
         ...result, entry: result.changed ? entry : null,
         files: plan.files, requires: plan.requires, warnings: plan.warnings,
@@ -508,7 +534,14 @@ export class EngineService {
       throw error
     }
     finish?.()
-    if (entry.documents) this.#options.host.preview.invalidateBlueprints?.()
+    if (entry.documents) {
+      this.#options.host.preview.invalidateBlueprints?.()
+      this.#dropDeletedPreviews(writes.filter(({ content }) => content === null).map(({ file }) => file))
+    } else if (direction === 'redo' && entry.ejectLock) {
+      for (const [name, record] of Object.entries(readLock(entry.ejectLock).pages)) {
+        if (writes.some(({ file, content }) => file === record.file && content !== null)) this.#removePreview(name)
+      }
+    }
     this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()

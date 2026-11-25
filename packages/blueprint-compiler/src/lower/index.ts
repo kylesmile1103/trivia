@@ -178,6 +178,7 @@ export function lowerCustom(
   const renderObject = (fields: string[]) => fields.length ? '{ ' + fields.join(', ') + ' }' : '{}'
   const action = actionLowerer({
     contract: context.contract, page: page.name, file, style: facts.style, expression,
+    ...(facts.previewDirectory && { handlerPath: facts.previewDirectory + '/handler.ts' }),
     name: (preferred) => names.take(preferred),
     setter: (key) => setters.get(key),
     refetch: (key) => {

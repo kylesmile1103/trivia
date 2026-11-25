@@ -42,7 +42,7 @@
 
 ## Phase 8: User Story 6 - Preview (P2)
 
-- [ ] T017 [US6] `next-refine/preview.ts` and the dev service's file-based `PreviewHost`: write under `app/(blueprint-preview)/__blueprint/<Name>/`, remove on eject, on draft deletion and on stop. Tests
+- [x] T017 [US6] `next-refine/preview.ts` and the dev service's file-based `PreviewHost`: write under `app/(blueprint-preview)/__blueprint/<Name>/`, remove on eject, on draft deletion and on stop. Tests
 
 ## Phase 9: Polish
 

@@ -7,6 +7,8 @@ export interface ProjectFacts {
   target: 'vite-refine' | 'next-refine'
   aliases: Readonly<Record<string, string>>
   pagesDir: string
+  /** The physical route directory for a Next draft preview. */
+  previewDirectory?: string
   style: PrintStyle
   formStyle: 'Field' | 'FormField'
   installed: ReadonlySet<string>

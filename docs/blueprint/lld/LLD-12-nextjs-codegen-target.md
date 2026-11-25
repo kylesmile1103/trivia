@@ -177,16 +177,20 @@ the HTTP status from `notFound()`. The cached SDK calls use anonymous request op
 
 The Vite target serves previews as virtual modules. Next.js compiles files from disk, so:
 
-- the dev service writes a draft's compiled files under `app/(blueprint-preview)/__blueprint/<Name>/`,
-  a gitignored folder, outside the undo history;
+- the dev service writes a draft's compiled files under `app/(blueprint-preview)/%5F_blueprint/<Name>/`,
+  a gitignored folder in the template, outside the undo history;
 - the canvas navigates to `/__blueprint/<Name>`;
 - the stamping loader skips that folder, so previews carry no locators, as on Vite;
 - the files are removed on eject, when the draft is deleted, and when the dev service stops.
   `withTrivia` (LLD-13) fails a production build that finds the folder, with a message that
   says to delete it.
 
-⚑ This is the least proven part of the design. It is validated in the same spike as the
-loader of LLD-13.
+⚑ Reuse the guarded disk writer and escaped segment proved by LLD-13. Move the compiled
+entry and views together, and keep any preview handler stub in the same folder. The
+stamping loader skips the folder while draft markup keeps its blueprint selection ids.
+For a route that needs dynamic parameters, a small entry adapter passes matching preview
+search parameters to the compiled page. Preview creation and cleanup share the service
+queue with source and draft edits.
 
 ## 7. Template and AppHost (FR-NX-06)
 
