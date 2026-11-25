@@ -1,6 +1,6 @@
 export { API_BASE, createApiMiddleware, type Middleware } from './api/http.js'
 export { EngineService, type AppRoute } from './api/service.js'
-export { loadEngine, unwrap, type EngineBinding, type Insertion } from './engine.js'
+export { ApiError, loadEngine, unwrap, type EngineBinding, type Insertion } from './engine.js'
 export { MCP_PATH, createMcpMiddleware } from './mcp/server.js'
 export { PREVIEW_PREFIX } from './refine/index.js'
 export type * from './types.js'

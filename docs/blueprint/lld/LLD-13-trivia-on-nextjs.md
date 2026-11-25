@@ -168,6 +168,15 @@ target. The dev service receives only the API and MCP path families.
 host, and prints the MCP URL. `Ctrl+C` stops both, and the dev service removes its preview
 files on the way out.
 
+⚑ The launcher uses the app's own Next CLI, passes arguments without a shell and runs the
+dev service in the launcher process. Both listeners use IPv4 loopback. The app port defaults
+to 3000 (or `PORT`) and `--service-port` defaults to an OS-selected port.
+⚑ The Next host resolves local imports with the app's TypeScript or JavaScript config.
+It reads shadcn's UI alias, with `--ui-dir` and `--import-base` overrides for custom layouts.
+⚑ Refine previews use `%5F_blueprint/refine-<id>/page.tsx` under the preview group.
+The native guarded writer preserves existing files and cleans only files this launch created
+with their expected content, plus the empty directories it created.
+
 ## 5. Routes and pages (FR-TN-04)
 
 `readRoutes` for `next`: walk `app/` for `page.tsx` and `page.jsx`. Route groups `(name)` are

@@ -16,7 +16,8 @@
   },
   "files": [
     "dist",
-    "src/loader.cjs"
+    "src/loader.cjs",
+    "bin"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -25,7 +26,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "typescript": "~6.0.2",
     "vitest": "^5.0.3",
     "@trivia/vite-plugin-ast-locator": "workspace:*"
   },
@@ -49,9 +49,13 @@
   "dependencies": {
     "@jridgewell/remapping": "2.3.5",
     "@trivia/dev-service": "workspace:*",
-    "@trivia/engine": "workspace:*"
+    "@trivia/engine": "workspace:*",
+    "typescript": "~6.0.2"
   },
   "peerDependencies": {
     "next": "16.4.6"
+  },
+  "bin": {
+    "trivia-next": "./bin/trivia-next.js"
   }
 }
