@@ -3,10 +3,10 @@ use oxc_ast::ast::*;
 use oxc_ast_visit::{Visit, walk};
 use oxc_span::{GetSpan, Span};
 
-use crate::{Diagnostic, Severity};
+use crate::{Diagnostic, Severity, allow};
 
 pub(crate) fn check(source: &str, expression: &Expression<'_>) -> Vec<Diagnostic> {
-    let mut subset = Subset { source, diagnostics: Vec::new(), arrow_argument: None };
+    let mut subset = Subset { source, diagnostics: Vec::new(), arrow_argument: None, format_factory: None };
     subset.visit_expression(expression);
     subset.diagnostics
 }
@@ -15,6 +15,7 @@ struct Subset<'s> {
     source: &'s str,
     diagnostics: Vec<Diagnostic>,
     arrow_argument: Option<Span>,
+    format_factory: Option<Span>,
 }
 
 impl Subset<'_> {
@@ -62,6 +63,26 @@ impl<'a> Visit<'a> for Subset<'_> {
             _ => "Syntax is unsupported in a binding",
         };
         self.unsupported(node.span(), message);
+    }
+
+    fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
+        let factory = if self.format_factory == Some(call.span) {
+            None
+        } else {
+            match allow::classify(&call.callee, |_| false) {
+                allow::Call::Allowed => None,
+                allow::Call::Format(factory) => Some(factory),
+                allow::Call::Refused => {
+                    self.diagnostics.push(Diagnostic::at(self.source, "expr_impure_call", Severity::Error,
+                        call.callee.span(), "Call target is outside the pure call allowlist"));
+                    self.visit_arguments(&call.arguments);
+                    return;
+                }
+            }
+        };
+        let previous = std::mem::replace(&mut self.format_factory, factory);
+        walk::walk_call_expression(self, call);
+        self.format_factory = previous;
     }
 
     fn visit_arguments(&mut self, args: &ArenaVec<'a, Argument<'a>>) {

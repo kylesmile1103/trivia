@@ -6,6 +6,7 @@ pub mod parse;
 #[doc(hidden)]
 mod utf16;
 mod subset;
+mod allow;
 
 use std::collections::BTreeMap;
 

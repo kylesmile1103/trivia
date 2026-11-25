@@ -41,6 +41,9 @@ Allowlist, as data in `allow.rs`:
 A call to anything else is `expr_impure_call`. The check is by name: OXC has no type checker,
 so a method on a value of unknown type is judged by its name alone.
 
+- ⚑ The `Math` calls are listed individually, excluding `random`. Computed call targets need a
+  literal key. The Intl factories are permitted as receivers of an immediate `.format` call.
+
 ## 2. Scope
 
 The caller describes what an expression may reference:

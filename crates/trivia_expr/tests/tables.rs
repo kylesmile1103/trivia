@@ -53,3 +53,44 @@ fn batch_limits_and_parse_errors_keep_other_results() {
     assert!(response.results[1..10_000].iter().all(|result| result.ok));
     assert_eq!(response.results[10_000].diagnostics[0].code, "expr_too_large");
 }
+
+#[test]
+fn fr_ex_07_checks_call_targets_and_reports_the_callee_span() {
+    use trivia_expr::{analyze, AnalyzeRequest, ExpressionInput, Scope};
+
+    let accepted = [
+        "' hi '.trim().toLowerCase().toUpperCase().replaceAll('I', 'i').padStart(3).padEnd(4).slice(0, 2)",
+        "'hi'.startsWith('h') && 'hi'.endsWith('i') && 'hi'.includes('i')",
+        "'hi'.split('').filter(x => x).flatMap(x => [x]).map((x => x)).toSorted().join('')",
+        "[1].find(x => x) && [1].some(x => x) && [1].every(x => x) && [1].includes(1)",
+        "[1].reduce((a, b) => a + b, 0) + [1].at(0) + [1].slice().length",
+        "(1).toFixed(2)",
+        "Boolean(String(Number('3'))) && Math['max'](1, 2) <= Math.abs(-2)",
+        "Object.keys({}) && Object.values({}) && Object.entries({}) && JSON.stringify({})",
+        "Intl.NumberFormat('vi').format(123) + Intl.DateTimeFormat('vi').format(Date.now())",
+        "item?.['trim']?.()",
+    ];
+    let refused = [
+        ("fetch('/x')", 0, 5),
+        ("'😀' + Math.random()", 7, 18),
+        ("[1].push(2)", 0, 8),
+        ("item[state.key]()", 0, 15),
+        ("item.format(1)", 0, 11),
+        ("Intl.NumberFormat('vi')", 0, 17),
+        ("Intl.NumberFormat('vi').resolvedOptions()", 0, 39),
+        ("JSON.parse('{}')", 0, 10),
+    ];
+    let expressions = accepted.into_iter().chain(refused.map(|case| case.0)).map(|source| ExpressionInput {
+        id: source.into(), source: source.into(), defines: None, locals: Default::default(),
+    }).collect();
+    let scope: Scope = serde_json::from_str(r#"{"roots":{"state":{"tier":"client","members":["key"]}},"locals":["item"]}"#).unwrap();
+    let results = analyze(AnalyzeRequest { scope, expressions }).results;
+    for (source, result) in accepted.iter().zip(&results) {
+        assert!(result.ok, "{source}: {:?}", result.diagnostics);
+    }
+    for ((source, start, end), result) in refused.into_iter().zip(&results[accepted.len()..]) {
+        assert!(!result.ok, "{source}");
+        assert_eq!(result.diagnostics.iter().map(|d| (d.code, d.start, d.end)).collect::<Vec<_>>(),
+            [("expr_impure_call", start, end)], "{source}");
+    }
+}
