@@ -23,22 +23,23 @@ export function checkNextRoutes(blueprint: Blueprint): Diagnostic[] {
         message = 'Next.js routes cannot contain dot segments.'
         break
       }
-      if (!segment.startsWith(':')) {
+      if (!segment.startsWith(':') && segment !== '*') {
         prefix += '/' + segment
         continue
       }
-      prefix += '/:'
+      prefix += segment === '*' ? '/:*' : '/:'
+      const param = segment === '*' ? ':splat' : segment
       const previous = dynamic.get(prefix)
-      if (names.has(segment)) {
-        message = 'Next.js route ' + route + ' repeats the parameter ' + segment + '.'
+      if (names.has(param)) {
+        message = 'Next.js route ' + route + ' repeats the parameter ' + param + '.'
         break
       }
-      if (previous !== undefined && previous !== segment) {
+      if (previous !== undefined && previous !== param) {
         message = 'The dynamic folder at ' + prefix + ' already uses the parameter ' + previous + '.'
         break
       }
-      names.add(segment)
-      candidate.push([prefix, segment])
+      names.add(param)
+      candidate.push([prefix, param])
     }
     if (message) diagnostics.push({ code: 'invalid_next_route', severity: 'error', doc, pointer: '/route', message })
     else for (const [prefix, segment] of candidate) dynamic.set(prefix, segment)

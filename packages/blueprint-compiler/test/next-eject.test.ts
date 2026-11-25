@@ -9,7 +9,7 @@ import { dotnetAvailable, mvpContract, nextExample, prepareMvp } from './next-fi
 
 const workspace = fileURLToPath(new URL('../../../', import.meta.url))
 const bin = fileURLToPath(new URL('../bin/trivia-blueprint.js', import.meta.url))
-const routes = ['accounts', 'customers', 'customers/create', 'customers/edit/[id]', 'customers/show/[id]']
+const routes = ['accounts', 'customers', 'customers/create', 'customers/edit/[id]', 'customers/show/[id]', 'probe/[...splat]', 'identity-probe', 'query-probe/[id]']
 
 function node(cwd: string, program: string, ...args: string[]) {
   return spawnSync(process.execPath, [program, ...args], {
@@ -31,6 +31,8 @@ it.skipIf(!dotnetAvailable)('FR-NX-08 ejects, guards and type-checks the complet
 
     const web = prepareMvp(root)
     await mvpContract(root, web)
+    const probe = new URL('../fixtures/next/edge/', import.meta.url)
+    fs.cpSync(probe, path.join(web, 'blueprint/pages'), { recursive: true })
     fs.symlinkSync(fileURLToPath(new URL('node_modules', nextExample)), path.join(web, 'node_modules'), 'junction')
     const ejected = node(web, bin, 'eject')
     expect(ejected.status, ejected.stdout + ejected.stderr).toBe(0)

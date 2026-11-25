@@ -1,4 +1,5 @@
 import { expressionsOf } from '../expressions.js'
+import { routeParameters } from '../types/common.js'
 import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import type { CustomPage, PageDoc, Query } from '../types/page.js'
 import type { LayerCheck } from './context.js'
@@ -76,7 +77,7 @@ export function expressionRequest(page: PageDoc, ui: UiExpressionScope = { tier:
   return {
     scope: {
       roots: {
-        params: { tier: 'server', members: page.route.split('/').filter((segment) => segment.startsWith(':')).map((segment) => segment.slice(1)) },
+        params: { tier: 'server', members: routeParameters(page.route).map(({ name }) => name) },
         search: { tier: 'server', members: null },
         user: { tier: 'server', members: ['id', 'name', 'roles'] },
         state: { tier: 'client', members: page.kind === 'custom' ? Object.keys(page.state) : [] },

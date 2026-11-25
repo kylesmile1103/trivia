@@ -9,6 +9,7 @@ export function nextPageFile(route: string, facts: ProjectFacts, file = 'page.ts
   if (facts.previewDirectory) return facts.previewDirectory + '/' + file
   const folders = route.split('/').slice(1).filter(Boolean).map((segment) => {
     if (segment === '.' || segment === '..') throw new CompileError('invalid_result', 'Next.js routes cannot contain dot segments.')
+    if (segment === '*') return '[...splat]'
     if (segment.startsWith(':')) return '[' + segment.slice(1) + ']'
     return segment.startsWith('_') ? '%5F' + segment.slice(1) : segment
   })

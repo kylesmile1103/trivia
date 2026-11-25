@@ -1,4 +1,4 @@
-import { toPointer, type ContractPage, type CustomPage, type Query } from '@trivia/blueprint'
+import { routeParameters, toPointer, type ContractPage, type CustomPage, type Query } from '@trivia/blueprint'
 import type { ManifestItemOperation, ManifestOperation, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import { CompileError, type CompileContext } from '../../compile.js'
@@ -150,7 +150,7 @@ export function contractRecord(page: ContractPage, resource: ManifestResource, c
   const operation = resource.operations.get
   const sdk = contract?.modules.sdk?.importPath
   if (!operation || !sdk || !operation.parameters.some(({ in: place, name }) => place === 'path' && name === operation.idParam)) return
-  const params = page.route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1)] : [])
+  const params = routeParameters(page.route).filter(({ catchAll }) => !catchAll).map(({ name }) => name)
   const routeParam = params.find((name) => name === operation.idParam) ?? params.find((name) => name === 'id') ??
     (params.length === 1 ? params[0] : undefined)
   if (routeParam !== undefined) return { operation, routeParam, sdk, public: page.public }
@@ -159,7 +159,7 @@ export function contractRecord(page: ContractPage, resource: ManifestResource, c
 export function printContractEntry(component: string, route: string, prefetch: ContractRecord, facts: ProjectFacts): string {
   const { style } = facts
   const { sdk, operation, routeParam } = prefetch
-  const params = route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1) + ': string'] : [])
+  const params = routeParameters(route).map(({ name, catchAll }) => name + ': ' + (catchAll ? 'string[]' : 'string'))
   const line = (code: string) => statement(code, style)
   const args = '{ ...request, path: { ' + property(operation.idParam, style) + ': recordId } }'
   const request = prefetch.public ? 'publicApiRequest()' : 'await apiRequest()'

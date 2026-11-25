@@ -1,4 +1,4 @@
-import { expressionRequest, pageDocPath, type Diagnostic, type ExpressionInput, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
+import { expressionRequest, pageDocPath, routeParameters, type Diagnostic, type ExpressionInput, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext } from '../compile.js'
 import { compareBytes } from '../print/style.js'
@@ -92,7 +92,7 @@ function missing(pointer: string): never {
 
 export function routeScope(
   deps: ReadonlySet<string>, names: import('./names.js').Names,
-  router: import('../targets/target.js').RefineHookMap['router'],
+  router: import('../targets/target.js').RefineHookMap['router'], route: string,
 ) {
   const rename: Record<string, string> = {}
   const imports: import('../ir.js').ImportIR[] = []
@@ -102,8 +102,17 @@ export function routeScope(
   if (has('params')) {
     const name = names.take('params')
     rename['params'] = name
+    const params = routeParameters(route)
+    if (router.searchTuple && params.some(({ catchAll }) => catchAll)) {
+      const splat = '(' + name + '["*"]?.split("/") ?? [])'
+      rename['params'] = '({ ...' + name + ', splat: ' + splat + ' })'
+      rename['params.splat'] = splat
+    }
     imports.push({ name: 'useParams', source: router.source })
-    hooks.push({ name, hook: 'useParams' })
+    const type = !router.searchTuple && params.length
+      ? '{ ' + params.map(({ name, catchAll }) => name + ': ' + (catchAll ? 'string[]' : 'string')).join('; ') + ' }'
+      : undefined
+    hooks.push({ name, hook: 'useParams', ...(type && { type }) })
     locals.push(name)
   }
   if (has('search')) {

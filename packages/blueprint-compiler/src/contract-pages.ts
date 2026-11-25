@@ -79,7 +79,7 @@ export function generateContract(
   const names = new Names(['columns', 'table', 'form', 'record', 'onFinish', 'formLoading', '_event', '_row'])
   const name = (preferred: string) => names.take(preferred)
   const depsOfExpressions = new Set(analyzePageExpressions(page, context.engine).flatMap(({ deps }) => deps))
-  const route = routeScope(depsOfExpressions, names, hooks.router)
+  const route = routeScope(depsOfExpressions, names, hooks.router, page.route)
   const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
   const lower = actionLowerer({

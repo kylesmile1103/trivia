@@ -421,6 +421,13 @@ export class EngineService {
     }
   }
 
+  #dropEjectedPreviews(lock: string, files: ReadonlySet<string>): void {
+    if (!this.#options.host.preview.removeBlueprint) return
+    for (const [page, record] of Object.entries(readLock(lock).pages)) {
+      if (files.has(record.file)) this.#removePreview(page)
+    }
+  }
+
   confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
     return this.#queue.run(() => {
       const history = this.#history.nextUndo
@@ -442,9 +449,6 @@ export class EngineService {
       const plan = await this.planBlueprintEject(pages)
       const entry = label ?? plan.label
       const result = this.#transact(plan.ops, entry, source)
-      for (const [name, record] of Object.entries(plan.lock.pages)) {
-        if (plan.files.includes(record.file)) this.#removePreview(name)
-      }
       return {
         ...result, entry: result.changed ? entry : null,
         files: plan.files, requires: plan.requires, warnings: plan.warnings,
@@ -477,10 +481,14 @@ export class EngineService {
       finish?.()
       host.filesChanged?.(result.changes.map((change) => change.file))
     }
+    const last = ops.at(-1)
+    const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
     if (result.changes.length > 0) {
-      const last = ops.at(-1)
-      const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
       this.#history.record({ label, changes: result.changes, ...(ejectLock !== undefined && { ejectLock }) })
+    }
+    if (ejectLock !== undefined) {
+      this.#dropEjectedPreviews(ejectLock, new Set(ops.flatMap((op) =>
+        typeof op.file === 'string' && (op.op === 'createFile' || op.op === 'replaceFile') ? [op.file] : [])))
     }
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
@@ -538,9 +546,7 @@ export class EngineService {
       this.#options.host.preview.invalidateBlueprints?.()
       this.#dropDeletedPreviews(writes.filter(({ content }) => content === null).map(({ file }) => file))
     } else if (direction === 'redo' && entry.ejectLock) {
-      for (const [name, record] of Object.entries(readLock(entry.ejectLock).pages)) {
-        if (writes.some(({ file, content }) => file === record.file && content !== null)) this.#removePreview(name)
-      }
+      this.#dropEjectedPreviews(entry.ejectLock, new Set(writes.filter(({ content }) => content !== null).map(({ file }) => file)))
     }
     this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()

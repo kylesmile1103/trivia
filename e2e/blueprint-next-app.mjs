@@ -39,6 +39,33 @@ async function configureLaunch(appHost) {
   }
 }
 
+function installApiFixture(root) {
+  const program = path.join(root, 'src/BankAdmin.Api/Program.cs')
+  const source = fs.readFileSync(program, 'utf8')
+  const fixture = `
+app.MapGet("/api/v1/customers/00000000-0000-0000-0000-000000000500", () =>
+    Results.Problem(statusCode: 500)).ExcludeFromDescription();
+app.MapGet("/api/v1/customers/00000000-0000-0000-0000-000000000401", (HttpRequest request) =>
+    HasFixtureCredentials(request)
+        ? Results.Ok(new {
+            id = "00000000-0000-0000-0000-000000000401", fullName = "Credentials forwarded",
+            email = "credential-fixture@example.test", status = "active",
+            creditLimit = 10, createdAt = "2026-01-01T00:00:00Z"
+        })
+        : Results.Unauthorized()).ExcludeFromDescription();
+app.MapGet("/_trivia-fixture/identity", (HttpRequest request) =>
+    HasFixtureCredentials(request) ? Results.Ok(new {
+        id = "fixture-user", name = "Fixture user", roles = new[] { "operator" }
+    }) : Results.Unauthorized()).ExcludeFromDescription();
+
+static bool HasFixtureCredentials(HttpRequest request) =>
+    request.Headers.Cookie.ToString() == "trivia-test=present" &&
+    request.Headers.Authorization == "Bearer e2e-fixture";
+`
+  if (!source.includes('app.Run();')) throw new Error('The fixture API startup anchor moved.')
+  fs.writeFileSync(program, source.replace('app.Run();', fixture + '\napp.Run();'))
+}
+
 try {
   const web = prepareMvp(root)
   fs.symlinkSync(fileURLToPath(new URL('node_modules', nextExample)), path.join(web, 'node_modules'), 'junction')
@@ -46,6 +73,10 @@ try {
   const scope = ['--blueprint', blueprint, '--root', root]
   run('trivia-dotnet', ['write', ...scope], root, 'ignore')
   run('trivia-dotnet', ['migrate', 'Initial', ...scope], root, 'ignore')
+  const probe = new URL('../packages/blueprint-compiler/fixtures/next/edge/', import.meta.url)
+  fs.cpSync(probe, path.join(blueprint, 'pages'), { recursive: true })
+  fs.writeFileSync(path.join(web, '.env'), 'TRIVIA_IDENTITY_PATH=/_trivia-fixture/identity\n')
+  installApiFixture(root)
   run('dotnet', ['build', 'BankAdmin.slnx', '--disable-build-servers'])
   run('pnpm', ['exec', 'trivia-contract-sync', '--input', 'openapi/api.openapi.json', '--zod'], web)
   run(process.execPath, [bin, 'eject'], web, 'ignore')

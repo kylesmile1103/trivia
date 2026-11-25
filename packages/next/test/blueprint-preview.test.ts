@@ -27,7 +27,7 @@ it('publishes split Next drafts and removes only the owned files on eject, delet
       $schema: 'https://trivia.dev/schemas/blueprint/app.v1.json',
       blueprintVersion: 1, name: 'DraftApp', targets: { web: 'next-refine' },
     }))
-    for (const [index, name] of ['First', 'Second', 'Third'].entries()) {
+    for (const [index, name] of ['First', 'Second', 'Third', 'Fourth'].entries()) {
       const doc = 'pages/' + name + '.page.json'
       await fs.writeFile(path.join(root, 'blueprint', doc), JSON.stringify({
         $schema: 'https://trivia.dev/schemas/blueprint/page.v1.json',
@@ -52,6 +52,10 @@ it('publishes split Next drafts and removes only the owned files on eject, delet
       } else if (name === 'Second') {
         const baseRev = (await service.blueprint.read()).docs[doc]!.rev
         await service.patchBlueprint([{ op: 'deletePage', doc, baseRev }], 'Delete draft')
+        await expect(fs.stat(view)).rejects.toMatchObject({ code: 'ENOENT' })
+      } else if (name === 'Third') {
+        const plan = await service.planBlueprintEject([name])
+        await service.batch(plan.ops, plan.label)
         await expect(fs.stat(view)).rejects.toMatchObject({ code: 'ENOENT' })
       }
     }

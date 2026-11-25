@@ -1,4 +1,4 @@
-import { exposedScope, type CustomPage, type LayerCheck } from '@trivia/blueprint'
+import { exposedScope, routeParameters, type CustomPage, type LayerCheck } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext } from '../../compile.js'
 import type { ImportIR, JsxIR, PageIR } from '../../ir.js'
@@ -51,8 +51,7 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
       return []
     })
   }
-  const params = page.route.split('/').filter((segment) => segment.startsWith(':'))
-    .map((segment) => segment.slice(1) + ': string')
+  const params = routeParameters(page.route).map(({ name, catchAll }) => name + ': ' + (catchAll ? 'string[]' : 'string'))
   const routeTypes = {
     params: '{ ' + params.join('; ') + ' }',
     search: 'Record<string, string | string[] | undefined>',
@@ -135,7 +134,9 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
     before.push(statement('const ' + request.search + ' = await searchParams', style))
   }
   if (required.has('user')) {
-    before.push(statement('const ' + request.user + ': ' + routeTypes.user + ' = { id: undefined, name: undefined, roles: [] }', style))
+    ir.imports.push({ name: 'readIdentity', source: '@/server/api' })
+    before.push(statement('const ' + request.user + ' = await readIdentity()', style))
+    ir.async = true
   }
   if (routeProps.length) {
     ir.async = true

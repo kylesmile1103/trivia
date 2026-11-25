@@ -46,7 +46,7 @@
 
 ## Phase 9: Polish
 
-- [ ] T018 Edge cases: catch-all routes, a failing server query reaching `error.tsx`, a server value crossing as a prop
+- [x] T018 Edge cases: catch-all routes, a failing server query reaching `error.tsx`, a server value crossing as a prop
 - [ ] T019 Update LLD-12 with verified API names and the spike's outcome. Update `docs/blueprint/README.md`
 - [ ] T020 Run `pnpm check`, `pnpm e2e`, and the `next build` job
 

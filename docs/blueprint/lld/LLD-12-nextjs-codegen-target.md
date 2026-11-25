@@ -190,7 +190,7 @@ entry and views together, and keep any preview handler stub in the same folder. 
 stamping loader skips the folder while draft markup keeps its blueprint selection ids.
 For a route that needs dynamic parameters, a small entry adapter passes matching preview
 search parameters to the compiled page. Preview creation and cleanup share the service
-queue with source and draft edits.
+queue with source and draft edits, including eject plans applied through the batch API.
 
 ## 7. Template and AppHost (FR-NX-06)
 
@@ -231,6 +231,14 @@ compiles the kit fixture and the MVP fixture for both targets from the same docu
 conflicting names for the same dynamic folder. The layer also accepts an injected compiler
 check, so target-specific checks can use manifest and expression facts while the schema
 package stays independent of the compiler.
+
+⚑ A terminal `/*` exposes `params.splat` as an array. Next emits a required
+`[...splat]` segment, and Vite splits React Router's wildcard value into segments.
+
+⚑ Server expressions can read identity from `TRIVIA_IDENTITY_PATH`, a trusted endpoint
+on the configured API origin. This endpoint receives the same credentials as server
+queries. The generated template keeps signed-out requests anonymous and exposes only
+`id`, `name` and `roles` to expressions.
 
 ## 9. Tests
 
