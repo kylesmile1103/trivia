@@ -1,8 +1,10 @@
 // Validation in layers (LLD-01 section 5, FR-BP-05). Pure, never throws. Each layer sees only
 // the documents no earlier layer found an error in, so one mistake is reported once, where it
 // is, rather than again by every layer that trips over it.
+import { validateModel } from '../model/validate.js'
 import type { Blueprint } from '../store.js'
 import type { Diagnostic } from '../types/diagnostics.js'
+import { MODEL_DOC } from '../types/ops.js'
 import type { LayerCheck, ValidationContext } from './context.js'
 import { checkReferences } from './references.js'
 
@@ -10,7 +12,12 @@ export type { LayerCheck, ValidationContext } from './context.js'
 
 /** Layers 1 and 2: what reading found (JSON, schema) and the references. A write needs both clean. */
 export function validateStructure(blueprint: Blueprint): Diagnostic[] {
-  return [...Object.values(blueprint.docs).flatMap((entry) => entry.diagnostics), ...checkReferences(blueprint)]
+  const diagnostics = [...Object.values(blueprint.docs).flatMap((entry) => entry.diagnostics), ...checkReferences(blueprint)]
+  const model = blueprint.docs[MODEL_DOC]
+  if (model?.kind === 'model' && model.doc) {
+    diagnostics.push(...validateModel(model.doc, model.rev))
+  }
+  return diagnostics
 }
 
 const failedDocs = (diagnostics: readonly Diagnostic[]) =>

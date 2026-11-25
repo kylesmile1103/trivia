@@ -2,11 +2,10 @@
 // either every op applies or nothing is written. Pure: it computes the files to write and
 // leaves writing them to the caller (the dev service, LLD-04). Never throws.
 import { applyModelOp } from '../model/apply.js'
-import { validateModel } from '../model/validate.js'
 import { compareBytes, serialize } from '../serialize.js'
 import { loadDocument, type Blueprint, type DocEntry } from '../store.js'
 import { applyError, type ApplyError, type Diagnostic } from '../types/diagnostics.js'
-import { blueprintOpSchema, MODEL_DOC, type BlueprintOp, type OpName, type OpOf } from '../types/ops.js'
+import { blueprintOpSchema, type BlueprintOp, type OpName, type OpOf } from '../types/ops.js'
 import { validate, validateStructure } from '../validate/index.js'
 import { setApp, setNav } from './app.js'
 import { Draft, Refusal, type ApplyOptions } from './draft.js'
@@ -51,11 +50,6 @@ const HANDLERS: { [N in OpName]: Handler<N> } = {
 
 function run(draft: Draft, op: BlueprintOp): void {
   ;(HANDLERS[op.op] as Handler<OpName>)(draft, op)
-}
-
-function checkModel(blueprint: Blueprint): Diagnostic[] {
-  const entry = blueprint.docs[MODEL_DOC]
-  return entry?.kind === 'model' && entry.doc ? validateModel(entry.doc, entry.rev) : []
 }
 
 export function apply(blueprint: Blueprint, ops: readonly unknown[], options: ApplyOptions): ApplyOutcome {
@@ -116,10 +110,8 @@ export function apply(blueprint: Blueprint, ops: readonly unknown[], options: Ap
   // The result must pass the schema and the references. Only errors the batch introduced
   // block it, so a broken file elsewhere does not freeze the rest of the blueprint.
   const key = (d: Diagnostic) => `${d.code}\u0000${d.doc}\u0000${d.pointer}`
-  const knownModel = checkModel(blueprint)
-  const model = next.docs[MODEL_DOC] === blueprint.docs[MODEL_DOC] ? knownModel : checkModel(next)
-  const known = new Set([...validateStructure(blueprint), ...knownModel].filter((d) => d.severity === 'error').map(key))
-  const structure = [...validateStructure(next), ...model]
+  const known = new Set(validateStructure(blueprint).filter((d) => d.severity === 'error').map(key))
+  const structure = validateStructure(next)
   const introduced = structure.filter((d) => d.severity === 'error' && !known.has(key(d)))
   if (introduced.length > 0) {
     return {
@@ -135,6 +127,6 @@ export function apply(blueprint: Blueprint, ops: readonly unknown[], options: Ap
     blueprint: next,
     // Manifest, contract and expression findings come back with the result but never block:
     // a draft may be incomplete.
-    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: [...validate(next, options.ctx), ...model] },
+    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: validate(next, options.ctx) },
   }
 }
