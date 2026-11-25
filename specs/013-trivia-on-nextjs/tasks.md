@@ -19,7 +19,7 @@
 ## Phase 3: User Story 3 - Stamp and edit (P1)
 
 - [x] T008 [US3] Generate `packages/next`. `src/loader.cjs` over `stamp.ts`. Test: the engine's locator fixtures through the loader equal the Vite transform's output (SC-003)
-- [ ] T009 [US3] `src/with-trivia.ts`: development only, `.tsx` and `.jsx` outside `node_modules` and the preview folder, for Turbopack and for webpack. Unit tests on the produced config per phase
+- [x] T009 [US3] `src/with-trivia.ts`: development only, `.tsx` and `.jsx` outside `node_modules` and the preview folder, for Turbopack and for webpack. Unit tests on the produced config per phase
 - [ ] T010 [US3] The designer's proxy: a second target for `/@trivia/api` and `/@trivia/mcp`, guard first. Tests in `packages/designer/server/`
 - [ ] T011 [US3] `src/launcher.ts` and `bin/trivia-next.js`: start `next dev` and the dev service, print the MCP URL, stop both, clean preview files
 - [ ] T012 [US3] `examples/next-admin`: the refine-admin pages on App Router with one server component page, `withTrivia` in its config

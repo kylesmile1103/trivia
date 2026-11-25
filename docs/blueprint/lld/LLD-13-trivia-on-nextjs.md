@@ -135,6 +135,10 @@ the loader for `.tsx` and `.jsx` under the project, excluding `node_modules` and
 folder, through `turbopack.rules` and through a `pre` rule in the webpack config. In a
 production build it only checks that no preview folder is left behind.
 
+⚑ `withTrivia` accepts a config object or factory and preserves the app's existing bundler
+rules. The application root defaults to the current directory, with an explicit `root` option
+for configs loaded from a different working directory.
+
 The file part of a locator is the path relative to the app root, the same string the engine
 resolves. One fixture suite, the locator fixtures the engine already has, is run through the
 loader to prove equality with the Vite transform (`CLAUDE.md` rule 3).

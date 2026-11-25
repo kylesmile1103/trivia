@@ -1,1 +1,1 @@
-export { stampFile } from './paths.js'
+export { withTrivia } from './with-trivia.js'

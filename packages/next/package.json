@@ -9,7 +9,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json",
     "./loader": "./src/loader.cjs"
@@ -50,5 +50,8 @@
     "@jridgewell/remapping": "2.3.5",
     "@trivia/dev-service": "workspace:*",
     "@trivia/engine": "workspace:*"
+  },
+  "peerDependencies": {
+    "next": "16.4.6"
   }
 }
