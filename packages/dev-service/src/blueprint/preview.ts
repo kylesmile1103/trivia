@@ -26,8 +26,7 @@ export function compilerError(error: unknown): never {
   throw error
 }
 
-export async function previewPage({ page }: z.infer<typeof previewInput>, service?: EngineService): Promise<PreviewResult> {
-  if (!service) throw new ApiError('unsupported', 'Blueprint preview needs the page compiler from spec 005.')
+export async function previewPage({ page }: z.infer<typeof previewInput>, service: EngineService): Promise<PreviewResult> {
   if (!service.blueprint.canPreview) throw new ApiError('unsupported', 'Blueprint preview requires a running Vite app host.')
   if (!(await service.refine.blueprintRouteAnchor())) {
     throw new ApiError('unsupported', 'The Refine app has no React Router route where a blueprint preview can be mounted.')

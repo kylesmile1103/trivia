@@ -157,14 +157,14 @@ it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a han
 })
 
 it.each([
-  ['trivia_blueprint_preview', { page: 'Customers' }, '005'],
+  ['trivia_blueprint_preview', { page: 'Customers' }, 'running Vite app host'],
   ['trivia_blueprint_eject', { pages: ['Customers'], label: 'Eject customers' }, '005'],
 ])('FR-AG-02 reserves %s with a structured unavailable response', async (name, args, spec) => {
   const result = await tool(name, args)
   expect(result).toMatchObject({
     isError: true, structuredContent: {
-      error: { code: 'unsupported', message: expect.stringContaining(`spec ${spec}`) },
-      next: expect.stringContaining(`spec ${spec}`),
+      error: { code: 'unsupported', message: expect.stringContaining(spec === '005' ? 'spec 005' : spec) },
+      next: expect.stringContaining(spec === '005' ? 'spec 005' : 'Vite Refine app host'),
     },
   })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
@@ -249,4 +249,27 @@ it('FR-DM-07 advertises model payloads and summarizes a patched model with its d
   expect(Object.fromEntries(variants.map(({ properties }) => [
     properties.op.const, Object.keys(properties).filter((key) => !['op', 'doc', 'baseRev'].includes(key)).sort(),
   ]))).toMatchSnapshot()
+})
+
+it('FR-AG-06 returns a loadable blueprint preview and optional code over MCP', async () => {
+  await client.close()
+  await running.close()
+  const host = createStandaloneHost(root)
+  running = await startDevService({
+    ...host,
+    preview: { blueprints: true, publish: (id) => '/@trivia/preview/' + id + '.tsx' },
+  }, { port: 0 })
+  client = new Client({ name: 'blueprint-preview-test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
+  expect((await tool('trivia_blueprint_patch', { ops: [listPage()], label: 'Draft' })).isError).not.toBe(true)
+
+  const result = await tool('trivia_blueprint_preview', { page: 'Customers' })
+  expect(result.isError).not.toBe(true)
+  expect(result.structuredContent).toMatchObject({
+    page: 'Customers', route: '/__blueprint/Customers', module: expect.stringContaining('/@trivia/preview/'),
+    next: expect.stringContaining('Open the Trivia designer'),
+  })
+  expect(result.structuredContent).not.toHaveProperty('code')
+  const withCode = await tool('trivia_blueprint_preview', { page: 'Customers', includeCode: true })
+  expect(withCode.structuredContent).toMatchObject({ code: expect.stringContaining('export function CustomerList()') })
 })

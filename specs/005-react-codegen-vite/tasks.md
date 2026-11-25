@@ -36,7 +36,7 @@
 
 - [x] T018 [US3] `src/blueprint/preview.ts` in the plugin: serve `compilePage` at `/@trivia/preview/<id>.tsx`, reuse the preview stylesheet, register `/__blueprint/<Name>` in dev, invalidate on store changes
 - [x] T019 [US3] Tests: `POST /blueprint/preview` result, the module compiles under Vite, 422 with diagnostics for an invalid page
-- [ ] T020 [US3] MCP `trivia_blueprint_preview`, replacing the stub of spec 004
+- [x] T020 [US3] MCP `trivia_blueprint_preview`, replacing the stub of spec 004
 
 ## Phase 6: User Story 4 - Eject and the lock (P1)
 

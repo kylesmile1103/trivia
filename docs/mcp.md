@@ -220,9 +220,9 @@ The patch schema includes the guarded model ops, such as `setModel` and `setEnti
 To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agent: ` prefix.
 `trivia_get_selection` also returns the next undo label in `history.undoLabel`.
 
-`trivia_blueprint_preview` accepts a page name and optional `includeCode`. After the page
-compiler lands in spec 005, use the returned route in the designer and call
-`trivia_screenshot` when it loads. The tool currently returns `unsupported`.
+`trivia_blueprint_preview` accepts a page name and optional `includeCode`. Open the returned
+route in the designer's canvas and call `trivia_screenshot` after it loads. The response
+includes setup advice when the designer has no active screenshot poll.
 
 ```json
 {"name":"trivia_blueprint_preview","arguments":{"page":"Customers"}}

@@ -265,6 +265,10 @@ export class EngineService {
   }
 
   /** A PNG of the designer's canvas, from the open designer (see ScreenshotRelay). */
+  get designerConnected(): boolean {
+    return this.#screenshots.connected
+  }
+
   screenshot(): Promise<Screenshot> {
     return this.#screenshots.request(this.#options.screenshotTimeoutMs ?? 15_000)
   }

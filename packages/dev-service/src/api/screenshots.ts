@@ -24,6 +24,10 @@ export class ScreenshotRelay {
   readonly #pending: Pending[] = []
   readonly #waiters: Array<(request: { id: string }) => void> = []
 
+  get connected(): boolean {
+    return this.#waiters.length > 0 || this.#pending.some(({ taken }) => taken)
+  }
+
   /** A screenshot from the open designer, or an error when none answers within `timeoutMs`. */
   request(timeoutMs: number): Promise<Screenshot> {
     return new Promise<Screenshot>((resolve, reject) => {

@@ -697,9 +697,15 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     },
     ({ page, includeCode }) =>
       run(async () => {
-        const { code, ...preview } = await previewPage({ page })
-        return { data: { ...preview, ...(includeCode && { code }) }, summary: `Preview ${page} at ${preview.route}` }
-      }, { unsupported: 'Preview becomes available with the page compiler in spec 005.' }, true),
+        const { code, ...preview } = await previewPage({ page }, service)
+        const next = service.designerConnected
+          ? 'Load the preview route in the Trivia canvas, then call trivia_screenshot.'
+          : 'Open the Trivia designer and load the preview route, then call trivia_screenshot.'
+        return { data: { ...preview, ...(includeCode && { code }), next }, summary: `Preview ${page} at ${preview.route}` }
+      }, {
+        unsupported: 'Start a Vite Refine app host with the Trivia plugin to preview this page.',
+        invalid_result: 'Read the diagnostics, patch the page at its current revision, and preview again.',
+      }, true),
   )
 
   server.registerTool(
