@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { apply, loadBlueprint, revOfText, sequenceSource } from '@trivia/blueprint'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
 import { copyBlueprintProject, listPage } from './blueprint-fixture.js'
@@ -16,6 +16,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await running?.close()
   fs.rmSync(root, { recursive: true, force: true })
 })
@@ -152,4 +153,62 @@ it('FR-AG-01 refuses a structurally invalid patch without creating the directory
     ok: false, error: { code: 'invalid_result', details: { diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'duplicate_route' })]) } },
   })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
+})
+
+const setResource = (doc: string, baseRev: string, resource: string) => ({ op: 'setPageMeta', doc, baseRev, resource })
+
+it('FR-AG-05 lets only one of two concurrent writes from the same read succeed', async () => {
+  const initial = seedPage()
+  const doc = listPage().doc
+  const ops = ['Account', 'Transaction'].map((name) => setResource(doc, revOfText(initial), name))
+  const results = await Promise.all(ops.map((op) => post('/patch', { label: 'Change resource', ops: [op] })))
+  expect(results.map(({ status }) => status).sort()).toEqual([200, 409])
+  const winner = ops[results.findIndex(({ status }) => status === 200)]!
+  const disk = fs.readFileSync(path.join(root, 'blueprint', doc), 'utf8')
+  expect(JSON.parse(disk).resource).toBe(winner.resource)
+  const conflict = results.find(({ status }) => status === 409)!
+  expect(await conflict.json()).toMatchObject({ error: { code: 'conflict', details: { revs: { [doc]: revOfText(disk) } } } })
+})
+
+it('FR-AG-05 reports the revision of a hand edit without overwriting its bytes', async () => {
+  const initial = seedPage()
+  const doc = listPage().doc
+  const edited = initial + '\n'
+  writeBlueprint(doc, edited)
+  const response = await post('/patch', { label: 'Change resource', ops: [setResource(doc, revOfText(initial), 'Account')] })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({ error: { code: 'conflict', details: { revs: { [doc]: revOfText(edited) } } } })
+  expect(fs.readFileSync(path.join(root, 'blueprint', doc), 'utf8')).toBe(edited)
+})
+
+it('FR-AG-05 reports all three revisions and preserves the batch when the last guard is stale', async () => {
+  const pages = [listPage(), listPage('Accounts', 'Account'), listPage('Transactions', 'Transaction')]
+  const outcome = apply(loadBlueprint({}), pages, { ids: sequenceSource() })
+  if (!outcome.ok) throw new Error(outcome.error.message)
+  const current = outcome.result.revs
+  for (const { file, after } of outcome.writes) writeBlueprint(file, after!)
+  const ops = pages.map(({ doc }, i) => setResource(doc, i === 2 ? 'sha256:' + '0'.repeat(64) : current[doc]!, 'Order'))
+  const response = await post('/patch', { label: 'Change three documents', ops })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({ error: { code: 'conflict', details: { revs: current } } })
+  for (const { file, after } of outcome.writes) {
+    expect(fs.readFileSync(path.join(root, 'blueprint', file), 'utf8')).toBe(after)
+  }
+})
+
+it('FR-AG-05 includes revisions when the byte guard detects an edit after planning', async () => {
+  const initial = seedPage()
+  const doc = listPage().doc
+  const edited = initial + '\n'
+  const lock = 'blueprint.lock.json'
+  writeBlueprint(lock, JSON.stringify({ lockVersion: 1, pages: {} }))
+  const read = fs.readFileSync
+  vi.spyOn(fs, 'readFileSync').mockImplementation((...args) => {
+    if (args[0] === path.join(root, 'blueprint', lock)) writeBlueprint(doc, edited)
+    return read(...args)
+  })
+  const response = await post('/patch', { label: 'Change resource', ops: [setResource(doc, revOfText(initial), 'Account')] })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({ error: { code: 'conflict', details: { revs: { [doc]: revOfText(edited) } } } })
+  expect(fs.readFileSync(path.join(root, 'blueprint', doc), 'utf8')).toBe(edited)
 })

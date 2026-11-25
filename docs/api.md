@@ -543,3 +543,7 @@ POST /@trivia/api/blueprint/patch
 
 {"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
 ```
+
+A stale revision or a file changed between planning and writing returns 409 `conflict`
+with `error.details.revs`. The map contains the current revision of each affected
+document, with `null` for a missing document. Re-read the affected documents before retrying.

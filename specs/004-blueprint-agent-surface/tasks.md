@@ -25,7 +25,7 @@
 
 ## Phase 4: User Story 2 - Conflicts (P1)
 
-- [ ] T012 [US2] Tests: two patches from one read, a hand edit between read and patch, a three-document batch with one stale revision. Then the `error.details.revs` payload
+- [x] T012 [US2] Tests: two patches from one read, a hand edit between read and patch, a three-document batch with one stale revision. Then the `error.details.revs` payload
 
 ## Phase 5: User Story 3 - Undo (P1)
 

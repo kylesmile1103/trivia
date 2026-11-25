@@ -7,6 +7,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { revOfText } from '@trivia/blueprint'
+
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { summarize, type PatchResult } from '../blueprint/summary.js'
@@ -312,8 +314,21 @@ export class EngineService {
         throw new ApiError(code, message, op === undefined ? details : { ...details, op })
       }
       const summary = summarize(this.blueprint, applied.blueprint, applied.result.diagnostics)
-      const entry = this.#commitDocuments(applied.writes, label)
-      return { ...applied.result, entry, summary }
+      try {
+        const entry = this.#commitDocuments(applied.writes, label)
+        return { ...applied.result, entry, summary }
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== 'conflict') throw error
+        const documents = new Set(applied.writes.map(({ file }) => file))
+        for (const op of ops) {
+          if (isObject(op) && typeof op.doc === 'string') documents.add(op.doc)
+        }
+        const revs = Object.fromEntries([...documents].map((file) => {
+          const text = this.blueprint.readDocumentText(file)
+          return [file, text === null ? null : revOfText(text)]
+        }))
+        throw new ApiError('conflict', error.message, { revs })
+      }
     })
   }
 
