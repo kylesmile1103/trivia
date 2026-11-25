@@ -7,6 +7,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { pageDocPath, type AppDoc, type Blueprint } from '@trivia/blueprint'
+import { projectFacts, relativeModule, resourceOps, restyleModule, routeOps, type EjectPage, type EmittedModule, type RouteRegistration } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import type { AppRoute } from '../api/service.js'
@@ -17,7 +19,7 @@ import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
 import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { alignOps, hasDiff, ruleDiff } from './rules.js'
-import { PAGE_KINDS, type PageFile, type PageKind, type ScaffoldContext, pageFiles, supportedKinds, withoutFields } from './scaffold.js'
+import { PAGE_KINDS, type PageKind, type ScaffoldContext, generateRefinePage, supportedKinds } from './scaffold.js'
 import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
@@ -233,7 +235,49 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'build'])
 export class RefineAdapter {
   readonly #host: RefineHost
   /** The pages the inferencer asked to preview, by module id. */
-  readonly #previews = new Map<string, PreviewRequest>()
+  readonly #previews = new Map<string, () => Promise<{ code: string; blueprint?: EmittedModule }>>()
+
+  async compileProject() {
+    const app = await this.#app()
+    const project = await this.#scaffoldContext('')
+    const entrySource = app ? fs.readFileSync(path.join(this.#host.root, app.file), 'utf8') : ''
+    const { root, uiDir } = this.#host
+    const modules = (dir: string, prefix: string | null): string[] => {
+      if (!prefix || dir.startsWith('..')) return []
+      const base = path.join(root, dir)
+      try {
+        return fs.readdirSync(base, { withFileTypes: true, recursive: true })
+          .filter((entry) => entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name))
+          .map((entry) => prefix + '/' + path.relative(base, path.join(entry.parentPath, entry.name))
+            .split(path.sep).join('/').replace(/\.(?:tsx?|jsx?)$/, ''))
+      } catch {
+        return []
+      }
+    }
+    const installed = [
+      ...modules(uiDir, project.ui),
+      ...modules(path.posix.join(path.posix.dirname(uiDir), 'refine-ui'), project.refineUi),
+    ]
+    return { project, entrySource, installed }
+  }
+
+  async blueprintRouteAnchor(file?: string): Promise<{ file: string; target: string } | null> {
+    const app = await this.#app()
+    if (!app || (file !== undefined && file !== app.file)) return null
+    const anchor = this.#routeAnchor(app)
+    return anchor ? { file: app.file, target: anchor.parent + '.' + anchor.index } : null
+  }
+
+  blueprintPreview(id: string, build: () => Promise<EmittedModule>): void {
+    this.#previews.set(id, async () => {
+      const blueprint = await build()
+      return { code: blueprint.code + '\nexport default ' + blueprint.component + '\n', blueprint }
+    })
+  }
+
+  async previewSource(id: string): Promise<EmittedModule | undefined> {
+    return id.startsWith('blueprint-') ? (await this.#previews.get(id)?.())?.blueprint : undefined
+  }
 
   constructor(host: RefineHost) {
     this.#host = host
@@ -298,7 +342,8 @@ export class RefineAdapter {
 
     const { root } = this.#host
     const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
-    const files = pageFiles(resource, wanted, await this.#scaffoldContext(name, nextRoutes))
+    const project = await this.#scaffoldContext(name, nextRoutes)
+    const files = wanted.map((kind) => generateRefinePage({ resource, kind, project }))
     const claimed = new Set(nextRoutes?.map((route) => routePattern(route.path)))
     for (const file of files) {
       if (claimed.has(routePattern(file.route))) throw new ApiError('conflict', `${file.route} already has an App Router page`)
@@ -306,37 +351,120 @@ export class RefineAdapter {
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
     }
-    const ops: Plan['ops'] = files.map((f) => ({ op: 'createFile', file: f.file, content: f.content }))
+    const style = this.#host.kind === 'vite'
+      ? projectFacts({ entrySource: fs.readFileSync(path.join(root, app.file), 'utf8') }).style : null
+    const ops: Plan['ops'] = files.map((f) => ({
+      op: 'createFile', file: f.file, content: style ? restyleModule(f.content, style) : f.content,
+    }))
 
-    // The resource entry: new keys on the existing one, or a new entry.
-    const routes = Object.fromEntries(files.map((f) => [f.kind, f.route]))
-    if (entryOf(app.resources, name)) {
-      for (const kind of PAGE_KINDS.filter((k) => routes[k])) {
-        ops.push({ op: 'setProperty', path: `${app.resourcesPath}[name=${name}]`, prop: kind, value: JSON.stringify(routes[kind]) })
-      }
-    } else {
-      const keys = [`name: ${JSON.stringify(name)}`, ...PAGE_KINDS.filter((k) => routes[k]).map((k) => `${k}: ${JSON.stringify(routes[k])}`)]
-      ops.push({ op: 'insertElement', path: app.resourcesPath, value: `{\n  ${keys.join(',\n  ')},\n}` })
-    }
-
-    if (this.#host.kind === 'vite') {
-      // The routes: before the catch-all among the resource routes, else after the last of them.
-      const anchor = this.#routeAnchor(app)
-      if (!anchor) throw new ApiError('unsupported', `${app.file} has no <Route path="…"> to put the new routes next to`)
-      files.forEach((f, i) => {
-        // Before the catch-all, each insert pushes it one further; after the last route, each new
-        // one is the next anchor. Either way the i-th insert names slot index + i.
-        ops.push({
-          op: 'insert',
-          target: `${anchor.parent}.${anchor.index + i}`,
-          expectedName: 'Route',
-          placement: anchor.placement,
-          snippet: `<Route path="${f.route}" element={<${f.component} />} />`,
-          imports: [{ name: f.component, source: f.importPath }],
-        })
-      })
-    }
+    ops.push(...this.#registrationOps(app, files.map((file) => ({ ...file, resource: name }))))
     return { ops, label: `Add ${wanted.join(', ')} ${wanted.length === 1 ? 'page' : 'pages'} for ${humanize(name)}` }
+  }
+
+  async planBlueprintRegistrations(pages: readonly EjectPage[], contract: TriviaManifest | null): Promise<Plan['ops']> {
+    if (!pages.length) return []
+    const app = await this.#app()
+    if (!app) throw new ApiError('unsupported', 'The app needs a Refine resources array and React Router routes to eject pages.')
+    const files = pages.map(({ page, module }): RouteRegistration => {
+      if (page.kind === 'custom') return { ...module, importPath: relativeModule(app.file, module.file) }
+      const resource = contractResource(contract, page.resource, null)
+      if (!resource) throw new ApiError('invalid_result', 'No contract resource named ' + page.resource)
+      return { ...module, kind: page.kind, resource: refineName(resource) }
+    })
+    return this.#registrationOps(app, files)
+  }
+
+  async planBlueprintDecorations(
+    doc: AppDoc, blueprint: Blueprint, registrations: readonly EjectPage[], contract: TriviaManifest | null,
+  ): Promise<{ beforeRoutes: Plan['ops']; afterRoutes: Plan['ops']; warnings: string[] }> {
+    const beforeRoutes: Plan['ops'] = []
+    const afterRoutes: Plan['ops'] = []
+    const warnings: string[] = []
+    const tokens = Object.entries(doc.theme.tokens).sort(([a], [b]) => a < b ? -1 : a === b ? 0 : 1)
+    if (!tokens.length && !doc.nav.length) return { beforeRoutes, afterRoutes, warnings }
+    const app = await this.#app()
+    const newResources = new Set(registrations.flatMap(({ page }) => {
+      const resource = page.kind === 'custom' ? null : contractResource(contract, page.resource, null)
+      return resource ? [refineName(resource)] : []
+    }))
+    const labelled = new Set<string>()
+    for (const nav of doc.nav) {
+      const entry = blueprint.docs[pageDocPath(nav.page)]
+      const page = entry?.kind === 'page' ? entry.doc : null
+      const resource = page && page.kind !== 'custom' ? contractResource(contract, page.resource, null) : null
+      const name = resource && refineName(resource)
+      const current = name ? entryOf(app?.resources, name) : undefined
+      const meta = current?.kind === 'object' ? current.properties.find(({ key }) => key === 'meta')?.value : undefined
+      if (!app || !name || (!current && !newResources.has(name)) || (meta && meta.kind !== 'object')) {
+        warnings.push(`Nav label for ${nav.page} needs a Refine resource with literal metadata.`)
+        continue
+      }
+      if (labelled.has(name)) {
+        warnings.push(`Refine resource ${name} already has a nav label from another blueprint page.`)
+        continue
+      }
+      labelled.add(name)
+      const resourcePath = app.resourcesPath + '[name=' + name + ']'
+      const label = JSON.stringify(nav.label)
+      afterRoutes.push(meta
+        ? { op: 'setProperty', path: resourcePath + '.meta', prop: 'label', value: label }
+        : { op: 'setProperty', path: resourcePath, prop: 'meta', value: '{ label: ' + label + ' }' })
+      if (nav.icon) warnings.push(`Nav icon for ${nav.page} needs a project icon import.`)
+    }
+    if (tokens.length) {
+      const shape = (locator: string) => this.#host.inspect(locator) as {
+        text: string | null; line: number; column: number; attributes: Array<{ name: string; value: unknown }>
+      }
+      const anchor = app && findNode(this.#host.outline(app.file) as OutlineNode[], (node) =>
+        node.name === 'style' && shape(node.locator).attributes.some(({ name, value }) => name === 'id' && value === 'trivia-theme'))
+      const details = anchor && shape(anchor.locator)
+      const line = details && fs.readFileSync(path.join(this.#host.root, app!.file), 'utf8').split('\n')[details.line - 1]
+      const empty = details && /^<style\s+id=(?:"trivia-theme"|'trivia-theme')\s*\/>/.test(line?.slice(details.column - 1) ?? '')
+      if (!anchor || !details || (!empty && !/^:root \{ (?:--[a-z0-9-]+: [^{}]*; )+\}$/.test(details.text ?? ''))) {
+        warnings.push('Theme tokens need a <style id="trivia-theme" /> anchor in the Refine app.')
+      } else if (tokens.some(([, value]) => /[;{}<>\r\n\u2028\u2029]|\/\*/u.test(value))) {
+        warnings.push('Theme tokens must contain single CSS values.')
+      } else {
+        const text = ':root { ' + tokens.map(([name, value]) => `--${name}: ${value};`).join(' ') + ' }'
+        beforeRoutes.push({ op: 'setText', target: anchor.locator, expectedName: 'style', text })
+      }
+    }
+    return { beforeRoutes, afterRoutes, warnings }
+  }
+
+  #registrationOps(app: AppShell, files: readonly RouteRegistration[]): Plan['ops'] {
+    const byResource = new Map<string, Partial<Record<PageKind, string>>>()
+    for (const file of files) {
+      if (file.kind === undefined || file.resource === undefined) continue
+      const routes = byResource.get(file.resource) ?? {}
+      routes[file.kind] = file.route
+      byResource.set(file.resource, routes)
+    }
+    const ops: Plan['ops'] = []
+    if (byResource.size && app.resources?.kind !== 'array') {
+      throw new ApiError('unsupported', 'The Refine resources prop must hold an array literal.')
+    }
+    for (const [name, routes] of byResource) {
+      const entry = entryOf(app.resources, name)
+      if (entry?.kind === 'object') {
+        for (const kind of PAGE_KINDS) {
+          const route = routes[kind]
+          const existing = entry.properties.find(({ key }) => key === kind)
+          if (!existing || route === undefined) continue
+          if (existing.value.kind !== 'string' || existing.value.value !== route) {
+            throw new ApiError('conflict', name + ' already registers a different ' + kind + ' page.')
+          }
+          delete routes[kind]
+        }
+      }
+      ops.push(...resourceOps(app.resourcesPath, name, routes, entry !== undefined))
+    }
+    if (this.#host.kind === 'vite') {
+      const anchor = this.#routeAnchor(app)
+      if (!anchor) throw new ApiError('unsupported', app.file + ' has no React Router route to register the new pages beside.')
+      ops.push(...routeOps(files, anchor))
+    }
+    return ops
   }
 
   /** Each `<Refine resources>` action that names a path: its resource, the action and the path. */
@@ -408,7 +536,7 @@ export class RefineAdapter {
     }
     walk(outline)
     const resourceRoutes = routes.filter((r) => r.path.startsWith('/'))
-    const last = resourceRoutes.at(-1)
+    const last = resourceRoutes.at(-1) ?? routes.find((route) => route.path === '*')
     if (!last) return null
     const parent = last.locator.slice(0, last.locator.lastIndexOf('.'))
     const slot = (loc: string) => Number(loc.slice(loc.lastIndexOf('.') + 1))
@@ -729,7 +857,7 @@ export class RefineAdapter {
     const key = normalized({ ...request, resource: page.resource })
     const id = createHash('sha256').update(JSON.stringify(key)).digest('hex').slice(0, 16)
     const module = await this.#host.preview.publish(id, page)
-    this.#previews.set(id, key)
+    this.#previews.set(id, () => this.#inferred(key))
     return { ...page, module }
   }
 
@@ -743,7 +871,7 @@ export class RefineAdapter {
     if (!request) return null
     let code: string
     try {
-      code = (await this.#inferred(request)).code
+      code = (await request()).code
     } catch (error) {
       return `throw new Error(${JSON.stringify(error instanceof Error ? error.message : String(error))});\n`
     }
@@ -763,11 +891,11 @@ export class RefineAdapter {
     if (!request || entry === null) return null
     let code = ''
     try {
-      code = (await this.#inferred(request)).code
+      code = (await request()).code
     } catch {
       // The module says why; no classes to add.
     }
-    const classes = [...new Set([...code.matchAll(/className="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)).filter((c) => c !== '' && !/["\\]/.test(c)))]
+    const classes = [...new Set([...code.matchAll(/className=(["'])(.*?)\1/g)].flatMap((m) => m[2]!.split(/\s+/)).filter((c) => c !== '' && !/["\\]/.test(c)))]
     const reference = path.join(this.#host.root, entry).split(path.sep).join('/')
     return `@reference "${reference}";\n@import "tailwindcss/utilities.css" layer(utilities) source(none);\n@source inline("${classes.join(' ')}");\n`
   }
@@ -831,8 +959,11 @@ export class RefineAdapter {
       throw new ApiError('unsupported', `${resource.name}'s contract has no operation for a ${request.kind} page`)
     }
     const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
-    const context = await this.#scaffoldContext(refineName(resource), nextRoutes)
-    const [page] = pageFiles(withoutFields(resource, request.hide ?? []), [request.kind], { ...context, ...(request.title ? { title: request.title } : {}) }) as [PageFile]
+    const project = await this.#scaffoldContext(refineName(resource), nextRoutes)
+    const page = generateRefinePage({
+      resource, kind: request.kind, project,
+      options: { ...(request.hide && { hideFields: request.hide }), ...(request.title && { title: request.title }) },
+    })
     let { file, importPath } = page
     if (request.file !== undefined) {
       if (!/^src\/(?:[\w.@-]+\/)*[\w.@-]+\.tsx$/.test(request.file) || request.file.split('/').some((p) => p === '..' || p === '.')) {

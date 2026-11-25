@@ -4,6 +4,8 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { LOCK_FILE } from '@trivia/blueprint-compiler'
+
 import { registerBlueprintRoutes } from '../blueprint/index.js'
 import { ApiError } from '../engine.js'
 import { parseColumnChanges, parseFieldChanges, parsePreviewRequest } from '../refine/index.js'
@@ -21,6 +23,7 @@ const STATUS: Record<ErrorCode, number> = {
   parse_error: 400,
   forbidden: 403,
   node_not_found: 404,
+  file_not_found: 404,
   stale_locator: 409,
   conflict: 409,
   unsupported: 422,
@@ -216,7 +219,14 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     if (!isJsonContentType(req.headers['content-type'])) {
       throw new ApiError('invalid_op', `${url.pathname} requires content-type: application/json`)
     }
-    return handle(url, await readBody(req, name === '/screenshot' ? MAX_SCREENSHOT_BYTES : MAX_BODY_BYTES), signal)
+    const body = await readBody(req, name === '/screenshot' ? MAX_SCREENSHOT_BYTES : MAX_BODY_BYTES)
+    if ((name === '/apply' || name === '/batch') && !isLoopback(req.socket.remoteAddress)) {
+      const ops = Array.isArray(body.ops) ? body.ops : [body.op]
+      if (ops.some((op) => isObject(op) && typeof op.file === 'string' && op.file.split('/').at(-1) === LOCK_FILE)) {
+        throw new ApiError('forbidden', 'Blueprint eject requires a loopback caller.')
+      }
+    }
+    return handle(url, body, signal)
   }
 
   const respond = async (req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> => {

@@ -10,7 +10,7 @@ import { z } from 'zod'
 import type { EngineService } from '../api/service.js'
 import { backendInput } from '../blueprint/backend.js'
 import { readComponents, readDoc } from '../blueprint/index.js'
-import { ejectBlueprint, ejectInput } from '../blueprint/plan.js'
+import { ejectInput } from '../blueprint/plan.js'
 import { previewInput, previewPage } from '../blueprint/preview.js'
 import { readSummary } from '../blueprint/summary.js'
 import { ApiError } from '../engine.js'
@@ -697,9 +697,15 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     },
     ({ page, includeCode }) =>
       run(async () => {
-        const { code, ...preview } = previewPage({ page })
-        return { data: { ...preview, ...(includeCode && { code }) }, summary: `Preview ${page} at ${preview.route}` }
-      }, { unsupported: 'Preview becomes available with the page compiler in spec 005.' }, true),
+        const { code, ...preview } = await previewPage({ page }, service)
+        const next = service.designerConnected
+          ? 'Load the preview route in the Trivia canvas, then call trivia_screenshot.'
+          : 'Open the Trivia designer and load the preview route, then call trivia_screenshot.'
+        return { data: { ...preview, ...(includeCode && { code }), next }, summary: `Preview ${page} at ${preview.route}` }
+      }, {
+        unsupported: 'Start a Vite Refine app host with the Trivia plugin to preview this page.',
+        invalid_result: 'Read the diagnostics, patch the page at its current revision, and preview again.',
+      }, true),
   )
 
   server.registerTool(
@@ -712,9 +718,13 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     },
     ({ pages, label }) =>
       run(async () => {
-        const result = ejectBlueprint({ pages, label: AGENT_LABEL + label })
+        const result = await service.ejectBlueprint(pages, AGENT_LABEL + label, { by: 'agent' })
         return { data: { ...result }, summary: `Ejected ${result.files.length} file(s).` }
-      }, { unsupported: 'Eject becomes available with the page compiler in spec 005.' }, true),
+      }, {
+        conflict: 'Read the conflict details and reconcile the existing files and routes before ejecting again.',
+        unresolved_component: 'Install the registry items in error.details.requires, then eject again.',
+        invalid_result: 'Resolve the reported blueprint diagnostics, then eject again.',
+      }, true),
   )
 
   server.registerTool(

@@ -9,6 +9,8 @@ export interface HistoryEntry {
   changes: FileChange[]
   /** JSON document snapshots use the blueprint writer. */
   documents?: true
+  /** Lock bytes submitted by the eject, including when the lock itself was unchanged. */
+  ejectLock?: string
 }
 
 export class History {

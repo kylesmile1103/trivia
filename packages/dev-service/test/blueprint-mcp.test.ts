@@ -9,7 +9,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
-import { copyBlueprintProject, listPage } from './blueprint-fixture.js'
+import { copyBlueprintProject, listPage, previewBlueprintHost } from './blueprint-fixture.js'
 
 let root: string
 let running: RunningDevService
@@ -156,21 +156,59 @@ it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a han
   expect((await tool('trivia_get_selection')).structuredContent).toMatchObject({ history: { undoLabel: entry } })
 })
 
-it.each([
-  ['trivia_blueprint_preview', { page: 'Customers' }, '005'],
-  ['trivia_blueprint_eject', { pages: ['Customers'], label: 'Eject customers' }, '005'],
-])('FR-AG-02 reserves %s with a structured unavailable response', async (name, args, spec) => {
-  const result = await tool(name, args)
+it('FR-AG-02 explains how to enable preview on the standalone host', async () => {
+  const result = await tool('trivia_blueprint_preview', { page: 'Customers' })
   expect(result).toMatchObject({
     isError: true, structuredContent: {
-      error: { code: 'unsupported', message: expect.stringContaining(`spec ${spec}`) },
-      next: expect.stringContaining(`spec ${spec}`),
+      error: { code: 'unsupported', message: expect.stringContaining('running Vite app host') },
+      next: expect.stringContaining('Vite Refine app host'),
     },
   })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
 })
 
+it('ejects and undoes generated source and lock in one Agent entry', async () => {
+  const draft = { ...listPage('DraftEject'), kind: 'custom', route: '/draft-eject', resource: undefined }
+  expect((await tool('trivia_blueprint_patch', { ops: [draft], label: 'Draft' })).isError).not.toBe(true)
+  const app = path.join(root, 'src/App.tsx')
+  const before = fs.readFileSync(app)
+  const entry = 'Agent: Eject draft'
+  const result = await tool('trivia_blueprint_eject', { pages: [draft.name], label: 'Eject draft' })
+  expect(result).toMatchObject({ structuredContent: { entry, files: [expect.stringMatching(/DraftEject\.tsx$/)] } })
+  const [file] = result.structuredContent!.files as string[]
+  const lock = path.join(root, 'blueprint/blueprint.lock.json')
+  expect(fs.readFileSync(path.join(root, file!), 'utf8')).toContain('function DraftEject')
+  expect(JSON.parse(fs.readFileSync(lock, 'utf8')).pages).toHaveProperty(draft.name)
+  expect((await tool('trivia_undo', { label: entry })).isError).not.toBe(true)
+  expect(fs.readFileSync(app)).toEqual(before)
+  expect(fs.existsSync(path.join(root, file!))).toBe(false)
+  expect(fs.existsSync(lock)).toBe(false)
+})
+
+it.each([true, false])('plans safe nav and theme edits with theme anchor=%s', async (anchor) => {
+  const app = path.join(root, 'src/App.tsx')
+  if (anchor) fs.writeFileSync(app, fs.readFileSync(app, 'utf8').replace('</Refine>', '<style id="trivia-theme" />\n      </Refine>'))
+  const draft = { ...listPage('AccountDraft', 'Account'), kind: 'show', route: '/draft-account/:id' }
+  expect((await tool('trivia_blueprint_patch', { label: 'Draft', ops: [
+    draft,
+    { op: 'setApp', doc: 'app.blueprint.json', baseRev: null, name: 'Bank', targets: { web: 'vite-refine' }, theme: { tokens: { radius: '6px' } } },
+    { op: 'setNav', doc: 'app.blueprint.json', baseRev: null, nav: [{ page: draft.name, label: 'Bank accounts', icon: 'landmark' }] },
+  ] })).isError).not.toBe(true)
+  const result = await tool('trivia_blueprint_eject', { pages: [draft.name], label: 'Decorate' })
+  expect(result.structuredContent).toMatchObject({ entry: 'Agent: Decorate', warnings: expect.arrayContaining([expect.stringContaining('icon')]) })
+  const source = fs.readFileSync(app, 'utf8')
+  expect(source).toContain('label: "Bank accounts"')
+  expect(source).toContain('icon: <LandmarkIcon />')
+  if (anchor) expect(source).toContain('--radius: 6px;')
+  else expect(result.structuredContent?.warnings).toEqual(expect.arrayContaining([expect.stringContaining('trivia-theme')]))
+})
+
 it('NFR-14 executes the documented blueprint authoring calls', async () => {
+  await client.close()
+  await running.close()
+  running = await startDevService(previewBlueprintHost(root))
+  client = new Client({ name: 'blueprint-mcp-doc-test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
   const docs = fs.readFileSync(new URL('../../../docs/mcp.md', import.meta.url), 'utf8')
   const section = docs.split(/^## Blueprint authoring$/m)[1]!
   const examples = [...section.matchAll(/^```json\n([\s\S]*?)\n^```$/gm)].map(([, json]) =>
@@ -191,9 +229,10 @@ it('NFR-14 executes the documented blueprint authoring calls', async () => {
   expect((await call('trivia_blueprint_get/components')).structuredContent).toMatchObject({ schemas: { Button: { type: 'object' } } })
   expect((await call('trivia_blueprint_patch')).structuredContent).toMatchObject({ entry: 'Agent: Add customers', summary: { pages: [{ errors: 0 }] } })
   expect((await call('trivia_blueprint_get/doc')).structuredContent).toMatchObject({ doc: { name: 'Customers' }, projection: expect.stringContaining('Customers') })
-  for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject']) {
-    expect(await call(toolName)).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
-  }
+  expect((await call('trivia_blueprint_preview')).structuredContent).toMatchObject({ route: '/__blueprint/Customers', code: expect.stringContaining('function Customers') })
+  const ejected = await call('trivia_blueprint_eject')
+  expect(ejected.structuredContent).toMatchObject({ entry: 'Agent: Eject customers', summary: { pages: [{ status: 'ejected' }] } })
+  expect((await tool('trivia_undo', { label: ejected.structuredContent?.entry })).isError).not.toBe(true)
   vi.stubEnv('PATH', root)
   try {
     expect(await call('trivia_blueprint_backend')).toMatchObject({
@@ -249,4 +288,23 @@ it('FR-DM-07 advertises model payloads and summarizes a patched model with its d
   expect(Object.fromEntries(variants.map(({ properties }) => [
     properties.op.const, Object.keys(properties).filter((key) => !['op', 'doc', 'baseRev'].includes(key)).sort(),
   ]))).toMatchSnapshot()
+})
+
+it('FR-AG-06 returns a loadable blueprint preview and optional code over MCP', async () => {
+  await client.close()
+  await running.close()
+  running = await startDevService(previewBlueprintHost(root))
+  client = new Client({ name: 'blueprint-preview-test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
+  expect((await tool('trivia_blueprint_patch', { ops: [listPage()], label: 'Draft' })).isError).not.toBe(true)
+
+  const result = await tool('trivia_blueprint_preview', { page: 'Customers' })
+  expect(result.isError).not.toBe(true)
+  expect(result.structuredContent).toMatchObject({
+    page: 'Customers', route: '/__blueprint/Customers', module: expect.stringContaining('/@trivia/preview/'),
+    next: expect.stringContaining('Open the Trivia designer'),
+  })
+  expect(result.structuredContent).not.toHaveProperty('code')
+  const withCode = await tool('trivia_blueprint_preview', { page: 'Customers', includeCode: true })
+  expect(withCode.structuredContent).toMatchObject({ code: expect.stringContaining('export function CustomerList()') })
 })

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000000",
+  "name": "StaticPage",
+  "kind": "custom",
+  "route": "/static",
+  "root": "n_00000000000000000000000000",
+  "nodes": {
+    "n_00000000000000000000000000": { "type": "main", "name": "page", "parent": null, "slot": null, "order": "a0" },
+    "n_00000000000000000000000001": { "type": "h1", "name": "heading", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a0" },
+    "n_00000000000000000000000002": { "type": "img", "name": "graphic", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a1" },
+    "n_00000000000000000000000003": { "type": "Button", "name": "view", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a2" }
+  },
+  "props": {
+    "n_00000000000000000000000001": { "children": "Café & ledger" },
+    "n_00000000000000000000000002": { "width": 96, "src": "/ledger.png", "alt": "The \"Ledger\"" },
+    "n_00000000000000000000000003": { "children": "View {ledger}", "variant": "outline" }
+  },
+  "styles": { "n_00000000000000000000000000": { "className": "grid  gap-4" } }
+}

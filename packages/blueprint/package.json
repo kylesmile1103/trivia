@@ -12,11 +12,13 @@
       "import": "./dist/index.js"
     },
     "./package.json": "./package.json",
-    "./schemas/*": "./schemas/*"
+    "./schemas/*": "./schemas/*",
+    "./samples/*": "./fixtures/manifests/kit-sample/*"
   },
   "files": [
     "dist",
-    "schemas"
+    "schemas",
+    "fixtures/manifests/kit-sample"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/emit-schemas.mjs",

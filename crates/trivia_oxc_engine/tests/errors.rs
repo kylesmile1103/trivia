@@ -195,7 +195,7 @@ fn ops_from_the_api_doc_deserialize() {
             ops.push(op);
         }
     }
-    assert_eq!(ops.len(), 18, "one example per op: {ops:?}");
+    assert_eq!(ops.len(), 19, "one example per op: {ops:?}");
     assert!(matches!(&ops[0], Op::Insert { placement: Placement::FirstChild, imports, expected_name: Some(n), .. } if imports.len() == 1 && n == "CardContent"));
     assert!(matches!(&ops[1], Op::InsertChild { expected_name: Some(n), .. } if n == "CardContent"));
     assert!(matches!(&ops[2], Op::UpdateProp { expected_name: Some(n), .. } if n == "Button"));
@@ -213,6 +213,10 @@ fn ops_from_the_api_doc_deserialize() {
     assert!(matches!(&ops[15], Op::SetCallArgument { method, index: 0, value, .. } if method == "max" && value == "500"));
     assert!(matches!(&ops[16], Op::InsertCall { before, .. } if before == &["optional", "refine"]));
     assert!(matches!(&ops[17], Op::RemoveCall { method, .. } if method == "optional"));
+    let replacement = serde_json::to_value(&ops[18]).unwrap();
+    assert_eq!(replacement["op"], "replaceFile");
+    assert_eq!(replacement["file"], "src/pages/summary/Summary.tsx");
+    assert_eq!(replacement["expectedHash"], "sha256:8ee4edc1ba342472bcd80bb951ce4df7ff1124d8c79a36086ba55fa1af1da1cf");
     for placement in ["before", "after", "firstChild", "lastChild"] {
         let text = format!(r#"{{ "op": "move", "source": "a#B#0", "target": "a#B#0", "placement": "{placement}" }}"#);
         assert!(serde_json::from_str::<Op>(&text).is_ok(), "{placement}");

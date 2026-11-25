@@ -15,7 +15,7 @@ Every response is JSON: `{ "ok": true, "data": … }` or
 `{ "ok": false, "error": { "code": "…", "message": "…" } }`.
 
 HTTP status: 200 for ok. Errors: 400 `invalid_locator` `invalid_op` `invalid_snippet` `parse_error`;
-403 `forbidden` (caller not on this machine, below); 404 `node_not_found`; 409 `stale_locator` `conflict`;
+403 `forbidden` (caller not on this machine, below); 404 `node_not_found` `file_not_found`; 409 `stale_locator` `conflict`;
 422 `unsupported` `unresolved_component` `invalid_result` `path_outside_root`; 500 `io_error` `internal`.
 
 Requests that change files must be `POST` with `content-type: application/json`.
@@ -340,6 +340,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 { "op": "setCallArgument", "path": "src/pages/customers/edit.tsx#module#customerSchema.notes", "method": "max", "index": 0, "value": "500" }
 { "op": "insertCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.fullName", "call": "max(120, \"Enter at most 120 characters.\")", "before": ["optional", "refine"] }
 { "op": "removeCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.phone", "method": "optional" }
+{ "op": "replaceFile", "file": "src/pages/summary/Summary.tsx",
+  "expectedHash": "sha256:8ee4edc1ba342472bcd80bb951ce4df7ff1124d8c79a36086ba55fa1af1da1cf",
+  "content": "export const Summary = () => <main>Summary</main>\n" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -356,12 +359,17 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `unsupported`: elements, `{…}` expressions, comments), void HTML elements (422), a line
   break in `text`, and text that would render differently where it goes, such as spaces next
   to a line break (400 `invalid_op`). The text it already has is a no-op (`changed: false`).
-- `createFile` writes a new `.tsx`/`.jsx` file inside the root, making its directories. It
+- `createFile` writes a new `.tsx`, `.jsx` or `.ts` file inside the root, making its directories. It
   is refused when the file exists (409 `conflict`; it never overwrites; with `"ifMissing": true`
   an existing file is kept as it is and the op is a no-op) and when `content`
   doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
   undo deletes it (only if it still holds what was written) and redo writes it again. The
   binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).
+- `replaceFile` writes the full source of a previously generated `.tsx`, `.jsx` or `.ts` file.
+  The expected hash is lowercase SHA-256 of the original bytes, prefixed with `sha256:`.
+  The op returns 404 `file_not_found` if the target is missing, 409 `conflict` if the hash
+  differs, or 400 `parse_error` if either version fails to parse. Undo can restore the
+  original bytes, including line endings. An identical replacement creates no history entry.
 - **Value ops** (`insertElement`, `removeElement`, `moveElement`, `setProperty`,
   `removeProperty`) edit object and array literals rather than JSX. They address them by
   **value path** `<file>#<scope>#<head><step>*` (`crate::values`):
@@ -501,8 +509,10 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
 
 ## Blueprint
 
-Vite and Next.js serve the same blueprint API. Paths in blueprint requests and results are
-relative to the blueprint directory, which defaults to `blueprint` and is configurable on Vite.
+Vite and Next.js serve the blueprint read and patch API. Blueprint preview and eject target
+Vite Refine. Document paths are relative to the blueprint directory, which defaults to
+`blueprint` and is configurable on Vite. The emitted `files` and source operations in an
+eject plan use project-relative paths.
 `dir` in the summary is relative to the project root. Blueprint endpoints require loopback even with Vite's
 `allowRemote: true`. Paths that traverse outside the blueprint directory or contain
 symlinks return 422 `path_outside_root`.
@@ -546,7 +556,7 @@ schema or reference error returns 422 `invalid_result` without writing.
 POST /@trivia/api/blueprint/patch
 Content-Type: application/json
 
-{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
+{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customer-workbench","kind":"custom"}]}
 ```
 
 A document from an unsupported version gives the same 422 error on a patch against
@@ -556,11 +566,10 @@ A stale revision or a file changed between planning and writing returns 409 `con
 with `error.details.revs`. The map contains the current revision of each affected
 document, with `null` for a missing document. Re-read the affected documents before retrying.
 
-The page compiler from spec 005 will provide `preview`, `plan` and `ejected`.
-These routes accept their documented inputs and return 422 `unsupported` until then.
-
-`preview` takes the page name and will return its preview route, module, compiled code,
-required registry items and diagnostics.
+`preview` takes the page name and returns `{ page, route, module, code, requires, diagnostics }`.
+Load `route` in the canvas of a running Vite Refine app. The app loads `module` at
+`/@trivia/preview/<id>.tsx`. Reload the route to see the current draft. An invalid page returns
+422 `invalid_result` with `error.details.diagnostics`.
 
 ```http
 POST /@trivia/api/blueprint/preview
@@ -569,8 +578,11 @@ Content-Type: application/json
 {"page":"Customers"}
 ```
 
-`plan` takes optional page names (defaults to all drafts) and will return an eject plan with
-guarded source operations, files, requirements, warnings, a lock and a label.
+`plan` accepts optional `pages` and defaults to all drafts. It returns
+`{ ops, files, requires, warnings, lock, label }`. Review the operations and warnings before
+applying them. A file changed since eject or a foreign file or route returns 409 `conflict`.
+Missing components return 422 `unresolved_component` with `error.details.requires` listing
+the registry items to install.
 
 ```http
 POST /@trivia/api/blueprint/plan
@@ -579,13 +591,17 @@ Content-Type: application/json
 {"pages":["Customers"]}
 ```
 
-`ejected` will record the eject lock after the source edit succeeds and return `lockRev`.
+Apply `{ ops, label }` as returned with `POST /@trivia/api/batch`. The final
+operation creates or replaces the managed `blueprint.lock.json` inside the blueprint
+directory. The draft revisions are checked before the batch writes any files. Source,
+registrations and the lock share an undo entry. `ejected` verifies the latest entry and
+checks that its lock still matches and includes the requested pages. It returns `{ lockRev }`.
 
 ```http
 POST /@trivia/api/blueprint/ejected
 Content-Type: application/json
 
-{"pages":["Customers"],"entry":"Eject customers"}
+{"pages":["Customers"],"entry":"Eject Customers"}
 ```
 
 `backend` runs `trivia-dotnet` for the project's blueprint and solution root. Install the

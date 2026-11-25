@@ -1,0 +1,39 @@
+{
+  "name": "blueprint-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "node typecheck.mjs"
+  },
+  "dependencies": {
+    "@refinedev/core": "5.0.12",
+    "@refinedev/react-hook-form": "5.0.4",
+    "@refinedev/react-router": "2.0.4",
+    "@refinedev/react-table": "6.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "5.103.2",
+    "@tanstack/react-table": "8.21.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-hook-form": "7.88.0",
+    "react-router": "7.18.4",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "nx": {
+    "implicitDependencies": [
+      "blueprint-compiler",
+      "refine-admin",
+      "playground"
+    ]
+  }
+}

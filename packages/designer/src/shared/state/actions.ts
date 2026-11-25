@@ -94,7 +94,9 @@ function followSelection(result: ApplyResult, ops: readonly Op[], selectedBefore
   // A value op (a Refine column, say) can add, drop or reorder JSX inside the literal it edits,
   // which renumbers the JSX locators after it in that file. Nothing says where the selected
   // node went, and a same-tag neighbour could slide into its old locator: let it go instead.
-  if (result.changed && s.selected !== null && ops.some((op) => isValueOp(op) && locatorFile(op.path) === locatorFile(s.selected!))) {
+  const selectedFile = s.selected === null ? null : locatorFile(s.selected)
+  if (result.changed && selectedFile !== null && ops.some((op) =>
+    op.op === 'replaceFile' ? op.file === selectedFile : isValueOp(op) && locatorFile(op.path) === selectedFile)) {
     s.select(null)
     return
   }
@@ -130,7 +132,7 @@ function subjectOf(op: Op): string | null {
 function filesOf(resultFile: string, ops: readonly Op[]): string[] {
   const files = new Set([resultFile])
   for (const op of ops) {
-    if (op.op === 'createFile') {
+    if ('file' in op) {
       files.add(op.file)
       continue
     }

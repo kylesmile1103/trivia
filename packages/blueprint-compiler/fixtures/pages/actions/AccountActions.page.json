@@ -1,0 +1,30 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000003",
+  "name": "AccountActions",
+  "kind": "custom",
+  "route": "/account-actions",
+  "root": "n_00000000000000000000000000",
+  "nodes": {
+    "n_00000000000000000000000000": { "type": "main", "name": "page", "parent": null, "slot": null, "order": "a0" },
+    "n_00000000000000000000000001": { "type": "Input", "name": "search", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a0" },
+    "n_00000000000000000000000002": { "type": "Button", "name": "send", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a1" }
+  },
+  "props": { "n_00000000000000000000000002": { "children": "Save" } },
+  "state": { "message": { "type": "string", "initial": "" } },
+  "queries": { "customers": { "kind": "list", "resource": "Customer" } },
+  "actions": {
+    "n_00000000000000000000000001.onChange": [{ "do": "setState", "name": "message", "value": "value" }],
+    "n_00000000000000000000000002.onClick": [
+      { "do": "mutate", "resource": "Customer", "operation": "create", "input": "{ name: state.message }" },
+      { "do": "mutate", "resource": "Customer", "operation": "update", "id": "\"c1\"", "input": "{ name: state.message }" },
+      { "do": "mutate", "resource": "Customer", "operation": "delete", "id": "\"c2\"" },
+      { "do": "mutate", "resource": "Account", "operation": "closeAccount", "id": "\"a1\"" },
+      { "do": "refetch", "query": "customers" },
+      { "do": "toast", "message": "\"Saved\"", "variant": "success" },
+      { "do": "call", "handler": "audit" },
+      { "do": "navigate", "to": "\"/customers\"" }
+    ]
+  }
+}

@@ -176,7 +176,9 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                     Some(slot) => slot,
                     None => {
                         // Only a createFile may name a file that doesn't exist yet.
-                        let text = if creates && !ws.exists(&file).map_err(step)? { None } else { Some(ws.read(&file).map_err(step)?) };
+                        let text = if creates {
+                            if ws.exists_for_edit(&file).map_err(step)? { Some(ws.read_for_edit(&file).map_err(step)?) } else { None }
+                        } else { Some(ws.read_for_op(&file, &op).map_err(step)?) };
                         files.push(Working { file: file.clone(), before: text.clone(), current: text });
                         files.len() - 1
                     }
@@ -296,7 +298,7 @@ struct Write {
 /// fails, the files already written get their previous text back.
 fn commit(ws: &Workspace, writes: &[Write]) -> Result<(), Failure> {
     for w in writes {
-        let now = if ws.exists(&w.file)? { Some(ws.read(&w.file)?) } else { None };
+        let now = if ws.exists_for_edit(&w.file)? { Some(ws.read_for_edit(&w.file)?) } else { None };
         if now != w.expected {
             return Err(Failure::conflict(&w.file));
         }
@@ -326,7 +328,7 @@ fn commit(ws: &Workspace, writes: &[Write]) -> Result<(), Failure> {
 /// Take `file` from `from` to `to` (`None`: absent), guarded by `from`.
 fn put(ws: &Workspace, file: &str, from: Option<&str>, to: Option<&str>) -> Result<(), EngineError> {
     match (from, to) {
-        (Some(from), Some(to)) => ws.restore(file, from, to),
+        (Some(from), Some(to)) => ws.restore_for_edit(file, from, to),
         (None, Some(to)) => ws.create(file, to),
         (Some(from), None) => ws.remove_file(file, from),
         (None, None) => Ok(()),

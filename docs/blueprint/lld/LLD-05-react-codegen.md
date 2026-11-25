@@ -4,13 +4,13 @@
   ADR-0003, ADR-0004, ADR-0007, ADR-0009, ADR-0016
 - Code: `packages/blueprint-compiler` (`@trivia/blueprint-compiler`); one engine op in
   `crates/trivia_oxc_engine/src/ops/replace_file.rs`; shared pieces of
-  `packages/vite-plugin-ast-locator/src/refine/scaffold.ts`.
+  `packages/dev-service/src/refine/scaffold.ts`.
 
 ## 1. Pipeline
 
 ```
 blueprint (valid) + manifests + contract manifest + project facts
-  └─ lower ─► PageIR ─► print (target) ─► EmittedModule { file, code, requires }
+  └─ lower ─► PageIR ─► print (target) ─► EmittedModule { file, code, requires, … }
                                              ├─ preview: served as a module
                                              └─ eject: Plan { ops, files, lock }
 ```
@@ -28,15 +28,29 @@ interface ProjectFacts {
   installed: Set<string>                   // registry items present in the project
 }
 function compilePage(bp: Blueprint, page: string, ctx: CompileContext): EmittedModule
-function planEject(bp: Blueprint, pages: string[], ctx: CompileContext, lock: Lock): EjectPlan
+function planEject(bp: Blueprint, pages: readonly string[] | undefined, ctx: EjectContext, lock: Lock): EjectPlan
 ```
+
+⚑ Project facts take the majority quote and semicolon style of static imports in the entry
+source. With no evidence or a tie, they use double quotes and semicolons. On Vite the
+Refine mounting file supplies the style used by both generators. For the shared scaffold's
+new TSX, the compiler edits only string tokens and statement terminators when adapting the
+style. The TypeScript parser supplies token boundaries, and the engine checks the result.
 
 ## 2. Contract pages (FR-RC-02)
 
 For `list`, `create`, `edit` and `show`, `compilePage` calls the Refine adapter's generator
 with `{ resource, kind, fields, hideFields, title }`. The generator moves behind a small
-interface in the plugin, taking the contract and the project facts and returning the page's
-code, so the compiler does not import the plugin. The adapter passes it in.
+interface in the dev service, taking the contract and the project facts and returning the page's
+code, so the compiler does not import either host or service. The adapter passes it in.
+
+⚑ LLD-13 moved the Refine adapter and the blueprint HTTP and MCP surfaces to
+`packages/dev-service`. The generator takes one `ScaffoldRequest` and the service passes
+it to the compiler. Both the existing Vite and Next hosts use the same Refine adapter.
+Spec 012 owns the Next blueprint target.
+
+⚑ Explicit fields keep the blueprint's order, with exclusions taking precedence. Omitting
+fields keeps the existing generator's default selection.
 
 `filters`, `rowActions` and `headerActions` are new generator inputs:
 
@@ -44,6 +58,15 @@ code, so the compiler does not import the plugin. The adapter passes it in.
   field's type, as the columns tool decides it.
 - An action is a button whose handler is compiled from its steps (section 4). Row actions go
   in the actions column, header actions in the page header.
+
+⚑ A row handler receives the data record, and confirmation uses the browser's confirm dialog.
+The generator puts header actions just below the Refine header, whose implementation may
+ignore children. An explicit filter list controls filter widgets while preserving sorters.
+Refine's notification hook supports success, error and progress. Blueprint error uses error,
+and the other blueprint variants use success.
+
+⚑ The compiler and the Refine adapter share the resource key derived from the collection
+path, so hooks and registered Refine routes name the same resource.
 
 A test runs `refine/pages/plan` and `compilePage` for the same resource with default options
 and asserts equal bytes.
@@ -57,9 +80,10 @@ interface PageIR {
   route: string
   client: boolean                // any client-tier expression, event or exposed value
   imports: ImportIR[]            // derived from references (FR-RC-04)
-  state: StateIR[]               // { name, setter, type, initial }
+  state: StateIR[]               // { name?, setter?, type, initial }
   queries: QueryIR[]             // { name, hook, args, fields: Record<bpField, tsPath> }
-  mutations: MutationIR[]
+  mutations: HookIR[]
+  hooks: HookIR[]                // router params, identity, notifications and navigation
   handlers: HandlerIR[]          // { name, params, body: StepIR[] }
   jsx: JsxIR                     // element | text | expr | cond | repeat
 }
@@ -82,15 +106,23 @@ Lowering:
    | `data.<q>.result` | The response of a `custom` query |
    | `data.<q>.isLoading`, `.error` | Status of any query |
 
-   The mapping to Refine's return shape lives in one file, `targets/refine-hooks.ts`, written
+   The mapping to Refine's return shape lives in one file, `targets/vite-refine/refine-hooks.ts`, written
    against the pinned `@refinedev/core` types and covered by a `tsc` test. Do not write it
    from memory: Refine 5 changed these shapes.
 3. **Queries.** `list` becomes `useList`, `one` becomes `useOne`, `custom` becomes
    `useCustom`. Parameters are emitted expressions. `enabled` maps to the hook's query options.
    A `DataTable` node does not use a page query: the composite owns its `useTable` (LLD-06).
+
+   ⚑ Dependent queries follow topological order. Refine pagination and sort keys go to the
+   corresponding hook options; remaining list parameters become filters. Custom query path
+   parameters are URL-encoded; the rest go to the provider's query, header or payload config.
+   A list total is zero until Refine supplies it.
 4. **Exposed values.** A node with an exposed value gets `valueProp={state}` and
    `changeProp={(…) => setState(arg)}` by the manifest's `via`. When an action is bound to the
    same event, the handler sets the state first, then runs the steps.
+
+   ⚑ A static value prop seeds the exposed state. The emitter omits unread state bindings and
+   unused setters from the destructuring it writes.
 5. **Actions.** Steps compile in order inside one `async` handler:
    - `setState`: the setter call;
    - `navigate`: Refine's `useGo`;
@@ -99,10 +131,17 @@ Lowering:
    - `toast`: Refine's `useNotification`;
    - `call`: an import from `src/handlers/<page>.ts`, called with `{ event, state, setters }`.
      The file is created with a typed stub when missing, and never overwritten.
+
+   ⚑ The stub types the declared page state and setters and exposes the triggering event as
+   unknown, since multiple event types can call one handler.
 6. **JSX.** Nodes in `order`, per slot. `when` becomes `{cond && <X/>}`. `each` becomes
    `{list.map((item, index) => <X key={…}/>)}`. Slot wrappers come from the manifest's
    `parts`. Static props print as attributes by the rules `updateProp` uses (strings as
    `"…"`, the rest in braces). `className` prints verbatim (ADR-0016).
+
+   ⚑ Wrapper parts follow manifest slot order. Repeat callbacks use allocated underscore-prefixed
+   parameters so unused aliases typecheck and nested repeats cannot capture outer bindings.
+   Handlers inside repeats close over the item and index in the callback.
 
 ## 4. The printer (FR-RC-01, FR-RC-11)
 
@@ -116,6 +155,15 @@ After printing, the module is parsed with the engine (`parse_error` here is a co
 surfaces as `internal`). Golden files pin the bytes. A `tsc` run over the fixture app with
 every golden page checks types (FR-RC-05).
 
+⚑ Static JSX text and attributes escape entity syntax while preserving the rendered value.
+The compiler uses a relative import for a custom page's route registration.
+
+⚑ The fixture app uses the banking mock API, contract and Refine UI from
+`examples/refine-admin`, and the installed Card from `examples/playground`. Its TypeScript
+aliases resolve the real components and generated contract types without duplicating them.
+Its typecheck stages goldens at their emitted paths in a temporary directory so relative
+handler imports get the same check as ejected files.
+
 ## 5. Preview (FR-RC-06)
 
 The adapter keeps a map from preview id to page name and serves
@@ -124,6 +172,15 @@ inferencer previews, including the Tailwind stylesheet for classes no file has u
 A preview route, `/__blueprint/<Name>`, is registered in dev by a small client entry that the
 plugin injects, so the canvas can navigate to it without touching the app's router file. The
 store's change events invalidate previews, and the page reloads.
+
+⚑ Vite injects the development route beside the Refine app's existing routes. Its lazy
+client entry asks the loopback preview API for the module. The shared inferencer loader
+adds a default export and the preview stylesheet. Relative imports resolve as if the
+module were at its ejected path. A missing call stub can also be served virtually.
+Vite invalidates the modules on draft document and contract file changes.
+
+⚑ The dev service resolves the three spec 002 sample manifests from the blueprint
+package's original fixture assets. Spec 006 supplies the full kit.
 
 ## 6. Eject (FR-RC-07 to FR-RC-10)
 
@@ -135,12 +192,26 @@ store's change events invalidate previews, and the page reloads.
   tool uses (`setProperty` or `insertElement` on `<Refine resources>`, `insert` of `<Route>`
   before the catch-all), each with its guards;
 - `createFile` for `src/handlers/<page>.ts` when a `call` step needs it and it is missing;
-- for the app document's `nav` and theme tokens: value ops on the layout's menu, and a guarded
-  edit of the stylesheet's variables. These are skipped with a warning when the expected
-  anchors are not found, never guessed.
+- for the app document's `nav` and theme tokens: value ops on literal Refine resource
+  metadata and a text op on the app's explicitly marked root stylesheet. Missing anchors
+  produce warnings.
+
+⚑ Eject updates `meta.label` on a matching literal Refine resource and leaves any existing
+icon import in place. Custom menu links and requested icons require project-specific wiring.
+Theme tokens use a dedicated `<style id="trivia-theme" />` anchor so eject can update the
+variables with the same JSX transaction and leave the project's stylesheet intact.
 
 Refusals: 422 with `requires` when a component is not installed; 409 when a page's file
 differs from its lock hash; 409 when a route or file already exists and is not in the lock.
+
+⚑ Existing call handlers are kept, including one created after the plan was read. The lock
+covers generated page modules. Handler stubs become project-owned on creation. File creation
+and history accept TypeScript handler files. JSX locators require JSX or TSX. Contract pages
+derive their registry requirements from their emitted imports.
+
+⚑ The lock records the route and component as well as the hash. These distinguish a
+deleted generated file from a route that someone has taken over. Re-eject refuses a moved
+file or route until the existing registration is resolved. Older hashes remain readable.
 
 ### The lock
 
@@ -149,14 +220,20 @@ differs from its lock hash; 409 when a route or file already exists and is not i
   "lockVersion": 1,
   "compiler": "0.3.0",
   "pages": {
-    "CustomerOverview": { "file": "src/pages/customers/overview.tsx",
-                          "hash": "sha256:…", "blueprintRev": "sha256:…" }
+    "CustomerOverview": { "file": "src/pages/CustomerOverview/CustomerOverview.tsx",
+                          "hash": "sha256:…", "blueprintRev": "sha256:…",
+                          "route": "/customer-overview", "component": "CustomerOverview" }
   }
 }
 ```
 
-No timestamps (NFR-02). The lock is written after the batch succeeds, in the same history
-entry (LLD-04).
+No timestamps (NFR-02).
+
+⚑ The adapter appends the guarded lock write as the final op of the source batch. The native
+transaction can roll back the sources and lock together. The dev service checks the page
+revisions under the edit queue, and `/ejected` confirms the resulting history entry.
+The entry retains the submitted lock bytes even when restoring a missing file leaves the
+lock unchanged. Only the managed lock basename is allowed as a JSON source-batch target.
 
 ### `replaceFile`
 
@@ -171,22 +248,34 @@ its bytes (409 `conflict` on mismatch, 404 when missing), parses `content` (400 
 on diagnostics), and writes atomically. It is the one op that replaces untouched code, and the
 hash guard is what makes that safe.
 
+⚑ The 404 code is `file_not_found`. After a hash match, the engine also parses the original
+source so a batch rollback or undo can restore it through the ordinary guarded write path.
+
 ## 7. CLI and templates (FR-RC-12)
 
 `trivia-blueprint`, the package's bin:
 
 | Command | Does |
 | --- | --- |
-| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for the kit |
+| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for Refine UI |
 | `validate [--json]` | Loads, validates, prints diagnostics. Exit 1 on errors |
 | `compile <Page> [--out file]` | Prints or writes one compiled page |
 | `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards |
+
+Run `validate`, `compile` and `eject` from the project root. Commands exit with 0 for success,
+1 for operation errors and validation errors, or 2 for incorrect arguments.
 
 `templates/vite-refine/` is a minimal app of `examples/refine-admin`'s shape: Vite, React,
 Refine core with the React Router binding, Tailwind v4, `components.json`, the Trivia plugin,
 a layout from refine-ui, an empty `<Refine resources>` with a catch-all route. It contains no
 component source: those arrive through the shadcn CLI, which needs the network and is
 therefore a printed command, not something `new` runs silently.
+
+⚑ The offline CLI loads the installed Vite adapter's dev service (or the sibling build in
+the repo) and constructs a standalone engine service without a server. This shares the
+project facts, validation, route plan and native writes without a package dependency cycle.
+`new` links the local Vite plugin when available because Trivia packages are built from
+the workspace. It prints commands for Refine UI's layout and views registry items.
 
 ## 8. Tests
 
@@ -197,12 +286,14 @@ therefore a printed command, not something `new` runs silently.
 - Lock rules: eject twice (the second is `replaceFile`), then edit the file by one byte (409).
 - `replaceFile`: engine unit tests, round trips, CRLF, each refusal.
 - Determinism: compile the fixture 20 times in shuffled document order, one hash.
-- `e2e/blueprint.spec.ts`: preview in the canvas, eject, and select and edit an ejected
-  element with the inspector.
+- `e2e/blueprint.spec.ts`: reload a draft in the canvas, eject, edit with the inspector,
+  then undo and redo with byte-exact source and lock snapshots.
+- `e2e/blueprint-mcp.spec.ts`: preview and screenshot through the designer proxy, eject,
+  and undo by the returned agent label.
 
-## 9. Open points
+## 9. Follow-ups
 
-- Whether `nav` and theme edits belong to eject or to the `new` template only. They are
-  best-effort for now, and that is their weakest point.
-- A page-level error boundary and loading skeleton, which the generator's pages have and
-  custom pages do not yet.
+- Deferred: needs spec 006 (full component kit and registry command).
+- Deferred: needs spec 010 (app-specific backend and data provider orchestration).
+- Deferred: needs spec 012 (Next.js preview and eject target).
+- A page-level error boundary and loading skeleton for custom pages remain open.

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { APP_DOC, MODEL_DOC, modelSchema, validate, type AppDoc, type ApplyResult, type Blueprint, type Diagnostic, type PageKind } from '@trivia/blueprint'
-import { z } from 'zod'
+import { LOCK_FILE, readLock, type LockedPage } from '@trivia/blueprint-compiler'
 
 import { ApiError } from '../engine.js'
 import { type BlueprintWorkspace, readBytes } from './store.js'
@@ -33,19 +33,12 @@ export interface PatchResult extends ApplyResult {
   summary: BlueprintSummary
 }
 
-const LOCK = 'blueprint.lock.json'
-const lockSchema = z.object({
-  lockVersion: z.literal(1),
-  pages: z.record(z.string(), z.object({ file: z.string(), hash: z.string().regex(/^sha256:[a-f0-9]{64}$/) })),
-})
-
-function readLock(workspace: BlueprintWorkspace, diagnostics: Diagnostic[]): z.infer<typeof lockSchema>['pages'] {
-  const text = workspace.readDocumentText(LOCK)
-  if (text === null) return {}
+function pageLocks(workspace: BlueprintWorkspace, diagnostics: Diagnostic[]): Record<string, LockedPage> {
+  const text = workspace.readDocumentText(LOCK_FILE)
   try {
-    return lockSchema.parse(JSON.parse(text)).pages
+    return readLock(text).pages
   } catch {
-    diagnostics.push({ code: 'invalid_lock', severity: 'warning', doc: LOCK, pointer: '', message: 'Invalid blueprint lock, expected lockVersion 1 and page file hashes' })
+    diagnostics.push({ code: 'invalid_lock', severity: 'warning', doc: LOCK_FILE, pointer: '', message: 'Invalid blueprint lock, expected lockVersion 1 and page file hashes' })
     return {}
   }
 }
@@ -68,7 +61,7 @@ export async function readSummary(workspace: BlueprintWorkspace): Promise<Bluepr
 
 export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, findings: readonly Diagnostic[]): BlueprintSummary {
   const diagnostics = [...findings]
-  const locks = readLock(workspace, diagnostics)
+  const locks = pageLocks(workspace, diagnostics)
   const counts = new Map<string, { errors: number; warnings: number }>()
   for (const finding of diagnostics) {
     const count = counts.get(finding.doc) ?? { errors: 0, warnings: 0 }

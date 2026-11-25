@@ -12,7 +12,7 @@ import {
 } from '@trivia/dev-service'
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
-import { createViteHost } from './host.js'
+import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
 
@@ -47,6 +47,25 @@ export interface AstLocatorOptions {
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
 
+const BLUEPRINT_ENTRY = 'blueprint-route.tsx'
+const BLUEPRINT_ROUTE = '/__blueprint/:triviaPage'
+const blueprintEntry = [
+  'import { lazy, Suspense, useMemo } from "react"',
+  'import { useParams } from "react-router"',
+  'export function TriviaBlueprintRoute() {',
+  '  const { triviaPage: page } = useParams()',
+  '  const Preview = useMemo(() => lazy(async () => {',
+  '    const response = await fetch("/@trivia/api/blueprint/preview", {',
+  '      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page }),',
+  '    })',
+  '    const result = await response.json()',
+  '    if (!result.ok) throw new Error(result.error.message)',
+  '    return import(/* @vite-ignore */ result.data.module)',
+  '  }), [page])',
+  '  return <Suspense fallback={null}><Preview /></Suspense>',
+  '}',
+].join('\n')
+
 export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let engine: EngineBinding | undefined
   let paths: ProjectPaths | undefined
@@ -77,10 +96,23 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       previewUrl = '/src/.trivia-preview/'
     },
 
-    resolveId(id) {
+    async resolveId(id, importer) {
       if (service === undefined) return null
       if (id.startsWith(PREVIEW_PREFIX)) return path.join(previewDir, id.slice(PREVIEW_PREFIX.length).split('?', 1)[0]!)
       if (id.startsWith(previewUrl)) return path.join(previewDir, id.slice(previewUrl.length).split('?', 1)[0]!)
+      if (importer && isPreview(importer) && id.startsWith('.')) {
+        const name = path.basename(importer.split('?', 1)[0]!, '.tsx')
+        const page = await service.refine.previewSource(name)
+        if (page && paths) {
+          const origin = path.resolve(roots[0]!, page.file)
+          const resolved = await this.resolve(id, origin, { skipSelf: true })
+          if (resolved) return resolved
+          const file = path.relative(roots[0]!, path.resolve(path.dirname(origin), id)).split(path.sep).join('/')
+          if (page.handler && (file === page.handler.file || file + '.ts' === page.handler.file)) {
+            return path.join(previewDir, name + '.handler.ts')
+          }
+        }
+      }
       // Vite resolves a module's own id again (its HMR self-accept): it is still a preview.
       return isPreview(id) ? id : null
     },
@@ -89,6 +121,8 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       if (service === undefined || !isPreview(id)) return null
       const file = id.split('?', 1)[0]!
       if (file.endsWith('.css')) return (await service.refine.previewStyles(path.basename(file, '.css'))) ?? ''
+      if (path.basename(file) === BLUEPRINT_ENTRY) return blueprintEntry
+      if (file.endsWith('.handler.ts')) return (await service.refine.previewSource(path.basename(file, '.handler.ts')))?.handler?.code
       const name = path.basename(file, '.tsx')
       const code = await service.refine.previewModule(name)
       return code ?? `throw new Error(${JSON.stringify(`no Trivia preview ${name}: the dev server restarted since it was asked for; reload the page`)});\n`
@@ -103,7 +137,21 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         const binding = engine
         if (file === null || binding === undefined) return null
         try {
-          return annotateModule(code, file, id.split('?', 1)[0] ?? id, (c, f) => binding.annotate(c, f))
+          const insertions = binding.annotate(code, file)
+          const stamp = () => annotateModule(code, file, id.split('?', 1)[0] ?? id, () => insertions)
+          if (!service || !code.includes('<Refine') || !code.includes('<Routes')) return stamp()
+          return service.refine.blueprintRouteAnchor(file).then((anchor) => {
+            const location = anchor && insertions.find((item) => item.text.includes('"' + anchor.target + '"'))
+            if (location) {
+              const offset = code.lastIndexOf('<', location.offset)
+              insertions.push({ offset, text: '<Route path="' + BLUEPRINT_ROUTE + '" element={<__TriviaBlueprintRoute />} />\n' })
+              insertions.push({
+                offset: 0, text: 'import { TriviaBlueprintRoute as __TriviaBlueprintRoute } from "'
+                  + PREVIEW_PREFIX + BLUEPRINT_ENTRY + '";\n',
+              })
+            }
+            return stamp()
+          }, () => stamp())
         } catch (error) {
           // A syntax error leaves the module untouched, so Vite's own transform reports it
           // with a code frame. Anything else is an engine failure worth saying out loud.
@@ -137,17 +185,12 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       server.middlewares.use(createDevMiddleware(host, { service, logger: server.config.logger, allowRemote, mcp: options.mcp !== false }))
       // A sync rewrites the manifest: previews generated from the old one are stale.
       const manifestFile = path.join(server.config.root, 'trivia.manifest.json')
-      server.watcher.on('change', (file) => {
-        if (path.resolve(file) !== manifestFile) return
-        const graph = server.environments.client.moduleGraph
-        let stale = false
-        for (const mod of graph.idToModuleMap.values()) {
-          if (mod.id !== null && isPreview(mod.id)) {
-            graph.invalidateModule(mod)
-            stale = true
-          }
-        }
-        if (stale) server.environments.client.hot.send({ type: 'full-reload' })
+      const blueprintDir = path.join(server.config.root, paths.blueprintDir) + path.sep
+      server.watcher.on('all', (event, file) => {
+        if (!['add', 'change', 'unlink'].includes(event)) return
+        const changed = path.resolve(file)
+        if (changed === manifestFile) invalidatePreviews(server, false)
+        else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
     },
   }

@@ -34,8 +34,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\//, use: { baseURL: `http://localhost:${designerPort}` } },
-    { name: 'refine', testMatch: /refine\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [

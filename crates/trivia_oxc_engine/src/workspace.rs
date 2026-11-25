@@ -47,12 +47,16 @@ impl Workspace {
     /// spelled canonically (`src/App.tsx`: no `./`, empty segments, trailing `/` or `\`),
     /// because it is the file part of every locator the engine returns.
     pub fn resolve(&self, rel: &str) -> Result<PathBuf> {
+        self.resolve_file(rel, false)
+    }
+
+    fn resolve_file(&self, rel: &str, edit: bool) -> Result<PathBuf> {
         let outside = || EngineError::PathOutsideRoot(rel.to_string());
         let path = Path::new(rel);
         if !is_canonical_relative(rel) || !path.components().all(|c| matches!(c, Component::Normal(_))) {
             return Err(outside());
         }
-        if !matches!(path.extension().and_then(|e| e.to_str()), Some("tsx" | "jsx")) {
+        if !supported_file(path, edit) {
             return Err(outside());
         }
         let full = self.root.join(path);
@@ -66,10 +70,18 @@ impl Workspace {
 
     /// Whether the project-relative `.tsx`/`.jsx` file exists (path rules as [`Self::resolve`]).
     pub fn exists(&self, rel: &str) -> Result<bool> {
-        match self.resolve(rel) {
+        self.exists_file(rel, false)
+    }
+
+    pub fn exists_for_edit(&self, rel: &str) -> Result<bool> {
+        self.exists_file(rel, true)
+    }
+
+    fn exists_file(&self, rel: &str, edit: bool) -> Result<bool> {
+        match self.resolve_file(rel, edit) {
             Ok(_) => Ok(true),
             Err(EngineError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-                self.resolve_new(rel)?; // still refuse a path outside the root
+                self.resolve_new(rel, edit)?; // still refuse a path outside the root
                 Ok(false)
             }
             Err(e) => Err(e),
@@ -80,7 +92,7 @@ impl Workspace {
     /// when it exists, `invalid_result` when `content` does not parse, and `path_outside_root`
     /// for any path [`Self::resolve`] refuses.
     pub fn create(&self, rel: &str, content: &str) -> Result<()> {
-        let path = self.resolve_new(rel)?;
+        let path = self.resolve_new(rel, true)?;
         ops::created(rel, content)?;
         let dir = path.parent().ok_or_else(|| EngineError::PathOutsideRoot(rel.to_string()))?;
         let io = |source| EngineError::Io { path: rel.to_string(), source };
@@ -107,22 +119,22 @@ impl Workspace {
 
     /// Delete a file only if it still holds `expected` (undoing a `createFile`), else `conflict`.
     pub fn remove_file(&self, rel: &str, expected: &str) -> Result<()> {
-        if self.read(rel)? != expected {
+        if self.read_for_edit(rel)? != expected {
             return Err(conflict(rel));
         }
-        let path = self.resolve(rel)?;
+        let path = self.resolve_file(rel, true)?;
         fs::remove_file(&path).map_err(|source| EngineError::Io { path: rel.to_string(), source })
     }
 
     /// [`Self::resolve`] for a file that doesn't exist yet: the same path rules, and its
     /// nearest existing directory must lie inside the root (symlinks followed).
-    fn resolve_new(&self, rel: &str) -> Result<PathBuf> {
+    fn resolve_new(&self, rel: &str, edit: bool) -> Result<PathBuf> {
         let outside = || EngineError::PathOutsideRoot(rel.to_string());
         let path = Path::new(rel);
         if !is_canonical_relative(rel) || !path.components().all(|c| matches!(c, Component::Normal(_))) {
             return Err(outside());
         }
-        if !matches!(path.extension().and_then(|e| e.to_str()), Some("tsx" | "jsx")) {
+        if !supported_file(path, edit) {
             return Err(outside());
         }
         let full = self.root.join(path);
@@ -141,8 +153,26 @@ impl Workspace {
     }
 
     pub fn read(&self, rel: &str) -> Result<String> {
-        let path = self.resolve(rel)?;
+        self.read_file(rel, false)
+    }
+
+    pub fn read_for_edit(&self, rel: &str) -> Result<String> {
+        self.read_file(rel, true)
+    }
+
+    fn read_file(&self, rel: &str, edit: bool) -> Result<String> {
+        let path = self.resolve_file(rel, edit)?;
         fs::read_to_string(&path).map_err(|source| EngineError::Io { path: rel.to_string(), source })
+    }
+
+    /// Read an op's input; the whole-file replace contract distinguishes a missing target.
+    pub fn read_for_op(&self, rel: &str, op: &Op) -> Result<String> {
+        self.read_file(rel, matches!(op, Op::ReplaceFile { .. })).map_err(|error| match error {
+            EngineError::Io { path, source }
+                if matches!(op, Op::ReplaceFile { .. }) && source.kind() == std::io::ErrorKind::NotFound =>
+                    EngineError::FileNotFound(path),
+            other => other,
+        })
     }
 
     /// Read the target file fresh, apply `op`, and write atomically if anything changed.
@@ -150,8 +180,8 @@ impl Workspace {
     /// `createFile` writes its new file (`before` is then empty).
     pub fn apply(&self, op: &Op) -> Result<Applied> {
         if let Op::CreateFile { file, content, if_missing } = op {
-            if *if_missing && self.exists(file)? {
-                let before = self.read(file)?;
+            if *if_missing && self.exists_for_edit(file)? {
+                let before = self.read_for_edit(file)?;
                 let outcome = ops::Outcome { file: file.clone(), changed: false, locator: None, code: before.clone() };
                 return Ok(Applied { outcome, before });
             }
@@ -159,10 +189,10 @@ impl Workspace {
             return Ok(Applied { outcome: ops::created(file, content)?, before: String::new() });
         }
         let file = op.file()?;
-        let before = self.read(&file)?;
+        let before = self.read_for_op(&file, op)?;
         let outcome = ops::apply_op(&before, &file, op)?;
         if outcome.changed {
-            self.write(&file, &outcome.code, Some(&before))?;
+            self.write(&file, &outcome.code, Some(&before), matches!(op, Op::ReplaceFile { .. }))?;
         }
         Ok(Applied { outcome, before })
     }
@@ -171,13 +201,20 @@ impl Workspace {
     /// Refuses with `conflict` when it does not, and with `invalid_result` when `content`
     /// does not parse.
     pub fn restore(&self, rel: &str, expected: &str, content: &str) -> Result<()> {
-        if self.read(rel)? != expected {
+        self.restore_file(rel, expected, content, false)
+    }
+
+    pub fn restore_for_edit(&self, rel: &str, expected: &str, content: &str) -> Result<()> {
+        self.restore_file(rel, expected, content, true)
+    }
+
+    fn restore_file(&self, rel: &str, expected: &str, content: &str, edit: bool) -> Result<()> {
+        if self.read_file(rel, edit)? != expected {
             return Err(conflict(rel));
         }
         // Never write code that doesn't parse.
-        let alloc = oxc_allocator::Allocator::default();
-        crate::parse(&alloc, content, rel).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
-        self.write(rel, content, Some(expected))
+        ops::validate_file(rel, content).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
+        self.write(rel, content, Some(expected), edit)
     }
 
     pub fn inspect(&self, locator: &str) -> Result<NodeDetails> {
@@ -256,13 +293,13 @@ impl Workspace {
     /// before any content is written, so a private file never has a readable copy) and
     /// refuses read-only files. No temp file is left behind, whether the write succeeds or not.
     pub fn write_atomic(&self, rel: &str, content: &str) -> Result<()> {
-        self.write(rel, content, None)
+        self.write(rel, content, None, false)
     }
 
     /// [`Self::write_atomic`], refusing with `conflict` when `expected` is given and the file
     /// no longer has that content just before the rename.
-    fn write(&self, rel: &str, content: &str, expected: Option<&str>) -> Result<()> {
-        let path = self.resolve(rel)?;
+    fn write(&self, rel: &str, content: &str, expected: Option<&str>, edit: bool) -> Result<()> {
+        let path = self.resolve_file(rel, edit)?;
         let io = |source| EngineError::Io { path: rel.to_string(), source };
         let meta = fs::metadata(&path).map_err(io)?;
         if meta.permissions().readonly() {
@@ -308,4 +345,13 @@ fn conflict(rel: &str) -> EngineError {
     EngineError::Conflict(format!(
         "{rel} changed on disk (outside the designer) since this edit was computed; nothing was written"
     ))
+}
+
+fn supported_file(path: &Path, edit: bool) -> bool {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("tsx" | "jsx") => true,
+        Some("ts") => edit,
+        Some("json") => edit && path.file_name().and_then(|name| name.to_str()) == Some("blueprint.lock.json"),
+        _ => false,
+    }
 }

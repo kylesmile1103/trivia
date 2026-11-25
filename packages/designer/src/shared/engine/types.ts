@@ -24,6 +24,7 @@ export type Op =
   | { op: 'insertChild'; parent: string; expectedName?: string; index: number; snippet: string; imports?: ImportSpec[] }
   | { op: 'updateProp'; target: string; expectedName?: string; prop: string; value: JsonValue }
   | { op: 'setText'; target: string; expectedName?: string; text: string }
+  | { op: 'replaceFile'; file: string; expectedHash: string; content: string }
   | { op: 'createFile'; file: string; content: string; ifMissing?: boolean }
   | { op: 'remove'; target: string; expectedName?: string }
   | { op: 'replaceElement'; target: string; expectedName?: string; snippet: string; imports?: ImportSpec[] }
@@ -154,6 +155,7 @@ export interface ComponentSchema {
 export type ErrorCode =
   | 'invalid_locator'
   | 'node_not_found'
+  | 'file_not_found'
   | 'stale_locator'
   | 'parse_error'
   | 'unsupported'

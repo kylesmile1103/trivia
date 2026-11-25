@@ -1,4 +1,7 @@
 import fs from 'node:fs'
+import Button from '@trivia/blueprint/samples/Button.manifest.json' with { type: 'json' }
+import Card from '@trivia/blueprint/samples/Card.manifest.json' with { type: 'json' }
+import Input from '@trivia/blueprint/samples/Input.manifest.json' with { type: 'json' }
 import path from 'node:path'
 
 import {
@@ -106,7 +109,7 @@ export class BlueprintWorkspace implements BlueprintStore {
       }
     }
     const resolved = resolveManifests({
-      kit: [],
+      kit: [Button, Card, Input].map((value) => componentManifestSchema.parse(value)),
       overrides,
       components,
       aliases: { ...config?.aliases, ui: this.#host.importBase, ...(typeof config?.style === 'string' && { style: config.style }) },
@@ -114,8 +117,25 @@ export class BlueprintWorkspace implements BlueprintStore {
     return { manifests: resolved.manifests, diagnostics: [...diagnostics, ...resolved.diagnostics] }
   }
 
-  context() {
-    return validationContext(this.manifests(), this.#json(this.#manifestPath) as TriviaManifest | null, this.#engine)
+  contract(): TriviaManifest | null {
+    return this.#json(this.#manifestPath) as TriviaManifest | null
+  }
+
+  aliases(): Record<string, string> {
+    const config = this.#json('components.json') as { aliases?: Record<string, unknown> } | null
+    return Object.fromEntries(Object.entries(config?.aliases ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  }
+
+  get hostKind(): DevHost['kind'] {
+    return this.#host.kind
+  }
+
+  get canPreview(): boolean {
+    return this.#host.preview.blueprints === true
+  }
+
+  context(manifests = this.manifests(), contract = this.contract()) {
+    return validationContext(manifests, contract, this.#engine)
   }
 
   async apply(ops: readonly unknown[]): Promise<ApplyOutcome> {

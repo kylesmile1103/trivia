@@ -7,13 +7,16 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { revOfText } from '@trivia/blueprint'
+import { APP_DOC, revOfText } from '@trivia/blueprint'
+import { LOCK_FILE, projectFacts, readLock, type CompileContext } from '@trivia/blueprint-compiler'
 
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
+import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
-import { summarize, type PatchResult } from '../blueprint/summary.js'
+import { readSummary, summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
+import { generateRefinePage } from '../refine/scaffold.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
 import type { ApplyResult, Drift, FileChange, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
@@ -105,6 +108,27 @@ export class EngineService {
       describeValue: (path) => this.describeValue(path),
       mentions: (file, name) => this.mentions(file, name),
     })
+  }
+
+  async blueprintInputs() {
+    const blueprint = await this.blueprint.read()
+    const resolution = this.blueprint.manifests()
+    const contract = this.blueprint.contract()
+    const app = blueprint.docs[APP_DOC]
+    const { project, entrySource, installed } = await this.refine.compileProject()
+    const facts = projectFacts({
+      target: this.blueprint.hostKind === 'next' ? 'next-refine'
+        : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine',
+      aliases: { ...this.blueprint.aliases(), ui: project.ui },
+      pagesDir: project.pagesDir, entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
+      installed,
+    })
+    const context: CompileContext = {
+      facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
+      validation: this.blueprint.context(resolution, contract),
+      generateContractPage: (input) => generateRefinePage({ ...input, project }),
+    }
+    return { blueprint, context }
   }
 
   health(): Health {
@@ -242,6 +266,10 @@ export class EngineService {
   }
 
   /** A PNG of the designer's canvas, from the open designer (see ScreenshotRelay). */
+  get designerConnected(): boolean {
+    return this.#screenshots.connected
+  }
+
   screenshot(): Promise<Screenshot> {
     return this.#screenshots.request(this.#options.screenshotTimeoutMs ?? 15_000)
   }
@@ -344,7 +372,37 @@ export class EngineService {
       .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
     if (changes.length === 0) return null
     this.#history.record({ label, changes, documents: true })
+    this.#options.host.preview.invalidateBlueprints?.()
     return label
+  }
+
+  confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
+    return this.#queue.run(() => {
+      const history = this.#history.nextUndo
+      const written = history?.label === entry ? history.ejectLock : undefined
+      const current = this.blueprint.readDocumentText(LOCK_FILE)
+      if (!written || written !== current || !pages.length || !pages.every((page) => Object.hasOwn(readLock(written).pages, page))) {
+        throw new ApiError('conflict', 'The latest edit is not the requested blueprint eject entry.')
+      }
+      return { lockRev: revOfText(written) }
+    })
+  }
+
+  planBlueprintEject(pages?: string[]): Promise<EjectPlan> {
+    return planEject({ pages }, this)
+  }
+
+  ejectBlueprint(pages: string[] | undefined, label?: string, source: EditSource = {}) {
+    return this.#queue.run(async () => {
+      const plan = await this.planBlueprintEject(pages)
+      const entry = label ?? plan.label
+      const result = this.#transact(plan.ops, entry, source)
+      return {
+        ...result, entry: result.changed ? entry : null,
+        files: plan.files, requires: plan.requires, warnings: plan.warnings,
+        summary: await readSummary(this.blueprint),
+      }
+    })
   }
 
   undo(expectedLabel?: string): Promise<HistoryResult> {
@@ -363,6 +421,7 @@ export class EngineService {
 
   /** Apply ops as one transaction (the engine writes all files or none) and record it. */
   #transact(ops: Json[], label: string, source: EditSource): ApplyResult {
+    validateEjectLock(this.blueprint, ops)
     const { engine, host } = this.#options
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
@@ -370,7 +429,11 @@ export class EngineService {
       finish?.()
       host.filesChanged?.(result.changes.map((change) => change.file))
     }
-    if (result.changes.length > 0) this.#history.record({ label, changes: result.changes })
+    if (result.changes.length > 0) {
+      const last = ops.at(-1)
+      const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
+      this.#history.record({ label, changes: result.changes, ...(ejectLock !== undefined && { ejectLock }) })
+    }
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
   }
@@ -423,6 +486,7 @@ export class EngineService {
       throw error
     }
     finish?.()
+    if (entry.documents) this.#options.host.preview.invalidateBlueprints?.()
     this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()
@@ -441,6 +505,8 @@ function describe(op: Json): string {
       return `Set text of ${name}`
     case 'createFile':
       return `Create ${typeof op['file'] === 'string' ? op['file'] : 'a file'}`
+    case 'replaceFile':
+      return `Replace ${typeof op['file'] === 'string' ? op['file'] : 'a file'}`
     case 'insert':
     case 'insertChild':
       return 'Insert element'

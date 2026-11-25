@@ -1,0 +1,24 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000002",
+  "name": "AccountQueries",
+  "kind": "custom",
+  "route": "/account-queries/:id",
+  "root": "n_00000000000000000000000000",
+  "nodes": {
+    "n_00000000000000000000000000": { "type": "main", "name": "page", "parent": null, "slot": null, "order": "a0" },
+    "n_00000000000000000000000001": { "type": "h1", "name": "title", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a0" },
+    "n_00000000000000000000000002": { "type": "p", "name": "report", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a1" }
+  },
+  "bindings": {
+    "n_00000000000000000000000001": { "children": "data.account.record?.iban ?? \"No account\"" },
+    "n_00000000000000000000000002": { "children": "data.accounts.isLoading ? \"Loading\" : data.accounts.total + \": \" + (data.stats.result?.status ?? \"none\")" }
+  },
+  "state": { "limit": { "type": "number", "initial": 20 } },
+  "queries": {
+    "account": { "kind": "one", "resource": "Account", "params": { "id": "data.accounts.items[0]?.id" }, "enabled": "data.accounts.total > 0" },
+    "accounts": { "kind": "list", "resource": "Account", "params": { "pageSize": "state.limit", "currency": "\"USD\"" } },
+    "stats": { "kind": "custom", "resource": "Account", "operation": "getAccountStats", "params": { "id": "params.id", "from": "search.from ?? \"\""}, "enabled": "params.id !== undefined" }
+  }
+}
