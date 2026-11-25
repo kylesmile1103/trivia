@@ -175,7 +175,10 @@ is generic over the resource name.
   ⚑ Assert the populated slots against each fixture entity's enabled operations. The bank
   exposes all five on Customer, and list and get on Account and Transaction. Contract-sync
   consumes the Verify snapshot unchanged by accepting a leading UTF-8 BOM on JSON inputs.
-- **Step 5.** Nothing new: `GET /@trivia/api/refine/drift` and `trivia_contract_drift`.
+- **Step 5.** `GET /@trivia/api/refine/drift` and `trivia_contract_drift` use the existing
+  Refine adapter. ⚑ The route is hosted by `packages/dev-service` behind `DevHost`. The
+  compiler test ejects both a list and a form, regenerates a temporary model with a field
+  removed, syncs it, and checks the fixes over the same HTTP route. This test uses .NET 10.
 
 `trivia-blueprint backend [--migration <Name>]` runs steps 1 to 4 in order, stops at the first
 failure, and prints the drift summary. For agents, `trivia_blueprint_backend` covers steps 1

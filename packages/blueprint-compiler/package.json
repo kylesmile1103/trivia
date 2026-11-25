@@ -43,6 +43,7 @@
         "dependsOn": ["^build", { "projects": ["plugin"], "target": "build" }],
         "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*",
           "{workspaceRoot}/dotnet/tests/Trivia.Blueprint.Codegen.Tests/Snapshots/BankOpenApi.verified.txt",
+          "{workspaceRoot}/dotnet/Directory.Packages.props", "{workspaceRoot}/dotnet/src/**/*",
           "{workspaceRoot}/packages/blueprint/fixtures/model/valid/bank/model.blueprint.json"]
       }
     }
