@@ -37,7 +37,7 @@
 
 ## Phase 6: User Story 6 - Never in production (P1)
 
-- [ ] T018 [US6] A test that runs `next build` on the example and greps the output for `data-ast-node` and for `@trivia` (SC-005)
+- [x] T018 [US6] A test that runs `next build` on the example and greps the output for `data-ast-node` and for `@trivia` (SC-005)
 
 ## Phase 7: Polish
 

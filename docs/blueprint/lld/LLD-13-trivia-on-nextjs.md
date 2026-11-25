@@ -238,7 +238,8 @@ The engine edits files. It does not care which kind of component a file holds. W
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a
   foreign Origin.
-- A production check: `next build` of the example has no `data-ast-node` in its output.
+- ⚑ The example's build runs `next build` and scans its emitted assets for `data-ast-node`
+  and `@trivia/`. The scanner skips the separate development output and build cache.
 
 ## 8. Open points
 

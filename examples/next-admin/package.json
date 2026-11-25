@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "trivia-next dev",
-    "build": "next build",
+    "build": "node scripts/check-production.mjs",
     "typecheck": "tsc --noEmit",
     "sync": "trivia-contract-sync --input openapi/bank.openapi.json --output src/api/generated --zod"
   },
