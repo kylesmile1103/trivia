@@ -920,6 +920,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "trivia_expr"
+version = "0.2.0"
+dependencies = [
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_parser",
+ "oxc_span",
+ "serde",
+]
+
+[[package]]
 name = "trivia_napi"
 version = "0.2.0"
 dependencies = [
