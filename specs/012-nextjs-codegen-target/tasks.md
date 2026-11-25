@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Read the current Next.js documentation (App Router file conventions, async `params` and `searchParams`, rewrites, `proxy.ts`, Cache Components) and Refine's Next.js guide (router binding, server-side data, initial data). Pin versions. Note the findings in LLD-12
-- [ ] T002 Build `templates/next-refine/` by hand: layout, providers, shell, `error.tsx`, `not-found.tsx`, `components.json` with `rsc: true`, the data provider, the sync script. It runs under `next dev` and `next build`
+- [x] T002 Build `templates/next-refine/` by hand: layout, providers, shell, `error.tsx`, `not-found.tsx`, `components.json` with `rsc: true`, the data provider, the sync script. It runs under `next dev` and `next build`
 
 ## Phase 2: Foundational
 

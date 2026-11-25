@@ -153,6 +153,17 @@ with `rsc: true`, Refine with its Next.js router binding, the layout shell, an e
 array, `error.tsx` and `not-found.tsx`, and the `sync` script. The AppHost scaffold picks the
 JavaScript app resource running the `dev` script when `targets.web` is `next-refine` (LLD-10).
 
+⚑ The root layout awaits `connection()` so Refine's App Router binding can read search
+parameters during request-time rendering. Static prerendering fails on the binding's
+`useSearchParams()`, and wrapping the app in a streaming fallback would hide the server
+content in the first HTML. [Next.js connection](https://nextjs.org/docs/app/api-reference/functions/connection).
+
+⚑ The template reserves no root page, so a blueprint can own `/`. Its Next configuration is
+shipped as `next.config.ts.template`, following the Vite template's convention. Nx would
+otherwise read the dev wrapper import as a compiler dependency and form a build cycle.
+The config disables Next's automatic agent-instruction file so starting the app only
+writes development artifacts.
+
 ## 8. One blueprint, two targets (FR-NX-07)
 
 Nothing in a blueprint names a target except `app.targets.web`. Target-only validation:

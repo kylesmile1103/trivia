@@ -30,3 +30,26 @@ it('documents the commands to create, generate, eject and run an Aspire solution
     'aspire run',
   ])
 })
+
+it('FR-NX-06 ships an App Router shell with the validated pins and the shared API provider', () => {
+  const templates = new URL('../templates/', import.meta.url)
+  const read = (file: string) => readFileSync(new URL('next-refine/' + file, templates), 'utf8')
+  const example = JSON.parse(readFileSync(new URL('../../../examples/next-admin/package.json', import.meta.url), 'utf8'))
+  const manifest = JSON.parse(read('package.json.template'))
+  for (const name of ['next', 'react', 'react-dom', '@refinedev/core', '@refinedev/nextjs-router', '@refinedev/react-hook-form', '@tanstack/react-query']) {
+    expect(manifest.dependencies[name]).toBe(example.dependencies[name])
+  }
+  expect(manifest.scripts).toMatchObject({ dev: 'trivia-next dev', build: 'next build', sync: expect.stringContaining('openapi/api.openapi.json') })
+  expect(read('next.config.ts.template')).toContain('withTrivia(')
+  expect(read('app/layout.tsx')).toContain('<Providers>')
+  const providers = read('app/providers.tsx')
+  expect(providers).toMatch(/^['"]use client['"]/)
+  expect(providers).toContain('resources={resources}')
+  expect(providers).toContain('const resources: ResourceProps[] = []')
+  expect(providers).toContain('notificationProvider=')
+  expect(read('app/(app)/layout.tsx')).toContain('<Layout>')
+  expect(read('app/error.tsx')).toMatch(/^['"]use client['"]/)
+  expect(read('app/not-found.tsx')).toContain('Page not found')
+  expect(JSON.parse(read('components.json'))).toMatchObject({ rsc: true, aliases: { ui: '@/components/ui' } })
+  expect(read('src/providers/data-provider.ts')).toBe(readFileSync(new URL('vite-refine/src/providers/data-provider.ts', templates), 'utf8'))
+})

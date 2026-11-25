@@ -1,0 +1,38 @@
+{
+  "name": "trivia-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.9.1",
+  "scripts": {
+    "dev": "trivia-next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "sync": "trivia-contract-sync --input openapi/api.openapi.json --zod"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@refinedev/core": "5.0.12",
+    "@refinedev/nextjs-router": "7.0.5",
+    "@refinedev/react-hook-form": "5.0.4",
+    "@refinedev/react-table": "6.0.1",
+    "@tanstack/react-query": "5.103.2",
+    "@tanstack/react-table": "8.21.3",
+    "next": "16.4.6",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@trivia/contract-sync": "0.2.0",
+    "@trivia/next": "0.2.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "shadcn": "^4.21.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2"
+  }
+}

@@ -1,0 +1,5 @@
+/.next/
+/app/(blueprint-preview)/
+/next-env.d.ts
+/node_modules/
+*.tsbuildinfo
