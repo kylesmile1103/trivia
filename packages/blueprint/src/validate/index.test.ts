@@ -96,3 +96,42 @@ describe('validate(): the layers composed (T023, FR-BP-05)', () => {
     expect(outcome.ok && outcome.result.diagnostics.map((d) => d.code)).toEqual(['unknown_resource'])
   })
 })
+
+it('FR-NX-07 runs Next checks after expressions only when the app selects next-refine', () => {
+  const app = JSON.parse(files['app.blueprint.json']!)
+  const page = JSON.parse(files[LIST]!)
+  const nextFiles = {
+    ...files,
+    [LIST]: JSON.stringify({ ...page, route: '/customers/:id/:id' }),
+    'app.blueprint.json': JSON.stringify({ ...app, targets: { ...app.targets, web: 'next-refine' } }),
+  }
+  const seen: string[][] = []
+  const ctx = {
+    next: layer(seen, () => [finding(OVERVIEW, 'boundary_not_serializable')]),
+  }
+  expect(validate(loadBlueprint(nextFiles), ctx)).toMatchObject([
+    { code: 'invalid_next_route', doc: LIST, pointer: '/route' },
+    { code: 'boundary_not_serializable', doc: OVERVIEW },
+  ])
+  expect(seen).toEqual([['app.blueprint.json', OVERVIEW]])
+  expect(validate(loadBlueprint({ ...nextFiles, 'app.blueprint.json': files['app.blueprint.json']! }), ctx)).toEqual([])
+  expect(seen).toHaveLength(1)
+})
+
+it('FR-NX-01 refuses a Next route with dot segments or inconsistent dynamic segment names', () => {
+  const app = JSON.parse(files['app.blueprint.json']!)
+  const next = JSON.stringify({ ...app, targets: { ...app.targets, web: 'next-refine' } })
+  const list = JSON.parse(files[LIST]!)
+  const overview = JSON.parse(files[OVERVIEW]!)
+  expect(validate(loadBlueprint({
+    ...files,
+    'app.blueprint.json': next,
+    [LIST]: JSON.stringify({ ...list, route: '/customers/../accounts' }),
+  }))).toMatchObject([{ code: 'invalid_next_route', doc: LIST, pointer: '/route' }])
+  expect(validate(loadBlueprint({
+    ...files,
+    'app.blueprint.json': next,
+    [LIST]: JSON.stringify({ ...list, route: '/customers/:id/details' }),
+    [OVERVIEW]: JSON.stringify({ ...overview, route: '/customers/:customer/history' }),
+  }))).toMatchObject([{ code: 'invalid_next_route', doc: OVERVIEW, pointer: '/route' }])
+})

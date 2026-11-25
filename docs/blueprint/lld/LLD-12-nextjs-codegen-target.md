@@ -171,6 +171,12 @@ Nothing in a blueprint names a target except `app.targets.web`. Target-only vali
 `public_page_uses_user` and `boundary_not_serializable` appear only for `next-refine`. A test
 compiles the kit fixture and the MVP fixture for both targets from the same documents.
 
+⚑ Validation runs a sixth layer only when the app selects `next-refine`. It reports
+`invalid_next_route` at `/route` for dot segments, repeated parameter names, and
+conflicting names for the same dynamic folder. The layer also accepts an injected compiler
+check, so target-specific checks can use manifest and expression facts while the schema
+package stays independent of the compiler.
+
 ## 9. Tests
 
 - Boundary algorithm: unit tests on small trees (two inputs sharing state under a static

@@ -14,6 +14,8 @@ export interface ValidationContext {
   contract?: LayerCheck
   /** Layer 5, expressions (LLD-03): the `expr_*` codes. */
   expressions?: LayerCheck
+  /** Layer 6, App Router constraints that require compiler facts (LLD-12). */
+  next?: LayerCheck
 }
 
 /**
