@@ -7,7 +7,7 @@
 
 - [x] T001 Generate `packages/blueprint-compiler` with the package generator. Add `bin/trivia-blueprint.js`
 - [x] T002 Create `examples/blueprint-fixture`: the refine-admin shape with the mock contract, where golden pages are type-checked
-- [ ] T003 Read the installed `@refinedev/core` and `@refinedev/react-table` types for `useList`, `useOne`, `useCustom`, the mutation hooks, `useGo`, `useNotification`. Note the result shapes at the top of `src/targets/vite-refine/refine-hooks.ts`
+- [x] T003 Read the installed `@refinedev/core` and `@refinedev/react-table` types for `useList`, `useOne`, `useCustom`, the mutation hooks, `useGo`, `useNotification`. Note the result shapes at the top of `src/targets/vite-refine/refine-hooks.ts`
 
 ## Phase 2: Foundational
 
