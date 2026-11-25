@@ -1,0 +1,37 @@
+{
+  "type": "DropdownMenu",
+  "source": {
+    "registry": "shadcn",
+    "item": "dropdown-menu",
+    "import": {
+      "name": "DropdownMenu",
+      "from": "ui"
+    },
+    "parts": {
+      "trigger": "DropdownMenuTrigger",
+      "content": "DropdownMenuContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "trigger",
+      "kind": "nodes",
+      "wrapper": "DropdownMenuTrigger"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "DropdownMenuContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onOpenChange",
+      "prop": "onOpenChange"
+    }
+  ],
+  "exposes": [],
+  "client": true,
+  "template": {}
+}

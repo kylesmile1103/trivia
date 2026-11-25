@@ -1,0 +1,17 @@
+{
+  "type": "Separator",
+  "source": {
+    "registry": "shadcn",
+    "item": "separator",
+    "import": {
+      "name": "Separator",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

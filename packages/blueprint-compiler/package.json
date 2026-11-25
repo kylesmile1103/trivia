@@ -16,7 +16,8 @@
   "files": [
     "dist",
     "bin",
-    "templates"
+    "templates",
+    "kit"
   ],
   "bin": {
     "trivia-blueprint": "./bin/trivia-blueprint.js"
@@ -41,7 +42,7 @@
     "targets": {
       "test": {
         "dependsOn": ["^build", { "projects": ["plugin"], "target": "build" }],
-        "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*"]
+        "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*", "{workspaceRoot}/tools/blueprint/check-kit-manifests.cjs", "{workspaceRoot}/packages/blueprint/fixtures/manifests/kit-sample/**/*"]
       }
     }
   }

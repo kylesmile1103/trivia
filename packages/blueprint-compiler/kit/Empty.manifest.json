@@ -1,0 +1,32 @@
+{
+  "type": "Empty",
+  "source": {
+    "registry": "shadcn",
+    "item": "empty",
+    "import": {
+      "name": "Empty",
+      "from": "ui"
+    },
+    "parts": {
+      "header": "EmptyHeader",
+      "content": "EmptyContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "header",
+      "kind": "nodes",
+      "wrapper": "EmptyHeader"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "EmptyContent"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

@@ -1,9 +1,12 @@
-import { exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
+import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
+import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
+import { lowerForm } from '../composites/form.js'
+import type { CompositeScope } from '../composites/source.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
 import { printHandler, printModule } from '../print/module.js'
-import { compareBytes, literal, property, quote, statement } from '../print/style.js'
+import { compareBytes, literal, property, quote, restyleModule, statement } from '../print/style.js'
 import { refineName, relativeModule } from '../targets/vite-refine/files.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
@@ -29,9 +32,24 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
 
   const manifestOf = (type: string): ResolvedManifest => {
     const manifest = context.manifests?.[type] ?? intrinsic[type]
+    if ((!manifest || manifest.type !== type) && type === 'Popover') {
+      return {
+        type, installed: false, client: true, props: [], slots: [], events: [], exposes: [], template: {},
+        source: { registry: 'shadcn', item: 'popover', import: { name: type, from: 'ui' } },
+      }
+    }
     if (!manifest || manifest.type !== type) throw new CompileError('invalid_result', 'No component manifest for ' + type)
-    if (manifest.composite) throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
     return manifest
+  }
+  const importReference = (spec: ImportIR): string => {
+    const key = spec.source + '\0' + spec.name + (spec.kind === 'type' ? '\0type' : '')
+    let identifier = identifiers.get(key)
+    if (!identifier) {
+      identifier = names.take(spec.name)
+      identifiers.set(key, identifier)
+      imports.push({ ...spec, ...(identifier !== spec.name && { as: identifier }) })
+    }
+    return identifier
   }
   const component = (manifest: ResolvedManifest, part?: string): string => {
     const { source, installed } = manifest
@@ -42,15 +60,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     if (!installed) missing.set(registry + '/' + item, { registry, item })
     const module = from === 'ui' ? facts.aliases['ui'] + '/' + item : from
     if (module.startsWith('@trivia/')) throw new CompileError('unsupported', 'Generated pages cannot import ' + module)
-    const key = module + '\0' + name
-    let identifier = identifiers.get(key)
-    if (!identifier) {
-      identifier = names.take(name)
-      identifiers.set(key, identifier)
-      imports.push({ name, source: module, ...(identifier !== name && { as: identifier }) })
-    }
     client ||= manifest.client
-    return identifier
+    return importReference({ name, source: module })
   }
 
   const ui = exposedScope(page, context.manifests ?? {})
@@ -88,18 +99,35 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   }
   if (deps.has('state.*')) rename['state'] = '({ ' + stateObject.join(', ') + ' })'
 
+  const declarations: string[] = []
+  const afterState: string[] = []
+  const composite: CompositeScope = { context, name: (preferred) => names.take(preferred), import: importReference, component, declarations }
+  const selections = new Map<string, TableSelection>()
   const exposed = new Map<string, Array<{ valueProp: string; changeProp: string; name: string; update: string; arg: string }>>()
   for (const [id, node] of Object.entries(page.nodes).sort(([a], [b]) => compareBytes(a, b))) {
     const manifest = manifestOf(node.type)
+    if (manifest.composite === 'DataTable') {
+      const selection = prepareTableSelection(page, id, deps, composite, state, rename, afterState)
+      if (selection) selections.set(id, selection)
+      continue
+    }
     if (!manifest.exposes.length) continue
     const values = manifest.exposes.map(({ name: key, type, initial, via }) => {
       const name = names.take(node.name + capitalize(key))
       const setter = names.take('set' + capitalize(name))
       const props = page.props[id]
       rename['ui.' + node.name + '.' + key] = name
-      state.push({
-        name, setter, type, initial: literal(props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp] : initial, facts.style),
-      })
+      const seed = props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp]
+        : configuredTabs(manifest, props?.['tabs'])?.[0]?.name ?? initial
+      let seedCode = literal(seed, facts.style)
+      if (manifest.type === 'DatePicker' && manifest.source.registry === 'shadcn') {
+        if (seed !== null && (typeof seed !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(seed) ||
+          !Number.isFinite(Date.parse(seed)) || new Date(seed).toISOString().slice(0, 10) !== seed)) {
+          throw new CompileError('invalid_result', node.name + '.' + via.valueProp + ' expects an ISO calendar date.')
+        }
+        seedCode = seed === null ? 'undefined' : 'new Date(' + literal(seed + 'T00:00:00', facts.style) + ')'
+      }
+      state.push({ name, setter, type, initial: seedCode })
       return { valueProp: via.valueProp, changeProp: via.changeProp, name, update: setter, arg: via.changeArg }
     })
     exposed.set(id, values)
@@ -146,12 +174,14 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       if (attributes.get(value.valueProp)?.kind !== 'expr') {
         attributes.set(value.valueProp, { kind: 'expr', code: value.name })
       }
-      const change = changes.get(value.changeProp) ?? { arg: value.arg === 'value' ? 'value' : 'event', updates: [] }
+      const change = changes.get(value.changeProp) ?? { arg: value.arg.startsWith('value') ? 'value' : 'event', updates: [] }
       change.updates.push({ setter: value.update, value: value.arg })
       changes.set(value.changeProp, change)
     }
+    const changed = (arg: string, input: string) => arg === 'valueToString'
+      ? 'String(' + input + ' ?? ' + quote('', facts.style) + ')' : arg.replace(/^(event|value)/, input)
     const changeSteps = (prop: string, event: string): StepIR[] =>
-      (changes.get(prop)?.updates ?? []).map(({ setter, value }) => ({ code: setter + '(' + value.replace(/^(event|value)/, event) + ')' }))
+      (changes.get(prop)?.updates ?? []).map(({ setter, value }) => ({ code: setter + '(' + changed(value, event) + ')' }))
     const node = page.nodes[id]!
     const manifest = manifestOf(node.type)
     for (const binding of byNode.get(id) ?? []) {
@@ -163,7 +193,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       const type = event.payload?.replace(/\bReact\./g, react + '.') ??
         'Parameters<NonNullable<' + react + '.ComponentProps<' + componentType + '>[' + quote(event.prop, facts.style) + ']>>[0]'
       const change = changes.get(event.prop)
-      const value = (change?.updates[0]?.value ?? 'event').replace(/^(event|value)/, '_event')
+      const value = changed(change?.updates[0]?.value ?? 'event', '_event')
       const handler: HandlerIR = {
         name, params: ['_event: ' + type, '_value = ' + value],
         body: [...changeSteps(event.prop, '_event'), ...action.steps(binding.steps, ['actions', binding.key])],
@@ -180,7 +210,11 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, context.previewNodeIds)
+  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style, (id, manifest, root) => {
+    client = true
+    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
+    return lowerForm(page, id, root, composite)
+  }, context.previewNodeIds)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))
@@ -188,10 +222,10 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
     name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
-    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers,
+    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations, afterState,
   }
   return {
-    code: printModule(ir, facts), file, route: page.route, component: page.name,
+    code: declarations.length ? restyleModule(printModule(ir, facts), facts.style) : printModule(ir, facts), file, route: page.route, component: page.name,
     importPath: relativeModule('src/App.tsx', file),
     ...(handler && { handler }),
     requires: [...missing.entries()].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item),

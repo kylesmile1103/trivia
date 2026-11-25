@@ -1,0 +1,48 @@
+{
+  "type": "Popover",
+  "source": {
+    "registry": "shadcn",
+    "item": "popover",
+    "import": {
+      "name": "Popover",
+      "from": "ui"
+    },
+    "parts": {
+      "trigger": "PopoverTrigger",
+      "content": "PopoverContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "trigger",
+      "kind": "nodes",
+      "wrapper": "PopoverTrigger"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "PopoverContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onOpenChange",
+      "prop": "onOpenChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "open",
+      "type": "boolean",
+      "initial": false,
+      "via": {
+        "valueProp": "open",
+        "changeProp": "onOpenChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

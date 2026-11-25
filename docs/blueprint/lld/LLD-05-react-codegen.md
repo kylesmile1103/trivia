@@ -49,6 +49,9 @@ code, so the compiler does not import either host or service. The adapter passes
 it to the compiler. Both the existing Vite and Next hosts use the same Refine adapter.
 Spec 012 owns the Next blueprint target.
 
+⚑ The same service injects `CompileContext.refineSnippets` for LLD-06. It exposes the
+existing column and form-field builders with the project context already applied.
+
 ⚑ Explicit fields keep the blueprint's order, with exclusions taking precedence. Omitting
 fields keeps the existing generator's default selection.
 
@@ -179,8 +182,9 @@ adds a default export and the preview stylesheet. Relative imports resolve as if
 module were at its ejected path. A missing call stub can also be served virtually.
 Vite invalidates the modules on draft document and contract file changes.
 
-⚑ The dev service resolves the three spec 002 sample manifests from the blueprint
-package's original fixture assets. Spec 006 supplies the full kit.
+⚑ Spec 005 used the three spec 002 sample manifests. Spec 006 replaces that catalog with
+the full kit shipped by `@trivia/blueprint-compiler`. The dev service reads the same files
+for compilation, HTTP component discovery and MCP (LLD-06).
 
 ## 6. Eject (FR-RC-07 to FR-RC-10)
 
@@ -293,7 +297,7 @@ the workspace. It prints commands for Refine UI's layout and views registry item
 
 ## 9. Follow-ups
 
-- Deferred: needs spec 006 (full component kit and registry command).
+- Kit registry installation and fixture coverage are in [LLD-06](LLD-06-component-kit.md).
 - Deferred: needs spec 010 (app-specific backend and data provider orchestration).
 - Deferred: needs spec 012 (Next.js preview and eject target).
 - A page-level error boundary and loading skeleton for custom pages remain open.

@@ -1,0 +1,48 @@
+{
+  "type": "Dialog",
+  "source": {
+    "registry": "shadcn",
+    "item": "dialog",
+    "import": {
+      "name": "Dialog",
+      "from": "ui"
+    },
+    "parts": {
+      "trigger": "DialogTrigger",
+      "content": "DialogContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "trigger",
+      "kind": "nodes",
+      "wrapper": "DialogTrigger"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "DialogContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onOpenChange",
+      "prop": "onOpenChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "open",
+      "type": "boolean",
+      "initial": false,
+      "via": {
+        "valueProp": "open",
+        "changeProp": "onOpenChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

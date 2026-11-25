@@ -25,6 +25,8 @@ function attribute({ name, value }: AttributeIR, style: PrintStyle): string {
 export function printJsx(node: JsxIR, level: number, style: PrintStyle, asChild = false): string {
   const at = '  '.repeat(level)
   switch (node.kind) {
+    case 'source':
+      return node.code.split('\n').map((line) => at + line).join('\n')
     case 'text':
       return at + jsxText(node.value, style)
     case 'expr':
@@ -36,7 +38,7 @@ export function printJsx(node: JsxIR, level: number, style: PrintStyle, asChild 
       return at + (asChild ? '{' : '') + '(' + node.list + ').map((' + [node.item, node.index].filter(Boolean).join(', ') + ') => (\n'
         + printJsx(node.child, level + 1, style) + '\n' + at + '))' + (asChild ? '}' : '')
     case 'element': {
-      const attributes = node.props.map((prop) => attribute(prop, style))
+      const attributes = [...(node.spreads ?? []).map((expression) => '{...' + expression + '}'), ...node.props.map((prop) => attribute(prop, style))]
       const end = node.children.length ? '>' : ' />'
       const compact = at + '<' + node.tag + (attributes.length ? ' ' + attributes.join(' ') : '') + end
       const opening = attributes.length && (compact.length > 100 || compact.includes('\n'))

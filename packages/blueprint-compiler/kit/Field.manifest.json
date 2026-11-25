@@ -1,0 +1,22 @@
+{
+  "type": "Field",
+  "source": {
+    "registry": "shadcn",
+    "item": "field",
+    "import": {
+      "name": "Field",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "children",
+      "kind": "nodes"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

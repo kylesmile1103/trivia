@@ -1,0 +1,37 @@
+{
+  "type": "Tooltip",
+  "source": {
+    "registry": "shadcn",
+    "item": "tooltip",
+    "import": {
+      "name": "Tooltip",
+      "from": "ui"
+    },
+    "parts": {
+      "trigger": "TooltipTrigger",
+      "content": "TooltipContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "trigger",
+      "kind": "nodes",
+      "wrapper": "TooltipTrigger"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "TooltipContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onOpenChange",
+      "prop": "onOpenChange"
+    }
+  ],
+  "exposes": [],
+  "client": true,
+  "template": {}
+}

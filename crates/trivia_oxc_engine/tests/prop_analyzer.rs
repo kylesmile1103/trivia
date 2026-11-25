@@ -766,3 +766,24 @@ fn workspace_components_are_sorted_by_file_with_import_sources() {
     // Trailing slashes on either argument change nothing.
     assert_eq!(workspace.components("src/components/ui/", "@/components/ui/").unwrap(), schemas);
 }
+
+#[test]
+fn recognizes_base_ui_alias_and_control_parts() {
+    let schemas = analyze_src(r#"
+        import { Select as SelectPrimitive } from "@base-ui/react/select";
+        import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
+        export const Select = SelectPrimitive.Root;
+        export function SelectItem({ ...props }: SelectPrimitive.Item.Props) {
+          return <SelectPrimitive.Item {...props} />;
+        }
+        export function Checkbox({ ...props }: CheckboxPrimitive.Root.Props) {
+          return <CheckboxPrimitive.Root {...props} />;
+        }
+    "#);
+    let select = find(&schemas, "Select");
+    assert!(select.accepts_children);
+    assert_eq!(select.base_element.as_deref(), Some("SelectPrimitive.Root"));
+    for (component, prop) in [("SelectItem", "value"), ("Checkbox", "id")] {
+        assert!(find(&schemas, component).props.iter().any(|p| p.name == prop), "{component}.{prop}");
+    }
+}

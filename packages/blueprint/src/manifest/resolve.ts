@@ -103,12 +103,19 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
   for (const [type, selectedManifest] of [...selected].sort(([a], [b]) => compareBytes(a, b))) {
     if (!PAGE_NAME.test(type)) continue
     const { variants, ...base } = selectedManifest
-    const variant = style !== undefined && variants && Object.hasOwn(variants, style) ? variants[style] : undefined
+    const family = style?.split('-')[0]
+    const variantKey = style && variants && Object.hasOwn(variants, style) ? style : family
+    const variant = variantKey && variants && Object.hasOwn(variants, variantKey) ? variants[variantKey] : undefined
     const replacements = Object.fromEntries(Object.entries(variant ?? {}).filter(([, value]) => value !== undefined))
     const manifest = { ...base, ...replacements }
+    if (manifest.composite === 'Form' && !byName.has(manifest.source.import.name) && byName.has('FormField')) {
+      manifest.source = { ...manifest.source, item: 'form', import: { ...manifest.source.import, name: 'FormField' } }
+    }
     const { source } = manifest
     const { name } = source.import
-    const declaredFrom = source.import.from === 'ui' ? (ui && `${ui}/${source.item}`) : source.import.from
+    const inferredRefine = componentsAlias ?? ui?.slice(0, ui.lastIndexOf('/')) ?? '@/components'
+    const declaredFrom = source.import.from === 'ui' ? (ui && `${ui}/${source.item}`)
+      : source.import.from === 'refine-ui' ? `${inferredRefine}/refine-ui/${source.item}/${source.item}` : source.import.from
     const candidates = byName.get(name) ?? []
     const matching = candidates.length > 1 ? candidates.filter(({ importSource }) => importSource === declaredFrom) : candidates
     if (candidates.length > 1 && matching.length !== 1) {
@@ -116,9 +123,11 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
       continue
     }
     const component = matching[0]
-    const from = declaredFrom ?? component?.importSource ?? 'ui'
+    const from = source.import.from === 'ui' && ui && component
+      ? ui + '/' + component.importSource.split('/').at(-1)
+      : (source.import.from === 'refine-ui' ? component?.importSource : undefined) ?? declaredFrom ?? component?.importSource ?? 'ui'
     const known = new Set(component?.props.map(({ name }) => name))
-    if (component && overrideTypes.has(type)) inspectOverride(manifest, style, variant, known, diagnostics)
+    if (component && overrideTypes.has(type)) inspectOverride(manifest, variantKey, variant, known, diagnostics)
     const descriptions: Array<[string, string]> = []
     for (const { name, description } of manifest.props) {
       if (known.has(name) && description !== undefined) descriptions.push([name, description])

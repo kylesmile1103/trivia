@@ -1,5 +1,5 @@
 import type { ContractOptions, ContractPage } from '@trivia/blueprint'
-import type { ManifestResource } from '@trivia/contract-sync'
+import type { ManifestField, ManifestResource } from '@trivia/contract-sync'
 
 import { CompileError, type CompileContext, type EmittedModule } from './compile.js'
 import type { ProjectFacts } from './facts.js'
@@ -31,6 +31,21 @@ export type ContractPageGenerator = (input: ContractPageInput) => {
   content: string
   component: string
   importPath: string
+}
+
+export interface RefineSnippetImport {
+  name: string
+  source: string
+}
+
+export interface RefineSnippetGenerator {
+  column(field: ManifestField, filter: boolean): { value: string; imports: RefineSnippetImport[] }
+  field(field: ManifestField, idPrefix: string): {
+    rule: string
+    defaultValue: string
+    controller: string
+    imports: RefineSnippetImport[]
+  }
 }
 
 export function generateContract(

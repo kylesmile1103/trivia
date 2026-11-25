@@ -1,0 +1,34 @@
+{
+  "type": "DatePicker",
+  "source": {
+    "registry": "shadcn",
+    "item": "calendar",
+    "import": {
+      "name": "Calendar",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onSelect",
+      "prop": "onSelect",
+      "payload": "Date | undefined"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "Date | undefined",
+      "initial": null,
+      "via": {
+        "valueProp": "selected",
+        "changeProp": "onSelect",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

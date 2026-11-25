@@ -1,0 +1,71 @@
+{
+  "type": "Form",
+  "source": {
+    "registry": "shadcn",
+    "item": "field",
+    "import": {
+      "name": "FieldGroup",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "footer",
+      "kind": "nodes"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": true,
+  "composite": "Form",
+  "configuration": [
+    {
+      "name": "resource",
+      "kind": "string",
+      "optional": false,
+      "source": "declared"
+    },
+    {
+      "name": "mode",
+      "kind": "enum",
+      "optional": true,
+      "source": "declared",
+      "options": [
+        "create",
+        "edit"
+      ]
+    },
+    {
+      "name": "fields",
+      "kind": "unknown",
+      "optional": true,
+      "source": "declared",
+      "typeText": "string[]"
+    },
+    {
+      "name": "layout",
+      "kind": "enum",
+      "optional": true,
+      "source": "declared",
+      "options": [
+        "stack",
+        "grid-2"
+      ]
+    },
+    {
+      "name": "redirect",
+      "kind": "unknown",
+      "optional": true,
+      "source": "declared",
+      "typeText": "\"list\" | \"show\" | \"edit\" | \"create\" | false"
+    }
+  ],
+  "template": {
+    "props": {
+      "mode": "create",
+      "layout": "stack",
+      "redirect": "list"
+    }
+  }
+}
