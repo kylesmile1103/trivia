@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import type { ComponentSchema, Health, HistoryState, NodeDetails, Placement } from '@/shared/engine/types'
 import type { Template } from '@/shared/template'
 
-export type LeftPanel = 'components' | 'layers' | 'pages' | 'data'
+export type LeftPanel = 'components' | 'layers' | 'pages' | 'data' | 'blueprint'
 
 export type DragSource =
   | { kind: 'palette'; template: Template }

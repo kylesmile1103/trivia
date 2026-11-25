@@ -1,1 +1,1 @@
-export { createBlueprintStore } from './store'
+export { BlueprintTab } from './BlueprintTab'
