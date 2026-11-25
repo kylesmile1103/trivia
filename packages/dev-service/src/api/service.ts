@@ -378,9 +378,8 @@ export class EngineService {
 
   confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
     return this.#queue.run(() => {
-      const file = this.blueprint.dir + '/' + LOCK_FILE
       const history = this.#history.nextUndo
-      const written = history?.label === entry ? history.changes.find((change) => change.file === file)?.after : undefined
+      const written = history?.label === entry ? history.ejectLock : undefined
       const current = this.blueprint.readDocumentText(LOCK_FILE)
       if (!written || written !== current || !pages.length || !pages.every((page) => Object.hasOwn(readLock(written).pages, page))) {
         throw new ApiError('conflict', 'The latest edit is not the requested blueprint eject entry.')
@@ -410,7 +409,11 @@ export class EngineService {
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
     if (result.changed) finish?.()
-    if (result.changes.length > 0) this.#history.record({ label, changes: result.changes })
+    if (result.changes.length > 0) {
+      const last = ops.at(-1)
+      const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
+      this.#history.record({ label, changes: result.changes, ...(ejectLock !== undefined && { ejectLock }) })
+    }
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
   }

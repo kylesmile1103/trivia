@@ -227,3 +227,54 @@ it('FR-RC-07: commits the lock with the batch and refuses an intervening draft e
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+it('SC-003: ejects four CRUD pages and restores every touched byte on undo and redo', async () => {
+  const root = copyRefineAdmin()
+  const app = path.join(root, 'src/App.tsx')
+  fs.writeFileSync(app, fs.readFileSync(app, 'utf8').replace(/^.*AccountList.*\n/gm, '')
+    .replace(/          \{\n            name: "accounts",[\s\S]*?\n          \},\n/, ''))
+  fs.rmSync(path.join(root, 'src/pages/accounts/list.tsx'))
+  const server = await startServer(root)
+  try {
+    const previous = fs.readFileSync(app)
+    const kinds = ['list', 'create', 'edit', 'show'] as const
+    const names = kinds.map((kind) => 'Account' + kind[0]!.toUpperCase() + kind.slice(1))
+    const patch = await post(server.socket, '/blueprint/patch', {
+      label: 'Draft CRUD',
+      ops: kinds.map((kind, index) => ({
+        op: 'createPage', doc: 'pages/' + names[index] + '.page.json', baseRev: null,
+        name: names[index], resource: 'Account', kind,
+        route: kind === 'list' ? '/accounts' : '/accounts/' + kind + (kind === 'create' ? '' : '/:id'),
+      })),
+    })
+    expect(patch.status).toBe(200)
+    const planned = await post(server.socket, '/blueprint/plan', { pages: names })
+    expect(planned.status, JSON.stringify(planned.body)).toBe(200)
+    const { ops, label, files } = planned.body.data
+    expect(files).toHaveLength(4)
+    expect(ops.filter((op: { op: string }) => op.op === 'insertElement')).toHaveLength(1)
+    expect(ops.filter((op: { op: string }) => op.op === 'insert')).toHaveLength(4)
+    expect((await post(server.socket, '/batch', { ops, label })).status).toBe(200)
+    const lock = path.join(root, 'blueprint/blueprint.lock.json')
+    const created = [lock, ...files.map((file: string) => path.join(root, file))]
+    const ejected = [app, ...created].map((file) => fs.readFileSync(file))
+    execFileSync(process.execPath, [path.join(REFINE_ADMIN, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.app.json', '--noEmit'], { cwd: root })
+    expect((await post(server.socket, '/undo')).status).toBe(200)
+    expect(fs.readFileSync(app)).toEqual(previous)
+    expect(created.some((file) => fs.existsSync(file))).toBe(false)
+    expect((await post(server.socket, '/redo')).status).toBe(200)
+    expect([app, ...created].map((file) => fs.readFileSync(file))).toEqual(ejected)
+
+    const missing = path.join(root, 'src/pages/accounts/list.tsx')
+    fs.rmSync(missing)
+    const restore = await post(server.socket, '/blueprint/plan', { pages: ['AccountList'] })
+    expect(restore.status, JSON.stringify(restore.body)).toBe(200)
+    expect((await post(server.socket, '/batch', { ops: restore.body.data.ops, label: restore.body.data.label })).status).toBe(200)
+    const confirmed = await post(server.socket, '/blueprint/ejected', { pages: ['AccountList'], entry: restore.body.data.label })
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200)
+    expect([app, ...created].map((file) => fs.readFileSync(file))).toEqual(ejected)
+  } finally {
+    await server.close()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 120_000)
