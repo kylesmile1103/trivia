@@ -6,7 +6,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 1: Setup
 
-- [ ] T001 Generate the package with `nx g @trivia/tools:package blueprint`. Add zod, and ajv as a dev dependency, at the repository's versions
+- [x] T001 Generate the package with `nx g @trivia/tools:package blueprint`. Add zod, and ajv as a dev dependency, at the repository's versions
 - [x] T002 Add the commit areas `blueprint:`, `compiler:` and `dotnet:` to `release.conventionalCommits.types` in `nx.json`
 - [ ] T003 [P] Write the hand-made fixture `packages/blueprint/fixtures/valid/backoffice/` (app, a `list` page, a `custom` page using every map)
 
