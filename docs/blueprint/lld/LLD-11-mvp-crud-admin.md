@@ -20,3 +20,6 @@
   the committed Radix kit's UI, hooks, utilities and CSS, and merges its dependencies into
   the generated package. The provider and routes come from the scaffold, and the API
   contract comes from the generated backend. The kit's mock API and contract are unused.
+- ⚑ The generated AppHost is started through Aspire.Hosting.Testing with its web resource
+  and persistent volume disabled. Aspire allocates the backend ports. The test host reports
+  the healthy API endpoint and shuts down when its Node parent's input pipe closes.

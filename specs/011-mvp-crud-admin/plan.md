@@ -36,6 +36,7 @@ examples/blueprint-mvp/
   README.md            the commands, by hand
 tools/blueprint/mvp.test.mjs       story 1 and 3, scripted
 tools/blueprint/mvp-project.mjs    shared disposable project setup
+dotnet/tests/Trivia.Blueprint.Mvp.Host/   Aspire Testing bridge for the generated AppHost
 e2e/blueprint-mvp.spec.ts          stories 1 to 3 in a browser, a fourth Playwright project
 ```
 

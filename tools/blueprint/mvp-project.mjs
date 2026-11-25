@@ -1,7 +1,9 @@
 // Shared setup for the scripted and browser acceptance tests.
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { cpSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { createInterface } from 'node:readline'
+import { setTimeout as delay } from 'node:timers/promises'
 
 export const repo = path.resolve(import.meta.dirname, '../..')
 const kit = path.join(repo, 'examples/blueprint-kit')
@@ -55,4 +57,49 @@ export function prepareMvp(directory) {
   writeFileSync(packagePath, JSON.stringify(manifest, null, 2) + '\n')
   run(web, 'pnpm', ['install', '--prefer-offline'])
   return web
+}
+
+
+export async function startMvpApi(root) {
+  const project = 'Trivia.Blueprint.Mvp.Host'
+  const harness = path.join(repo, 'dotnet/tests', project, project + '.csproj')
+  const artifacts = path.join(root, '.mvp-host')
+  run(root, 'dotnet', ['build', harness, '--artifacts-path', artifacts, '--disable-build-servers'])
+  const dll = path.join(artifacts, 'bin', project, 'debug', project + '.dll')
+  const appHost = path.join('src/BankAdmin.AppHost/bin/Debug/net10.0/BankAdmin.AppHost.dll')
+  const child = spawn('dotnet', [dll, appHost], {
+    cwd: root, stdio: 'pipe',
+    env: { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_NOLOGO: '1' },
+  })
+  let output = ''
+  const closed = new Promise((resolve) => child.once('close', resolve))
+  child.stderr.setEncoding('utf8').on('data', (text) => { output += text })
+  child.stdin.on('error', () => {}) // The host can exit before shutdown is requested.
+  const lines = createInterface({ input: child.stdout })
+  const endpoint = new Promise((resolve, reject) => {
+    child.once('error', reject)
+    lines.on('line', (line) => {
+      const prefix = 'TRIVIA_MVP_API='
+      if (line.startsWith(prefix)) resolve(line.slice(prefix.length))
+      else output += line + '\n'
+    })
+  })
+  async function close() {
+    child.stdin.end()
+    if (await Promise.race([closed.then(() => true), delay(20_000, false, { ref: false })])) return
+    child.kill('SIGKILL')
+    await closed
+    throw new Error('MVP Aspire host did not shut down after stdin closed.\n' + output)
+  }
+  try {
+    const url = await Promise.race([
+      endpoint,
+      closed.then((status) => { throw new Error(`MVP Aspire host exited (${status}).\n${output}`) }),
+      delay(200_000, undefined, { ref: false }).then(() => { throw new Error('MVP Aspire host did not become ready.\n' + output) }),
+    ])
+    return { url, close }
+  } catch (error) {
+    await close().catch(() => {})
+    throw error
+  }
 }
