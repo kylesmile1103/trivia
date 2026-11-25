@@ -56,6 +56,8 @@ export interface DesignerState {
   revision: number
   /** Where the canvas is in the app: path, query and hash; null before a document has loaded. */
   canvasPath: string | null
+  /** A marked draft element selected in the canvas, consumed by the Blueprint tab. */
+  previewNode: { page: string; node: string } | null
   /**
    * Set around undo/redo: the tag name of the selected node before the history jump. Locators
    * are positions, so after the jump the same locator can name a different element; when the
@@ -77,6 +79,7 @@ export interface DesignerState {
   setDrop(drop: DropTarget | null): void
   bumpRevision(): void
   setCanvasPath(path: string | null): void
+  setPreviewNode(selection: DesignerState['previewNode']): void
   expectSelectedName(name: string | null): void
 }
 
@@ -97,6 +100,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
   drop: null,
   revision: 0,
   canvasPath: null,
+  previewNode: null,
   expectedSelectedName: null,
 
   setHealth: (health) => set({ health }),
@@ -130,6 +134,7 @@ export const useDesigner = create<DesignerState>()((set) => ({
       revision: s.revision + 1,
       expectedSelectedName: s.expectedSelectedName ?? (s.details !== null && s.details.locator === s.selected ? s.details.name : null),
     })),
+  setPreviewNode: (previewNode) => set(previewNode ? { previewNode, panel: 'blueprint' } : { previewNode }),
   setCanvasPath: (canvasPath) => set((s) => (s.canvasPath === canvasPath ? s : { canvasPath })),
   expectSelectedName: (expectedSelectedName) => set({ expectedSelectedName }),
 }))

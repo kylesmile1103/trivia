@@ -37,7 +37,9 @@ export async function previewPage({ page }: z.infer<typeof previewInput>, servic
     const id = 'blueprint-' + createHash('sha256').update(page).digest('hex').slice(0, 16)
     service.refine.blueprintPreview(id, async () => {
       const next = await service.blueprintInputs()
-      return compilePage(next.blueprint, page, next.context)
+      // Keep code returned to callers canonical for eject. Only the virtual module gets
+      // the data attributes the canvas uses to select blueprint nodes.
+      return compilePage(next.blueprint, page, { ...next.context, previewNodeIds: true })
     })
     return {
       page, route: '/__blueprint/' + page, module: PREVIEW_PREFIX + id + '.tsx', code: out.code, requires: out.requires,

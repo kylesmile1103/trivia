@@ -8,7 +8,7 @@
 
 import { toast } from 'sonner'
 
-import type { CanvasApi, MovePlacement } from '@/shared/canvas'
+import { blueprintPreviewPage, type CanvasApi, type MovePlacement } from '@/shared/canvas'
 import { ApiError } from '@/shared/engine/client'
 import type { ImportSpec, NodeDetails, Op, Placement } from '@/shared/engine/types'
 import { dispatch, dispatchBatch, isApplying, onIdle } from '@/shared/state/actions'
@@ -366,6 +366,21 @@ export class CanvasController {
     // it here instead would count as programmatic focus and paint the focus-visible ring.
     if (e.button !== 0 || s.mode !== 'design') return
     const point = { x: e.clientX, y: e.clientY }
+    const doc = this.session.doc
+    const page = blueprintPreviewPage(doc?.defaultView?.location.pathname)
+    const framePoint = page && this.toFrame(point)
+    if (page && doc && framePoint) {
+      const element = doc.elementsFromPoint(framePoint.x, framePoint.y)[0]
+      const node = element?.closest('[data-bp-node]')?.getAttribute('data-bp-node')
+      if (node) {
+        this.press = null
+        this.held = null
+        this.gesture = null
+        s.select(null)
+        s.setPreviewNode({ page, node })
+        return
+      }
+    }
     // What is under the cursor is the old render: selecting or dragging it would act on
     // whatever node now holds its position in source. A drag can't start (the busy cursor
     // says to wait), but the press isn't lost: it selects once the app has rendered.

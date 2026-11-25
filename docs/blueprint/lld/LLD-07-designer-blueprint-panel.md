@@ -77,7 +77,9 @@ carry no locators, so the canvas shows a banner: "Preview of a draft page. Eject
 the canvas." With FR-DS-09 (could), the compiler stamps `data-bp-node` in preview modules only,
 and a click selects the node in the tree. ⚑ The canvas derives the banner from the
 actual `/__blueprint/` path, so it follows navigation and replaces the missing-locators notice
-for these routes.
+for these routes. ⚑ Only the virtual custom preview module receives the node IDs. The
+HTTP response's `code` field still carries the canonical compiled source used by eject.
+A Design click on a marked element opens its draft in Blueprint and selects the stable ID.
 
 **Eject.** `POST /blueprint/plan`. A 422 with `requires` shows the `shadcn add` command to
 copy. ⚑ Refine items use their registry URL. Local items are listed for manual installation.

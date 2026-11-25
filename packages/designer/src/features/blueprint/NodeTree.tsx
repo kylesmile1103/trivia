@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 
 import type { MovePlacement } from '@/shared/canvas'
 import type { BlueprintComponent, BlueprintComponents, BlueprintDocument, BlueprintNode, BlueprintNodePosition, CustomPage } from '@/shared/engine/types'
@@ -85,8 +85,16 @@ export function NodeTree({ document: { doc, rev, path }, catalog, selected, busy
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [drop, setDrop] = useState<{ id: string; placement: MovePlacement } | null>(null)
   const drag = useRef<{ id: string; rev: string } | null>(null)
-  const { rows, children } = treeRows(doc, collapsed)
+  const selectedRow = useRef<HTMLButtonElement>(null)
+  const openAncestors = new Set<string>()
   const current = doc.nodes[selected]
+  for (let id = current?.parent; id && !openAncestors.has(id); id = doc.nodes[id]?.parent) openAncestors.add(id)
+  const hidden = new Set([...collapsed].filter((id) => !openAncestors.has(id)))
+  const { rows, children } = treeRows(doc, hidden)
+
+  useEffect(() => {
+    selectedRow.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [selected])
   const components = catalog.components
 
   function move(source: string, destination: Destination) {
@@ -113,7 +121,7 @@ export function NodeTree({ document: { doc, rev, path }, catalog, selected, busy
       <ul className="space-y-0.5">
         {rows.map(({ entry: [id, node], depth }) => {
           const canCollapse = children.has(id)
-          const expanded = canCollapse && !collapsed.has(id)
+          const expanded = canCollapse && !hidden.has(id)
           return (
             <li key={id} className="relative flex items-center gap-0.5" style={{ paddingInlineStart: Math.min(depth, 12) * 9 }}>
               {canCollapse && (
@@ -125,7 +133,7 @@ export function NodeTree({ document: { doc, rev, path }, catalog, selected, busy
                   })}>{expanded ? '−' : '+'}</Button>
               )}
               <button
-                type="button" data-bp-tree-node={id} data-pointer={`/nodes/${id}`}
+                type="button" ref={selected === id ? selectedRow : null} data-bp-tree-node={id} data-pointer={`/nodes/${id}`}
                 aria-pressed={selected === id} disabled={busy} draggable={!busy && id !== doc.root}
                 className={cn(
                   'relative flex min-w-0 flex-1 items-baseline gap-1 rounded-sm border-y border-transparent px-1.5 py-1 text-left text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',

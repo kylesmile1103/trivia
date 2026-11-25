@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LoaderCircleIcon, TriangleAlertIcon, UnplugIcon } from 'lucide-react'
 
-import { setCanvasApi } from '@/shared/canvas'
+import { blueprintPreviewPage, setCanvasApi } from '@/shared/canvas'
 import { cn } from '@/shared/lib/utils'
 import { useDesigner } from '@/shared/state/store'
 
@@ -22,7 +22,7 @@ export function Canvas() {
   const controllerRef = useRef<CanvasController | null>(null)
   const [view, setView] = useState<CanvasView>(EMPTY_VIEW)
   const mode = useDesigner((s) => s.mode)
-  const draft = useDesigner((s) => s.canvasPath?.startsWith('/__blueprint/') ?? false)
+  const draft = useDesigner((s) => blueprintPreviewPage(s.canvasPath) !== undefined)
   const zoom = useDesigner((s) => s.zoom)
   const dragging = useDesigner((s) => s.drag !== null)
 

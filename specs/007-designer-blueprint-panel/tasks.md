@@ -52,7 +52,7 @@
 
 ## Phase 10: User Story 7 - Select from a preview (P3)
 
-- [ ] T021 [US7] `data-bp-node` in preview modules only (compiler flag), click to select in the tree
+- [x] T021 [US7] `data-bp-node` in preview modules only (compiler flag), click to select in the tree
 
 ## Dependencies
 

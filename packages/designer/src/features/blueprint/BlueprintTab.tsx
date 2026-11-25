@@ -65,6 +65,28 @@ export function BlueprintTab() {
     return result !== null
   }
   const host = useDesigner((state) => state.health?.host)
+  const previewNode = useDesigner((state) => state.previewNode)
+
+  useEffect(() => {
+    if (!previewNode || !summary || pending) return
+    const page = summary.pages.find((item) => item.name === previewNode.page && item.kind === 'custom' && item.status === 'draft')
+    if (!page) {
+      designer.getState().setPreviewNode(null)
+      return
+    }
+    setAdding(false)
+    setModelOpen(false)
+    if (path !== page.path) {
+      void open(page.path)
+      return
+    }
+    if (!document && !loadError) return
+    if (document && 'nodes' in document.doc && Object.hasOwn(document.doc.nodes, previewNode.node)) {
+      setNodeSelection({ page: document.doc.id, node: previewNode.node })
+    }
+    designer.getState().setPreviewNode(null)
+  }, [previewNode, summary, pending, path, document, loadError, open])
+
   function initialize() {
     focusAdd.current = true
     void commit([{
@@ -74,8 +96,8 @@ export function BlueprintTab() {
   }
 
   useEffect(() => {
-    if (modelOpen && modelRev && path !== MODEL_DOC) void open(MODEL_DOC)
-  }, [modelOpen, modelRev, open, path])
+    if (modelOpen && !previewNode && modelRev && path !== MODEL_DOC) void open(MODEL_DOC)
+  }, [modelOpen, modelRev, open, path, previewNode])
 
   function openModel() {
     focusName.current = true

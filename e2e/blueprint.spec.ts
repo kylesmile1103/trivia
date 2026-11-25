@@ -186,7 +186,7 @@ test.describe('Blueprint panel', () => {
     await expect(panel(page).getByRole('button', { name: 'Preview AccountIntake' })).toBeVisible()
   })
 
-  test('FR-DS-03 previews text bound to the value exposed by a manifest input', async ({ page }) => {
+  test('FR-DS-03 FR-DS-09 previews text bound to the value exposed by a manifest input', async ({ page }) => {
     await openBlueprint(page)
     await createPage(page, 'SearchDraft', '/blueprint-search')
     const tree = editor(page).getByRole('region', { name: 'Blueprint nodes' })
@@ -210,6 +210,15 @@ test.describe('Blueprint panel', () => {
     await expect(input).toBeVisible({ timeout: 35_000 })
     await input.fill('bound blueprint text')
     await expect(canvas(page).getByText('bound blueprint text', { exact: true })).toBeVisible()
+
+    await expect(input).toHaveAttribute('data-bp-node', /^n_/)
+    await page.getByRole('tab', { name: 'Layers' }).click()
+    await page.getByRole('radio', { name: 'Design' }).click()
+    const box = await input.boundingBox()
+    expect(box).not.toBeNull()
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2)
+    await expect(page.getByRole('tab', { name: 'Blueprint' })).toHaveAttribute('aria-selected', 'true')
+    await expect(tree.getByRole('button', { name: 'Select search (Input)' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('FR-DS-07 refuses a stale save after a concurrent MCP patch and loads the agent revision', async ({ page }) => {
