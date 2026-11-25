@@ -16,7 +16,7 @@
 ## Phase 3: User Story 1 - Pages (P1)
 
 - [x] T005 [US1] `PagesList.tsx` with status chips, counts and empty states. Tests
-- [ ] T006 [US1] `PageForm.tsx` for contract kinds: resource from the contract, fields, title, filters, actions. One labelled patch per change. Tests per kind
+- [x] T006 [US1] `PageForm.tsx` for contract kinds: resource from the contract, fields, title, filters, actions. One labelled patch per change. Tests per kind
 - [ ] T007 [US1] `Diagnostics.tsx`: the list, each entry focusing its field
 
 ## Phase 4: User Story 2 - Preview and eject (P1)

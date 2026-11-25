@@ -37,7 +37,7 @@ export type ActionStep =
   | { do: 'toast'; message: string; variant?: 'default' | 'success' | 'info' | 'warning' | 'error' }
   | { do: 'call'; handler: string }
 
-export interface ContractAction {
+export type ContractAction = {
   name: string
   label: string
   confirm?: string

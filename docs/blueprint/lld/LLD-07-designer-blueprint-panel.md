@@ -45,6 +45,10 @@ changed since eject and is now the truth (ADR-0003). A button adds a page.
 **Page form.** Kind decides the fields: contract kinds show the resource (from the contract
 manifest), field checklists, title, filters and actions; `custom` shows the node tree. Each
 change is one patch, labelled by what changed ("Blueprint: set route of CustomerList").
+⚑ The reducer permits kind changes within contract kinds. A custom page keeps its kind.
+A resource or kind change keeps the selected fields that are available in the new operation.
+Template field and filter defaults have a separate checkbox. Structured action steps use
+a JSON array editor with an explicit save, so every LLD-01 step can be represented.
 
 **Node tree and props.** The tree is built from the flat maps and reuses the drop rules of the
 Layers tab (before, after, inside), which move into `shared/lib/` since a second feature needs
