@@ -46,6 +46,12 @@ identity. A rename is explicit (section 4).
 Names: entities and enums PascalCase, fields and relations camelCase, `plural` kebab-case (the
 URL segment and, in snake_case, the table name).
 
+⚑ The namespace is one or more dot-separated PascalCase identifiers. The document declares
+its enum and entity arrays, and each entity declares its fields, relations, indexes and API
+operations, using empty arrays where appropriate. Enum values are nonempty strings. Custom
+operations take an uppercase method, a relative path of literal or brace-parameter segments
+(empty for the collection), optional input fields and an optional entity name for the return.
+
 ## 2. Types and mapping (FR-DM-02, FR-DM-04)
 
 `mapping.ts` is one table and the only place this knowledge lives on the Node side. LLD-09
@@ -74,6 +80,11 @@ Constraints per type: strings take `minLength`, `maxLength`, `pattern` and `form
 `uri`, `password`); numbers take `minimum` and `maximum`; `decimal` needs `precision` and
 `scale`. Any field may have `required`, `unique`, `readOnly`, `default` and `description`.
 `generated` is `onCreate` or `onUpdate` for `datetime`, and `v7` for a `uuid` key.
+
+⚑ Each field type has a strict schema, so a constraint on the wrong field type produces
+`schema_violation` at that property. `invalid_constraint` covers conflicts between valid
+properties. String and text lengths use a nonnegative minimum and positive maximum.
+Integer bounds use the signed 32-bit range for `int` and safe JSON integers for `long`.
 
 Keys: `uuid` (generated, the default), `int` or `long` (an identity column). One key field per
 entity. Composite keys are refused in version 1.
@@ -118,7 +129,7 @@ Model diagnostics, on top of the schema layer:
 | `dangling_reference` | A relation to a missing entity, a field's enum that does not exist, an index or API list naming a missing field |
 | `unmatched_relation` | A `hasMany` without its `belongsTo` |
 | `invalid_default` | A default that does not fit the type, the enum or the bounds |
-| `invalid_constraint` | `minimum` above `maximum`, a `scale` above `precision`, `maxLength` on a number |
+| `invalid_constraint` | `minimum` above `maximum`, a `scale` above `precision`, or other conflicting constraints |
 | `invalid_api` | A sortable or filterable `json` field, a custom operation path that collides with a CRUD route |
 | `breaking_change` (warning) | Against the lock's last generated model: a removed field, a narrowed type, a new required field without a default |
 
