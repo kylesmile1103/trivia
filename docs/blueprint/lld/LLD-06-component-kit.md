@@ -110,6 +110,10 @@ using every type, every exposed value in a binding, and every event in an action
 `DataTable` and a `Form` page. `examples/blueprint-kit/` is the app it compiles into: the
 template of LLD-05 with the kit installed, on a mock contract.
 
+⚑ The Radix example uses shadcn CLI 4.21.3 with the `radix-nova` preset and a self-contained
+snapshot of the banking OpenAPI contract, provider, and mock. The Refine registry filter
+label map adds `eqs` and `nes` to match the installed Refine 5.0.12 operator union.
+
 - Unit: compile every page, compare with golden files, run `tsc`.
 - e2e (`e2e/blueprint-kit.spec.ts`): eject all pages, load each route, check it renders
   without console errors, type into an input and see a bound text change, sort and filter the
