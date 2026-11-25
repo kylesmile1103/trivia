@@ -8,6 +8,8 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="../../../packages/blueprint/fixtures/model/**/*"
+             Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
