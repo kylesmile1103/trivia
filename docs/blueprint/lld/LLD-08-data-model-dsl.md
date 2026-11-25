@@ -132,6 +132,20 @@ BlueprintOps on `model.blueprint.json` (LLD-01 section 4):
 `renamedFrom` stays in the document until the next migration is generated. `trivia-dotnet`
 turns it into a column or table rename, and `migrate` clears the marker (LLD-09).
 
+⚑ `setModel` can create the document with empty entity and enum arrays. `setEntity` merges
+supplied top-level properties and replaces any supplied arrays or API object. Creation
+requires `plural` and `key` and starts with empty collections and no API operations unless
+provided. Setters for enums, fields and relations replace an exact-name match in place or
+append a new entry. `moveField.index` addresses the field's final position.
+
+⚑ An entity rename also updates custom operation returns and can be paired with `setEntity`
+to change the plural. A chain of renames retains the first name through later field updates
+and clears the marker if the name returns to that original.
+
+⚑ Entity and enum removals report the blocking references in the draft. Remove those
+references before the removal op in the same batch. Self-references disappear with their
+entity, and custom operation inputs and returns count as references.
+
 ## 5. Validation (FR-DM-03)
 
 Model diagnostics, on top of the schema layer:

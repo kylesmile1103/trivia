@@ -1,0 +1,10 @@
+[
+  { "op": "renameEntity", "entity": "Customer", "name": "Client" },
+  { "op": "renameField", "entity": "Client", "field": "status", "name": "accountStatus" },
+  { "op": "moveField", "entity": "Client", "field": "accountStatus", "index": 0 },
+  { "op": "setEnum", "enum": { "name": "CustomerStatus", "values": ["pending", "active", "suspended", "closed"] } },
+  { "op": "setEntity", "entity": { "name": "Client", "plural": "clients" } },
+  { "op": "setRelation", "entity": "Account", "relation": {
+    "name": "customer", "kind": "belongsTo", "to": "Client", "foreignKey": "customerId", "required": true, "onDelete": "cascade"
+  } }
+]

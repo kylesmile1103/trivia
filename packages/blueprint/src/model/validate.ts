@@ -6,16 +6,11 @@ import { MODEL_DOC } from '../types/ops.js'
 import csharp from './reserved/csharp.json' with { type: 'json' }
 import generator from './reserved/generator.json' with { type: 'json' }
 import postgres from './reserved/postgres.json' with { type: 'json' }
-import type { ModelDoc, ModelEntity, ModelField, ModelFieldType, ModelRelation } from './types.js'
+import type { ModelOp } from './apply.js'
+import type { ModelDoc, ModelEntity, ModelField, ModelFieldType } from './types.js'
 
 type Path = readonly PropertyKey[]
-interface SetRelationFix {
-  op: 'setRelation'
-  doc: typeof MODEL_DOC
-  baseRev: string
-  entity: string
-  relation: Extract<ModelRelation, { kind: 'belongsTo' }>
-}
+type SetRelationFix = Extract<ModelOp, { op: 'setRelation' }> & { baseRev: string }
 export interface ModelDiagnostic extends Omit<Diagnostic, 'hint'> {
   hint?: { ops?: SetRelationFix[]; text?: string }
 }

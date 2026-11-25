@@ -23,7 +23,7 @@
 
 ## Phase 5: User Story 3 - Ops (P1)
 
-- [ ] T007 [US3] Op fixtures, then `src/model/apply.ts`: `setModel`, `setEnum`, `removeEnum`, `setEntity`, `removeEntity`, `renameEntity`, `setField`, `removeField`, `renameField`, `moveField`, `setRelation`, `removeRelation`, `setIndexes`, `setEntityApi`
+- [x] T007 [US3] Op fixtures, then `src/model/apply.ts`: `setModel`, `setEnum`, `removeEnum`, `setEntity`, `removeEntity`, `renameEntity`, `setField`, `removeField`, `renameField`, `moveField`, `setRelation`, `removeRelation`, `setIndexes`, `setEntityApi`
 - [ ] T008 [US3] Add the model ops to the op union and the batch reducer of spec 001. Refusal tests
 - [ ] T009 [US3] The plugin's summary and MCP input schema pick the new ops up (snapshot updates in spec 004's tests)
 
