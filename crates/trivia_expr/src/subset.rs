@@ -5,9 +5,11 @@ use oxc_span::{GetSpan, Span};
 
 use crate::{Diagnostic, Severity, allow, deps::Reads, scope::{ArrowBindings, ScopeCheck}};
 
-pub(crate) fn check<'a>(source: &str, expression: &Expression<'a>, scope: ScopeCheck<'_>) -> (Vec<Diagnostic>, Reads) {
+pub(crate) fn check<'a>(
+    source: &str, expression: &Expression<'a>, scope: ScopeCheck<'_>, validate_names: bool,
+) -> (Vec<Diagnostic>, Reads) {
     let mut subset = Subset {
-        source, scope, diagnostics: Vec::new(), arrow_argument: None, format_factory: None,
+        source, scope, validate_names, diagnostics: Vec::new(), arrow_argument: None, format_factory: None,
         bindings: ArrowBindings::default(), reads: Reads::default(), member_root: None,
     };
     subset.visit_expression(expression);
@@ -17,6 +19,7 @@ pub(crate) fn check<'a>(source: &str, expression: &Expression<'a>, scope: ScopeC
 struct Subset<'s, 'a> {
     source: &'s str,
     scope: ScopeCheck<'s>,
+    validate_names: bool,
     diagnostics: Vec<Diagnostic>,
     arrow_argument: Option<Span>,
     format_factory: Option<Span>,
@@ -126,14 +129,14 @@ impl<'a> Visit<'a> for Subset<'_, 'a> {
         if self.member_root != Some(identifier.span) {
             self.reads.identifier(&self.scope, &self.bindings, name);
         }
-        if !self.scope.known(&self.bindings, name) {
+        if self.validate_names && !self.scope.known(&self.bindings, name) {
             self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_root", Severity::Error,
                 identifier.span, format!("Unknown root `{name}`")));
         }
     }
 
     fn visit_member_expression(&mut self, member: &MemberExpression<'a>) {
-        if let Some((span, name)) = member.static_property_info()
+        if self.validate_names && let Some((span, name)) = member.static_property_info()
             && self.scope.has_unknown_member(&self.bindings, member)
         {
             self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_member", Severity::Error,

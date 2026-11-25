@@ -128,6 +128,13 @@ Everything else, whitespace and comments included, is copied as written. The res
 again, and a result with diagnostics is an `internal` error, never output. An object literal at
 the top level is wrapped in parentheses only when the caller asks for an arrow body.
 
+- ⚑ Emission enforces the syntax and call subset and uses the caller's name map without checking
+  it against a page scope. It rewrites free value references, including literal bracket keys.
+  A renamed shorthand expands to `key: value` so its original property key stays the same.
+- ⚑ Identity prefixes keep their original bytes and suppress shorter replacements. The emitter
+  reparses changed output, including any arrow-body parentheses, and uses the initial parse
+  for an unchanged result. Arrow-body parentheses sit inside leading and trailing trivia.
+
 `renameReferences` uses the same splice to rewrite `ui.<old>` to `ui.<new>` in stored sources,
 for the `renameNode` op (LLD-01).
 

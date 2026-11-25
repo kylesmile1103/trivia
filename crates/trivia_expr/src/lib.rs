@@ -10,6 +10,9 @@ mod allow;
 mod scope;
 mod deps;
 mod graph;
+mod emit;
+
+pub use emit::emit;
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -192,7 +195,7 @@ pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
         } else {
             parse::parse(source, |expression| subset::check(source, expression, scope::ScopeCheck {
                 scope: &request.scope, locals: &input.locals,
-            }))
+            }, true))
                 .unwrap_or_else(|error| (vec![Diagnostic::from_parse(source, error)], deps::Reads::default()))
         };
         let ok = diagnostics.iter().all(|diagnostic| diagnostic.severity != Severity::Error);
