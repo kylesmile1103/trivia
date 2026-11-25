@@ -17,3 +17,16 @@ it('ships a Vite Refine shell with eject anchors and registry aliases', () => {
   expect(existsSync(path.join(root, 'src/components'))).toBe(false)
   expect(JSON.parse(read('../../package.json')).files).toContain('templates')
 })
+
+it('documents the commands to create, generate, eject and run an Aspire solution', () => {
+  const readme = readFileSync(new URL('../../../docs/blueprint/README.md', import.meta.url), 'utf8')
+  const gettingStarted = readme.split('## Run a generated .NET and Vite app')[1]?.split('\n## ')[0]
+  const commands = gettingStarted?.match(/```sh\n([\s\S]*?)```/)?.[1]?.trim().split('\n').filter((line) => !line.startsWith('#'))
+  expect(commands).toEqual([
+    'trivia-blueprint new backoffice --api dotnet-minimal',
+    'cd backoffice',
+    'trivia-blueprint backend --migration Initial',
+    'trivia-blueprint eject',
+    'aspire run',
+  ])
+})

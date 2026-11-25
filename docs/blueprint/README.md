@@ -5,8 +5,33 @@ React + shadcn and ASP.NET Core codebase, which Trivia then edits. These documen
 the Openblocks port assessment and Kyle's choices after it (strategy C, clean room, one-way
 eject, minimal API slices on PostgreSQL, Phases 0 to 3 in depth).
 
-**Status: specified, not started.** Nothing here is built yet. `docs/HANDOFF.md` and
-`docs/product.md` still describe the shipped product and have not been changed.
+See the task lists in `specs/` for implementation status. The setup below uses the .NET
+and Vite solution from spec 010.
+
+## Run a generated .NET and Vite app
+
+Use the .NET 10 SDK, Aspire CLI 13.6.5, a running container runtime, Node and pnpm. Make
+`trivia-blueprint` and `trivia-dotnet` available from your Trivia build or distribution.
+
+```sh
+trivia-blueprint new backoffice --api dotnet-minimal
+cd backoffice
+# Run the printed pnpm and shadcn setup in web/, then author the model and pages in web/blueprint/.
+trivia-blueprint backend --migration Initial
+trivia-blueprint eject
+aspire run
+```
+
+The backend command generates the solution, restores its pinned EF tool, adds the migration,
+builds the API, syncs the web client and reports contract drift. Commit the OpenAPI document
+under `web/openapi/` with your changes. After changing the model, run the backend command
+again and pass `--migration <Name>` when the database schema changes.
+
+Open the web endpoint in the Aspire dashboard after the migration completes. When running
+Vite on its own, set `API_URL` to the API origin. If Aspire reports a missing or stopped
+container runtime, run `aspire doctor` for its status and start the selected runtime.
+[Aspire troubleshooting](https://aspire.dev/get-started/troubleshooting/) ·
+[Solution and contract loop](lld/LLD-10-aspire-solution-and-contract-loop.md).
 
 ## Reading order
 
