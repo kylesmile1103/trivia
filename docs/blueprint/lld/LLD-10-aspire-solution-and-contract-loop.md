@@ -5,8 +5,36 @@
   ServiceDefaults, MigrationService); the data provider and dev proxy in the web templates of
   `packages/blueprint-compiler/templates/`; orchestration in the `trivia-blueprint` CLI.
 
-Aspire's API is still moving. The snippets show intent. Check method names against the Aspire
-13.x documentation and pin the version before writing the scaffold files.
+## Verified dependencies
+
+⚑ Pin the C# AppHost SDK, `Aspire.Hosting.AppHost`, `Aspire.Hosting.PostgreSQL`,
+`Aspire.Hosting.JavaScript`, `Aspire.Hosting.Docker` and `Aspire.Hosting.Testing` to
+**13.6.5**. The Aspire CLI used for verification is also 13.6.5.
+[SDK](https://www.nuget.org/packages/Aspire.AppHost.Sdk/13.6.5) ·
+[AppHost](https://www.nuget.org/packages/Aspire.Hosting.AppHost/13.6.5) ·
+[PostgreSQL](https://www.nuget.org/packages/Aspire.Hosting.PostgreSQL/13.6.5) ·
+[JavaScript](https://www.nuget.org/packages/Aspire.Hosting.JavaScript/13.6.5) ·
+[Docker](https://www.nuget.org/packages/Aspire.Hosting.Docker/13.6.5) ·
+[Testing](https://www.nuget.org/packages/Aspire.Hosting.Testing/13.6.5).
+
+- `AddPostgres`, `WithDataVolume` and `AddDatabase` model PostgreSQL. For a project
+  `AddProject<T>` uses a generated type for its project reference. `WithReference`
+  injects a connection string or endpoint addresses. `WaitFor` waits for running and
+  healthy, while `WaitForCompletion` waits for a successful exit.
+  [PostgreSQL setup](https://aspire.dev/integrations/databases/postgres/postgres-get-started/) ·
+  [Hosting API](https://github.com/microsoft/aspire/blob/v13.6.5/src/Aspire.Hosting/ResourceBuilderExtensions.cs).
+- `AddViteApp` registers an HTTP endpoint and exports `PORT` to the dev script.
+  `AddJavaScriptApp` accepts a run script, and `AddNextJsApp` configures Next.js
+  specifically. All support `WithPnpm`. Service discovery exports
+  `services__{resource}__{endpoint}__{index}`.
+  [JavaScript integration](https://aspire.dev/integrations/frameworks/javascript/) ·
+  [Environment variables](https://aspire.dev/fundamentals/environment-variables/).
+- `DistributedApplicationTestingBuilder.CreateAsync`, `BuildAsync`, `StartAsync`,
+  `WaitForResourceHealthyAsync` and `CreateHttpClient` start and exercise the graph.
+  [Aspire testing](https://aspire.dev/testing/write-your-first-test/).
+- `AddDockerComposeEnvironment` adds the Compose target. Vite uses
+  `PublishAsStaticWebsite` to serve its built assets in a container.
+  [JavaScript publishing](https://aspire.dev/deployment/javascript-apps/).
 
 ## 1. The solution
 
