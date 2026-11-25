@@ -107,7 +107,7 @@ export async function kitBaseContext(): Promise<CompileContext> {
     facts: { ...base.facts, installed },
     refineSnippets: generateRefineSnippets({
       ui: base.facts.aliases['ui'], refineUi: '@/components/refine-ui', textarea: true, style: 'field',
-    }, true),
+    }, { datePicker: true, describeErrors: true }),
     validation: {
       manifests: manifestCheck(manifests),
       expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),

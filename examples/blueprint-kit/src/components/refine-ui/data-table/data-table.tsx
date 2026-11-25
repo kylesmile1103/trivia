@@ -87,10 +87,13 @@ export function DataTable<TData extends BaseRecord>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const isPlaceholder = header.isPlaceholder;
+                  const sort = header.column.getSortIndex() === 0 && header.column.getIsSorted();
 
                   return (
                     <TableHead
                       key={header.id}
+                      scope="col"
+                      aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
                       style={{
                         ...getCommonStyles({
                           column: header.column,

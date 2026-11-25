@@ -127,8 +127,10 @@ export class EngineService {
       facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
       validation: this.blueprint.context(resolution, contract),
       generateContractPage: (input) => generateRefinePage({ ...input, project }),
-      refineSnippets: generateRefineSnippets(project,
-        ['calendar', 'popover'].every((item) => installed.includes(project.ui + '/' + item))),
+      refineSnippets: generateRefineSnippets(project, {
+        datePicker: ['calendar', 'popover'].every((item) => installed.includes(project.ui + '/' + item)),
+        describeErrors: true,
+      }),
     }
     return { blueprint, context }
   }

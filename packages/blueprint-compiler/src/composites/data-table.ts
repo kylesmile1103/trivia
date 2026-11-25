@@ -162,6 +162,10 @@ export function lowerDataTable(
   )
   if (virtual) return withNodeAttributes(root, lowerVirtualTable(table, resource.name + ' rows', scope))
   return withNodeAttributes(root, {
-    kind: 'element', tag: scope.component(manifest), props: [{ name: 'table', value: { kind: 'expr', code: table } }], children: [],
+    kind: 'element', tag: 'section',
+    props: [{ name: 'aria-label', value: { kind: 'static', value: resource.name + ' table' } }],
+    children: [{
+      kind: 'element', tag: scope.component(manifest), props: [{ name: 'table', value: { kind: 'expr', code: table } }], children: [],
+    }],
   })
 }

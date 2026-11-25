@@ -36,7 +36,7 @@ export function KitForm() {
   return (
     <main className="grid max-w-4xl gap-5 p-6">
       <h1>New customer</h1>
-      <form noValidate={true} onSubmit={form.handleSubmit(onFinish)}>
+      <form aria-label="Create customer" noValidate={true} onSubmit={form.handleSubmit(onFinish)}>
         <FieldGroup className="grid gap-4 sm:grid-cols-2">
           <Controller
             name="fullName"
@@ -50,8 +50,10 @@ export function KitForm() {
                   value={field.value ?? ""}
                   onChange={(e) => field.onChange(e.target.value)}
                   aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.invalid ? "customer-form-full-name-error" : undefined}
+                  aria-required
                 />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && <FieldError id="customer-form-full-name-error" errors={[fieldState.error]} />}
               </Field>
             )}
           />
@@ -68,8 +70,10 @@ export function KitForm() {
                   value={field.value ?? ""}
                   onChange={(e) => field.onChange(e.target.value)}
                   aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.invalid ? "customer-form-email-error" : undefined}
+                  aria-required
                 />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && <FieldError id="customer-form-email-error" errors={[fieldState.error]} />}
               </Field>
             )}
           />
@@ -80,7 +84,7 @@ export function KitForm() {
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="customer-form-segment">Segment</FieldLabel>
                 <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                  <SelectTrigger id="customer-form-segment" aria-invalid={fieldState.invalid}>
+                  <SelectTrigger id="customer-form-segment" aria-invalid={fieldState.invalid} aria-describedby={fieldState.invalid ? "customer-form-segment-error" : undefined} aria-required>
                     <SelectValue placeholder="Choose…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -89,7 +93,7 @@ export function KitForm() {
                     <SelectItem value="business">Business</SelectItem>
                   </SelectContent>
                 </Select>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && <FieldError id="customer-form-segment-error" errors={[fieldState.error]} />}
               </Field>
             )}
           />
@@ -105,8 +109,9 @@ export function KitForm() {
                   value={field.value ?? ""}
                   onChange={(e) => field.onChange(e.target.value || undefined)}
                   aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.invalid ? "customer-form-notes-error" : undefined}
                 />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && <FieldError id="customer-form-notes-error" errors={[fieldState.error]} />}
               </Field>
             )}
           />

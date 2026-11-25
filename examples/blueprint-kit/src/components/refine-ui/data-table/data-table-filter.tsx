@@ -51,6 +51,7 @@ export function DataTableFilterDropdown<TData>({
       <PopoverTrigger asChild>
         <Button
           onClick={() => setIsOpen(true)}
+          aria-label={`Filter by ${column.id}`}
           variant="ghost"
           size="icon"
           className={cn(
@@ -67,6 +68,7 @@ export function DataTableFilterDropdown<TData>({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        aria-label={`Filter ${column.id}`}
         align="start"
         className={cn("w-full", "shadow-sm", contentClassName)}
       >
@@ -323,6 +325,7 @@ export function DataTableFilterCombobox<TData>({
               <Button
                 variant="outline"
                 role="combobox"
+                aria-label={`Choose ${column.id} values`}
                 aria-expanded={isOpen}
                 className={cn(
                   "w-full",
@@ -915,6 +918,7 @@ export function DataTableFilterOperatorSelect({
         <Button
           variant="outline"
           role="combobox"
+          aria-label={t("table.filter.operator.label", "Filter operator")}
           aria-expanded={open}
           className={cn(
             "w-full",

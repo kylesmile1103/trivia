@@ -36,7 +36,7 @@ export function KitForm() {
     <main className="grid max-w-4xl gap-5 p-6">
       <h1>New customer</h1>
       <Form {...form}>
-        <form noValidate={true} onSubmit={form.handleSubmit(onFinish)}>
+        <form aria-label="Create customer" noValidate={true} onSubmit={form.handleSubmit(onFinish)}>
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               control={form.control}
@@ -44,7 +44,7 @@ export function KitForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Full name</FormLabel>
-                  <FormControl>
+                  <FormControl aria-required>
                     <Input
                       {...field}
                       value={field.value ?? ""}
@@ -61,7 +61,7 @@ export function KitForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
-                  <FormControl>
+                  <FormControl aria-required>
                     <Input
                       {...field}
                       type="email"
@@ -80,7 +80,7 @@ export function KitForm() {
                 <FormItem>
                   <FormLabel>Segment</FormLabel>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <FormControl>
+                    <FormControl aria-required>
                       <SelectTrigger>
                         <SelectValue placeholder="Choose…" />
                       </SelectTrigger>

@@ -188,6 +188,12 @@ The engine's editor schema deliberately omits some inherited props needed by the
 redirect a successful create to the ejected table. The Playwright project exercises the
 emitted fixture through the same guarded eject routes and restores generated files and
 router edits afterwards.
+
+⚑ Generated forms name their landmarks and associate invalid controls with inline errors.
+Tables provide labelled regions and native row selection controls. The installed example
+table identifies the primary sort in its header and names the filter and page-size controls.
+Chromium exercises Tab, Enter, Space and Escape through those controls. The accessibility
+pass draws on the [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md).
 - A check that fails when a kit type has no page in the fixture.
 
 ## 7. Open points

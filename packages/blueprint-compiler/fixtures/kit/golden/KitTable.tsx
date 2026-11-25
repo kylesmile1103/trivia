@@ -94,7 +94,9 @@ export function KitTable() {
   return (
     <main className="grid max-w-4xl gap-5 p-6">
       <h1>Customer table</h1>
-      <DataTable table={table} />
+      <section aria-label="Customer table">
+        <DataTable table={table} />
+      </section>
       <p>{customersSelectedRow.id ?? "No customer selected"}</p>
     </main>
   )

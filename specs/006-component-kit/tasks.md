@@ -46,7 +46,7 @@
 ## Phase 9: Polish
 
 - [x] T017 `e2e/blueprint-kit.spec.ts`: eject all fixture pages, load each route, no console errors, type into an input, sort and filter the table, submit the form
-- [ ] T018 Accessibility pass on the form and table pages (labels, keyboard) for NFR-13
+- [x] T018 Accessibility pass on the form and table pages (labels, keyboard) for NFR-13
 - [ ] T019 Update LLD-06 with the final manifest list and any type that moved to deferred
 - [ ] T020 Run `pnpm check` and `pnpm e2e`
 

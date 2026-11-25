@@ -113,7 +113,7 @@ ${defaults.join('\n')}
     .replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase()
   const formElement: Element = {
     kind: 'element', tag: 'form',
-    props: [value('noValidate', true), binding('onSubmit', `${form}.handleSubmit(${onFinish})`)],
+    props: [value('aria-label', submit), value('noValidate', true), binding('onSubmit', `${form}.handleSubmit(${onFinish})`)],
     children: [{
       kind: 'element', tag: group,
       props: [value('className', layout === 'grid-2' ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4')],

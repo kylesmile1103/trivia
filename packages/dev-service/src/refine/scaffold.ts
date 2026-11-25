@@ -8,7 +8,7 @@ import type { ContractPageInput, RefineSnippetGenerator } from '@trivia/blueprin
 import type { ManifestField, ManifestResource } from '@trivia/contract-sync'
 
 import { type ImportSpec, columnFor, fieldShape, humanize } from './columns.js'
-import { type FormStyle, formFieldFor, kebab } from './fields.js'
+import { type FieldContext, type FormStyle, formFieldFor, kebab } from './fields.js'
 import { bodyFields } from './form.js'
 import { refineName } from './page.js'
 
@@ -147,14 +147,14 @@ const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
 
 export function generateRefineSnippets(
   project: Pick<ScaffoldContext, 'ui' | 'refineUi' | 'textarea' | 'style'>,
-  datePicker = false,
+  fieldOptions: Pick<FieldContext, 'datePicker' | 'describeErrors'> = {},
 ): RefineSnippetGenerator {
   const { ui, refineUi, textarea = false, style = 'field' } = project
   return {
     column: (field, filter) => columnFor(field, {
       badge: ui + '/badge', dataTable: refineUi ? refineUi + '/data-table' : null, filter,
     }),
-    field: (field, idPrefix) => formFieldFor(field, { ui, textarea, style, idPrefix, datePicker }),
+    field: (field, idPrefix) => formFieldFor(field, { ui, textarea, style, idPrefix, ...fieldOptions }),
   }
 }
 

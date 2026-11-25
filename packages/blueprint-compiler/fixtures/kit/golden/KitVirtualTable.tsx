@@ -79,7 +79,7 @@ export function KitVirtualTable() {
             {table.reactTable.getHeaderGroups().map((group) => (
               <tr key={group.id}>
                 {group.headers.map((header) => {
-                  const sort = header.column.getIsSorted()
+                  const sort = header.column.getSortIndex() === 0 && header.column.getIsSorted()
                   return (
                     <th key={header.id} scope="col" colSpan={header.colSpan} className="h-10 px-2 text-left"
                       aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}>
