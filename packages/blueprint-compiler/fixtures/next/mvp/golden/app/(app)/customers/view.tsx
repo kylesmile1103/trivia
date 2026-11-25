@@ -4,7 +4,12 @@ import { useCustomMutation } from "@refinedev/core";
 import { useTable } from "@refinedev/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { MouseEvent } from "react";
-import { useCallback, useMemo } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 
 import type { CustomerResponse } from "@/api/generated/types.gen";
 import { EditButton } from "@/components/refine-ui/buttons/edit";
@@ -17,11 +22,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export function CustomerList() {
+  const refetchList = useRef<() => Promise<unknown>>(null);
+
   const mutateCustom = useCustomMutation();
 
   const handleApproveKyc = useCallback(async (_event: MouseEvent<HTMLButtonElement>, _row: CustomerResponse) => {
     if (!window.confirm("Approve KYC for this customer?")) return;
     await mutateCustom.mutateAsync({ url: "/api/v1/customers/" + encodeURIComponent(String(_row.id)) + "/approve-kyc", method: "post", values: {} });
+    await refetchList.current!();
   }, [mutateCustom.mutateAsync]);
 
   async function handleRefresh(_event: MouseEvent<HTMLButtonElement>) {
@@ -110,6 +118,11 @@ export function CustomerList() {
       resource: "customers",
     },
   });
+
+  const refetchTable = table.refineCore.tableQuery.refetch;
+  useLayoutEffect(() => {
+    refetchList.current = () => refetchTable({ throwOnError: true });
+  }, [refetchTable]);
 
   return (
     <ListView>
