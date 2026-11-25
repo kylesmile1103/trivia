@@ -30,7 +30,7 @@ Tests come before the code they cover and must fail first.
 - [x] T013 [US2] `src/apply/page.ts`: `createPage`, `deletePage`, `setPageMeta`
 - [x] T014 [US2] `src/apply/nodes.ts`: `addNode`, `removeNode` (subtree), `moveNode`, `renameNode` (reference rewrite through the injected function)
 - [x] T015 [P] [US2] `src/apply/values.ts`: `setProp`, `setBinding`, `setStyle`, `setControl`
-- [ ] T016 [P] [US2] `src/apply/logic.ts`: `setState`, `removeState`, `setQuery`, `removeQuery`, `setActions`
+- [x] T016 [P] [US2] `src/apply/logic.ts`: `setState`, `removeState`, `setQuery`, `removeQuery`, `setActions`
 - [ ] T017 [P] [US2] `src/apply/app.ts`: `setApp`, `setNav`
 - [x] T018 [US2] `src/apply/index.ts`: the batch reducer with `baseRev` and `expectedType` guards and all-or-nothing commit. Tests for each refusal code
 - [x] T019 [US2] `store.apply()` returning `FileWrite[]`, with the diff-locality test (SC-002)
