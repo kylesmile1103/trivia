@@ -154,6 +154,11 @@ requested id for a 204 response. Custom requests use same-origin paths and can a
 query parameters, repeated filters and sorters. Problem details retain the field-message
 arrays Refine's form adapter expects.
 
+⚑ The generated list query always accepts `id:in` as a lookup by the primary key,
+including on resources that omit the key from their general filter allowlist. The lookup
+starts with the same scoped query as other list filters. Other operations still follow
+the model's allowlist.
+
 ## 3. The contract loop (FR-AS-04, FR-AS-05, FR-AS-08)
 
 ```

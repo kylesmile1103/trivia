@@ -10,6 +10,9 @@
   <ItemGroup>
     <Content Include="../../../packages/blueprint/fixtures/model/**/*"
              Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Integration/data-provider.mjs" Link="Provider/data-provider.mjs" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../packages/blueprint-compiler/templates/vite-refine/src/providers/data-provider.ts"
+             Link="Provider/data-provider.ts" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />

@@ -4,7 +4,8 @@
     "dotnet": [
       "{projectRoot}/**/*",
       "{workspaceRoot}/packages/blueprint/schemas/app.v1.json",
-      "{workspaceRoot}/packages/blueprint/schemas/model.v1.json"
+      "{workspaceRoot}/packages/blueprint/schemas/model.v1.json",
+      "{workspaceRoot}/packages/blueprint-compiler/templates/vite-refine/src/providers/data-provider.ts"
     ]
   },
   "targets": {

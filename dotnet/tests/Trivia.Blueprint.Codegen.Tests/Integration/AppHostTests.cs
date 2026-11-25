@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
@@ -5,6 +6,7 @@ using System.Text.Json;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
+using Trivia.Blueprint.Codegen.Model;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -18,10 +20,17 @@ public sealed class AppHostTests(ITestOutputHelper output)
     [Fact]
     public async Task FR_AS_01_And_FR_AS_02_StartsTheGeneratedGraphAndServesCrud()
     {
-        using GeneratedProject project = await GeneratedProject.WriteAsync(FixtureTests.Bank);
+        using TempDirectory blueprint = new();
+        ModelDocument model = ModelLoader.Load(FixtureTests.Bank).Model;
+        ModelEntity[] entities = model.Entities.Select(entity => entity.Name == "Customer"
+            ? entity with { Api = entity.Api with { Filterable = [.. entity.Api.Filterable!, "creditLimit", "birthDate"] } }
+            : entity).ToArray();
+        File.WriteAllText(Path.Combine(blueprint.Path, ModelLoader.ModelFile),
+            JsonSerializer.Serialize(model with { Entities = entities }, ModelLoader.Json));
+        using GeneratedProject project = await GeneratedProject.WriteAsync(blueprint.Path);
         using StringWriter migration = new();
         int status = await Program.RunAsync(
-            ["migrate", "Initial", "--blueprint", FixtureTests.Bank, "--root", project.Root], migration, TextWriter.Null);
+            ["migrate", "Initial", "--blueprint", blueprint.Path, "--root", project.Root], migration, TextWriter.Null);
         Assert.True(status == 0, migration.ToString());
         await project.BuildAsync();
 
@@ -58,5 +67,27 @@ public sealed class AppHostTests(ITestOutputHelper output)
         using HttpResponseMessage missing = await client.GetAsync(location, token);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         output.WriteLine("API became healthy after the migration and completed CRUD.");
+        await FR_AS_06_RunDataProvider(client.BaseAddress!, token);
+    }
+
+    private static async Task FR_AS_06_RunDataProvider(Uri baseAddress, CancellationToken token)
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "Provider");
+        using Process node = GeneratedProject.Start("node", directory,
+            ["--experimental-strip-types", "data-provider.mjs", baseAddress.AbsoluteUri]);
+        Task<string> stdout = node.StandardOutput.ReadToEndAsync();
+        Task<string> stderr = node.StandardError.ReadToEndAsync();
+        try
+        {
+            await node.WaitForExitAsync(token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!node.HasExited)
+                node.Kill(entireProcessTree: true);
+            throw;
+        }
+        string text = await stdout + await stderr;
+        Assert.True(node.ExitCode == 0, text);
     }
 }
