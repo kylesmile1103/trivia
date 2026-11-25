@@ -32,7 +32,7 @@ test.afterEach(async () => {
   try {
     expect(errors, 'no page errors (designer or canvas)').toEqual([])
   } finally {
-    restore(DASHBOARD, original)
+    await restore(DASHBOARD, original)
   }
 })
 

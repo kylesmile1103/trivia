@@ -40,7 +40,7 @@ test.beforeAll(async ({ request }) => {
   for (const file of ['app.blueprint.json', ...pages.map((page) => `pages/${page}.page.json`)]) {
     const target = remember('blueprint/' + file)
     fs.mkdirSync(path.dirname(target), { recursive: true })
-    writeWhole(target, fs.readFileSync(new URL(file, fixture)))
+    await writeWhole(target, fs.readFileSync(new URL(file, fixture)))
   }
   const plan = await post<{ ops: Array<{ file?: string }>; label: string }>(request, '/blueprint/plan', { pages })
   remember('src/App.tsx')
@@ -51,10 +51,10 @@ test.beforeAll(async ({ request }) => {
   await post(request, '/blueprint/ejected', { pages, entry: plan.label })
 })
 
-test.afterAll(() => {
+test.afterAll(async () => {
   for (const [file, before] of originals) {
     if (before === null) fs.rmSync(file, { force: true })
-    else restore(file, before)
+    else await restore(file, before)
   }
   for (const dir of [...newDirectories].sort((a, b) => b.length - a.length)) {
     if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)

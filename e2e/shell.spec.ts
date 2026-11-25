@@ -29,7 +29,7 @@ test.beforeEach(async () => {
 
 test.afterEach(async () => {
   for (const [file, bytes] of originals) {
-    restore(file, bytes)
+    await restore(file, bytes)
   }
 })
 

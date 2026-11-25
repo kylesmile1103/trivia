@@ -14,8 +14,8 @@ const DATA_TABLE = `${PLAYGROUND}src/components/data-table.tsx`
 const FORMS = `${PLAYGROUND}src/components/forms`
 const original = fs.readFileSync(DASHBOARD, 'utf8')
 
-test.afterEach(() => {
-  restore(DASHBOARD, original)
+test.afterEach(async () => {
+  await restore(DASHBOARD, original)
   fs.rmSync(DATA_TABLE, { force: true })
   fs.rmSync(FORMS, { recursive: true, force: true })
 })

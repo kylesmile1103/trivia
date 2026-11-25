@@ -11,9 +11,9 @@ const CREATE = fileURLToPath(new URL('../../examples/next-admin/app/(bank)/accou
 const originals = new Map([CLIENT_LIST, PROVIDER].map((file) => [file, fs.readFileSync(file, 'utf8')]))
 const app = (page: Page) => page.frameLocator('iframe[title="App canvas"]')
 
-test.afterEach(() => {
+test.afterEach(async () => {
   for (const [file, original] of originals) {
-    restore(file, original)
+    await restore(file, original)
   }
   fs.rmSync(CREATE, { force: true })
 })

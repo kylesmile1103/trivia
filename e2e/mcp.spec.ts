@@ -22,7 +22,7 @@ let agent: Client | null = null
 test.afterEach(async () => {
   await agent?.close()
   agent = null
-  restore(DASHBOARD_FILE, original)
+  await restore(DASHBOARD_FILE, original)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

@@ -16,8 +16,8 @@ const ACCOUNTS = path.join(ROOT, 'src/pages/accounts')
 const original = fs.readFileSync(APP, 'utf8')
 const NEW = ['create', 'edit', 'show'].map((k) => path.join(ACCOUNTS, `${k}.tsx`))
 
-test.afterEach(() => {
-  restore(APP, original)
+test.afterEach(async () => {
+  await restore(APP, original)
   for (const file of NEW) fs.rmSync(file, { force: true })
 })
 

@@ -104,8 +104,8 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
     await undo.click()
     await expect.poll(files, { timeout: 15_000 }).toEqual(restored)
   } finally {
-    restore(app, before)
-    if (priorLock) restore(lock, priorLock)
+    await restore(app, before)
+    if (priorLock) await restore(lock, priorLock)
     else fs.rmSync(lock, { force: true })
     fs.rmSync(source, { force: true })
     fs.rmSync(path.join(blueprint, doc), { force: true })
@@ -135,10 +135,10 @@ test.describe('Blueprint panel', () => {
     newDirs = [path.join(blueprint, 'pages'), blueprint].filter((dir) => !fs.existsSync(dir))
   })
 
-  test.afterEach(() => {
+  test.afterEach(async () => {
     for (const [file, original] of baseline) {
       if (!original) fs.rmSync(file, { force: true })
-      else restore(file, original)
+      else await restore(file, original)
     }
     for (const dir of newDirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
   })

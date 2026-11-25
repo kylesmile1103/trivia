@@ -132,8 +132,8 @@ test('FR-AG-06 previews, screenshots and ejects a draft through the Vite MCP end
     expect(fs.existsSync(source)).toBe(false)
     expect(fs.existsSync(lock) ? fs.readFileSync(lock) : null).toEqual(priorLock)
   } finally {
-    restore(app, original)
-    if (priorLock) restore(lock, priorLock)
+    await restore(app, original)
+    if (priorLock) await restore(lock, priorLock)
     else fs.rmSync(lock, { force: true })
     fs.rmSync(source, { force: true })
     fs.rmSync(draft, { force: true })

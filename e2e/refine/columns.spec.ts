@@ -12,8 +12,8 @@ import { restore } from '../files'
 const LIST = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/list.tsx', import.meta.url))
 const original = fs.readFileSync(LIST, 'utf8')
 
-test.afterEach(() => {
-  restore(LIST, original)
+test.afterEach(async () => {
+  await restore(LIST, original)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

@@ -14,9 +14,9 @@ const EDIT = fileURLToPath(new URL('../../examples/refine-admin/src/pages/custom
 const original = fs.readFileSync(CREATE, 'utf8')
 const originalEdit = fs.readFileSync(EDIT, 'utf8')
 
-test.afterEach(() => {
-  restore(CREATE, original)
-  restore(EDIT, originalEdit)
+test.afterEach(async () => {
+  await restore(CREATE, original)
+  await restore(EDIT, originalEdit)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

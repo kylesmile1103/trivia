@@ -19,7 +19,7 @@ import path from 'node:path'
 
 import { expect, test, type Frame, type Locator, type Page } from '@playwright/test'
 
-import { restore, writeWhole } from './files'
+import { restore, writeInPlace, writeWhole } from './files'
 
 const DASHBOARD = path.resolve(import.meta.dirname, '../examples/playground/src/pages/Dashboard.tsx')
 const SAVE_BUTTON = '<Button>Save changes</Button>'
@@ -54,7 +54,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  restore(DASHBOARD, original)
+  await restore(DASHBOARD, original)
 })
 
 async function openDesigner(page: Page): Promise<Designer> {
@@ -322,9 +322,11 @@ test('an element removed by an edit shows "Element not found", not a crash', asy
   await clickOnCanvas(page, save)
   await expect(inspector.getByRole('heading', { name: 'Button', exact: true })).toBeVisible()
 
-  // Delete the button by hand, as an IDE's safe write would (whole file, one change).
+  // Delete the button by hand, as VS Code or Cursor save: in place, truncate then write. Vite can
+  // hear only the truncation (its watcher drops the second change); the plugin replays it, and
+  // writeInPlace fails if the dev server does not come to serve the whole file without help.
   const lines = original.split('\n')
-  writeWhole(DASHBOARD, lines.filter((l) => !l.includes(SAVE_BUTTON)).join('\n'))
+  await writeInPlace(DASHBOARD, lines.filter((l) => !l.includes(SAVE_BUTTON)).join('\n'))
   await expect(frame.getByText('Save changes')).toHaveCount(0) // HMR applied
   // The canvas bumps the revision on HMR; doing it here too is harmless with the real canvas.
   await page.evaluate(() => (window as TestWindow).__trivia?.state().bumpRevision())
@@ -380,7 +382,7 @@ test('a value typed and left with a canvas click is written to the element it wa
 
 test('class manager keeps a multi-line className’s layout, and an added class survives the component’s cn()', async ({ page }) => {
   const MULTI = '<CardFooter\n          className="\n            justify-end\n            gap-2 px-2 p-4\n          "\n        >'
-  writeWhole(DASHBOARD, original.replace(FOOTER_OPEN, MULTI))
+  await writeWhole(DASHBOARD, original.replace(FOOTER_OPEN, MULTI))
   const { frame, inspector } = await openDesigner(page)
   const footer = frame.locator('[data-slot="card-footer"]')
   await expect(footer).toHaveClass(/(^|\s)p-4(\s|$)/)

@@ -15,8 +15,8 @@ const APP = path.join(ROOT, 'src/App.tsx')
 const SHOW = path.join(ROOT, 'src/pages/transactions/show.tsx')
 const original = fs.readFileSync(APP, 'utf8')
 
-test.afterEach(() => {
-  restore(APP, original)
+test.afterEach(async () => {
+  await restore(APP, original)
   fs.rmSync(SHOW, { force: true })
 })
 

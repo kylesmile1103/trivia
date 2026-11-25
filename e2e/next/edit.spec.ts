@@ -16,8 +16,8 @@ const selected = (page: Page) => page.evaluate(() =>
   (window as Window & { __trivia?: { state(): { selected: string | null } } }).__trivia?.state().selected,
 )
 
-test.afterEach(() => {
-  for (const [file, original] of originals) restore(file, original)
+test.afterEach(async () => {
+  for (const [file, original] of originals) await restore(file, original)
 })
 
 async function clickCanvas(page: Page, target: Locator, button: 'left' | 'right' = 'left') {
