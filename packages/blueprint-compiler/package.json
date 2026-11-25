@@ -1,0 +1,36 @@
+{
+  "name": "@trivia/blueprint-compiler",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Compile Trivia blueprint pages into React source and guarded eject plans.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "bin": {
+    "trivia-blueprint": "./bin/trivia-blueprint.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.3"
+  },
+  "nx": {
+    "name": "blueprint-compiler"
+  }
+}
