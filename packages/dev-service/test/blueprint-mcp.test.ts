@@ -58,3 +58,57 @@ it('FR-AG-04 sends blueprint refusal details and tool-specific next steps as str
     },
   })
 })
+
+it('FR-AG-02 lists blueprint tools and their guarded input shapes', async () => {
+  const { tools } = await client.listTools()
+  const blueprint = tools.filter(({ name }) => name.startsWith('trivia_blueprint_'))
+  expect(blueprint.map(({ name, inputSchema, annotations }) => ({
+    name,
+    arguments: Object.keys(inputSchema.properties ?? {}).sort(),
+    required: [...inputSchema.required ?? []].sort(),
+    readOnly: annotations?.readOnlyHint,
+  }))).toMatchSnapshot()
+  const patch = blueprint.find(({ name }) => name === 'trivia_blueprint_patch')
+  const { items, minItems } = patch?.inputSchema.properties?.ops as {
+    minItems: number
+    items: { oneOf?: OperationSchema[]; anyOf?: OperationSchema[] }
+  }
+  expect(minItems).toBe(1)
+  const ops = items.oneOf ?? items.anyOf!
+  expect(ops.map(({ properties, required }) => ({ op: properties.op.const, required }))).toMatchSnapshot()
+})
+
+interface OperationSchema {
+  properties: { op: { const: string } }
+  required: string[]
+}
+
+it('FR-AG-04 scripts an MCP-only authoring loop for two pages and fixes the diagnostics', async () => {
+  const first = listPage()
+  const second = listPage('Accounts', 'MissingAccounts')
+  const result = await tool('trivia_blueprint_patch', {
+    label: 'Draft bank pages',
+    ops: [
+      { op: 'setApp', doc: 'app.blueprint.json', baseRev: null, name: 'Bank', targets: { web: 'vite-refine' } },
+      first, second,
+    ],
+  })
+  expect(result.isError).not.toBe(true)
+  expect(result.structuredContent).toMatchObject({
+    diagnostics: [{ code: 'unknown_resource', doc: second.doc, hint: { text: expect.stringContaining('Account') } }],
+    summary: { pages: [{ name: 'Accounts', errors: 1 }, { name: 'Customers', errors: 0 }] },
+  })
+
+  const { structuredContent: doc } = await tool('trivia_blueprint_get', { what: 'doc', path: second.doc })
+  const fixed = await tool('trivia_blueprint_patch', {
+    label: 'Use the account resource',
+    ops: [{ op: 'setPageMeta', doc: second.doc, baseRev: doc?.rev, resource: 'Account' }],
+  })
+  expect(fixed.isError).not.toBe(true)
+  expect(fixed.structuredContent).toMatchObject({
+    diagnostics: [],
+    summary: { app: { name: 'Bank' }, pages: [{ name: 'Accounts', errors: 0 }, { name: 'Customers', errors: 0 }] },
+  })
+  const summary = await tool('trivia_blueprint_get')
+  expect(summary.structuredContent).toEqual(fixed.structuredContent?.summary)
+})
