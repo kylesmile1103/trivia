@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { FIXTURES, readFixture } from '../../test/helpers.js'
 import { apply, loadBlueprint, sequenceSource } from '../index.js'
-import { revOfText } from '../serialize.js'
+import { rev, revOfText } from '../serialize.js'
 import { MODEL_DOC } from '../types/ops.js'
 import { modelSchema } from './types.js'
 import { modelFieldTypes, validateModel } from './validate.js'
@@ -74,6 +74,22 @@ describe('FR-DM-05: relations and references', () => {
       { code: 'invalid_constraint', pointer: '/entities/1/relations/0/foreignKey', message: expect.stringContaining('uuid') },
       { code: 'invalid_constraint', pointer: '/entities/1/relations/0/onDelete' },
     ])
+  })
+
+  it('offers to remove a declared field that a belongsTo relation already implies (spec 011 T012)', () => {
+    // Both agent sessions of the MVP exercise declared customerId and the relation that implies it.
+    const text = readFixture(`${fixtures}/valid/bank`)[MODEL_DOC]!
+    const model = modelSchema.parse(JSON.parse(text))
+    model.entities[1]!.fields.push({ name: 'customerId', type: 'uuid', required: true })
+    const baseRev = rev(model)
+    const [finding] = validateModel(model, baseRev)
+    expect(finding).toMatchObject({
+      code: 'invalid_constraint', pointer: '/entities/1/relations/0/foreignKey',
+      message: expect.stringContaining('the relation declares it'),
+      hint: { ops: [{ op: 'removeField', doc: MODEL_DOC, baseRev, entity: 'Account', field: 'customerId' }] },
+    })
+    const repaired = modelSchema.parse(JSON.parse(text))
+    expect(validateModel(repaired, rev(repaired))).toEqual([])
   })
 })
 

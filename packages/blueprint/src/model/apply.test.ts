@@ -47,6 +47,15 @@ describe('FR-DM-07, FR-DM-08: model operation diffs', () => {
     expect(() => run([{ op: 'removeEntity', entity: 'Customer' }])).toThrow(/Account\.customer.*Transaction\.reviewer/)
   })
 
+  it('names what a new entity lacks, with an example of each (spec 011 T012)', () => {
+    // Both agent sessions of the MVP exercise sent a key without a plural and had to guess.
+    const key = { name: 'id', type: 'uuid', generated: 'v7' }
+    const create = (entity: object) => () => run([{ op: 'setEntity', entity: { name: 'Branch', ...entity } }])
+    expect(create({ key })).toThrow(/Creating Branch requires plural \(its route segment, for example "branches"\)$/)
+    expect(create({ plural: 'branches' })).toThrow(/requires key \(its primary key, for example \{"name":"id","type":"uuid","generated":"v7"\}\)$/)
+    expect(create({})).toThrow(/requires plural \(.*\) and key \(.*\)$/)
+  })
+
   it('refuses to remove an enum used by a field', () => {
     expect(() => run([{ op: 'removeEnum', name: 'CustomerStatus' }])).toThrow(/Customer\.status/)
   })
