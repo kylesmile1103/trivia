@@ -669,7 +669,7 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
       description:
         'Apply one guarded batch to the blueprint and record it in shared undo history. ' +
         'Every op names doc and baseRev from a read, or baseRev: null for a new document. ' +
-        'Use the synced operation ID for a custom mutation. To refresh a list from a header action, refetch query "list". ' +
+        'Use the synced operation ID for a custom mutation. To refresh the table, refetch query "list" in row or header actions on a list page. ' +
         'Use created to find new page and node IDs. Read diagnostics and summary.next, then patch until errors reach zero.',
       inputSchema: {
         ops: z.array(blueprintOpSchema).min(1),
