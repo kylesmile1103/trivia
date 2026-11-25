@@ -6,7 +6,10 @@
   "targets": {
     "e2e": {
       "command": "playwright test",
-      "dependsOn": [{ "projects": ["plugin", "next"], "target": "build" }],
+      "dependsOn": [
+        { "projects": ["plugin", "next"], "target": "build" },
+        { "projects": ["dotnet"], "target": "tool" }
+      ],
       "cache": false
     }
   }

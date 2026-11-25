@@ -6,12 +6,12 @@
 import { RotateCcw } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
+import { EnumSetter } from '@/shared/components/EnumSetter'
 import type { NodeDetails } from '@/shared/engine/types'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
@@ -194,34 +194,6 @@ export function SourceCode({ source, muted = false }: { source: string; muted?: 
 /** Why a row can't be edited here; sits under the setter column of a ROW grid. */
 export function RowHint({ children }: { children: ReactNode }) {
   return <p className="col-span-2 col-start-2 pt-1 pb-0.5 text-[11px] leading-4 text-muted-foreground">{children}</p>
-}
-
-interface EnumSetterProps {
-  id: string
-  options: string[]
-  /** undefined while the attribute is absent: the placeholder shows the default. */
-  value: string | undefined
-  placeholder: string
-  onCommit(value: string): void
-}
-
-function EnumSetter({ id, options, value, placeholder, onCommit }: EnumSetterProps) {
-  // A source value outside the schema's union still has to be visible as the current value.
-  const items = value !== undefined && value !== '' && !options.includes(value) ? [...options, value] : options
-  return (
-    <Select value={value ?? ''} onValueChange={onCommit}>
-      <SelectTrigger id={id} size="sm" className="h-7 w-full font-mono text-xs">
-        <SelectValue placeholder={placeholder === '' ? 'unset' : placeholder} />
-      </SelectTrigger>
-      <SelectContent position="popper" className="min-w-(--radix-select-trigger-width)">
-        {items.map((option) => (
-          <SelectItem key={option} value={option} className="font-mono text-xs">
-            {option}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
 }
 
 type Parsed = { ok: true; value: Literal } | { ok: false; reason: string }

@@ -1,6 +1,8 @@
 // TypeScript mirror of the engine contract (docs/api.md). Keep in sync with the Rust serde
 // types in crates/trivia_oxc_engine/src/{ops/mod,ops/bind_query,inspect,prop_analyzer,error}.rs.
 
+export type * from './blueprint-types'
+
 export type Placement = 'before' | 'after' | 'firstChild' | 'lastChild'
 
 export interface ImportSpec {
@@ -172,6 +174,7 @@ export type ErrorCode =
 export interface ApiErrorPayload {
   code: ErrorCode
   message: string
+  details?: Record<string, unknown>
 }
 
 export type Envelope<T> = { ok: true; data: T } | { ok: false; error: ApiErrorPayload }

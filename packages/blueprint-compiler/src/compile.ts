@@ -27,6 +27,8 @@ export interface CompileContext {
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
   refineSnippets?: RefineSnippetGenerator
+  /** Add node ids for selection in a virtual draft preview. Never set for eject. */
+  previewNodeIds?: boolean
 }
 
 export class CompileError extends Error {

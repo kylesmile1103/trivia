@@ -8,6 +8,10 @@
 // *new* utility values must use real CSS (`previewStyle`); `previewClassName` is exact only
 // for classes that already exist in the app's CSS.
 
+export function blueprintPreviewPage(path: string | null | undefined): string | undefined {
+  return /^\/__blueprint\/([A-Z][A-Za-z0-9]*)\/?(?:[?#]|$)/.exec(path ?? '')?.[1]
+}
+
 /** One element of the canvas as the user wrote it (a usage site), for the layers panel. */
 export interface Layer {
   locator: string

@@ -214,7 +214,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     client = true
     if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     return lowerForm(page, id, root, composite)
-  })
+  }, context.previewNodeIds)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))

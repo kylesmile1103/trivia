@@ -62,8 +62,9 @@ TRIVIA_NEXT_APP_PORT=5313 TRIVIA_NEXT_PORT=4413 TRIVIA_NEXT_API_PORT=4513 \
   pnpm e2e
 ```
 
-`pnpm e2e` builds the Vite and Next.js packages first. CI runs the same gate on every pull
-request: [CI/CD](ci.md).
+`pnpm e2e` builds the Vite and Next.js packages first, and publishes this checkout's
+`trivia-dotnet` (`nx run dotnet:tool`, so it needs the .NET 10 SDK): the apps' dev services find
+it through the shim in `e2e/bin`. CI runs the same gate on every pull request: [CI/CD](ci.md).
 
 ## Contributing
 

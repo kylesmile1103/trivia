@@ -17,6 +17,7 @@ export function lowerJsx(
   repeats: ReadonlyMap<string, RepeatLocal>,
   style: PrintStyle,
   expand: (id: string, manifest: ResolvedManifest, element: Extract<JsxIR, { kind: 'element' }>) => JsxIR,
+  previewNodeIds = false,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -38,6 +39,7 @@ export function lowerJsx(
       attributes.set(name, { kind: 'expr', code: expression(toPointer(['bindings', id, name])) })
     }
     wire(id, tag, attributes, repeated)
+    if (previewNodeIds) attributes.set('data-bp-node', { kind: 'static', value: id })
     if (repeat) attributes.set('key', { kind: 'expr', code: expression(toPointer(['control', id, 'key'])) })
     const content = attributes.get('children')
     const asChild = content?.kind === 'expr' || (content?.kind === 'static' && typeof content.value === 'string')
