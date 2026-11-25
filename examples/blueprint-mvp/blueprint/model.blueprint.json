@@ -1,0 +1,192 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "BankAdmin",
+  "enums": [
+    {
+      "name": "CustomerStatus",
+      "values": [
+        "pending",
+        "active",
+        "suspended"
+      ]
+    },
+    {
+      "name": "AccountType",
+      "values": [
+        "checking",
+        "savings"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "Customer",
+      "plural": "customers",
+      "key": {
+        "name": "id",
+        "type": "uuid",
+        "generated": "v7"
+      },
+      "fields": [
+        {
+          "name": "fullName",
+          "type": "string",
+          "required": true,
+          "description": "Legal name",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "format": "email"
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "enum": "CustomerStatus",
+          "required": true,
+          "default": "pending"
+        },
+        {
+          "name": "creditLimit",
+          "type": "decimal",
+          "default": 0,
+          "precision": 18,
+          "scale": 2,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "maxLength": 1000
+        },
+        {
+          "name": "createdAt",
+          "type": "datetime",
+          "required": true,
+          "readOnly": true,
+          "generated": "onCreate"
+        }
+      ],
+      "relations": [
+        {
+          "name": "accounts",
+          "kind": "hasMany",
+          "to": "Account",
+          "foreignKey": "customerId"
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "status"
+          ]
+        }
+      ],
+      "api": {
+        "operations": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete"
+        ],
+        "filterable": [
+          "status",
+          "email"
+        ],
+        "sortable": [
+          "fullName",
+          "createdAt"
+        ],
+        "searchable": [
+          "fullName",
+          "email"
+        ],
+        "custom": [
+          {
+            "name": "approveKyc",
+            "method": "POST",
+            "path": "{id}/approve-kyc",
+            "input": [
+              {
+                "name": "reason",
+                "type": "string",
+                "maxLength": 500
+              }
+            ],
+            "returns": "Customer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Account",
+      "plural": "accounts",
+      "key": {
+        "name": "id",
+        "type": "int"
+      },
+      "fields": [
+        {
+          "name": "accountNumber",
+          "type": "string",
+          "required": true,
+          "pattern": "^[0-9]{10}$"
+        },
+        {
+          "name": "type",
+          "type": "enum",
+          "enum": "AccountType",
+          "required": true
+        },
+        {
+          "name": "balance",
+          "type": "decimal",
+          "required": true,
+          "default": 0,
+          "precision": 18,
+          "scale": 2
+        },
+        {
+          "name": "openedOn",
+          "type": "date",
+          "required": true
+        }
+      ],
+      "relations": [
+        {
+          "name": "customer",
+          "kind": "belongsTo",
+          "to": "Customer",
+          "foreignKey": "customerId",
+          "required": true,
+          "onDelete": "restrict"
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "customerId",
+            "accountNumber"
+          ],
+          "unique": true
+        }
+      ],
+      "api": {
+        "operations": [
+          "list",
+          "get"
+        ],
+        "filterable": [
+          "customerId"
+        ]
+      }
+    }
+  ]
+}

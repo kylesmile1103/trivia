@@ -1,0 +1,22 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000001",
+  "name": "AccountList",
+  "route": "/accounts",
+  "kind": "list",
+  "resource": "Account",
+  "options": {
+    "fields": [
+      "accountNumber",
+      "type",
+      "balance",
+      "openedOn",
+      "customerId"
+    ],
+    "title": "Accounts",
+    "filters": [
+      "customerId"
+    ]
+  }
+}

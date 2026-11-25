@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { MODEL_DOC, modelOpSchema, revOfText } from '@trivia/blueprint'
+import type { TriviaManifest } from '@trivia/contract-sync'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
@@ -307,4 +308,48 @@ it('FR-AG-06 returns a loadable blueprint preview and optional code over MCP', a
   expect(result.structuredContent).not.toHaveProperty('code')
   const withCode = await tool('trivia_blueprint_preview', { page: 'Customers', includeCode: true })
   expect(withCode.structuredContent).toMatchObject({ code: expect.stringContaining('export function CustomerList()') })
+})
+
+it('FR-AG-04: MCP diagnostics show the synced mutation ID and the implicit list query', async () => {
+  const manifestFile = path.join(root, 'trivia.manifest.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as TriviaManifest
+  const customer = manifest.resources.find(({ name }) => name === 'Customer')!
+  customer.customOperations = [
+    { ...customer.operations.update!, kind: 'custom', method: 'POST',
+      path: '/api/v1/customers/{id}/approve-kyc', operationId: 'approveKycCustomer', sdkFn: 'approveKycCustomer' },
+    { ...customer.operations.get!, kind: 'custom', method: 'GET',
+      path: '/api/v1/customers/{id}/kyc', operationId: 'getCustomerKyc', sdkFn: 'getCustomerKyc' },
+  ]
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest))
+
+  const page = listPage()
+  const options = (operation: string, query: string) => ({
+    rowActions: [{ name: 'approveKyc', label: 'Approve KYC', steps: [{ do: 'mutate', resource: 'Customer', operation, id: 'row.id' }] }],
+    headerActions: [{ name: 'refresh', label: 'Refresh', steps: [{ do: 'refetch', query }] }],
+  })
+  const draft = await tool('trivia_blueprint_patch', {
+    label: 'Add draft actions',
+    ops: [
+      { op: 'setApp', doc: 'app.blueprint.json', baseRev: null, name: 'Bank', targets: { web: 'vite-refine' } },
+      { ...page, options: options('approveKyc', 'customers') },
+    ],
+  })
+  const data = draft.structuredContent
+  expect(data?.diagnostics).toMatchObject([
+    {
+      code: 'unsupported_operation', pointer: '/options/rowActions/0/steps/0/operation',
+      hint: { text: expect.stringContaining('approveKycCustomer') },
+    },
+    {
+      code: 'unsupported_operation', pointer: '/options/headerActions/0/steps/0/query',
+      hint: { text: expect.stringContaining('"list"') },
+    },
+  ])
+  expect(JSON.stringify(data?.diagnostics)).not.toContain('getCustomerKyc')
+  const fixed = await tool('trivia_blueprint_patch', {
+    label: 'Use the contract actions',
+    ops: [{ op: 'setPageMeta', doc: page.doc, baseRev: (data?.revs as Record<string, string>)[page.doc],
+      options: options('approveKycCustomer', 'list') }],
+  })
+  expect(fixed.structuredContent).toMatchObject({ diagnostics: [], summary: { pages: [{ errors: 0 }] } })
 })

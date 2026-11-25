@@ -64,6 +64,9 @@ jobs:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry-run }}
           GH_TOKEN: ${{ github.token }}
+          # The gate job (ci.yml on this commit) ran the BankAdmin MVP slice in `integration`, on
+          # Linux with Docker; this macOS runner has no Docker (tools/release/preflight.mjs).
+          TRIVIA_MVP_GATE_PASSED: '1'
         run: |
           args=("$VERSION")
           if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi

@@ -82,6 +82,10 @@ jobs:
           "$HOME/.aspire/bin/aspire" --version
       - name: Container tests, uncached
         run: pnpm exec nx run dotnet:integration --skip-nx-cache --output-style=static
+      - name: The BankAdmin MVP slice, required (the release acceptance, spec 011)
+        env:
+          TRIVIA_MVP_REQUIRED: '1'
+        run: pnpm exec nx run tools:mvp --skip-nx-cache --output-style=static
 
   e2e:
     name: e2e (Linux, Chromium)
@@ -96,6 +100,12 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
+      - name: Aspire CLI, with its orchestrator and dashboard bundle (the BankAdmin MVP project starts its AppHost)
+        run: |
+          curl -fsSL https://aspire.dev/install.sh -o "$RUNNER_TEMP/aspire-install.sh"
+          bash "$RUNNER_TEMP/aspire-install.sh" --version 13.6.5 --skip-path < /dev/null
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+          "$HOME/.aspire/bin/aspire" --version
       - name: Install Chromium and its system libraries
         run: pnpm exec playwright install --with-deps chromium
       - name: End-to-end tests

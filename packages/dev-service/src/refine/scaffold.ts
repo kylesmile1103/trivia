@@ -256,7 +256,7 @@ function listPage(
         '  header: "",',
         '  enableSorting: false,',
         '  cell: ({ row }) => (',
-        '    <div className="flex justify-end gap-1">',
+        `    <div className="flex ${context.actions?.row.length ? 'flex-wrap ' : ''}justify-end gap-1">`,
         ...actions.map((a) => `      ${a}`),
         '    </div>',
         '  ),',
@@ -336,7 +336,7 @@ function formPage(
       ? `      <Form {...form}>
         <form
           noValidate
-          onSubmit={form.handleSubmit(onFinish)}
+          onSubmit={form.handleSubmit((values) => onFinish(values).catch(console.error))}
           className="grid max-w-xl gap-6"
         >
 ${pieces.map((p) => indent(p.controller, 10)).join('\n')}${skippedNote(10)}
@@ -345,7 +345,7 @@ ${button(10)}
       </Form>`
       : `      <form
         noValidate
-        onSubmit={form.handleSubmit(onFinish)}
+        onSubmit={form.handleSubmit((values) => onFinish(values).catch(console.error))}
         className="grid max-w-xl gap-6"
       >
         <FieldGroup>

@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import { defineConfig, devices } from '@playwright/test'
 
+import { missingMvpPrerequisite } from './tools/blueprint/mvp-project.mjs'
+
 // End-to-end tests drive the real stack: an example app (the user's Vite dev server with
 // vite-plugin-ast-locator or Next App Router) and the designer proxying it. Ports are
 // env-configurable so several worktrees can run suites side by side.
@@ -14,6 +16,9 @@ const nextDesignerPort = Number(process.env.TRIVIA_NEXT_PORT ?? 4402)
 const nextApiPort = Number(process.env.TRIVIA_NEXT_API_PORT ?? 4403)
 const kitAppPort = Number(process.env.TRIVIA_KIT_APP_PORT ?? 5176)
 const kitDesignerPort = Number(process.env.TRIVIA_KIT_PORT ?? 4404)
+const mvpAppPort = Number(process.env.TRIVIA_MVP_APP_PORT ?? 5476)
+const mvpDesignerPort = Number(process.env.TRIVIA_MVP_PORT ?? 4576)
+const missingMvp = missingMvpPrerequisite()
 
 // The dev service runs `trivia-dotnet` for the backend routes. The apps' servers find this
 // checkout's build of it first: `e2e/bin` holds a shim for what `nx run dotnet:tool` publishes.
@@ -42,9 +47,15 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit|-mvp)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
     { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
     { name: 'blueprint-kit', testMatch: /blueprint-kit\.spec\.ts$/, use: { baseURL: `http://localhost:${kitDesignerPort}` } },
+    {
+      name: 'blueprint-mvp',
+      testMatch: /blueprint-mvp\.spec\.ts$/,
+      metadata: { missingMvp },
+      use: { baseURL: `http://localhost:${mvpDesignerPort}` },
+    },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [
@@ -81,5 +92,16 @@ export default defineConfig({
       timeout: 120_000,
     },
     designer(kitDesignerPort, kitAppPort, 'node_modules/.vite-kit'),
+    ...(missingMvp ? [] : [
+      {
+        command: `node tools/blueprint/mvp-serve.mjs ${mvpAppPort}`,
+        url: `http://localhost:${mvpAppPort}/api/v1/customers`,
+        env: appEnv,
+        reuseExistingServer: false,
+        timeout: 480_000,
+        gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },
+      },
+      designer(mvpDesignerPort, mvpAppPort, 'node_modules/.vite-mvp'),
+    ]),
   ],
 })

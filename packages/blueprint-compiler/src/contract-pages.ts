@@ -74,6 +74,8 @@ export function generateContract(
   const lower = actionLowerer({
     contract: context.contract, page: page.name, file: facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
+    refetch: (key, path) => page.kind === 'list' && path[1] === 'headerActions' && key === 'list'
+      ? 'table.refineCore.tableQuery.refetch' : undefined,
   })
   const definitions = (group: 'rowActions' | 'headerActions', actions: typeof rowActions) => actions.map((action, index) => {
     const confirm = action.confirm

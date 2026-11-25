@@ -1,8 +1,7 @@
 # Implementation Plan: MVP slice
 
 **Branch**: `011-mvp-crud-admin` | **Date**: 2026-11-25 | **Spec**: [spec.md](spec.md)
-**Design**: HLD sections 4 and 9, BRD section 7. No LLD: this feature adds tests and an example,
-not a component.
+**Design**: HLD sections 4 and 9, BRD section 7, and [LLD-11](../../docs/blueprint/lld/LLD-11-mvp-crud-admin.md) for the example and acceptance harness.
 
 ## Summary
 
@@ -36,6 +35,9 @@ examples/blueprint-mvp/
   PROMPT.md            the agent prompt for story 4
   README.md            the commands, by hand
 tools/blueprint/mvp.test.mjs       story 1 and 3, scripted
+tools/blueprint/mvp-project.mjs    shared disposable project setup
+tools/blueprint/mvp-serve.mjs      Playwright web server lifecycle
+dotnet/tests/Trivia.Blueprint.Mvp.Host/   Aspire Testing bridge for the generated AppHost
 e2e/blueprint-mvp.spec.ts          stories 1 to 3 in a browser, a fourth Playwright project
 ```
 

@@ -8,6 +8,8 @@ pnpm release 0.2.0               # or: pnpm release minor
 ```
 
 A release:
+- first runs the BankAdmin MVP slice (`nx run tools:mvp`, spec 011) in required mode, so it needs
+  the .NET 10 SDK and a running Docker, and stops if either is missing or the slice fails;
 - bumps each `package.json`, `Cargo.toml`, `tauri.conf.json` and `Cargo.lock` entry in place;
 - writes `CHANGELOG.md` with a section per commit prefix (`engine:`, `designer:`, `MCP:`, …);
 - commits `release: v<version>`, tags, pushes, and creates the GitHub release;
@@ -23,5 +25,6 @@ comes from `GH_TOKEN`, `GITHUB_TOKEN` or git's credential helper.
 
 The Release workflow runs the same `pnpm release` on a macOS runner, so no Mac or local token is
 needed: Actions → Release → Run workflow on `main`, with `version` (`0.3.0`, or `major`, `minor`,
-`patch`) and `dry-run` (on by default). It first runs CI on the same commit, and the release commit
-is authored by `github-actions[bot]`. Details: [CI/CD](ci.md).
+`patch`) and `dry-run` (on by default). It first runs CI on the same commit, whose `integration` job runs the MVP slice on
+Linux with Docker (the macOS runner has none, so the release step trusts that job), and the
+release commit is authored by `github-actions[bot]`. Details: [CI/CD](ci.md).

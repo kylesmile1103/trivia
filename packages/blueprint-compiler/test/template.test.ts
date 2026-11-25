@@ -11,7 +11,7 @@ it('ships a Vite Refine shell with eject anchors and registry aliases', () => {
   expect(app).toContain('<Route path="*"')
   expect(app).toContain('<Layout>')
   expect(app).toContain('<style id="trivia-theme" />')
-  expect(read('vite.config.ts.template')).toContain('plugins: [astLocator(), react(), tailwindcss()]')
+  expect(read('vite.config.ts.template')).toContain('plugins: [astLocator() as Plugin, react(), tailwindcss()]')
   expect(JSON.parse(read('components.json')).aliases.ui).toBe('@/components/ui')
   expect(JSON.parse(read('tsconfig.json')).compilerOptions.paths['@/*']).toEqual(['./src/*'])
   expect(existsSync(path.join(root, 'src/components'))).toBe(false)
@@ -29,4 +29,13 @@ it('documents the commands to create, generate, eject and run an Aspire solution
     'trivia-blueprint eject',
     'aspire run',
   ])
+})
+
+it('FR-MVP-02: the generated app mounts a Refine notification provider and its toaster', () => {
+  const root = new URL('../templates/vite-refine/', import.meta.url)
+  const app = readFileSync(new URL('src/App.tsx', root), 'utf8')
+  const manifest = JSON.parse(readFileSync(new URL('package.json.template', root), 'utf8'))
+  expect(manifest.dependencies.sonner).toBe('2.0.8')
+  expect(app).toContain('notificationProvider={notificationProvider}')
+  expect(app).toContain('<Toaster richColors />')
 })

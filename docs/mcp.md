@@ -267,3 +267,15 @@ summary read and two patches with zero refused calls. The draft's
 `unknown_resource` hint listed Account, Customer and Transaction. Claude Code used the
 returned revision to change `Client` to `Customer`. An independent HTTP read verified
 two draft pages with zero errors and zero warnings.
+
+### BankAdmin action diagnostics
+
+The MVP test exercised a model operation named `approveKyc`. Contract sync publishes it
+as `approveKycCustomer`. Use the synced operation ID in a mutation step. The
+`unsupported_operation` diagnostic now offers the names accepted for the action in
+`diagnostics[].hint.text`. An invalid list-header refetch points at its `query` and suggests
+`"list"`, the current Refine table query.
+
+The MCP SDK regression exercises both corrections through guarded patches. The two
+fresh-session acceptance runs are pending. Use the BankAdmin exercise for the server,
+project setup and exact prompt. [BankAdmin exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise).
