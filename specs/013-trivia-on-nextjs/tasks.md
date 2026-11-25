@@ -22,7 +22,7 @@
 - [x] T009 [US3] `src/with-trivia.ts`: development only, `.tsx` and `.jsx` outside `node_modules` and the preview folder, for Turbopack and for webpack. Unit tests on the produced config per phase
 - [x] T010 [US3] The designer's proxy: a second target for `/@trivia/api` and `/@trivia/mcp`, guard first. Tests in `packages/designer/server/`
 - [x] T011 [US3] `src/launcher.ts` and `bin/trivia-next.js`: start `next dev` and the dev service, print the MCP URL, stop both, clean preview files
-- [ ] T012 [US3] `examples/next-admin`: the refine-admin pages on App Router with one server component page, `withTrivia` in its config
+- [x] T012 [US3] `examples/next-admin`: the refine-admin pages on App Router with one server component page, `withTrivia` in its config
 - [ ] T013 [US3] If T003 found a Vite dependency: the host-neutral re-render signal, with the existing e2e projects still green
 - [ ] T014 [US3] `e2e/next/edit.spec.ts` and the third Playwright project: select, inspect, `updateProp`, `setText` in a server component, insert, move, remove, undo and redo
 

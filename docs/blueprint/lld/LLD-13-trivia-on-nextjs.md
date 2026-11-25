@@ -214,6 +214,10 @@ The engine edits files. It does not care which kind of component a file holds. W
   component page. A third Playwright project runs a subset of the existing suites on it:
   select, inspect, `updateProp`, `setText`, insert, move, undo and redo, the Pages tab, the
   columns tool on a list page, and one edit to a server component.
+
+  ⚑ The example keeps the bank contract and mock data, ports Refine routing to
+  `@refinedev/nextjs-router` 7.0.5, and serves the mock through an App Router route handler.
+  Its root server page embeds a small client component so both edit paths are testable.
 - The dev service: the plugin's API and MCP suites run unchanged through the Vite host, and a
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a
