@@ -1,8 +1,9 @@
-import { hasErrors, pageDocPath, validate, type Blueprint, type ComponentManifest, type Diagnostic, type ValidationContext } from '@trivia/blueprint'
+import { hasErrors, pageDocPath, validate, type Blueprint, type ComponentManifest, type Diagnostic, type ResolvedManifests, type ValidationContext } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { generateContract, type ContractPageGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
+import { lowerCustom } from './lower/index.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
 
@@ -19,6 +20,7 @@ export interface CompileContext {
   facts: ProjectFacts
   engine: { annotate(code: string, file: string): unknown; emitExpressions(requestJson: string): string }
   validation?: ValidationContext
+  manifests?: ResolvedManifests
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
 }
@@ -48,15 +50,21 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   if (page === null || hasErrors(diagnostics)) {
     throw new CompileError('invalid_result', 'Cannot compile blueprint page ' + name, { diagnostics })
   }
-  if (page.kind === 'custom') throw new CompileError('unsupported', 'Custom page printing is unavailable.')
-  const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
-  if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
-  if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
-  const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
-  try {
-    context.engine.annotate(content, generated.file)
-  } catch (error) {
-    throw new CompileError('internal', 'Generated ' + generated.file + ' did not parse: ' + (error as Error).message)
+  let emitted: EmittedModule
+  if (page.kind === 'custom') {
+    emitted = lowerCustom(page, context)
+  } else {
+    const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
+    if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
+    if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
+    const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
+    emitted = { ...generated, code: content, route: page.route, requires: [] }
   }
-  return { ...generated, code: content, route: page.route, requires: [] }
+  emitted.code = emitted.code.replace(/\r\n?/g, '\n')
+  try {
+    context.engine.annotate(emitted.code, emitted.file)
+  } catch (error) {
+    throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)
+  }
+  return emitted
 }

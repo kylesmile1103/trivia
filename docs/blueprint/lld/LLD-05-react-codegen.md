@@ -136,6 +136,9 @@ After printing, the module is parsed with the engine (`parse_error` here is a co
 surfaces as `internal`). Golden files pin the bytes. A `tsc` run over the fixture app with
 every golden page checks types (FR-RC-05).
 
+⚑ Static JSX text and attributes escape entity syntax while preserving the rendered value.
+The compiler uses a relative import for a custom page's route registration.
+
 ⚑ The fixture app uses the banking mock API, contract and Refine UI from
 `examples/refine-admin`, and the installed Card from `examples/playground`. Its TypeScript
 aliases resolve the real components and generated contract types without duplicating them.

@@ -559,6 +559,9 @@ importers:
         specifier: workspace:*
         version: link:../contract-sync
     devDependencies:
+      '@trivia/engine':
+        specifier: workspace:*
+        version: link:../../crates/trivia_napi
       '@types/node':
         specifier: ^24.13.3
         version: 24.19.1
