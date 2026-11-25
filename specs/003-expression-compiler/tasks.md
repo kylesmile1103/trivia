@@ -28,7 +28,7 @@
 
 ## Phase 5: User Story 3 - Cycles (P2)
 
-- [ ] T012 [US3] `tests/cycles.rs`, then `src/graph.rs`
+- [x] T012 [US3] `tests/cycles.rs`, then `src/graph.rs`
 
 ## Phase 6: User Story 4 - Emission (P1)
 

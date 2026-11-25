@@ -103,6 +103,9 @@ shadow roots, with a warning.
 - **Cycles.** The caller passes every expression of a page with the entity it defines (a
   query's parameters define `data.<name>`, sent as the optional `defines` field). The crate builds the graph and reports each cycle
   once as `expr_cycle`, with the path in the message, on every expression taking part.
+- ⚑ Overlapping cycles produce one diagnostic per participating expression. The message shows a
+  deterministic closed walk covering the whole strongly connected group. Invalid expressions
+  contribute no edges. Wildcard reads use one graph vertex for the whole root.
 
 Diagnostics carry `start` and `end` as UTF-16 code units from the start of the expression
 string, and the response says so (`CLAUDE.md` rule 2). Internally spans are UTF-8 bytes and are

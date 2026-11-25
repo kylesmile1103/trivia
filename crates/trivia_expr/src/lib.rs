@@ -9,8 +9,9 @@ mod subset;
 mod allow;
 mod scope;
 mod deps;
+mod graph;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
@@ -108,7 +109,12 @@ pub struct Diagnostic {
     pub severity: Severity,
     pub start: usize,
     pub end: usize,
-    pub message: String,
+    #[serde(serialize_with = "serialize_message")]
+    pub message: Arc<str>,
+}
+
+fn serialize_message<S: serde::Serializer>(message: &Arc<str>, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(message)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -161,7 +167,7 @@ pub struct EmitResponse {
 const MAX_EXPRESSIONS: usize = 10_000;
 
 impl Diagnostic {
-    fn at(source: &str, code: &'static str, severity: Severity, span: oxc_span::Span, message: impl Into<String>) -> Self {
+    fn at(source: &str, code: &'static str, severity: Severity, span: oxc_span::Span, message: impl Into<Arc<str>>) -> Self {
         let (start, end) = utf16::to_utf16(source, span);
         Self { code, severity, start, end, message: message.into() }
     }
@@ -173,7 +179,7 @@ impl Diagnostic {
     fn batch_limit() -> Self {
         Self {
             code: "expr_too_large", severity: Severity::Error, start: 0, end: 0,
-            message: "Batch exceeds 10 000 expressions".to_owned(),
+            message: "Batch exceeds 10 000 expressions".into(),
         }
     }
 }
@@ -193,6 +199,7 @@ pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
         Analysis { id: input.id.clone(), ok, deps: reads.deps, tier: reads.tier, diagnostics }
     }).collect();
     deps::propagate_query_tiers(&request, &mut results);
+    graph::report_cycles(&request, &mut results);
     AnalyzeResponse { unit: Unit::Utf16, results }
 }
 
