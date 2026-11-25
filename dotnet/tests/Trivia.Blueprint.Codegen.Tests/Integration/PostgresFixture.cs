@@ -33,7 +33,11 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
     public Task DisposeAsync() => container.DisposeAsync().AsTask();
 
-    internal async Task<RunningApi> StartAsync(GeneratedProject project, IReadOnlyDictionary<string, string>? settings = null)
+    internal async Task<RunningApi> StartAsync(GeneratedProject project, IReadOnlyDictionary<string, string>? settings = null) =>
+        await RunningApi.StartAsync(project, await CreateDatabaseAsync(), settings);
+
+    /// <summary>A new empty database on the shared container, as a connection string.</summary>
+    internal async Task<string> CreateDatabaseAsync()
     {
         string database = "test_" + Guid.NewGuid().ToString("N");
         await using NpgsqlConnection connection = new(container.GetConnectionString());
@@ -41,10 +45,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using NpgsqlCommand command = new($"CREATE DATABASE {database}", connection);
         await command.ExecuteNonQueryAsync();
 
-        string connectionString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
+        return new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
             Database = database
         }.ConnectionString;
-        return await RunningApi.StartAsync(project, connectionString, settings);
     }
 }
