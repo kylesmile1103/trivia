@@ -47,21 +47,41 @@ jobs:
           rust-workspaces: |
             . -> target
             crates/trivia_shell -> target
-      - name: Set up .NET (Linux, where Docker runs its database tests)
-        if: runner.os == 'Linux' && hashFiles('dotnet/**/*.slnx') != ''
+      - name: Set up .NET (its tests, and the compiler's contract-loop tests, run on every OS)
+        if: hashFiles('dotnet/**/*.slnx') != ''
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
       - name: dotnet-ef, which the migration tests run (the EF Core version dotnet/ pins)
-        if: runner.os == 'Linux' && hashFiles('dotnet/**/*.slnx') != ''
+        if: hashFiles('dotnet/**/*.slnx') != ''
         run: dotnet tool install --global dotnet-ef --version 10.0.12
       - name: Build, typecheck, lint and test, uncached
-        shell: bash
+        # The container tests are the `integration` job's: only Linux runners have Docker.
+        run: pnpm exec nx run-many -t build typecheck lint test --skip-nx-cache --output-style=static
+
+  integration:
+    name: integration (Linux, Docker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - name: dotnet-ef, which the migration tests run (the EF Core version dotnet/ pins)
+        run: dotnet tool install --global dotnet-ef --version 10.0.12
+      - name: Aspire CLI, with its orchestrator and dashboard bundle (the version dotnet/ pins)
         run: |
-          extra=()
-          # The .NET tests start PostgreSQL in Docker, which only the Linux runners have.
-          if [ -d dotnet ] && [ "$RUNNER_OS" != Linux ]; then extra+=(--exclude dotnet); fi
-          pnpm exec nx run-many -t build typecheck lint test --skip-nx-cache --output-style=static "${extra[@]}"
+          curl -fsSL https://aspire.dev/install.sh -o "$RUNNER_TEMP/aspire-install.sh"
+          bash "$RUNNER_TEMP/aspire-install.sh" --version 13.6.5 --skip-path --skip-completions < /dev/null
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+          "$HOME/.aspire/bin/aspire" --version
+      - name: Container tests, uncached
+        run: pnpm exec nx run dotnet:integration --skip-nx-cache --output-style=static
 
   e2e:
     name: e2e (Linux, Chromium)
