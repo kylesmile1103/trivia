@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Create `examples/blueprint-kit` from `templates/vite-refine`, install the 25 shadcn items and the refine-ui items with the shadcn CLI, commit the result. Mock contract with Customer, Account, Transaction
-- [ ] T002 `tools/blueprint/check-kit-manifests.cjs`: for each manifest, assert its `valueProp`, `changeProp`, events and parts exist in the installed component source (via `@trivia/engine` `components()`)
+- [x] T002 `tools/blueprint/check-kit-manifests.cjs`: for each manifest, assert its `valueProp`, `changeProp`, events and parts exist in the installed component source (via `@trivia/engine` `components()`)
 - [ ] T003 A test that lists `kit/*.manifest.json` and fails when a type has no page in `fixtures/kit/` (SC-001)
 
 ## Phase 2: Foundational

@@ -114,6 +114,10 @@ template of LLD-05 with the kit installed, on a mock contract.
 snapshot of the banking OpenAPI contract, provider, and mock. The Refine registry filter
 label map adds `eqs` and `nes` to match the installed Refine 5.0.12 operator union.
 
+⚑ The manifest checker locates exports through the engine's `components()` result and
+uses the installed TypeScript checker for inherited props and matching wrapper exports.
+The engine's editor schema deliberately omits some inherited props needed by the kit.
+
 - Unit: compile every page, compare with golden files, run `tsc`.
 - e2e (`e2e/blueprint-kit.spec.ts`): eject all pages, load each route, check it renders
   without console errors, type into an input and see a bound text change, sort and filter the
