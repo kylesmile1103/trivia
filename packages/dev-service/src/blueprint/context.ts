@@ -2,7 +2,7 @@ import {
   exposedScope, expressionCheck, manifestCheck, toPointer,
   type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ResolvedManifests, type ValidationContext,
 } from '@trivia/blueprint'
-import { checkDataTable } from '@trivia/blueprint-compiler'
+import { checkDataTable, checkForm } from '@trivia/blueprint-compiler'
 import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import type { EngineBinding } from '../engine.js'
@@ -52,7 +52,9 @@ function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManif
         }
       } else {
         for (const [id, node] of Object.entries(page.nodes)) {
-          if (manifests[node.type]?.composite === 'DataTable') diagnostics.push(...checkDataTable(page, id, manifest).diagnostics)
+          const composite = manifests[node.type]?.composite
+          if (composite === 'DataTable') diagnostics.push(...checkDataTable(page, id, manifest).diagnostics)
+          if (composite === 'Form') diagnostics.push(...checkForm(page, id, manifest).diagnostics)
         }
         for (const [name, query] of Object.entries(page.queries)) {
           const source = resourceOf(query.resource, ['queries', name, 'resource'])

@@ -147,13 +147,14 @@ const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
 
 export function generateRefineSnippets(
   project: Pick<ScaffoldContext, 'ui' | 'refineUi' | 'textarea' | 'style'>,
+  datePicker = false,
 ): RefineSnippetGenerator {
   const { ui, refineUi, textarea = false, style = 'field' } = project
   return {
     column: (field, filter) => columnFor(field, {
       badge: ui + '/badge', dataTable: refineUi ? refineUi + '/data-table' : null, filter,
     }),
-    field: (field, idPrefix) => formFieldFor(field, { ui, textarea, style, idPrefix }),
+    field: (field, idPrefix) => formFieldFor(field, { ui, textarea, style, idPrefix, datePicker }),
   }
 }
 

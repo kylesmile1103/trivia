@@ -106,6 +106,9 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
     const variant = style !== undefined && variants && Object.hasOwn(variants, style) ? variants[style] : undefined
     const replacements = Object.fromEntries(Object.entries(variant ?? {}).filter(([, value]) => value !== undefined))
     const manifest = { ...base, ...replacements }
+    if (manifest.composite === 'Form' && !byName.has(manifest.source.import.name) && byName.has('FormField')) {
+      manifest.source = { ...manifest.source, item: 'form', import: { ...manifest.source.import, name: 'FormField' } }
+    }
     const { source } = manifest
     const { name } = source.import
     const inferredRefine = componentsAlias ?? ui?.slice(0, ui.lastIndexOf('/')) ?? '@/components'

@@ -16,25 +16,35 @@ it('FR-KT-06 checks every published manifest and type-checks all Radix goldens',
   const result = spawnSync(process.execPath, [script], { encoding: 'utf8' })
   expect(result.status, result.stdout + result.stderr).toBe(0)
   expect(result.stdout).toContain(`Checked ${kitManifests().length} manifests`)
-  const app = fileURLToPath(kitApp)
-  const golden = fileURLToPath(new URL('golden/', fixtureDir))
-  const names = globSync('*.tsx', { cwd: golden }).sort()
+  const golden = new URL('golden/', fixtureDir)
+  const names = globSync('*.tsx', { cwd: fileURLToPath(golden) }).sort()
   const pages = Object.keys(fixture()).filter((name) => name.endsWith('.page.json'))
   expect(names).toEqual(pages.map((file) => path.basename(file, '.page.json') + '.tsx').sort())
+  checkTypes(kitApp, 'tsconfig.json', names.map((name) => new URL(name, golden)))
+}, 60_000)
+
+it('FR-KT-03 type-checks the legacy FormField golden against the installed Refine controls', () => {
+  const app = new URL('../../../examples/refine-admin/', import.meta.url)
+  checkTypes(app, 'tsconfig.app.json', [new URL('golden/form-field/KitForm.tsx', fixtureDir)])
+}, 60_000)
+
+function checkTypes(project: URL, config: string, sources: URL[]) {
+  const app = fileURLToPath(project)
   const temp = mkdtempSync(path.join(tmpdir(), 'trivia-kit-tsc-'))
   try {
     symlinkSync(path.join(app, 'node_modules'), path.join(temp, 'node_modules'), 'junction')
     const include = [path.join(app, 'src', '**', '*')]
-    for (const name of names) {
+    for (const source of sources) {
+      const name = path.basename(fileURLToPath(source))
       const target = path.join(temp, 'src/pages', path.basename(name, '.tsx'), name)
       mkdirSync(path.dirname(target), { recursive: true })
-      copyFileSync(path.join(golden, name), target)
+      copyFileSync(source, target)
       include.push(target)
     }
-    writeFileSync(path.join(temp, 'tsconfig.json'), JSON.stringify({ extends: path.join(app, 'tsconfig.json'), include }))
+    writeFileSync(path.join(temp, 'tsconfig.json'), JSON.stringify({ extends: path.join(app, config), include }))
     const tsc = spawnSync(process.execPath, [compiler, '-p', temp, '--pretty', 'false'], { encoding: 'utf8' })
     expect(tsc.status, tsc.stdout + tsc.stderr).toBe(0)
   } finally {
     rmSync(temp, { recursive: true, force: true })
   }
-}, 60_000)
+}

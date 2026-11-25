@@ -1,5 +1,7 @@
-import { globSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { cpSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { componentManifestSchema, exposedScope, expressionCheck, loadBlueprint, manifestCheck, resolveManifests, type ComponentManifest, type ComponentSchema } from '@trivia/blueprint'
 
@@ -71,4 +73,19 @@ export async function kitServiceContext(app = kitApp): Promise<CompileContext> {
   const { createStandaloneHost, EngineService } = await import(module.href)
   const service = new EngineService({ engine, host: createStandaloneHost(fileURLToPath(app)), version: 'test' })
   return (await service.blueprintInputs()).context
+}
+
+
+export async function kitFormFieldContext(): Promise<CompileContext> {
+  const app = new URL('../../../examples/refine-admin/', import.meta.url)
+  const temp = mkdtempSync(join(tmpdir(), 'trivia-kit-form-field-'))
+  try {
+    mkdirSync(join(temp, 'src/components'), { recursive: true })
+    cpSync(new URL('src/components/ui/', app), join(temp, 'src/components/ui'), { recursive: true })
+    rmSync(join(temp, 'src/components/ui/field.tsx'))
+    for (const file of ['components.json', 'trivia.manifest.json']) cpSync(new URL(file, app), join(temp, file))
+    return await kitServiceContext(pathToFileURL(temp + '/'))
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
 }

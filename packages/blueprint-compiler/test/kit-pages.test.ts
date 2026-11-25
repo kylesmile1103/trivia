@@ -4,7 +4,7 @@ import { loadBlueprint } from '@trivia/blueprint'
 import { expect, it } from 'vitest'
 
 import { checkDataTable, compilePage } from '../src/index.js'
-import { compileKitPage, fixture, fixtureDir, kitManifests, kitServiceContext } from './kit-fixture.js'
+import { compileKitPage, fixture, fixtureDir, kitFormFieldContext, kitManifests, kitServiceContext } from './kit-fixture.js'
 
 it('FR-KT-01 compiles the action and display kit with the installed slot parts', async () => {
   expect(kitManifests().map(({ type }) => type)).toEqual(expect.arrayContaining([
@@ -97,4 +97,35 @@ it('FR-KT-02 exposes the selected row and typed multiple selection to bindings',
   delete page.props[id].selectable
   expect(() => compilePage(loadBlueprint({ ...files, [file]: JSON.stringify(page) }), 'KitTable', context))
     .toThrow('Cannot compile blueprint page KitTable')
+})
+
+it('FR-KT-03 compiles forms with matching inputs, defaults and rules in both project styles', async () => {
+  const current = await kitServiceContext()
+  const legacy = await kitFormFieldContext()
+  expect(current.facts.formStyle).toBe('Field')
+  expect(legacy.facts.formStyle).toBe('FormField')
+  for (const [directory, context, control] of [
+    ['golden', current, 'Controller'],
+    ['golden/form-field', legacy, 'FormField'],
+  ] as const) {
+    const { code, requires } = compileKitPage('KitForm', context)
+    expect(requires).toEqual([])
+    expect(code).toContain('resolver: zodResolver(')
+    expect(code).toContain('redirect: "list"')
+    expect(code).toContain('sm:grid-cols-2')
+    expect(code).toContain('<' + control)
+    for (const field of ['fullName', 'email', 'segment', 'notes']) expect(code).toContain(`name="${field}"`)
+    expect(code).toContain('Fields marked required must be completed.')
+    await expect(code).toMatchFileSnapshot(fileURLToPath(new URL(directory + '/KitForm.tsx', fixtureDir)))
+  }
+
+  const files = fixture()
+  const file = 'pages/KitForm.page.json'
+  const page = JSON.parse(files[file]!)
+  const props = Object.values(page.props).find((entry: unknown) => (entry as { resource?: string }).resource === 'Customer') as { fields: string[] }
+  props.fields.push('birthDate')
+  const date = compilePage(loadBlueprint({ ...files, [file]: JSON.stringify(page) }), 'KitForm', current)
+  expect(date.code).toContain('<Calendar')
+  expect(date.code).toContain('mode="single"')
+  expect(date.code).toContain('birthDate: z.iso.date(')
 })

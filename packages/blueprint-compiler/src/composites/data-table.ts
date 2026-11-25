@@ -1,11 +1,11 @@
 import { pageDocPath, toPointer, type CustomPage, type Diagnostic, type ResolvedManifest } from '@trivia/blueprint'
-import type { ManifestField, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
+import type { ManifestField, TriviaManifest } from '@trivia/contract-sync'
 
 import { CompileError } from '../compile.js'
 import type { JsxIR, StateIR } from '../ir.js'
 import { quote, statement } from '../print/style.js'
 import { refineName } from '../targets/vite-refine/files.js'
-import { indent, snippet, withNodeAttributes, type CompositeScope } from './source.js'
+import { indent, resourceRowType, snippet, withNodeAttributes, type CompositeScope } from './source.js'
 
 type Element = Extract<JsxIR, { kind: 'element' }>
 
@@ -26,7 +26,7 @@ export function prepareTableSelection(
   const node = page.nodes[id]!
   const rows = scope.name(node.name + 'SelectedRows')
   const setter = scope.name('set' + rows.charAt(0).toUpperCase() + rows.slice(1))
-  const rowType = tableRowType(resource, scope)
+  const rowType = resourceRowType(resource, scope)
   const root = 'ui.' + node.name
   rename[root + '.selectedRows'] = rows
   state.push({ name: rows, setter, type: rowType + '[]', initial: '[]' })
@@ -101,7 +101,7 @@ export function lowerDataTable(
   const useMemo = scope.import({ name: 'useMemo', source: 'react' })
   const useTable = scope.import({ name: 'useTable', source: '@refinedev/react-table' })
   const columnDef = scope.import({ name: 'ColumnDef', source: '@tanstack/react-table', kind: 'type' })
-  const row = selection?.rowType ?? tableRowType(resource, scope)
+  const row = selection?.rowType ?? resourceRowType(resource, scope)
   const columnList = scope.name('columns')
   const table = scope.name('table')
   const tag = scope.component(manifest)
@@ -154,11 +154,4 @@ export function lowerDataTable(
   return withNodeAttributes(root, {
     kind: 'element', tag, props: [{ name: 'table', value: { kind: 'expr', code: table } }], children: [],
   })
-}
-
-export function tableRowType(resource: ManifestResource, scope: CompositeScope): string {
-  const name = resource.entity?.typeName
-  const source = scope.context.contract?.modules.types?.importPath
-  return name && source ? scope.import({ name, source, kind: 'type' })
-    : scope.import({ name: 'BaseRecord', source: '@refinedev/core', kind: 'type' })
 }

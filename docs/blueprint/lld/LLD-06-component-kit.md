@@ -108,7 +108,7 @@ the manifest's `deferred` list, so validation can say so.
 ## 4. `Form` (FR-KT-03)
 
 ```json
-{ "resource": "Customer", "mode": "create", "fields": ["fullName", "email", "status", "notes"],
+{ "resource": "Customer", "mode": "create", "fields": ["fullName", "email", "segment", "notes"],
   "layout": "grid-2", "redirect": "list" }
 ```
 
@@ -126,6 +126,13 @@ Expansion, in `composites/form.ts`:
 
 Rule, default and control come from the builders in `src/refine/fields.ts` and `rules.ts`, so
 the form-fields tool and the drift tool read back what the compiler wrote.
+
+⚑ The existing Refine adapter chooses the prevailing form style and uses Field on a tie
+when both installs exist. Kit date fields use the shared Calendar and Popover renderer
+when those registry items are installed. The same builder supports a native date input
+when they are absent. The banking fixture uses `segment` because its create contract
+owns that field. Form defaults to the contract's editable scalar fields, a stacked layout
+and a list redirect. Edit mode reads its record ID from the route's `:id` parameter.
 
 A `Form` node may hold extra child nodes (a note, a custom button) in its `footer` slot.
 Custom widgets per field are out: after eject they are a code edit.

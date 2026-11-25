@@ -68,6 +68,11 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     throw new CompileError('unsupported', 'Generated modules cannot import from @trivia.')
   }
   if (page.kind !== 'custom') emitted.requires = requiredRegistryItems(sources, context.facts)
+  else if (Object.values(page.nodes).some(({ type }) => context.manifests?.[type]?.composite)) {
+    const requires = [...emitted.requires, ...requiredRegistryItems(sources, context.facts)]
+    const byItem = new Map(requires.map((item) => [item.registry + '/' + item.item, item]))
+    emitted.requires = [...byItem].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item)
+  }
   emitted.code = emitted.code.replace(/\r\n?/g, '\n')
   try {
     context.engine.annotate(emitted.code, emitted.file)

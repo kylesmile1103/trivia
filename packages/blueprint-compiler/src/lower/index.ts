@@ -2,6 +2,7 @@ import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionS
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
 import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
+import { lowerForm } from '../composites/form.js'
 import type { CompositeScope } from '../composites/source.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
 import { printHandler, printModule } from '../print/module.js'
@@ -209,7 +210,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
 
   const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style, (id, manifest, root) => {
     if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
-    throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
+    client = true
+    return lowerForm(page, id, root, composite)
   })
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0

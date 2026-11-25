@@ -1,6 +1,7 @@
 import ts from 'typescript'
 
 import type { ResolvedManifest } from '@trivia/blueprint'
+import type { ManifestResource } from '@trivia/contract-sync'
 
 import type { CompileContext } from '../compile.js'
 import type { RefineSnippetImport } from '../contract-pages.js'
@@ -49,4 +50,12 @@ export function snippet(
 export function withNodeAttributes(root: Element, content: Element): Element {
   const props = root.props.filter(({ name }) => name === 'className' || name === 'key')
   return props.length ? { kind: 'element', tag: 'div', props, children: [content] } : content
+}
+
+
+export function resourceRowType(resource: ManifestResource, scope: CompositeScope): string {
+  const name = resource.entity?.typeName
+  const source = scope.context.contract?.modules.types?.importPath
+  return name && source ? scope.import({ name, source, kind: 'type' })
+    : scope.import({ name: 'BaseRecord', source: '@refinedev/core', kind: 'type' })
 }

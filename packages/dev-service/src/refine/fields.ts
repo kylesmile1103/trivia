@@ -20,6 +20,8 @@ export interface FieldContext {
   idPrefix: string
   /** The project has shadcn's `textarea` (long text gets one). */
   textarea?: boolean
+  /** Use the installed Calendar and Popover for dates in kit forms. */
+  datePicker?: boolean
   /**
    * How the form writes a field (docs/product.md, slice 5): `field` is a react-hook-form
    * `<Controller>` around shadcn's `Field` (v4); `form` is shadcn's older `<FormField>` with
@@ -238,6 +240,24 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
       ...invalid,
       `/>`,
     ])
+  } else if (shape === 'date' && context.datePicker) {
+    use('Calendar', `${context.ui}/calendar`)
+    for (const part of ['Popover', 'PopoverContent', 'PopoverTrigger']) use(part, `${context.ui}/popover`)
+    use('format', 'date-fns')
+    const cleared = field.nullable ? 'null' : field.required ? '""' : 'undefined'
+    input = [
+      '<Popover>',
+      ...control(['<PopoverTrigger type="button"', ...wired, ...invalid, '>', '  {field.value || "Pick a date"}', '</PopoverTrigger>'])
+        .map((line) => '  ' + line),
+      '  <PopoverContent>',
+      '    <Calendar',
+      '      mode="single"',
+      '      selected={field.value ? new Date(field.value + "T00:00:00") : undefined}',
+      `      onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : ${cleared})}`,
+      '    />',
+      '  </PopoverContent>',
+      '</Popover>',
+    ]
   } else if (context.textarea && isLongText(field)) {
     use('Textarea', `${context.ui}/textarea`)
     input = control([
