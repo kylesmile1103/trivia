@@ -273,8 +273,8 @@ two draft pages with zero errors and zero warnings.
 The MVP test exercised a model operation named `approveKyc`. Contract sync publishes it
 as `approveKycCustomer`. Use the synced operation ID in a mutation step. The
 `unsupported_operation` diagnostic now offers the names accepted for the action in
-`diagnostics[].hint.text`. An invalid list-header refetch points at its `query` and suggests
-`"list"`, the current Refine table query.
+`diagnostics[].hint.text`. An invalid contract refetch points at its `query` and suggests
+`"list"` in a list page's row or header actions. Both use the current Refine table query.
 
 The MCP SDK regression exercises both corrections through guarded patches. Use the BankAdmin
 exercise for the server, project setup and exact prompt.
@@ -293,5 +293,7 @@ refused model patches, and the messages changed for them:
 - A field named like the foreign key a `belongsTo` relation implies is a collision. The
   diagnostic says the relation declares it, and `hint.ops` holds the guarded `removeField`.
 
-Both also wanted a `refetch` after the Approve KYC mutation in the row action, which LLD-05
-allows in header actions only; that one is the owner's call.
+Both sessions tried to refetch the list after Approve KYC and had to leave the explicit
+Refresh button in charge of reloading. List row actions now accept `refetch` with query
+`"list"`. The BankAdmin blueprint runs it after a successful approval.
+[LLD-05](blueprint/lld/LLD-05-react-codegen.md#2-contract-pages-fr-rc-02).

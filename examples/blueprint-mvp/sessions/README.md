@@ -33,7 +33,7 @@ Both sessions made the same two refused patches before the model went in:
    a collision. The diagnostic now says the relation declares it and carries a guarded
    `removeField` fix.
 
-Both sessions also tried a `refetch` step in the Approve KYC row action. LLD-05 allows
-`refetch` of the list in header actions only (⚑), so the agents dropped it and the list does
-not reload after an approval until Refresh. That is left for the owner: allowing it in row
-actions is a compiler change, not a message fix.
+Both sessions also tried a `refetch` step in the Approve KYC row action. They removed it
+after validation refused it, leaving Refresh as the way to reload the list. The 2026-11-26
+decision lets row actions refetch the same table query as Refresh after a successful mutation.
+[LLD-05](../../../docs/blueprint/lld/LLD-05-react-codegen.md#2-contract-pages-fr-rc-02).
