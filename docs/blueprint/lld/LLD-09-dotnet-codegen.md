@@ -89,6 +89,13 @@ written, and every path is checked to be inside `--root` first.
 Writes are atomic per file (temp and rename). The plan is computed in full before the first
 write, so a refusal writes nothing (NFR-12).
 
+⚑ Plan paths use forward-slash relative names. Reject symbolic links in output paths and
+  serialize writers for the same root. Recheck file bytes before applying and stage sibling
+  temporary files with rollback copies for a failed batch.
+⚑ Discover obsolete files under the API's generated directories via the tool's header marker.
+  Scan Data at its top level so EF migrations stay outside ownership. The reported scaffold
+  hash is for the proposed scaffold template; existing scaffold contents are never read.
+
 ## 3. Output
 
 ```
