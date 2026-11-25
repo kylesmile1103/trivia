@@ -28,7 +28,7 @@ CRUD, server field errors, KYC confirmation, designer edits, undo and re-eject c
   for this project.
 - The lead still needs to run the prompt in two fresh Claude Code sessions and review the
   marked decisions with the owner. [Agent exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise)
-  · [Decisions](blueprint/README.md#spec-001011-decisions-pending-review).
+  · [Decisions](blueprint/README.md#decisions-).
 
 ## 1. Status (2026-10-09, session 3)
 
