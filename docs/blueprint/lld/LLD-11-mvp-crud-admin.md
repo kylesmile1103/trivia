@@ -43,3 +43,5 @@
   separate guarded patch so the one-field diff can be measured on its own.
 - ⚑ One EF migration includes the new migration and designer files and an update to EF's
   existing model snapshot. The test compares every other backend source file by content.
+- ⚑ The browser's drift case starts a second, isolated AppHost on the revised solution and
+  forwards the list request to its real API while keeping the Vite and designer ports fixed.

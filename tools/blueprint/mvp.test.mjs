@@ -5,7 +5,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 
 import {
-  applyRefineChange, blueprint, missingMvpPrerequisite, prepareMvp, reviseCustomerModel,
+  applyRefineChange, blueprint, followCustomerDrift, missingMvpPrerequisite, prepareMvp, reviseCustomerModel,
   run, startMvpApi, startMvpDevService, triviaRequest,
 } from './mvp-project.mjs'
 
@@ -80,6 +80,13 @@ test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
   assert.equal(issue.code, 'missing_field')
   assert.equal(issue.name, 'notes')
   assert.deepEqual(issue.fix?.changes, [{ action: 'remove', field: 'notes' }])
+
+  await followCustomerDrift(dev.url, issue.fix.changes)
+  assert.doesNotMatch(editSource(), /\bnotes\b/)
+  const list = readFileSync(path.join(web, 'src/pages/customers/list.tsx'), 'utf8')
+  assert.match(list, /accessorKey: "segment"/)
+  assert.deepEqual((await triviaRequest(dev.url, '/refine/drift')).pages, [])
+  await run(web, 'pnpm', ['exec', 'tsc', '--noEmit'])
 })
 
 

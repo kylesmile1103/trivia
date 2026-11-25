@@ -149,3 +149,8 @@ export async function reviseCustomerModel(origin) {
     }],
   })
 }
+
+export async function followCustomerDrift(origin, fix) {
+  await applyRefineChange(origin, 'fields', 'src/pages/customers/edit.tsx', fix)
+  await applyRefineChange(origin, 'columns', 'src/pages/customers/list.tsx', [{ action: 'add', field: 'segment' }])
+}

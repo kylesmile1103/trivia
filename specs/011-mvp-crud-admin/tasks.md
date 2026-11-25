@@ -23,7 +23,7 @@
 ## Phase 4: User Story 3 - Model change and drift (P1)
 
 - [x] T009 [US3] In the script: patch the model (add `segment`, remove `notes`), run `backend --migration Segment`, assert the backend diff is `.g.cs` files plus one migration, assert the drift list
-- [ ] T010 [US3] Apply the fix and add the column through the plugin API. `tsc` passes
+- [x] T010 [US3] Apply the fix and add the column through the plugin API. `tsc` passes
 
 ## Phase 5: User Story 4 - Agent (P1)
 
@@ -49,6 +49,10 @@
   cases in `packages/vite-plugin-ast-locator/test/blueprint-codegen.test.ts`.
 - Spec 005: the Vite scaffold had no notification provider, so the KYC error was invisible.
   Regressions: `packages/blueprint-compiler/test/template.test.ts` and the 501 browser case.
+
+- Spec 009: an enum used only in nullable fields emitted an empty OpenAPI schema, so the
+  segment column rendered JSON. Regression: `dotnet/tests/Trivia.Blueprint.Codegen.Tests/OpenApiTests.cs`
+  (nullable enum wire values) and the regenerated API browser case.
 
 ## Dependencies
 

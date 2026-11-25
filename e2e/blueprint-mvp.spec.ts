@@ -3,6 +3,10 @@ import path from 'node:path'
 
 import { expect, test, type APIRequestContext, type Page, type Response } from '@playwright/test'
 
+import {
+  applyRefineChange, blueprint, followCustomerDrift, reviseCustomerModel, startMvpApi, triviaRequest,
+} from '../tools/blueprint/mvp-project.mjs'
+
 test.beforeEach(({}, info) => {
   const missing = info.project.metadata.missingMvp
   test.skip(Boolean(missing), missing)
@@ -208,4 +212,38 @@ test('FR-RC-08, FR-MVP-03: re-eject refuses a designer-edited page and preserves
   await undo(page).click()
   await expect.poll(snapshot).toEqual(before)
   expect((await plan()).status()).toBe(200)
+})
+
+test('FR-AS-08: the new segment column displays records from the regenerated API', async ({ page, request }, info) => {
+  test.setTimeout(240_000)
+  const origin = info.project.use.baseURL!
+  const web = await devRoot(request)
+  const solution = path.dirname(web)
+  await applyRefineChange(origin, 'fields', editFile, [{ action: 'add', field: 'notes' }])
+  await reviseCustomerModel(origin)
+  await blueprint(solution, 'backend', '--migration', 'Segment')
+  const { pages } = await triviaRequest(origin, '/refine/drift')
+  const removed = pages.find((page: { file: string }) => page.file === editFile)
+    ?.issues.find((issue: { name: string }) => issue.name === 'notes')
+  expect(removed).toMatchObject({ code: 'missing_field', fix: { changes: [{ action: 'remove', field: 'notes' }] } })
+  await followCustomerDrift(origin, removed.fix.changes)
+
+  const api = await startMvpApi(solution)
+  try {
+    const created = await request.post(new URL(customers, api.url).href, {
+      data: { fullName: 'Segment Customer', email: 'segment@example.test', segment: 'retail' },
+    })
+    expect(created.status(), await created.text()).toBe(201)
+    await page.route('**/api/v1/customers?*', async (route) => {
+      const { pathname, search } = new URL(route.request().url())
+      const response = await route.fetch({ url: new URL(pathname + search, api.url).href })
+      await route.fulfill({ response })
+    })
+    await page.goto('/customers')
+    await expect(page.getByRole('columnheader', { name: 'Segment' })).toBeVisible()
+    const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Segment Customer', exact: true }) })
+    await expect(row.getByRole('cell', { name: 'retail', exact: true })).toBeVisible()
+  } finally {
+    await api.close()
+  }
 })
