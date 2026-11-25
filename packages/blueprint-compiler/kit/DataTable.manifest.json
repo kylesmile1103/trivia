@@ -11,7 +11,28 @@
   "props": [],
   "slots": [],
   "events": [],
-  "exposes": [],
+  "exposes": [
+    {
+      "name": "selectedRow",
+      "type": "Record<string, unknown>",
+      "initial": {},
+      "via": {
+        "valueProp": "selectedRow",
+        "changeProp": "onSelectionChange",
+        "changeArg": "value"
+      }
+    },
+    {
+      "name": "selectedRows",
+      "type": "Array<Record<string, unknown>>",
+      "initial": [],
+      "via": {
+        "valueProp": "selectedRows",
+        "changeProp": "onSelectionChange",
+        "changeArg": "value"
+      }
+    }
+  ],
   "client": true,
   "composite": "DataTable",
   "configuration": [
@@ -49,6 +70,16 @@
       "options": [
         "server",
         "off"
+      ]
+    },
+    {
+      "name": "selectable",
+      "kind": "enum",
+      "optional": true,
+      "source": "declared",
+      "options": [
+        "single",
+        "multiple"
       ]
     }
   ],

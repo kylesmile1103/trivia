@@ -1,7 +1,7 @@
 import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
-import { lowerDataTable } from '../composites/data-table.js'
+import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
 import type { CompositeScope } from '../composites/source.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
 import { printHandler, printModule } from '../print/module.js'
@@ -98,9 +98,18 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   }
   if (deps.has('state.*')) rename['state'] = '({ ' + stateObject.join(', ') + ' })'
 
+  const declarations: string[] = []
+  const afterState: string[] = []
+  const composite: CompositeScope = { context, name: (preferred) => names.take(preferred), import: importReference, component, declarations }
+  const selections = new Map<string, TableSelection>()
   const exposed = new Map<string, Array<{ valueProp: string; changeProp: string; name: string; update: string; arg: string }>>()
   for (const [id, node] of Object.entries(page.nodes).sort(([a], [b]) => compareBytes(a, b))) {
     const manifest = manifestOf(node.type)
+    if (manifest.composite === 'DataTable') {
+      const selection = prepareTableSelection(page, id, deps, composite, state, rename, afterState)
+      if (selection) selections.set(id, selection)
+      continue
+    }
     if (!manifest.exposes.length) continue
     const values = manifest.exposes.map(({ name: key, type, initial, via }) => {
       const name = names.take(node.name + capitalize(key))
@@ -198,10 +207,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const declarations: string[] = []
-  const composite: CompositeScope = { context, name: (preferred) => names.take(preferred), import: importReference, component, declarations }
   const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style, (id, manifest, root) => {
-    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite)
+    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
   })
   const hooks = [...action.hooks.values()]
@@ -211,7 +218,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
     name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
-    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations,
+    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations, afterState,
   }
   return {
     code: declarations.length ? restyleModule(printModule(ir, facts), facts.style) : printModule(ir, facts), file, route: page.route, component: page.name,

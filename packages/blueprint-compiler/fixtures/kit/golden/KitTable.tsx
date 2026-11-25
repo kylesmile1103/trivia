@@ -1,6 +1,6 @@
 import { useTable } from "@refinedev/react-table"
 import type { ColumnDef } from "@tanstack/react-table"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 import type { CustomerDto } from "@/api/generated/types.gen"
 import { DataTable } from "@/components/refine-ui/data-table/data-table"
@@ -9,7 +9,23 @@ import { DataTableSorter } from "@/components/refine-ui/data-table/data-table-so
 import { Badge } from "@/components/ui/badge"
 
 export function KitTable() {
+  const [customersSelectedRows, setCustomersSelectedRows] = useState<CustomerDto[]>([])
+  const customersSelectedRow: Partial<CustomerDto> = customersSelectedRows[0] ?? {}
   const columns = useMemo<ColumnDef<CustomerDto>[]>(() => [
+    {
+      id: "selection",
+      header: "Select",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <input
+          type="radio"
+          name="customers-selection"
+          aria-label={"Select row " + row.id}
+          checked={row.getIsSelected()}
+          onChange={() => setCustomersSelectedRows([row.original])}
+        />
+      ),
+    },
     {
       id: "fullName",
       accessorKey: "fullName",
@@ -65,6 +81,8 @@ export function KitTable() {
   ], [])
   const table = useTable<CustomerDto>({
     columns,
+    getRowId: (row) => String(row["id"]),
+    state: { rowSelection: Object.fromEntries(customersSelectedRows.map((row) => [String(row["id"]), true])) },
     refineCoreProps: {
       resource: "customers",
       pagination: { mode: "server", pageSize: 3 },
@@ -77,6 +95,7 @@ export function KitTable() {
     <main className="grid max-w-4xl gap-5 p-6">
       <h1>Customer table</h1>
       <DataTable table={table} />
+      <p>{customersSelectedRow.id ?? "No customer selected"}</p>
     </main>
   )
 }

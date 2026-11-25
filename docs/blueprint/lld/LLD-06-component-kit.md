@@ -92,6 +92,11 @@ Expansion, in `composites/data-table.ts`:
 
 ⚑ The table requires an explicit nonempty column list. It preserves the first occurrence of
 each field, defaults to ten rows per server page, and allows filters on visible columns.
+
+⚑ Selection uses a labelled radio or checkbox column and the contract primary key.
+Single selection exposes `selectedRow`, and multiple selection also exposes `selectedRows`.
+Before a selection, the row is an empty partial record so a direct field binding such as
+`ui.customers.selectedRow.id` can render safely.
 The `refine-ui` source marker resolves the installed table beside the project's UI library.
 
 After eject the table is ordinary Refine code, and the columns tool adds, removes and reorders

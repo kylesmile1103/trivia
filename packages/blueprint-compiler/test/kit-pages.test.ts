@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { loadBlueprint } from '@trivia/blueprint'
 import { expect, it } from 'vitest'
 
-import { checkDataTable } from '../src/index.js'
+import { checkDataTable, compilePage } from '../src/index.js'
 import { compileKitPage, fixture, fixtureDir, kitManifests, kitServiceContext } from './kit-fixture.js'
 
 it('FR-KT-01 compiles the action and display kit with the installed slot parts', async () => {
@@ -73,4 +73,28 @@ it('FR-KT-02 reports a resource without a list operation at the table resource p
   expect(checkDataTable(page, id, contract).diagnostics).toEqual([expect.objectContaining({
     code: 'unsupported_operation', pointer: `/props/${id}/resource`,
   })])
+})
+
+it('FR-KT-02 exposes the selected row and typed multiple selection to bindings', async () => {
+  const context = await kitServiceContext()
+  const { code } = compileKitPage('KitTable', context)
+  expect(code).toContain('const customersSelectedRow: Partial<CustomerDto>')
+  expect(code).toContain('customersSelectedRow.id')
+  expect(code).toContain('type="radio"')
+  expect(code).toContain('getRowId: (row) => String(row["id"])')
+
+  const files = fixture()
+  const file = 'pages/KitTable.page.json'
+  const page = JSON.parse(files[file]!)
+  const id = Object.keys(page.props).find((key) => page.props[key].resource === 'Customer')!
+  const binding = Object.keys(page.bindings)[0]!
+  page.props[id].selectable = 'multiple'
+  page.bindings[binding].children = 'ui.customers.selectedRows.length'
+  const multiple = compilePage(loadBlueprint({ ...files, [file]: JSON.stringify(page) }), 'KitTable', context)
+  expect(multiple.code).toContain('type="checkbox"')
+  expect(multiple.code).toContain('customersSelectedRows.length')
+
+  delete page.props[id].selectable
+  expect(() => compilePage(loadBlueprint({ ...files, [file]: JSON.stringify(page) }), 'KitTable', context))
+    .toThrow('Cannot compile blueprint page KitTable')
 })

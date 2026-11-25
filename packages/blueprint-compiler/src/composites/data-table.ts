@@ -2,12 +2,42 @@ import { pageDocPath, toPointer, type CustomPage, type Diagnostic, type Resolved
 import type { ManifestField, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import { CompileError } from '../compile.js'
-import type { JsxIR } from '../ir.js'
-import { quote } from '../print/style.js'
+import type { JsxIR, StateIR } from '../ir.js'
+import { quote, statement } from '../print/style.js'
 import { refineName } from '../targets/vite-refine/files.js'
 import { indent, snippet, withNodeAttributes, type CompositeScope } from './source.js'
 
 type Element = Extract<JsxIR, { kind: 'element' }>
+
+export interface TableSelection {
+  mode: 'single' | 'multiple'
+  rows: string
+  setter: string
+  key: string
+  rowType: string
+}
+
+export function prepareTableSelection(
+  page: CustomPage, id: string, deps: ReadonlySet<string>, scope: CompositeScope, state: StateIR[],
+  rename: Record<string, string>, afterState: string[],
+): TableSelection | undefined {
+  const { resource, selectable } = checkDataTable(page, id, scope.context.contract)
+  if (!resource?.primaryKey || (selectable !== 'single' && selectable !== 'multiple')) return
+  const node = page.nodes[id]!
+  const rows = scope.name(node.name + 'SelectedRows')
+  const setter = scope.name('set' + rows.charAt(0).toUpperCase() + rows.slice(1))
+  const rowType = tableRowType(resource, scope)
+  const root = 'ui.' + node.name
+  rename[root + '.selectedRows'] = rows
+  state.push({ name: rows, setter, type: rowType + '[]', initial: '[]' })
+  const path = root + '.selectedRow'
+  if ([...deps].some((dep) => dep === root || dep === path || dep.startsWith(path + '.') || dep === root + '.*' || dep === 'ui.*')) {
+    const row = scope.name(node.name + 'SelectedRow')
+    rename[path] = row
+    afterState.push(statement(`const ${row}: Partial<${rowType}> = ${rows}[0] ?? {}`, scope.context.facts.style))
+  }
+  return { mode: selectable, rows, setter, key: resource.primaryKey, rowType }
+}
 
 export function checkDataTable(page: CustomPage, id: string, contract: TriviaManifest | null | undefined) {
   const props = page.props[id] ?? {}
@@ -51,11 +81,17 @@ export function checkDataTable(page: CustomPage, id: string, contract: TriviaMan
   }
   const mode = props['pagination'] ?? 'server'
   if (mode !== 'server' && mode !== 'off') report('invalid_prop_value', 'pagination', 'DataTable.pagination expects server or off.')
-  return { diagnostics, resource, columns, filters, pageSize, mode }
+  const selectable = props['selectable']
+  if (selectable !== undefined && selectable !== 'single' && selectable !== 'multiple') {
+    report('invalid_prop_value', 'selectable', 'DataTable.selectable expects single or multiple.')
+  } else if (selectable && resource && !resource.primaryKey) {
+    report('invalid_prop_value', 'selectable', 'DataTable selection requires a contract primary key.')
+  }
+  return { diagnostics, resource, columns, filters, pageSize, mode, selectable }
 }
 
 export function lowerDataTable(
-  page: CustomPage, id: string, manifest: ResolvedManifest, root: Element, scope: CompositeScope,
+  page: CustomPage, id: string, manifest: ResolvedManifest, root: Element, scope: CompositeScope, selection?: TableSelection,
 ): Element {
   const { context } = scope
   const { diagnostics, resource, columns, filters, pageSize, mode } = checkDataTable(page, id, context.contract)
@@ -65,7 +101,7 @@ export function lowerDataTable(
   const useMemo = scope.import({ name: 'useMemo', source: 'react' })
   const useTable = scope.import({ name: 'useTable', source: '@refinedev/react-table' })
   const columnDef = scope.import({ name: 'ColumnDef', source: '@tanstack/react-table', kind: 'type' })
-  const row = tableRowType(resource, scope)
+  const row = selection?.rowType ?? tableRowType(resource, scope)
   const columnList = scope.name('columns')
   const table = scope.name('table')
   const tag = scope.component(manifest)
@@ -74,11 +110,39 @@ export function lowerDataTable(
     return indent(snippet(definition.value, definition.imports, scope), 2) + ','
   })
   const str = (value: string) => quote(value, context.facts.style)
+  let selectionOptions = ''
+  if (selection) {
+    const { key, rows, setter, mode } = selection
+    const multiple = mode === 'multiple'
+    const node = page.nodes[id]!
+    const keyAt = (target: string) => target + '[' + str(key) + ']'
+    const update = multiple
+      ? `(event) => ${setter}((current) => event.target.checked ? [...current, row.original] : current.filter((record) => ${keyAt('record')} !== ${keyAt('row.original')}))`
+      : `() => ${setter}([row.original])`
+    let selectionId = 'selection'
+    while (columns.some((field) => field.name === selectionId)) selectionId += '_'
+    const column = `{
+  id: ${str(selectionId)},
+  header: "Select",
+  enableSorting: false,
+  cell: ({ row }) => (
+    <input
+      type="${multiple ? 'checkbox' : 'radio'}"
+      ${multiple ? '' : 'name=' + str(node.name + '-selection') + '\n      '}aria-label={"Select row " + row.id}
+      checked={row.getIsSelected()}
+      onChange={${update}}
+    />
+  ),
+},`
+    definitions.unshift(indent(column, 2))
+    selectionOptions = `\n  getRowId: (row) => String(${keyAt('row')}),
+  state: { rowSelection: Object.fromEntries(${rows}.map((row) => [String(${keyAt('row')}), true])) },`
+  }
   const columnProperty = columnList === 'columns' ? columnList : 'columns: ' + columnList
   scope.declarations.push(
     `const ${columnList} = ${useMemo}<${columnDef}<${row}>[]>(() => [\n${definitions.join('\n')}\n], []);`,
     `const ${table} = ${useTable}<${row}>({
-  ${columnProperty},
+  ${columnProperty},${selectionOptions}
   refineCoreProps: {
     resource: ${str(refineName(resource))},
     pagination: { mode: ${str(String(mode))}, pageSize: ${pageSize} },

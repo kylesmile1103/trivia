@@ -19,6 +19,7 @@ export function printModule(ir: PageIR, facts: ProjectFacts): string {
   const declarations = [
     ...ir.state.map(({ name, setter, type, initial }) => statement(
       'const [' + (name ?? '') + (setter ? ', ' + setter : '') + '] = useState<' + type + '>(' + initial + ')', style)),
+    ...(ir.afterState ?? []),
     ...[...ir.hooks, ...ir.queries, ...ir.mutations].map((hook) => printHook(hook, style)),
     ...(ir.declarations ?? []),
   ]

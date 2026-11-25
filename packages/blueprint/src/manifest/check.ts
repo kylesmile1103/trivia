@@ -140,11 +140,15 @@ export function exposedScope(page: PageDoc, manifests: ResolvedManifests): Expos
   const members: Array<[string, string[]]> = []
   const types: Array<[string, Record<string, string>]> = []
   if (page.kind === 'custom') {
-    for (const [, node] of byKey(page.nodes)) {
+    for (const [id, node] of byKey(page.nodes)) {
       const manifest = lookup(manifests, node.type)
-      if (!manifest?.installed || !manifest.exposes.length) continue
-      members.push([node.name, manifest.exposes.map(({ name }) => name)])
-      types.push([node.name, Object.fromEntries(manifest.exposes.map(({ name, type }) => [name, type]))])
+      if (!manifest?.installed) continue
+      const selectable = page.props[id]?.['selectable']
+      const exposes = manifest.composite !== 'DataTable' || selectable === 'multiple' ? manifest.exposes
+        : selectable === 'single' ? manifest.exposes.filter(({ name }) => name === 'selectedRow') : []
+      if (!exposes.length) continue
+      members.push([node.name, exposes.map(({ name }) => name)])
+      types.push([node.name, Object.fromEntries(exposes.map(({ name, type }) => [name, type]))])
     }
   }
   return { tier: 'client', members: Object.fromEntries(members), types: Object.fromEntries(types) }

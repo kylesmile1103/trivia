@@ -11,6 +11,7 @@ export interface PageIR {
   hooks: HookIR[]
   handlers: HandlerIR[]
   declarations?: string[]
+  afterState?: string[]
   jsx: JsxIR
 }
 

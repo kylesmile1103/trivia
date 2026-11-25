@@ -90,12 +90,12 @@ export function manifestJsonSchema(): object {
 }
 
 /** Static prop contracts include structural text and controlled values described by the manifest. */
-export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes' | 'configuration'>): Map<string, PropSchema> {
+export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes' | 'configuration' | 'composite'>): Map<string, PropSchema> {
   const props = new Map([...manifest.props, ...(manifest.configuration ?? [])].map((prop) => [prop.name, prop]))
   if (!props.has('children') && manifest.slots.some(({ kind }) => kind === 'text')) {
     props.set('children', { name: 'children', kind: 'string', optional: true, source: 'declared' })
   }
-  for (const { type, via: { valueProp } } of manifest.exposes) {
+  for (const { type, via: { valueProp } } of manifest.composite ? [] : manifest.exposes) {
     if (props.has(valueProp)) continue
     const base = { name: valueProp, optional: true, source: 'declared' as const }
     if (type === 'string' || type === 'number' || type === 'boolean') props.set(valueProp, { ...base, kind: type })
