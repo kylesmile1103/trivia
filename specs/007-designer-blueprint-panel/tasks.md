@@ -5,7 +5,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Mirror the LLD-04 types in `packages/designer/src/shared/engine/types.ts` and add the client functions (summary, doc, components, patch, preview, plan, ejected, backend)
+- [x] T001 Mirror the LLD-04 types in `packages/designer/src/shared/engine/types.ts` and add the client functions (summary, doc, components, patch, preview, plan, ejected, backend)
 - [ ] T002 Move the Layers drop rules to `src/shared/lib/tree-drop.ts`. Layers tests and `architecture.test.ts` green
 
 ## Phase 2: Foundational

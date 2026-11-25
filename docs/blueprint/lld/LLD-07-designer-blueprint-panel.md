@@ -31,7 +31,9 @@ features/blueprint/
 ```
 
 `shared/engine/` gains the typed client functions and the types of LLD-04, mirrored from the
-plugin as the other engine types are.
+dev service as the other engine types are. ⚑ The blueprint handlers live in
+`packages/dev-service`, behind `DevHost` (LLD-13). The designer uses their HTTP
+envelope, including structured refusal details for diagnostics and registry items.
 
 ## 2. Behaviour
 
