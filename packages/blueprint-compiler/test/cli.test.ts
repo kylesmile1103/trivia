@@ -31,7 +31,7 @@ it('copies a template and writes a canonical empty blueprint, without fetching c
   expect(cli('new', 'bank-admin').status).toBe(1)
   expect(cli('new', 'next-admin', '--target', 'next-refine').status).toBe(2)
   expect(cli('compile', '--out').status).toBe(2)
-})
+}, 30_000) // five CLI processes: past Vitest's default 5 s while the gate runs other projects
 
 it('wires pnpm sync to the emitted API contract and includes its dependencies', () => {
   expect(cli('new', 'bank-admin').status).toBe(0)
