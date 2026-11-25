@@ -16,7 +16,7 @@
 
 ## Phase 3: User Story 1 - Authoring (P1)
 
-- [ ] T006 [US1] Tests for `GET /blueprint`, `/blueprint/doc`, `/blueprint/components` on the example copy, including `exists: false`
+- [x] T006 [US1] Tests for `GET /blueprint`, `/blueprint/doc`, `/blueprint/components` on the example copy, including `exists: false`
 - [ ] T007 [US1] `src/blueprint/summary.ts` and the three read routes in `index.ts`, registered from `src/api/http.ts`
 - [ ] T008 [US1] Tests for `POST /blueprint/patch`: create a page, diagnostics in the result, directory created on first patch
 - [ ] T009 [US1] The patch route: store apply, `writeDocuments`, `PatchResult` with the fresh summary and `next`
