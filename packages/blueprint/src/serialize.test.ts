@@ -85,8 +85,8 @@ describe('canonical serialization (FR-BP-04, SC-001)', () => {
     const text = serialize(page({
       props: { n_01JDK3M8A00000000000000001: { data: { b: [3, 1, 2], a: { '2': 'two', '10': 'ten', Z: 0 } } } },
     }))
-    const value = '{\n          "a": {\n            "10": "ten",\n            "2": "two",\n            "Z": 0\n          },\n' +
-      '          "b": [\n            3,\n            1,\n            2\n          ]\n        }'
+    const value = '{\n        "a": {\n          "10": "ten",\n          "2": "two",\n          "Z": 0\n        },\n' +
+      '        "b": [\n          3,\n          1,\n          2\n        ]\n      }'
     expect(text).toContain(`"data": ${value}`)
   })
 
