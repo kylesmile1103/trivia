@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 `tools/blueprint/refresh-analyzer-fixture.cjs`: write `fixtures/manifests/analyzer/refine-admin.components.json` from `@trivia/engine` `components()`
-- [ ] T002 [P] Sample manifests for `Button`, `Input`, `Card` in `fixtures/manifests/kit-sample/`
+- [x] T002 [P] Sample manifests for `Button`, `Input`, `Card` in `fixtures/manifests/kit-sample/`
 
 ## Phase 2: Foundational
 

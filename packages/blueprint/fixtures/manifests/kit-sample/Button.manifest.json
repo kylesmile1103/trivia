@@ -1,0 +1,23 @@
+{
+  "type": "Button",
+  "source": {
+    "registry": "shadcn",
+    "item": "button",
+    "import": { "name": "Button", "from": "ui" }
+  },
+  "props": [
+    {
+      "name": "variant",
+      "kind": "enum",
+      "options": ["default", "outline", "secondary", "ghost", "destructive", "link"],
+      "optional": true,
+      "default": "default",
+      "source": "variant"
+    }
+  ],
+  "slots": [{ "name": "children", "kind": "text" }],
+  "events": [{ "name": "onClick", "prop": "onClick", "payload": "React.MouseEvent<HTMLButtonElement>" }],
+  "exposes": [],
+  "client": true,
+  "template": { "children": "Button" }
+}
