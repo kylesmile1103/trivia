@@ -98,8 +98,12 @@ Nothing is installed during resolution (FR-MF-03).
 - `nodes[id].type` resolves, else `unknown_component`. Deferred kit types get the hint of
   FR-KT-07.
 - `slot` is one of the parent's slots, and the child type is in `accepts` when given.
+  ⚑ An absent slot is `unknown_slot`. A node in a text slot or a node excluded by
+  `accepts` is `invalid_slot_content`. Both point at the child's `slot`.
 - Each key of `props[id]` and `bindings[id]` is a prop, `children` when the type has a text
   slot, or an exposed value's `valueProp`. Static values match the prop's kind and options.
+  ⚑ Text children are strings. An analyzer prop of kind `unknown` accepts any JSON value,
+  since its source type is not expanded by the analyzer.
 - Action keys name an entry of `events`.
 - Binding the `changeProp` of an exposed value directly is refused: the compiler owns that
   wiring. Reacting to a change is an action on the event.

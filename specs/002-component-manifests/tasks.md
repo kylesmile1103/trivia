@@ -17,7 +17,7 @@
 
 - [x] T005 [US1] Resolver tests: kit and installed (analyzer props win), with the `brand` variant case
 - [x] T006 [US1] `src/manifest/resolve.ts`: merge order, import path from aliases
-- [ ] T007 [US1] `src/manifest/check.ts`: `unknown_component`, `unknown_prop`, `invalid_prop_value`, slot checks. Fixtures per code
+- [x] T007 [US1] `src/manifest/check.ts`: `unknown_component`, `unknown_prop`, `invalid_prop_value`, slot checks. Fixtures per code
 - [ ] T008 [US1] Register the layer in `validate()` through the context
 
 ## Phase 4: User Story 2 - Missing components (P1)
