@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Write `examples/blueprint-mvp/blueprint/`: the app document, the model (Customer, Account, two enums, `approveKyc`), five pages with their options and two actions. It must validate
-- [ ] T002 `examples/blueprint-mvp/README.md` with the commands, and `PROMPT.md` with the one-paragraph agent prompt
+- [x] T002 `examples/blueprint-mvp/README.md` with the commands, and `PROMPT.md` with the one-paragraph agent prompt
 
 ## Phase 2: User Story 1 - Blueprint to running solution (P1)
 
