@@ -8,6 +8,7 @@ mod utf16;
 mod subset;
 mod allow;
 mod scope;
+mod deps;
 
 use std::collections::BTreeMap;
 
@@ -178,19 +179,20 @@ impl Diagnostic {
 }
 
 pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
-    let results = request.expressions.into_iter().enumerate().map(|(index, input)| {
+    let mut results: Vec<_> = request.expressions.iter().enumerate().map(|(index, input)| {
         let source = &input.source;
-        let diagnostics = if index >= MAX_EXPRESSIONS {
-            vec![Diagnostic::batch_limit()]
+        let (diagnostics, reads) = if index >= MAX_EXPRESSIONS {
+            (vec![Diagnostic::batch_limit()], deps::Reads::default())
         } else {
             parse::parse(source, |expression| subset::check(source, expression, scope::ScopeCheck {
                 scope: &request.scope, locals: &input.locals,
             }))
-                .unwrap_or_else(|error| vec![Diagnostic::from_parse(source, error)])
+                .unwrap_or_else(|error| (vec![Diagnostic::from_parse(source, error)], deps::Reads::default()))
         };
         let ok = diagnostics.iter().all(|diagnostic| diagnostic.severity != Severity::Error);
-        Analysis { id: input.id, ok, deps: Vec::new(), tier: Tier::Static, diagnostics }
+        Analysis { id: input.id.clone(), ok, deps: reads.deps, tier: reads.tier, diagnostics }
     }).collect();
+    deps::propagate_query_tiers(&request, &mut results);
     AnalyzeResponse { unit: Unit::Utf16, results }
 }
 

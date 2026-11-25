@@ -91,10 +91,15 @@ shadow roots, with a warning.
 
 - **Dependencies** are the distinct `root.member` pairs referenced (`ui.search.value` counts
   as `ui.search`), in source order.
+- ⚑ A bare root or a computed root member with no literal name records `root.*`. It carries
+  the root's tier or, for a query root, the highest tier of any query there.
 - **Tier.** `static` with no dependencies. Otherwise the highest tier among them, in the
   order `static < server < client`. A dependency on `data.<q>` takes the query's tier, which is
   the highest tier of that query's parameter expressions. An `event`, `item` under a client
   `each`, `row` or `value` local makes the expression `client`.
+- ⚑ A query with no valid parameter expressions starts at `static`. Tier increases propagate
+  across query references in any input order. A direct reference to the built-in `Date.now`
+  is `client`, including when passed as a callback.
 - **Cycles.** The caller passes every expression of a page with the entity it defines (a
   query's parameters define `data.<name>`, sent as the optional `defines` field). The crate builds the graph and reports each cycle
   once as `expr_cycle`, with the path in the message, on every expression taking part.

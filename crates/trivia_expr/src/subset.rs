@@ -3,15 +3,15 @@ use oxc_ast::ast::*;
 use oxc_ast_visit::{Visit, walk};
 use oxc_span::{GetSpan, Span};
 
-use crate::{Diagnostic, Severity, allow, scope::{ArrowBindings, ScopeCheck}};
+use crate::{Diagnostic, Severity, allow, deps::Reads, scope::{ArrowBindings, ScopeCheck}};
 
-pub(crate) fn check<'a>(source: &str, expression: &Expression<'a>, scope: ScopeCheck<'_>) -> Vec<Diagnostic> {
+pub(crate) fn check<'a>(source: &str, expression: &Expression<'a>, scope: ScopeCheck<'_>) -> (Vec<Diagnostic>, Reads) {
     let mut subset = Subset {
         source, scope, diagnostics: Vec::new(), arrow_argument: None, format_factory: None,
-        bindings: ArrowBindings::default(),
+        bindings: ArrowBindings::default(), reads: Reads::default(), member_root: None,
     };
     subset.visit_expression(expression);
-    subset.diagnostics
+    (subset.diagnostics, subset.reads)
 }
 
 struct Subset<'s, 'a> {
@@ -21,6 +21,8 @@ struct Subset<'s, 'a> {
     arrow_argument: Option<Span>,
     format_factory: Option<Span>,
     bindings: ArrowBindings<'a>,
+    reads: Reads,
+    member_root: Option<Span>,
 }
 
 impl Subset<'_, '_> {
@@ -121,6 +123,9 @@ impl<'a> Visit<'a> for Subset<'_, 'a> {
 
     fn visit_identifier_reference(&mut self, identifier: &IdentifierReference<'a>) {
         let name = identifier.name.as_str();
+        if self.member_root != Some(identifier.span) {
+            self.reads.identifier(&self.scope, &self.bindings, name);
+        }
         if !self.scope.known(&self.bindings, name) {
             self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_root", Severity::Error,
                 identifier.span, format!("Unknown root `{name}`")));
@@ -134,7 +139,10 @@ impl<'a> Visit<'a> for Subset<'_, 'a> {
             self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_member", Severity::Error,
                 span, format!("Unknown member `{name}`")));
         }
+        let root = self.reads.member(&self.scope, &self.bindings, member);
+        let previous = std::mem::replace(&mut self.member_root, root);
         walk::walk_member_expression(self, member);
+        self.member_root = previous;
     }
 
     fn visit_object_property(&mut self, property: &ObjectProperty<'a>) {

@@ -1,6 +1,6 @@
 use oxc_ast::ast::{ArrowFunctionExpression, BindingIdentifier, Expression, MemberExpression};
 
-use crate::{Locals, Members, Scope, allow};
+use crate::{Locals, Members, Scope, Tier, allow};
 
 #[derive(Default)]
 pub(crate) struct ArrowBindings<'a> {
@@ -34,9 +34,12 @@ pub(crate) struct ScopeCheck<'s> {
 }
 
 impl ScopeCheck<'_> {
+    pub(crate) fn local_tier(&self, name: &str) -> Option<Tier> {
+        self.locals.tier(name).or_else(|| self.scope.locals.tier(name))
+    }
+
     pub(crate) fn shadowed(&self, bindings: &ArrowBindings<'_>, name: &str) -> bool {
-        bindings.contains(name) || self.locals.tier(name).is_some() || self.scope.locals.tier(name).is_some()
-            || self.scope.roots.contains_key(name)
+        bindings.contains(name) || self.local_tier(name).is_some() || self.scope.roots.contains_key(name)
     }
 
     pub(crate) fn known(&self, bindings: &ArrowBindings<'_>, name: &str) -> bool {
@@ -53,7 +56,7 @@ impl ScopeCheck<'_> {
         let expr = expr.get_inner_expression();
         if let Expression::Identifier(id) = expr {
             let name = id.name.as_str();
-            if bindings.contains(name) || self.locals.tier(name).is_some() || self.scope.locals.tier(name).is_some() {
+            if bindings.contains(name) || self.local_tier(name).is_some() {
                 return Shape::Open;
             }
             if let Some(root) = self.scope.roots.get(name) {
