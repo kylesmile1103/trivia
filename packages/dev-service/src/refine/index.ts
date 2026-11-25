@@ -10,7 +10,7 @@ import path from 'node:path'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { ApiError } from '../engine.js'
-import type { PreviewHost } from '../host.js'
+import type { DevHost, PreviewHost } from '../host.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
@@ -185,6 +185,7 @@ export interface Plan {
 /** What the adapter needs from the engine service. */
 export interface RefineHost {
   root: string
+  kind: DevHost['kind']
   /** shadcn's ui folder (project-relative) and its import prefix: `src/components/ui`, `@/components/ui`. */
   uiDir: string
   importBase: string
@@ -343,7 +344,7 @@ export class RefineAdapter {
 
   /** The file and component rendering `<Refine resources>`. */
   async #app(): Promise<AppShell | null> {
-    const { root } = this.#host
+    const { root, kind } = this.#host
     const candidates: string[] = []
     const walk = async (dir: string): Promise<void> => {
       let entries: fs.Dirent[]
@@ -355,14 +356,14 @@ export class RefineAdapter {
       for (const entry of entries) {
         const rel = path.posix.join(dir, entry.name)
         if (entry.isDirectory()) {
-          if (!entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name) && rel.split('/').length < 4) await walk(rel)
-        } else if (/\.(tsx|jsx)$/.test(entry.name)) {
+          if (!entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name) && entry.name !== '(blueprint-preview)' && (kind === 'next' || rel.split('/').length < 4)) await walk(rel)
+        } else if ((kind !== 'next' || entry.isFile()) && /\.(tsx|jsx)$/.test(entry.name)) {
           const text = await fsp.readFile(path.join(root, rel), 'utf8').catch(() => '')
           if (/<Refine[\s>]/.test(text) && /resources=\{/.test(text)) candidates.push(rel)
         }
       }
     }
-    await walk('src')
+    await walk(kind === 'next' ? '.' : 'src')
     for (const file of candidates.sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
       const refine = findNode(this.#host.outline(file) as OutlineNode[], (n) => n.name === 'Refine')
       if (!refine) continue

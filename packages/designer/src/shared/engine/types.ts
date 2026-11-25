@@ -361,7 +361,7 @@ export interface AppRoute {
   params: string[]
   index: boolean
   catchAll: boolean
-  router: 'react-router' | 'tanstack-router'
+  router: 'react-router' | 'tanstack-router' | 'next-app-router'
   component: string | null
   /** The component's module, project-relative; null for a package. */
   file: string | null

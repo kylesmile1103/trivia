@@ -78,6 +78,7 @@ export class EngineService {
     this.#history = new History(options.historyLimit ?? 100)
     this.refine = new RefineAdapter({
       root: options.host.root,
+      kind: options.host.kind,
       uiDir: options.host.uiDir,
       importBase: options.host.importBase,
       preview: options.host.preview,

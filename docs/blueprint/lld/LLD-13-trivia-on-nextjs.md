@@ -187,6 +187,13 @@ read from the resources array wherever the `<Refine>` element lives.
 
 The `pages/` router is not supported. An app with only `pages/` gets an empty list and a note.
 
+⚑ Use `app/`, falling back to `src/app/` as Next does. `next-app-router` entries point to
+the declaring page file even when it re-exports its component. Both catch-all forms use the
+existing `*` representation. The route reader decodes the escaped leading underscore and
+omits the transient preview group from the Pages tab.
+⚑ For Next, the Refine resource search covers project source outside `src/`, including
+providers used by App Router layouts.
+
 ## 6. Editing server and client components (FR-TN-05)
 
 The engine edits files. It does not care which kind of component a file holds. What changes:

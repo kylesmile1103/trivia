@@ -28,7 +28,7 @@
 
 ## Phase 4: User Story 4 - Pages and Refine tools (P2)
 
-- [ ] T015 [US4] `packages/next/src/host.ts` `readRoutes`: `app/**/page.{tsx,jsx}`, route groups, dynamic and catch-all segments, skipped kinds, Refine labels. Unit tests on a fixture tree
+- [x] T015 [US4] `packages/next/src/host.ts` `readRoutes`: `app/**/page.{tsx,jsx}`, route groups, dynamic and catch-all segments, skipped kinds, Refine labels. Unit tests on a fixture tree
 - [ ] T016 [US4] The Refine adapter's route registration by `DevHost.kind`. e2e: the Pages tab and the columns tool on the example
 
 ## Phase 5: User Story 5 - Agents (P2)

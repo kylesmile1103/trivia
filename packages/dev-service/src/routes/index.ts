@@ -27,7 +27,7 @@ export interface RouteEntry {
   index: boolean
   /** It ends in a splat: it serves every URL below it. */
   catchAll: boolean
-  router: 'react-router' | 'tanstack-router'
+  router: 'react-router' | 'tanstack-router' | 'next-app-router'
   /** The component it renders, as named where the route is declared; null for a lazy route module. */
   component: string | null
   /** That component's module (project-relative), or null when it comes from a package or can't be resolved. */

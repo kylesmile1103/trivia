@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { ApiError, type DevHost, type EngineBinding, type PreviewHost, unwrap } from '@trivia/dev-service'
+import { ApiError, type DevHost, type EngineBinding, type PreviewHost, type RouteEntry, unwrap } from '@trivia/dev-service'
 import ts from 'typescript'
 
 import { APP_DIRECTORIES, PREVIEW_GROUP, projectPath } from './paths.js'
@@ -9,7 +9,10 @@ import { APP_DIRECTORIES, PREVIEW_GROUP, projectPath } from './paths.js'
 const PREVIEW_SEGMENT = '%5F_blueprint'
 
 export function appDirectory(root: string): typeof APP_DIRECTORIES[number] | undefined {
-  return APP_DIRECTORIES.find((dir) => fs.statSync(path.join(root, dir), { throwIfNoEntry: false })?.isDirectory())
+  return APP_DIRECTORIES.find((dir) => {
+    const absolute = path.join(root, dir)
+    return fs.statSync(absolute, { throwIfNoEntry: false })?.isDirectory() && projectPath(root, fs.realpathSync(absolute)) !== null
+  })
 }
 
 export function createNextHost(root: string, engine: EngineBinding, paths: { uiDir?: string; importBase?: string } = {}): DevHost {
@@ -32,7 +35,7 @@ export function createNextHost(root: string, engine: EngineBinding, paths: { uiD
       const real = await fs.promises.realpath(result.resolvedFileName).catch(() => null)
       return real && projectPath(root, real) !== null ? projectPath(root, result.resolvedFileName) : null
     },
-    readRoutes: async () => [],
+    readRoutes: () => readRoutes(root),
     preview: diskPreviews(root, app, engine),
     allowedHosts: [],
   }
@@ -96,4 +99,47 @@ function diskPreviews(root: string, app: string | undefined, engine: EngineBindi
       if (errors.length > 0) throw new AggregateError(errors, 'could not remove every Trivia preview')
     },
   }
+}
+
+/** App Router file conventions. The declared module is the page file, even for re-exports. */
+export async function readRoutes(root: string): Promise<RouteEntry[]> {
+  const app = appDirectory(root)
+  if (!app) return []
+  const routes: RouteEntry[] = []
+  const walk = async (dir: string, segments: string[]): Promise<void> => {
+    const entries = await fs.promises.readdir(path.join(root, dir), { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return []
+      throw error
+    })
+    const file = ['page.tsx', 'page.jsx'].find((name) => entries.some((entry) => entry.isFile() && entry.name === name))
+    if (file) {
+      const pathname = `/${segments.join('/')}`
+      const source = path.posix.join(dir, file)
+      routes.push({
+        path: pathname,
+        params: segments.flatMap((segment) => segment === '*' ? ['*'] : segment.startsWith(':') ? [segment.slice(1)] : []),
+        index: segments.length === 0,
+        catchAll: segments.includes('*'),
+        router: 'next-app-router',
+        file: source,
+        declared: { file: source, line: 1 },
+        component: null,
+        locator: null,
+      })
+    }
+    for (const entry of entries) {
+      const name = entry.name
+      if (!entry.isDirectory() || name === PREVIEW_GROUP || name === 'node_modules' || /^[.@_]/.test(name) || /^\(\.{1,3}\)/.test(name)) continue
+      const segment = /^\(.*\)$/.test(name) ? null : urlSegment(name)
+      await walk(path.posix.join(dir, name), segment === null ? segments : [...segments, segment])
+    }
+  }
+  await walk(app, [])
+  return routes.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+}
+
+function urlSegment(name: string): string {
+  if (/^\[\.\.\.[^\]]+\]$|^\[\[\.\.\.[^\]]+\]\]$/.test(name)) return '*'
+  const dynamic = /^\[([^\]]+)\]$/.exec(name)
+  return dynamic?.[1] ? `:${dynamic[1]}` : encodeURIComponent(name.replaceAll('%5F', '_'))
 }
