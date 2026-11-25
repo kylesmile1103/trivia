@@ -120,6 +120,13 @@ gains cases for all three, with the existing RSS bound.
 An expression is at most 4 096 bytes and 64 levels deep. A batch is at most 10 000
 expressions. Past a limit the answer is `expr_too_large` for that expression, never a crash.
 
+- ⚑ OXC 0.153.0's `Parser::parse_expression` consumes through EOF and already gives
+  source-relative spans. This replaces the parenthesis wrapper and offset correction in the plan.
+- ⚑ The depth walk counts expressions, statement and type nodes, patterns, and nested JSX.
+  Inputs longer than 128 bytes parse on a scoped thread with a 32 MiB stack. OXC recurses
+  before the depth walk can reject the input, and a 4 095-byte parenthesized expression
+  exhausted the default Rust test stack.
+
 ## 7. Tests
 
 - A table of accepted and refused forms, one line each, with the expected code and span.

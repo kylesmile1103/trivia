@@ -10,7 +10,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T003 `src/parse.rs`: parse a single expression, map spans back, limits (4 096 bytes, depth 64) as `expr_too_large`. Tests in `tests/limits.rs`
+- [x] T003 `src/parse.rs`: parse a single expression, map spans back, limits (4 096 bytes, depth 64) as `expr_too_large`. Tests in `tests/limits.rs`
 - [ ] T004 [P] `src/utf16.rs` with astral-character tests
 - [ ] T005 [P] Request and response serde types in `src/lib.rs`
 
