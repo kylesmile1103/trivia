@@ -57,6 +57,30 @@ web/                          the React app (LLD-05, LLD-12)
 ```
 
 All of these are scaffold files: written once by `trivia-dotnet write`, then the developer's.
+Existing scaffold files are preserved. To add Aspire to a solution emitted by spec 009,
+merge the new project references, package pins and startup changes into the existing
+solution, central package file and API scaffold.
+
+⚑ Use the Aspire CLI bundle for DCP and the dashboard. The generated AppHost has an HTTP
+development profile. The API uses a dynamically allocated HTTP port, passes its
+`/health` check to Aspire, and keeps `ConnectionStrings:AppDb` for standalone use.
+The ServiceDefaults scaffold maps `/health` and `/alive` in all environments because
+Aspire also checks readiness in Compose.
+[Service defaults](https://aspire.dev/get-started/csharp-service-defaults/).
+
+⚑ Pin `Microsoft.Extensions.Hosting` to **10.0.14**, resilience and service discovery
+to **10.10.0**, OpenTelemetry hosting and OTLP exporter to **1.19.1**, and the ASP.NET Core,
+HTTP and runtime instrumentation packages to **1.19.0**. Keep the emitted projects' direct
+package references pinned in their shared `Directory.Packages.props`. The migration project
+pins EF Relational to **10.0.12** to match the API's EF design package.
+
+⚑ Build and migration subprocesses use project paths relative to their working directory
+so NuGet sees one identity for each project on macOS. Disable reusable MSBuild servers
+for captured builds so a surviving worker does not hold their output pipes open.
+
+⚑ Select `AddViteApp` or Aspire's dedicated `AddNextJsApp` from `targets.web`. The latter
+is the JavaScript integration's Next.js resource. The Next.js template itself belongs to
+spec 007.
 
 ### AppHost (FR-AS-01, FR-AS-02)
 
@@ -67,13 +91,15 @@ var postgres = builder.AddPostgres("postgres").WithDataVolume();
 var db = postgres.AddDatabase("appdb");
 
 var migrations = builder.AddProject<Projects.BackOffice_MigrationService>("migrations")
-    .WithReference(db).WaitFor(db);
+    .WithReference(db, connectionName: "AppDb").WaitFor(db);
 
-var api = builder.AddProject<Projects.BackOffice_Api>("api")
-    .WithReference(db).WaitForCompletion(migrations);
+var api = builder.AddProject<Projects.BackOffice_Api>("api", options => options.ExcludeLaunchProfile = true)
+    .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
+    .WithReference(db, connectionName: "AppDb").WaitForCompletion(migrations)
+    .WithHttpHealthCheck("/health");
 
-builder.AddViteApp("web", "../../web")          // the Next.js target uses the JavaScript app resource
-    .WithReference(api).WaitFor(api);
+builder.AddViteApp("web", "../../web")          // next-refine uses AddNextJsApp
+    .WithPnpm().WithReference(api).WaitFor(api);
 
 builder.Build().Run();
 ```

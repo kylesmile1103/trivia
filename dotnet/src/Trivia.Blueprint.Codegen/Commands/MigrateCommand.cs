@@ -42,7 +42,6 @@ internal static class MigrateCommand
                 ? ModelLoader.Load(source)
                 : null;
             string relative = LocateProject(root, input?.AppName);
-            string project = Ownership.Resolve(root, relative);
             string migrationsPath = Path.GetDirectoryName(relative)!.Replace(Path.DirectorySeparatorChar, '/') + "/" + Migrations;
             string directory = Ownership.Resolve(root, migrationsPath, directory: true);
             HashSet<string> before = MigrationFiles(directory).ToHashSet(StringComparer.Ordinal);
@@ -51,12 +50,14 @@ internal static class MigrateCommand
                 ? RenameRewriter.ReadTables(File.ReadAllText(snapshot))
                 : new Dictionary<string, string>();
 
-            (int build, string buildOutput) = await RunDotnet(root, ["build", project, "-warnaserror", "--nologo"], cancellationToken);
+            // A relative path keeps NuGet project identities consistent when the working directory
+            // is an OS alias, such as /var on macOS.
+            (int build, string buildOutput) = await RunDotnet(root, ["build", relative, "-warnaserror", "--nologo", "--disable-build-servers"], cancellationToken);
             if (build != 0)
                 return Fail(output, new("migration_build_failed", relative, "", buildOutput));
 
-            string[] arguments = ["ef", "migrations", "add", name, "--project", project,
-                "--startup-project", project, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
+            string[] arguments = ["ef", "migrations", "add", name, "--project", relative,
+                "--startup-project", relative, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
             (int status, string message) = await RunDotnet(root, arguments, cancellationToken);
             if (status != 0)
                 return Fail(output, new("migration_failed", relative, "", message));
@@ -116,6 +117,8 @@ internal static class MigrateCommand
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        // The EF CLI invokes MSBuild too. Reusable nodes can outlive it and keep these pipes open.
+        start.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         foreach (string argument in arguments)
             start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new IOException("Could not start dotnet.");

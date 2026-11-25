@@ -1,0 +1,15 @@
+var builder = DistributedApplication.CreateBuilder(args);
+
+var db = builder.AddPostgres("postgres").WithDataVolume().AddDatabase("appdb");
+
+var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.ExcludeLaunchProfile = true)
+    .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
+    .WithReference(db, connectionName: "AppDb")
+    .WithHttpHealthCheck("/health");
+
+builder.{{WebResource}}("web", "../../web")
+    .WithPnpm()
+    .WithReference(api)
+    .WaitFor(api);
+
+builder.Build().Run();

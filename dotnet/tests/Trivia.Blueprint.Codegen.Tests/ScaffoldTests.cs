@@ -7,6 +7,34 @@ namespace Trivia.Blueprint.Codegen.Tests;
 public sealed class ScaffoldTests
 {
     [Fact]
+    public void FR_AS_01_And_FR_AS_03_AddAspireProjectsAsScaffolds()
+    {
+        using TempDirectory root = new();
+        LoadedBlueprint bank = ModelLoader.Load(FixtureTests.Bank);
+        FilePlan plan = ApiPlan.Create(root.Path, bank);
+        string[] projects = ["AppHost", "ServiceDefaults", "MigrationService"];
+        foreach (string project in projects)
+        {
+            string path = $"src/BackOffice.{project}/BackOffice.{project}.csproj";
+            Assert.Contains(plan.Files, file => file.Path == path && file.Kind == FileKind.Scaffold);
+        }
+
+        PlanWriter.Write(root.Path, plan);
+        string Read(string path) => File.ReadAllText(Path.Combine(root.Path, path));
+        string solution = Read("BackOffice.slnx");
+        Assert.All(projects, project => Assert.Contains($"BackOffice.{project}.csproj", solution));
+        string host = Read("src/BackOffice.AppHost/Program.cs");
+        Assert.Contains("AddPostgres", host);
+        Assert.Contains("AddViteApp", host);
+        string defaults = Read("src/BackOffice.ServiceDefaults/Extensions.cs");
+        Assert.Contains("AddOpenTelemetry", defaults);
+        Assert.Contains("AddStandardResilienceHandler", defaults);
+        Assert.Contains("AddServiceDiscovery", defaults);
+        Assert.Contains("MapHealthChecks", defaults);
+        Assert.Contains("Aspire.Hosting.PostgreSQL", Read("Directory.Packages.props"));
+    }
+
+    [Fact]
     public void FR_NC_02_EmitsAStandaloneSolutionAndPartialFiles()
     {
         using TempDirectory root = new();

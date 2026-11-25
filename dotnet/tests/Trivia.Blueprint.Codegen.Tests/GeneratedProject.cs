@@ -26,7 +26,7 @@ internal sealed class GeneratedProject : IDisposable
 
     public async Task<string> BuildAsync()
     {
-        using Process process = Start("dotnet", Root, ["build", SolutionPath, "-warnaserror", "--nologo"]);
+        using Process process = Start("dotnet", Root, ["build", Path.GetFileName(SolutionPath), "-warnaserror", "--nologo", "--disable-build-servers"]);
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
         Task<string> stderr = process.StandardError.ReadToEndAsync();
         using CancellationTokenSource timeout = new(TimeSpan.FromMinutes(2));

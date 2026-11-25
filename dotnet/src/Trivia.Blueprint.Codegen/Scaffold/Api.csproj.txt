@@ -8,6 +8,7 @@
     <OpenApiGenerateDocumentsOptions>--openapi-version OpenApi3_1 --file-name openapi</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../{{App}}.ServiceDefaults/{{App}}.ServiceDefaults.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
