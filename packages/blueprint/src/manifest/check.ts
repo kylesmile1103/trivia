@@ -2,6 +2,7 @@ import { compareBytes } from '../serialize.js'
 import type { Blueprint } from '../store.js'
 import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import type { CustomPage } from '../types/page.js'
+import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
 import type { PropSchema } from './types.js'
 
@@ -79,4 +80,9 @@ export function checkManifests(blueprint: Blueprint, manifests: ResolvedManifest
     if (entry.kind === 'page' && entry.doc?.kind === 'custom') checkPage(entry.doc, doc, manifests, out)
   }
   return out
+}
+
+/** Supply this check as `ctx.manifests` to validate() and to guarded ops. */
+export function manifestCheck(manifests: ResolvedManifests): LayerCheck {
+  return (blueprint) => checkManifests(blueprint, manifests)
 }
