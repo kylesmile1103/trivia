@@ -1,0 +1,18 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000000",
+  "name": "KitTree",
+  "route": "/kit/tree",
+  "kind": "custom",
+  "root": "n_00000000000000000000000001",
+  "nodes": {
+    "n_00000000000000000000000001": {
+      "type": "Tree",
+      "name": "tree",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    }
+  }
+}

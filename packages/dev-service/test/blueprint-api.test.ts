@@ -324,3 +324,20 @@ it('FR-KT-01 publishes the kit through the existing component response', async (
   expect(result.data.schemas['Tabs']).toMatchObject({ properties: { tabs: expect.any(Object) } })
   expect(Object.keys(result.data).sort()).toEqual(['components', 'schemas'])
 })
+
+it('FR-KT-07 returns the published deferred reason for a tree component', async () => {
+  const dir = new URL('../../blueprint-compiler/fixtures/kit/invalid/', import.meta.url)
+  writeBlueprint('app.blueprint.json', fs.readFileSync(new URL('../app.blueprint.json', dir), 'utf8'))
+  writeBlueprint('pages/KitTree.page.json', fs.readFileSync(new URL('KitTree.page.json', dir), 'utf8'))
+  const response = await get()
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    data: {
+      diagnostics: [{
+        code: 'unknown_component', pointer: '/nodes/n_00000000000000000000000001/type',
+        hint: { text: 'Tree is deferred in the kit. Tree navigation and lazy children need a dedicated adapter. Use a local component with its own manifest.' },
+      }],
+    },
+  })
+})

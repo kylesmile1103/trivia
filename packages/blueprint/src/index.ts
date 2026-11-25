@@ -54,5 +54,5 @@ export {
   resolveManifests,
   type ManifestAliases, type ManifestInputs, type ManifestResolution, type ResolvedManifest, type ResolvedManifests,
 } from './manifest/resolve.js'
-export { exposedScope, manifestCheck, type ExposedScope } from './manifest/check.js'
+export { exposedScope, manifestCheck, type DeferredComponents, type ExposedScope } from './manifest/check.js'
 export { manifestsToJsonSchema, type ManifestIndexEntry, type ManifestJsonSchemas } from './manifest/json-schema.js'

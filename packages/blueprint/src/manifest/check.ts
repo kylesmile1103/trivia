@@ -6,6 +6,9 @@ import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
 import { configuredTabs, manifestProps, manifestSlots, type ComponentManifest, type PropSchema } from './types.js'
 
+export type DeferredComponents = Readonly<Record<string, { reason: string; suggestion: string }>>
+
+// Spec 002 callers can still validate without a configured catalog.
 const deferredTypes = new Set([
   'Tree', 'TreeSelect', 'Cascader', 'Transfer', 'Upload', 'TimePicker', 'DateRangePicker', 'Steps', 'Rate', 'Tour', 'Chart',
 ])
@@ -38,16 +41,19 @@ function installHint({ registry, item, import: specifier }: ComponentManifest['s
   return `pnpm dlx shadcn@latest add ${arg}`
 }
 
-function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, out: Diagnostic[]): void {
+function checkPage(
+  page: CustomPage, doc: string, manifests: ResolvedManifests, out: Diagnostic[], deferred?: DeferredComponents,
+): void {
   const report = (code: string, path: string[], message: string, hint?: string) => {
     out.push({ code, doc, pointer: toPointer(path), message, severity: 'error', ...(hint && { hint: { text: hint } }) })
   }
   for (const [id, node] of byKey(page.nodes)) {
     const manifest = lookup(manifests, node.type)
     if (!manifest) {
-      const hint = deferredTypes.has(node.type)
-        ? `${node.type} is deferred in the kit. Use a local component with its own manifest.`
-        : undefined
+      const entry = deferred && Object.hasOwn(deferred, node.type) ? deferred[node.type] : undefined
+      const hint = entry ? `${node.type} is deferred in the kit. ${entry.reason} ${entry.suggestion}`
+        : !deferred && deferredTypes.has(node.type)
+          ? `${node.type} is deferred in the kit. Use a local component with its own manifest.` : undefined
       report('unknown_component', ['nodes', id, 'type'], `Unknown component ${node.type}`, hint)
       continue
     }
@@ -90,8 +96,10 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
         }
         const prop = props.get(name)
         if (!prop) {
+          const reason = manifest.deferred && Object.hasOwn(manifest.deferred, name) ? manifest.deferred[name] : undefined
           report('unknown_prop', path, `${node.type} has no prop "${name}"`,
-            `Check the component source and its blueprint/manifests/${node.type}.manifest.json override.`)
+            reason ? `${node.type}.${name} is deferred. ${reason}`
+              : `Check the component source and its blueprint/manifests/${node.type}.manifest.json override.`)
         } else if (map === 'props') {
           const expected = invalidValue(prop, value)
           if (expected) report('invalid_prop_value', path, `${node.type}.${name} expects ${expected}`)
@@ -116,17 +124,17 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
 }
 
 /** Layer 3 checks for the custom pages that passed the earlier layers. */
-export function checkManifests(blueprint: Blueprint, manifests: ResolvedManifests): Diagnostic[] {
+export function checkManifests(blueprint: Blueprint, manifests: ResolvedManifests, deferred?: DeferredComponents): Diagnostic[] {
   const out: Diagnostic[] = []
   for (const [doc, entry] of byKey(blueprint.docs)) {
-    if (entry.kind === 'page' && entry.doc?.kind === 'custom') checkPage(entry.doc, doc, manifests, out)
+    if (entry.kind === 'page' && entry.doc?.kind === 'custom') checkPage(entry.doc, doc, manifests, out, deferred)
   }
   return out
 }
 
 /** Supply this check as `ctx.manifests` to validate() and to guarded ops. */
-export function manifestCheck(manifests: ResolvedManifests): LayerCheck {
-  return (blueprint) => checkManifests(blueprint, manifests)
+export function manifestCheck(manifests: ResolvedManifests, deferred?: DeferredComponents): LayerCheck {
+  return (blueprint) => checkManifests(blueprint, manifests, deferred)
 }
 
 export interface ExposedScope {

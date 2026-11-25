@@ -1,6 +1,6 @@
 import {
   exposedScope, expressionCheck, manifestCheck, toPointer,
-  type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ResolvedManifests, type ValidationContext,
+  type DeferredComponents, type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ResolvedManifests, type ValidationContext,
 } from '@trivia/blueprint'
 import { checkDataTable, checkForm } from '@trivia/blueprint-compiler'
 import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
@@ -86,8 +86,9 @@ export function validationContext(
   { manifests, diagnostics }: ManifestResolution,
   contract: TriviaManifest | null,
   engine: EngineBinding,
+  deferred?: DeferredComponents,
 ): ValidationContext {
-  const checkManifests = manifestCheck(manifests)
+  const checkManifests = manifestCheck(manifests, deferred)
   return {
     manifests: (blueprint) => [...diagnostics, ...checkManifests(blueprint)],
     contract: contractCheck(contract, manifests),

@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import {
   APP_DOC, BLUEPRINT_VERSION, MODEL_DOC, apply, blueprintOpSchema, componentManifestSchema, loadBlueprint, resolveManifests, ulidSource,
-  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type Diagnostic, type DocEntry, type ManifestResolution,
+  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type DeferredComponents, type Diagnostic, type DocEntry, type ManifestResolution,
   type ApplyOutcome,
 } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
@@ -17,6 +17,8 @@ const kitDir = new URL('./kit/', import.meta.resolve('@trivia/blueprint-compiler
 const kit = fs.readdirSync(kitDir).filter((file) => file.endsWith('.manifest.json')).sort().map((file) =>
   componentManifestSchema.parse(JSON.parse(fs.readFileSync(new URL(file, kitDir), 'utf8'))),
 )
+
+const deferred = JSON.parse(fs.readFileSync(new URL('deferred.json', kitDir), 'utf8')) as DeferredComponents
 
 export function readBytes(root: string, file: string): Buffer | null {
   try {
@@ -142,7 +144,7 @@ export class BlueprintWorkspace implements BlueprintStore {
   }
 
   context(manifests = this.manifests(), contract = this.contract()) {
-    return validationContext(manifests, contract, this.#engine)
+    return validationContext(manifests, contract, this.#engine, deferred)
   }
 
   async apply(ops: readonly unknown[]): Promise<ApplyOutcome> {

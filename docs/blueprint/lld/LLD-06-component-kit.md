@@ -144,6 +144,10 @@ standalone input, `Steps`, `Rate`, `Tour`, charts. `kit/deferred.json` lists the
 one-line reason and the suggested route (a local component with its own manifest). A node of
 such a type is `unknown_component`, with that text as the hint.
 
+⚑ The dev service injects the published list into layer 3. Standalone manifest validation
+keeps the original generic hint when a caller omits the catalog. The DataTable manifest also
+provides a reason for each deferred table option at its `unknown_prop` diagnostic.
+
 ## 6. The kit fixture (FR-KT-06)
 
 `packages/blueprint-compiler/fixtures/kit/` is a blueprint with one custom page per group,

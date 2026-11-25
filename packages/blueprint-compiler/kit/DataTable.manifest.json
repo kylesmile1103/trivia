@@ -83,5 +83,11 @@
       ]
     }
   ],
-  "template": {}
+  "template": {},
+  "deferred": {
+    "fixedColumns": "Fixed columns need a dedicated layout configuration.",
+    "columnResize": "Column resizing needs a dedicated interaction configuration.",
+    "treeRows": "Tree rows need a hierarchy and expansion model.",
+    "editableCells": "Editable cells need per-field rules and mutation behavior."
+  }
 }

@@ -33,7 +33,7 @@
 
 ## Phase 6: User Story 4 - Limits (P2)
 
-- [ ] T014 [US4] `kit/deferred.json` and the `unknown_component` hint. Fixture and test
+- [x] T014 [US4] `kit/deferred.json` and the `unknown_component` hint. Fixture and test
 
 ## Phase 7: Base UI
 

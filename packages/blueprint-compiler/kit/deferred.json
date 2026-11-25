@@ -1,0 +1,46 @@
+{
+  "Tree": {
+    "reason": "Tree navigation and lazy children need a dedicated adapter.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "TreeSelect": {
+    "reason": "Tree keyboard navigation and selection need a dedicated adapter.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Cascader": {
+    "reason": "Dependent levels need an explicit value and loading model.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Transfer": {
+    "reason": "Two-panel selection and moves need a dedicated adapter.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Upload": {
+    "reason": "File transport belongs to the application and its contract.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "TimePicker": {
+    "reason": "Time-only values need a dedicated input contract.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "DateRangePicker": {
+    "reason": "The registry currently supplies it as a table filter.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Steps": {
+    "reason": "Step navigation and validation need an explicit workflow model.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Rate": {
+    "reason": "Rating values and keyboard behavior need a dedicated adapter.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Tour": {
+    "reason": "Tour targets and progression need an explicit workflow model.",
+    "suggestion": "Use a local component with its own manifest."
+  },
+  "Chart": {
+    "reason": "Series, axes and data transformations need a chart manifest.",
+    "suggestion": "Use a local component with its own manifest."
+  }
+}

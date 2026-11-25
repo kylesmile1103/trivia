@@ -67,6 +67,7 @@ const manifestFields = z.strictObject({
   }),
   props: z.array(propSchema),
   configuration: z.array(propSchema).optional(),
+  deferred: z.record(propName, text).optional(),
   slots: z.array(slotSchema),
   events: z.array(eventSchema),
   exposes: z.array(exposedValueSchema),
