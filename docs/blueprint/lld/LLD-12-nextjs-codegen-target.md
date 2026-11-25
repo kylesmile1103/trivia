@@ -5,9 +5,39 @@
 - Code: `packages/blueprint-compiler/src/targets/next-refine/` and
   `packages/blueprint-compiler/templates/next-refine/`.
 
-Next.js was at 16.x when this was written, with Cache Components opt-in and due to become the
-default in 17. Pin the version when the phase starts, and re-read the caching and `proxy.ts`
-documentation first.
+## 0. Framework versions and APIs
+
+⚑ Match the installed and exercised App Router host from LLD-13. Pin `next@16.4.6`,
+`react@19.2.7`, `react-dom@19.2.7`, `@refinedev/core@5.0.12`,
+`@refinedev/nextjs-router@7.0.5`, `@refinedev/react-hook-form@5.0.4` and
+`@tanstack/react-query@5.103.2`. The current Next.js documentation covers this installed
+release.
+
+- The root layout owns `html` and `body`. A `page.tsx` creates a route and a parenthesized
+  route group is omitted from its URL. An underscore-prefixed URL segment must have its leading
+  underscore escaped as `%5F` on disk. Await `params` and `searchParams`; a catch-all parameter
+  is an array and repeated search keys also produce arrays.
+  [Project structure](https://nextjs.org/docs/app/getting-started/project-structure),
+  [page props](https://nextjs.org/docs/app/api-reference/file-conventions/page),
+  [dynamic segments](https://nextjs.org/docs/app/api-reference/file-conventions/dynamic-routes).
+- A `next.config.ts` rewrite can send a wildcard path to an external origin. Next.js 16
+  renamed Middleware to `proxy.ts`, which runs on Node. The API forwarding here only needs
+  a configuration rewrite. [Rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites),
+  [Proxy](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+- Cache Components is opt-in through `cacheComponents`. Its `'use cache'` directive supports
+  `cacheLife`; a shared cached function cannot read request headers or cookies. With Cache
+  Components enabled, runtime data outside cached functions can require a Suspense boundary.
+  [Caching](https://nextjs.org/docs/app/getting-started/caching),
+  [cacheLife](https://nextjs.org/docs/app/api-reference/functions/cacheLife).
+- Refine runs in a client provider with the App Router binding. The installed router exports
+  the same binding from its root and `/app`. The server entry can await a fetch before rendering
+  the client view. The installed `useShow` and core `useForm` forward `queryOptions` to
+  `useOne`, and the React Hook Form adapter supplies core options through `refineCoreProps`.
+  Initial single-record data has the shape `{ data: record }`. TanStack Query treats initial
+  data as immediately stale by default, so pass a freshness option to avoid the mount refetch.
+  [Refine Next.js guide](https://refine.dev/core/docs/routing/integrations/next-js/),
+  [Refine useOne](https://refine.dev/core/docs/data/hooks/use-one/#queryoptions),
+  [TanStack initial data](https://tanstack.com/query/latest/docs/framework/react/guides/initial-query-data).
 
 ## 1. What a target is
 
