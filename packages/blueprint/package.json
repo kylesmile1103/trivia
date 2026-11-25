@@ -11,13 +11,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./schemas/*": "./schemas/*"
   },
   "files": [
-    "dist"
+    "dist",
+    "schemas"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/emit-schemas.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
@@ -31,6 +33,11 @@
     "vitest": "^5.0.3"
   },
   "nx": {
-    "name": "blueprint"
+    "name": "blueprint",
+    "targets": {
+      "build": {
+        "outputs": ["{projectRoot}/dist", "{projectRoot}/schemas"]
+      }
+    }
   }
 }

@@ -1,0 +1,1002 @@
+{
+  "$id": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "title": "Trivia Blueprint Page",
+  "description": "A custom or contract page in a Trivia blueprint.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "const": "https://trivia.dev/schemas/blueprint/page.v1.json"
+        },
+        "blueprintVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^pg_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "route": {
+          "type": "string",
+          "pattern": "^\\/(?:(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*)(?:\\/(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*))*)?$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "list",
+            "create",
+            "edit",
+            "show"
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "public": {
+          "default": false,
+          "type": "boolean"
+        },
+        "options": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              }
+            },
+            "hideFields": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              }
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              }
+            },
+            "rowActions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "steps": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "setState"
+                            },
+                            "name": {
+                              "type": "string",
+                              "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                            },
+                            "value": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "name",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "navigate"
+                            },
+                            "to": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "mutate"
+                            },
+                            "resource": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "operation": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            },
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "resource",
+                            "operation"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "refetch"
+                            },
+                            "query": {
+                              "type": "string",
+                              "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "query"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "toast"
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            },
+                            "variant": {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "success",
+                                "info",
+                                "warning",
+                                "error"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "call"
+                            },
+                            "handler": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "handler"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "label",
+                  "steps"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "headerActions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "steps": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "setState"
+                            },
+                            "name": {
+                              "type": "string",
+                              "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                            },
+                            "value": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "name",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "navigate"
+                            },
+                            "to": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "mutate"
+                            },
+                            "resource": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "operation": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            },
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "resource",
+                            "operation"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "refetch"
+                            },
+                            "query": {
+                              "type": "string",
+                              "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "query"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "toast"
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "x-trivia-expression": true
+                            },
+                            "variant": {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "success",
+                                "info",
+                                "warning",
+                                "error"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "do": {
+                              "type": "string",
+                              "const": "call"
+                            },
+                            "handler": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+                            }
+                          },
+                          "required": [
+                            "do",
+                            "handler"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "label",
+                  "steps"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "$schema",
+        "blueprintVersion",
+        "id",
+        "name",
+        "route",
+        "kind",
+        "resource"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "const": "https://trivia.dev/schemas/blueprint/page.v1.json"
+        },
+        "blueprintVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^pg_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "route": {
+          "type": "string",
+          "pattern": "^\\/(?:(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*)(?:\\/(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*))*)?$"
+        },
+        "kind": {
+          "type": "string",
+          "const": "custom"
+        },
+        "resource": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "public": {
+          "default": false,
+          "type": "boolean"
+        },
+        "root": {
+          "type": "string",
+          "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "nodes": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "pattern": "^(?:[A-Z][A-Za-z0-9]*|[a-z][a-z0-9]*)$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+              },
+              "parent": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "slot": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "order": {
+                "type": "string",
+                "pattern": "^(?!A0{26}$)(?:a[0-9A-Za-z]{1}|A[0-9A-Za-z]{26}|b[0-9A-Za-z]{2}|B[0-9A-Za-z]{25}|c[0-9A-Za-z]{3}|C[0-9A-Za-z]{24}|d[0-9A-Za-z]{4}|D[0-9A-Za-z]{23}|e[0-9A-Za-z]{5}|E[0-9A-Za-z]{22}|f[0-9A-Za-z]{6}|F[0-9A-Za-z]{21}|g[0-9A-Za-z]{7}|G[0-9A-Za-z]{20}|h[0-9A-Za-z]{8}|H[0-9A-Za-z]{19}|i[0-9A-Za-z]{9}|I[0-9A-Za-z]{18}|j[0-9A-Za-z]{10}|J[0-9A-Za-z]{17}|k[0-9A-Za-z]{11}|K[0-9A-Za-z]{16}|l[0-9A-Za-z]{12}|L[0-9A-Za-z]{15}|m[0-9A-Za-z]{13}|M[0-9A-Za-z]{14}|n[0-9A-Za-z]{14}|N[0-9A-Za-z]{13}|o[0-9A-Za-z]{15}|O[0-9A-Za-z]{12}|p[0-9A-Za-z]{16}|P[0-9A-Za-z]{11}|q[0-9A-Za-z]{17}|Q[0-9A-Za-z]{10}|r[0-9A-Za-z]{18}|R[0-9A-Za-z]{9}|s[0-9A-Za-z]{19}|S[0-9A-Za-z]{8}|t[0-9A-Za-z]{20}|T[0-9A-Za-z]{7}|u[0-9A-Za-z]{21}|U[0-9A-Za-z]{6}|v[0-9A-Za-z]{22}|V[0-9A-Za-z]{5}|w[0-9A-Za-z]{23}|W[0-9A-Za-z]{4}|x[0-9A-Za-z]{24}|X[0-9A-Za-z]{3}|y[0-9A-Za-z]{25}|Y[0-9A-Za-z]{2}|z[0-9A-Za-z]{26}|Z[0-9A-Za-z]{1})(?:[0-9A-Za-z]*[1-9A-Za-z])?$"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "parent",
+              "slot",
+              "order"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "props": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^(?!__proto__$)[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/__schema0"
+            }
+          }
+        },
+        "bindings": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^(?!__proto__$)[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "x-trivia-expression": true
+            }
+          }
+        },
+        "styles": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "className": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "className"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "control": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  }
+                },
+                "required": [
+                  "when"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  },
+                  "each": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  },
+                  "as": {
+                    "type": "string",
+                    "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  }
+                },
+                "required": [
+                  "each",
+                  "as",
+                  "key"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "state": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "initial": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "required": [
+              "type",
+              "initial"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "queries": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "list"
+                  },
+                  "resource": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "params": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "enabled": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  }
+                },
+                "required": [
+                  "kind",
+                  "resource"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "one"
+                  },
+                  "resource": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "params": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "enabled": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  }
+                },
+                "required": [
+                  "kind",
+                  "resource"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "custom"
+                  },
+                  "resource": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "operation": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "params": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "enabled": {
+                    "type": "string",
+                    "minLength": 1,
+                    "x-trivia-expression": true
+                  }
+                },
+                "required": [
+                  "kind",
+                  "resource",
+                  "operation"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "actions": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^n_[0-7][0-9A-HJKMNP-TV-Z]{25}\\.on[A-Z][A-Za-z0-9]*$"
+          },
+          "additionalProperties": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "setState"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "name",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "navigate"
+                    },
+                    "to": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "to"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "mutate"
+                    },
+                    "resource": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "input": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "resource",
+                    "operation"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "refetch"
+                    },
+                    "query": {
+                      "type": "string",
+                      "pattern": "^(?!(?:await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|package|private|protected|public|return|static|super|switch|this|throw|true|try|typeof|var|void|while|with|yield)$)[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "query"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "toast"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "x-trivia-expression": true
+                    },
+                    "variant": {
+                      "type": "string",
+                      "enum": [
+                        "default",
+                        "success",
+                        "info",
+                        "warning",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "do": {
+                      "type": "string",
+                      "const": "call"
+                    },
+                    "handler": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+                    }
+                  },
+                  "required": [
+                    "do",
+                    "handler"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "$schema",
+        "blueprintVersion",
+        "id",
+        "name",
+        "route",
+        "kind",
+        "root"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    }
+  }
+}
