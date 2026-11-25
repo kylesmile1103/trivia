@@ -183,6 +183,11 @@ The engine's editor schema deliberately omits some inherited props needed by the
 - e2e (`e2e/blueprint-kit.spec.ts`): eject all pages, load each route, check it renders
   without console errors, type into an input and see a bound text change, sort and filter the
   table against the mock API, submit the form.
+
+⚑ The kit example registers the customer resource's list and create paths so Refine can
+redirect a successful create to the ejected table. The Playwright project exercises the
+emitted fixture through the same guarded eject routes and restores generated files and
+router edits afterwards.
 - A check that fails when a kit type has no page in the fixture.
 
 ## 7. Open points

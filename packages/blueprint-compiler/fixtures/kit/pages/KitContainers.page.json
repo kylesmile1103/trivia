@@ -276,7 +276,7 @@
   },
   "bindings": {
     "n_00000000000000000000000010": {
-      "children": "ui.tabs.value"
+      "children": "`Active tab: ${ui.tabs.value}`"
     },
     "n_00000000000000000000000017": {
       "children": "ui.dialog.open ? \"dialog open\" : \"dialog closed\""

@@ -9,7 +9,9 @@ import { Layout } from "@/components/refine-ui/layout/layout"
 export default function App() {
   return (
     <BrowserRouter>
-      <Refine dataProvider={dataProvider} routerProvider={routerProvider} resources={[]} options={{ disableTelemetry: true }}>
+      <Refine dataProvider={dataProvider} routerProvider={routerProvider} resources={[
+        { name: "customers", list: "/kit/table", create: "/kit/form", meta: { label: "Customers" } },
+      ]} options={{ disableTelemetry: true }}>
         <style id="trivia-theme" />
         <TooltipProvider>
           <Routes>

@@ -63,7 +63,7 @@ export function KitContainers() {
           <p>Account details</p>
         </TabsContent>
       </Tabs>
-      <p>{tabsValue}</p>
+      <p>{`Active tab: ${tabsValue}`}</p>
       <Dialog
         onOpenChange={(event) => void handleDialogOnOpenChange(event).catch(console.error)}
         open={dialogOpen}
