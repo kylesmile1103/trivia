@@ -26,7 +26,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 4: User Story 2 - Guarded operations (P1)
 
-- [ ] T012 [US2] Op fixtures `fixtures/ops/<op>/{before,ops,after}` for the app and page groups
+- [x] T012 [US2] Op fixtures `fixtures/ops/<op>/{before,ops,after}` for the app and page groups
 - [ ] T013 [US2] `src/apply/page.ts`: `createPage`, `deletePage`, `setPageMeta`
 - [ ] T014 [US2] `src/apply/nodes.ts`: `addNode`, `removeNode` (subtree), `moveNode`, `renameNode` (reference rewrite through the injected function)
 - [ ] T015 [P] [US2] `src/apply/values.ts`: `setProp`, `setBinding`, `setStyle`, `setControl`

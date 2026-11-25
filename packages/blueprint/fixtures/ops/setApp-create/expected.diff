@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/app.blueprint.json
++{
++  "$schema": "https://trivia.dev/schemas/blueprint/app.v1.json",
++  "blueprintVersion": 1,
++  "name": "Shop",
++  "targets": {
++    "web": "next-refine"
++  }
++}

@@ -1,0 +1,8 @@
+--- a/app.blueprint.json
++++ b/app.blueprint.json
+-    },
+-    {
+-      "page": "CustomerOverview",
+-      "label": "Overview"
+--- a/pages/CustomerOverview.page.json
++++ /dev/null

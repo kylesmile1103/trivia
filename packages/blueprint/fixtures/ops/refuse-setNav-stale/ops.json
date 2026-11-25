@@ -1,0 +1,15 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setNav",
+      "doc": "app.blueprint.json",
+      "baseRev": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "nav": []
+    }
+  ],
+  "error": {
+    "code": "conflict",
+    "op": 0
+  }
+}

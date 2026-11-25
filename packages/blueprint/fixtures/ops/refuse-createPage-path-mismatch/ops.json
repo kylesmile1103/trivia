@@ -1,0 +1,18 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "createPage",
+      "doc": "pages/Foo.page.json",
+      "baseRev": null,
+      "name": "Bar",
+      "route": "/bar",
+      "kind": "list",
+      "resource": "Bar"
+    }
+  ],
+  "error": {
+    "code": "invalid_op",
+    "op": 0
+  }
+}

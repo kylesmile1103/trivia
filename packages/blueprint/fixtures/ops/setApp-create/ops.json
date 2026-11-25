@@ -1,0 +1,14 @@
+{
+  "base": "none",
+  "ops": [
+    {
+      "op": "setApp",
+      "doc": "app.blueprint.json",
+      "baseRev": null,
+      "name": "Shop",
+      "targets": {
+        "web": "next-refine"
+      }
+    }
+  ]
+}

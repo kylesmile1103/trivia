@@ -1,0 +1,14 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setColour",
+      "doc": "pages/CustomerList.page.json",
+      "baseRev": "@current"
+    }
+  ],
+  "error": {
+    "code": "invalid_op",
+    "op": 0
+  }
+}

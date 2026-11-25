@@ -1,0 +1,8 @@
+--- a/app.blueprint.json
++++ b/app.blueprint.json
+-      "page": "CustomerList",
++      "page": "ClientList",
+--- a/pages/CustomerList.page.json
++++ b/pages/ClientList.page.json
+-  "name": "CustomerList",
++  "name": "ClientList",

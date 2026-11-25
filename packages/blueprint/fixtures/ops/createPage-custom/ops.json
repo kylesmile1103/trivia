@@ -1,0 +1,17 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "createPage",
+      "doc": "pages/Dashboard.page.json",
+      "baseRev": null,
+      "name": "Dashboard",
+      "route": "/dashboard",
+      "kind": "custom"
+    }
+  ],
+  "created": {
+    "Dashboard": "pg_00000000000000000000000001",
+    "Dashboard/page": "n_00000000000000000000000002"
+  }
+}

@@ -1,0 +1,20 @@
+--- /dev/null
++++ b/pages/Dashboard.page.json
++{
++  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
++  "blueprintVersion": 1,
++  "id": "pg_00000000000000000000000001",
++  "name": "Dashboard",
++  "route": "/dashboard",
++  "kind": "custom",
++  "root": "n_00000000000000000000000002",
++  "nodes": {
++    "n_00000000000000000000000002": {
++      "type": "div",
++      "name": "page",
++      "parent": null,
++      "slot": null,
++      "order": "a0"
++    }
++  }
++}

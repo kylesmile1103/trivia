@@ -3,21 +3,11 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { FIXTURES, readFixture } from '../../test/helpers.js'
 import { loadBlueprint } from '../store.js'
 import { checkSchema } from './schema.js'
 
-const fixtures = path.resolve(import.meta.dirname, '../../fixtures/invalid/schema_violation')
-
-/** Every file of a fixture directory except expected.json, keyed by its path in the blueprint. */
-export function readFixture(dir: string): Record<string, string> {
-  const files: Record<string, string> = {}
-  for (const entry of fs.readdirSync(dir, { recursive: true, withFileTypes: true })) {
-    if (!entry.isFile() || entry.name === 'expected.json') continue
-    const full = path.join(entry.parentPath, entry.name)
-    files[path.relative(dir, full).split(path.sep).join('/')] = fs.readFileSync(full, 'utf8')
-  }
-  return files
-}
+const fixtures = path.join(FIXTURES, 'invalid/schema_violation')
 
 describe('schema diagnostics (layer 1, FR-BP-05)', () => {
   const cases = fs.readdirSync(fixtures).sort()

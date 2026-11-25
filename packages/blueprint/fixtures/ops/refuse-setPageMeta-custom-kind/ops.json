@@ -1,0 +1,15 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setPageMeta",
+      "doc": "pages/CustomerOverview.page.json",
+      "baseRev": "@current",
+      "kind": "list"
+    }
+  ],
+  "error": {
+    "code": "invalid_op",
+    "op": 0
+  }
+}

@@ -1,0 +1,4 @@
+--- a/app.blueprint.json
++++ b/app.blueprint.json
+-      "label": "Overview"
++      "label": "Dashboard"

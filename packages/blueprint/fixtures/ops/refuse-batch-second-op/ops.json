@@ -1,0 +1,20 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setPageMeta",
+      "doc": "pages/CustomerList.page.json",
+      "baseRev": "@current",
+      "route": "/clients"
+    },
+    {
+      "op": "deletePage",
+      "doc": "pages/Nope.page.json",
+      "baseRev": null
+    }
+  ],
+  "error": {
+    "code": "invalid_op",
+    "op": 1
+  }
+}

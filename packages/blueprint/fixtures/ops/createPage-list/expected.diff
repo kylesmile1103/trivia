@@ -1,0 +1,11 @@
+--- /dev/null
++++ b/pages/Orders.page.json
++{
++  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
++  "blueprintVersion": 1,
++  "id": "pg_00000000000000000000000001",
++  "name": "Orders",
++  "route": "/orders",
++  "kind": "list",
++  "resource": "Order"
++}

@@ -1,0 +1,18 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "createPage",
+      "doc": "pages/CustomerList.page.json",
+      "baseRev": null,
+      "name": "CustomerList",
+      "route": "/customers2",
+      "kind": "list",
+      "resource": "Customer"
+    }
+  ],
+  "error": {
+    "code": "conflict",
+    "op": 0
+  }
+}
