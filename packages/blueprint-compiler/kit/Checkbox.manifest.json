@@ -29,5 +29,21 @@
     }
   ],
   "client": true,
-  "template": {}
+  "template": {},
+  "variants": {
+    "base": {
+      "exposes": [
+        {
+          "name": "checked",
+          "type": "boolean",
+          "initial": false,
+          "via": {
+            "valueProp": "checked",
+            "changeProp": "onCheckedChange",
+            "changeArg": "value"
+          }
+        }
+      ]
+    }
+  }
 }

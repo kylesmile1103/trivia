@@ -39,6 +39,12 @@ Prop names differ by shadcn base. Each manifest carries variants keyed by the pr
 `components.json` style, checked against the real component source in a fixture (LLD-02
 section 6). Radix and Base UI are covered first.
 
+⚑ Exact style variants take precedence over a library-family variant such as `base`.
+Base UI switches and checkboxes return a boolean. Base UI selects, radios and tabs normalize
+a cleared value to an empty string for the blueprint, and Select receives its empty state as
+`null`. The engine recognizes Base UI's direct Select export and the inherited control props
+needed for authored items and labels.
+
 ⚑ Manifest slots describe the outer registry parts. Authors place deeper parts such as
 `BreadcrumbItem` and `DropdownMenuItem` as ordinary nodes in those slots. The resolver
 keeps a project's installed filename for a uniquely resolved shadcn export, so a renamed
@@ -158,6 +164,10 @@ template of LLD-05 with the kit installed, on a mock contract.
 ⚑ The Radix example uses shadcn CLI 4.21.3 with the `radix-nova` preset and a self-contained
 snapshot of the banking OpenAPI contract, provider, and mock. The Refine registry filter
 label map adds `eqs` and `nes` to match the installed Refine 5.0.12 operator union.
+
+⚑ The second type-check uses the committed `base-nova` sources, Base UI 1.9.0, and the
+parent fixture's Refine table registry. Its UI alias is distinct so the shared Refine
+registry keeps its own component dependencies.
 
 ⚑ The manifest checker locates exports through the engine's `components()` result and
 uses the installed TypeScript checker for inherited props and matching wrapper exports.

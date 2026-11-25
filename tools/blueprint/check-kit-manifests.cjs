@@ -1,5 +1,5 @@
 // Run after building @trivia/engine. The registry sources used here are committed fixtures.
-const { readFileSync, readdirSync } = require('node:fs')
+const { existsSync, readFileSync, readdirSync } = require('node:fs')
 const { createRequire } = require('node:module')
 const { join, resolve } = require('node:path')
 const { pathToFileURL } = require('node:url')
@@ -9,28 +9,35 @@ const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'))
 
 async function main() {
   const directory = resolve(process.argv[2] ?? join(repo, 'packages/blueprint-compiler/kit'))
-  const root = resolve(process.argv[3] ?? join(repo, 'examples/blueprint-kit'))
+  const radix = join(repo, 'examples/blueprint-kit')
+  const root = resolve(process.argv[3] ?? radix)
   const { aliases, style } = readJson(join(root, 'components.json'))
   const project = join(root, 'tsconfig.json')
   const ts = createRequire(project)('typescript')
   const config = ts.readConfigFile(project, ts.sys.readFile)
   if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root)
-  const program = ts.createProgram(parsed.fileNames, parsed.options)
-  const checker = program.getTypeChecker()
   const { components } = await import(pathToFileURL(join(repo, 'crates/trivia_napi/index.js')).href)
-  const libraries = [['src/components/ui', aliases.ui], ['src/components/refine-ui/data-table', aliases.components + '/refine-ui/data-table']]
-  const analyzed = libraries.flatMap(([dir, alias]) => {
-    const result = JSON.parse(components(root, dir, alias))
+  const tableDir = 'src/components/refine-ui/data-table'
+  const variantFixture = root === join(radix, 'base-ui')
+  const tableRoot = variantFixture ? radix : root
+  const tableAlias = (variantFixture ? '@/components' : aliases.components) + '/refine-ui/data-table'
+  const libraries = [[root, 'src/components/ui', aliases.ui]]
+  if (existsSync(join(tableRoot, tableDir))) libraries.push([tableRoot, tableDir, tableAlias])
+  const analyzed = libraries.flatMap(([projectRoot, dir, alias]) => {
+    const result = JSON.parse(components(projectRoot, dir, alias))
     if (!result.ok) throw new Error(result.error.message)
-    return result.data
+    return result.data.map((component) => ({ ...component, absolute: resolve(projectRoot, component.file) }))
   })
+  const program = ts.createProgram([...new Set([...parsed.fileNames, ...analyzed.map(({ absolute }) => absolute)])], parsed.options)
+  const checker = program.getTypeChecker()
 
   const failures = []
   const files = readdirSync(directory).filter((name) => name.endsWith('.manifest.json')).sort()
   for (const file of files) {
     const base = readJson(join(directory, file))
-    const { type, source, composite, events, exposes, slots } = { ...base, ...base.variants?.[style] }
+    const variant = base.variants?.[style] ?? base.variants?.[style.split('-')[0]]
+    const { type, source, composite, events, exposes, slots } = { ...base, ...variant }
     const report = (name, description) => failures.push(`${type}: ${name} ${description}`)
     const component = analyzed.find(({ name, importSource }) =>
       name === source.import.name && (['ui', 'refine-ui'].includes(source.import.from) || source.import.from === importSource))
@@ -39,7 +46,7 @@ async function main() {
       continue
     }
 
-    const module = program.getSourceFile(resolve(root, component.file))
+    const module = program.getSourceFile(component.absolute)
     const symbol = module && checker.getSymbolAtLocation(module)
     const exports = symbol ? checker.getExportsOfModule(symbol) : []
     for (const name of new Set([...Object.values(source.parts ?? {}), ...slots.flatMap((slot) => slot.wrapper ?? [])])) {

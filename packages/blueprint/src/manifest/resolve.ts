@@ -103,7 +103,9 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
   for (const [type, selectedManifest] of [...selected].sort(([a], [b]) => compareBytes(a, b))) {
     if (!PAGE_NAME.test(type)) continue
     const { variants, ...base } = selectedManifest
-    const variant = style !== undefined && variants && Object.hasOwn(variants, style) ? variants[style] : undefined
+    const family = style?.split('-')[0]
+    const variantKey = style && variants && Object.hasOwn(variants, style) ? style : family
+    const variant = variantKey && variants && Object.hasOwn(variants, variantKey) ? variants[variantKey] : undefined
     const replacements = Object.fromEntries(Object.entries(variant ?? {}).filter(([, value]) => value !== undefined))
     const manifest = { ...base, ...replacements }
     if (manifest.composite === 'Form' && !byName.has(manifest.source.import.name) && byName.has('FormField')) {
@@ -125,7 +127,7 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
       ? ui + '/' + component.importSource.split('/').at(-1)
       : (source.import.from === 'refine-ui' ? component?.importSource : undefined) ?? declaredFrom ?? component?.importSource ?? 'ui'
     const known = new Set(component?.props.map(({ name }) => name))
-    if (component && overrideTypes.has(type)) inspectOverride(manifest, style, variant, known, diagnostics)
+    if (component && overrideTypes.has(type)) inspectOverride(manifest, variantKey, variant, known, diagnostics)
     const descriptions: Array<[string, string]> = []
     for (const { name, description } of manifest.props) {
       if (known.has(name) && description !== undefined) descriptions.push([name, description])

@@ -48,5 +48,21 @@
       "optional": true,
       "source": "declared"
     }
-  ]
+  ],
+  "variants": {
+    "base": {
+      "exposes": [
+        {
+          "name": "value",
+          "type": "string",
+          "initial": "",
+          "via": {
+            "valueProp": "value",
+            "changeProp": "onValueChange",
+            "changeArg": "valueToString"
+          }
+        }
+      ]
+    }
+  }
 }

@@ -89,3 +89,28 @@ export async function kitFormFieldContext(): Promise<CompileContext> {
     rmSync(temp, { recursive: true, force: true })
   }
 }
+
+
+export async function kitBaseContext(): Promise<CompileContext> {
+  const base = kitContext(new URL('base-ui/', kitApp))
+  const radix = await kitServiceContext()
+  // The Base UI fixture shares the installed Refine table library from its parent app.
+  const manifests = { ...base.manifests, DataTable: radix.manifests?.['DataTable'] }
+  const installed = new Set(radix.facts.installed)
+  for (const manifest of Object.values(manifests)) {
+    if (manifest?.installed) installed.add(manifest.source.import.from)
+  }
+  const module = new URL('../../dev-service/dist/refine/scaffold.js', import.meta.url)
+  const { generateRefineSnippets } = await import(module.href)
+  return {
+    ...base, manifests, contract: radix.contract ?? null,
+    facts: { ...base.facts, installed },
+    refineSnippets: generateRefineSnippets({
+      ui: base.facts.aliases['ui'], refineUi: '@/components/refine-ui', textarea: true, style: 'field',
+    }, true),
+    validation: {
+      manifests: manifestCheck(manifests),
+      expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),
+    },
+  }
+}

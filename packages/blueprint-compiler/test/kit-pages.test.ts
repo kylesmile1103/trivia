@@ -4,7 +4,7 @@ import { loadBlueprint } from '@trivia/blueprint'
 import { expect, it } from 'vitest'
 
 import { checkDataTable, compilePage } from '../src/index.js'
-import { compileKitPage, fixture, fixtureDir, kitFormFieldContext, kitManifests, kitServiceContext } from './kit-fixture.js'
+import { compileKitPage, fixture, fixtureDir, kitBaseContext, kitFormFieldContext, kitManifests, kitServiceContext } from './kit-fixture.js'
 
 it('FR-KT-01 compiles the action and display kit with the installed slot parts', async () => {
   expect(kitManifests().map(({ type }) => type)).toEqual(expect.arrayContaining([
@@ -128,4 +128,15 @@ it('FR-KT-03 compiles forms with matching inputs, defaults and rules in both pro
   expect(date.code).toContain('<Calendar')
   expect(date.code).toContain('mode="single"')
   expect(date.code).toContain('birthDate: z.iso.date(')
+})
+
+it('SC-002 compiles the same component pages against the Base UI registry', async () => {
+  const context = await kitBaseContext()
+  expect(context.manifests?.['Checkbox']?.exposes[0]?.via.changeArg).toBe('value')
+  for (const page of ['KitDisplay', 'KitInputs', 'KitContainers', 'KitTable', 'KitForm']) {
+    const emitted = compileKitPage(page, context)
+    expect(emitted.requires).toEqual([])
+    expect(emitted.code).toContain('from "@base/components/ui/')
+    await expect(emitted.code).toMatchFileSnapshot(fileURLToPath(new URL('golden/base-ui/' + page + '.tsx', fixtureDir)))
+  }
 })

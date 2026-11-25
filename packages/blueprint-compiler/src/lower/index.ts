@@ -178,8 +178,10 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       change.updates.push({ setter: value.update, value: value.arg })
       changes.set(value.changeProp, change)
     }
+    const changed = (arg: string, input: string) => arg === 'valueToString'
+      ? 'String(' + input + ' ?? ' + quote('', facts.style) + ')' : arg.replace(/^(event|value)/, input)
     const changeSteps = (prop: string, event: string): StepIR[] =>
-      (changes.get(prop)?.updates ?? []).map(({ setter, value }) => ({ code: setter + '(' + value.replace(/^(event|value)/, event) + ')' }))
+      (changes.get(prop)?.updates ?? []).map(({ setter, value }) => ({ code: setter + '(' + changed(value, event) + ')' }))
     const node = page.nodes[id]!
     const manifest = manifestOf(node.type)
     for (const binding of byNode.get(id) ?? []) {
@@ -191,7 +193,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       const type = event.payload?.replace(/\bReact\./g, react + '.') ??
         'Parameters<NonNullable<' + react + '.ComponentProps<' + componentType + '>[' + quote(event.prop, facts.style) + ']>>[0]'
       const change = changes.get(event.prop)
-      const value = (change?.updates[0]?.value ?? 'event').replace(/^(event|value)/, '_event')
+      const value = changed(change?.updates[0]?.value ?? 'event', '_event')
       const handler: HandlerIR = {
         name, params: ['_event: ' + type, '_value = ' + value],
         body: [...changeSteps(event.prop, '_event'), ...action.steps(binding.steps, ['actions', binding.key])],

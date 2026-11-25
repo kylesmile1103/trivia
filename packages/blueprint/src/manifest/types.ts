@@ -54,7 +54,7 @@ const exposedValueSchema = z.strictObject({
   via: z.strictObject({
     valueProp: propName,
     changeProp: eventName,
-    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked', 'value === true']),
+    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked', 'value === true', 'valueToString']),
   }),
 })
 

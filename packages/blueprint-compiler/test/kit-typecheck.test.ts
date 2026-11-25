@@ -11,6 +11,7 @@ import { fixture, fixtureDir, kitApp, kitManifests } from './kit-fixture.js'
 
 const compiler = createRequire(import.meta.url).resolve('typescript/bin/tsc')
 const script = fileURLToPath(new URL('../../../tools/blueprint/check-kit-manifests.cjs', import.meta.url))
+const manifests = fileURLToPath(new URL('../kit/', import.meta.url))
 
 it('FR-KT-06 checks every published manifest and type-checks all Radix goldens', () => {
   const result = spawnSync(process.execPath, [script], { encoding: 'utf8' })
@@ -28,11 +29,24 @@ it('FR-KT-03 type-checks the legacy FormField golden against the installed Refin
   checkTypes(app, 'tsconfig.app.json', [new URL('golden/form-field/KitForm.tsx', fixtureDir)])
 }, 60_000)
 
-function checkTypes(project: URL, config: string, sources: URL[]) {
+it('SC-002 checks Base UI variants and type-checks the fixture with both component libraries', () => {
+  const app = new URL('base-ui/', kitApp)
+  const result = spawnSync(process.execPath, [script, manifests, fileURLToPath(app)], { encoding: 'utf8' })
+  expect(result.status, result.stdout + result.stderr).toBe(0)
+  expect(result.stdout).toContain(`Checked ${kitManifests().length} manifests against base-nova`)
+  const pages = Object.keys(fixture()).filter((name) => name.endsWith('.page.json'))
+  const sources = pages.map((file) => {
+    const name = path.basename(file, '.page.json') + '.tsx'
+    return new URL('golden/base-ui/' + name, fixtureDir)
+  })
+  checkTypes(app, 'tsconfig.json', sources, kitApp)
+}, 60_000)
+
+function checkTypes(project: URL, config: string, sources: URL[], dependencies = project) {
   const app = fileURLToPath(project)
   const temp = mkdtempSync(path.join(tmpdir(), 'trivia-kit-tsc-'))
   try {
-    symlinkSync(path.join(app, 'node_modules'), path.join(temp, 'node_modules'), 'junction')
+    symlinkSync(fileURLToPath(new URL('node_modules', dependencies)), path.join(temp, 'node_modules'), 'junction')
     const include = [path.join(app, 'src', '**', '*')]
     for (const source of sources) {
       const name = path.basename(fileURLToPath(source))

@@ -44,6 +44,10 @@ export function kitElement(
   }
   if (manifest.type === 'Select') {
     const placeholder = label('Choose an option')
+    if (manifest.exposes.some(({ via }) => via.changeArg === 'valueToString')) {
+      root.props = root.props.map((prop) => prop.name === 'value' && prop.value.kind === 'expr'
+        ? bound('value', '(' + prop.value.code + ') || null') : prop)
+    }
     root.children.unshift(element(part('SelectTrigger'), [
       element(part('SelectValue'), [], [attr('placeholder', placeholder)]),
     ]))

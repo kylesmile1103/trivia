@@ -46,7 +46,9 @@ and props may carry an optional description.
 ⚑ Kit manifests can declare static-only `configuration` alongside the native props.
 The compiler consumes these values when building JSX, and they appear in the agent prop
 schemas. The `value === true` change argument normalizes a primitive's event value to
-a boolean (LLD-06).
+a boolean (LLD-06). The `valueToString` argument preserves the blueprint string exposure
+when the installed base returns a nullable value. An exact style variant takes precedence
+over an explicitly declared family variant such as `base`.
 
 `componentManifestSchema` parses manifest files. `manifestJsonSchema()` generates the
 equivalent draft 2020-12 schema for the files, including style variants.

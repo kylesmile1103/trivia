@@ -37,7 +37,7 @@
 
 ## Phase 7: Base UI
 
-- [ ] T015 Base UI variants in the manifests. A second example configuration (or a fixture set of component sources) for the check script and `tsc` (SC-002)
+- [x] T015 Base UI variants in the manifests. A second example configuration (or a fixture set of component sources) for the check script and `tsc` (SC-002)
 
 ## Phase 8: User Story 5 - Virtual rows (P3)
 

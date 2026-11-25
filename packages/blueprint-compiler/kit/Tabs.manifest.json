@@ -56,5 +56,21 @@
       "source": "declared",
       "typeText": "Array<{ name: string; label: string }>"
     }
-  ]
+  ],
+  "variants": {
+    "base": {
+      "exposes": [
+        {
+          "name": "value",
+          "type": "string",
+          "initial": "",
+          "via": {
+            "valueProp": "value",
+            "changeProp": "onValueChange",
+            "changeArg": "valueToString"
+          }
+        }
+      ]
+    }
+  }
 }
