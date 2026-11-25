@@ -219,6 +219,8 @@ The engine edits files. It does not care which kind of component a file holds. W
   ⚑ The example keeps the bank contract and mock data, ports Refine routing to
   `@refinedev/nextjs-router` 7.0.5, and serves the mock through an App Router route handler.
   Its root server page embeds a small client component so both edit paths are testable.
+  ⚑ The `next` Playwright project defaults to app/designer/service ports 5175/4402/4403,
+  configurable through `TRIVIA_NEXT_APP_PORT`, `TRIVIA_NEXT_PORT` and `TRIVIA_NEXT_API_PORT`.
 - The dev service: the plugin's API and MCP suites run unchanged through the Vite host, and a
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a
