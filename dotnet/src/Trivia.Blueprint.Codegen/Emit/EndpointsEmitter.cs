@@ -61,6 +61,7 @@ public static class EndpointsEmitter
                     break;
                 case "update":
                     Register("Put", "/{id}", "UpdateAsync", $"update{name}", ".ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
+                    Register("Patch", "/{id}", "PatchAsync", $"patch{name}", ".ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
                     string confirmVersion = entity.Concurrency == true ? $$"""
                         if (entity.{{Member(entity, "version")}} != input.Version)
                             throw new ApiProblemException(409, "The record changed after it was read.", "stale");
@@ -68,13 +69,35 @@ public static class EndpointsEmitter
                     string assignments = string.Join("\n", writable.Select(item => "entity." + item + ";")
                         .Concat(entity.Fields.Where(field => field.Generated == "onUpdate")
                             .Select(field => $"entity.{Member(entity, field.Name)} = DateTimeOffset.UtcNow;")));
+                    // A PATCH overlays the members it carries on the stored record and then saves
+                    // that merged record like a PUT, so OnUpdating sees the same request either way.
+                    IEnumerable<string> merged = members.Where(member => member.Writable).Select(member =>
+                            $"{member.Member} = patch.{ContractsEmitter.Sent(member)} ? patch.{member.Member} : entity.{member.Member}")
+                        .Concat(entity.Concurrency == true ? ["Version = patch.Version"] : []);
+                    string lookup = $"{name}? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync({criteria});";
                     handlers.Add($$"""
                         private static async Task<Results<Ok<{{response}}>, NotFound>> UpdateAsync(
                             {{keyType}} id, Update{{name}}Request input, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
                         {
-                            {{name}}? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync({{criteria}});
+                            {{lookup}}
                             if (entity is null)
                                 return TypedResults.NotFound();
+                            return await SaveUpdateAsync(entity, input, db, cancellationToken);
+                        }
+
+                        private static async Task<Results<Ok<{{response}}>, NotFound>> PatchAsync(
+                            {{keyType}} id, Patch{{name}}Request patch, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+                        {
+                            {{lookup}}
+                            if (entity is null)
+                                return TypedResults.NotFound();
+                            Update{{name}}Request input = new() { {{string.Join(", ", merged)}} };
+                            return await SaveUpdateAsync(entity, input, db, cancellationToken);
+                        }
+
+                        private static async Task<Ok<{{response}}>> SaveUpdateAsync(
+                            {{name}} entity, Update{{name}}Request input, AppDbContext db, CancellationToken cancellationToken)
+                        {
                             {{confirmVersion}}
                             {{assignments}}
                             await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);

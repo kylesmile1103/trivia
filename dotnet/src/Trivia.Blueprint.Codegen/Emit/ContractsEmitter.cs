@@ -19,15 +19,17 @@ public static class ContractsEmitter
         string response = string.Join(",\n", members.Select(member =>
             $"[property: JsonPropertyName({Literal(member.WireName)})] {member.ResponseType} {member.Member}"));
         string request = string.Join("\n", members.Where(member => member.Writable).Select(member => RequestProperty(model, member)));
-        string update = entity.Concurrency == true
-            ? request + "\n" + RequestProperty(model, new("version", "Version", "uint", Required: true))
-            : request;
+        string version = entity.Concurrency == true
+            ? "\n" + RequestProperty(model, new("version", "Version", "uint", Required: true))
+            : "";
         List<string> records =
         [
             $"public sealed record {entity.Name}Response({response});",
             $"public sealed record Create{entity.Name}Request {{ {request} }}",
-            $"public sealed record Update{entity.Name}Request {{ {update} }}"
+            $"public sealed record Update{entity.Name}Request {{ {request}{version} }}"
         ];
+        if (entity.Api.Operations.Contains("update"))
+            records.Add(PatchRecord(model, entity, version));
         if (entity.Api.Operations.Contains("list"))
             records.Add($"public sealed record {entity.Name}Page(IReadOnlyList<{entity.Name}Response> Items, int Total, int Page, int PageSize);");
         foreach (CustomOperation operation in entity.Api.Custom ?? [])
@@ -50,10 +52,38 @@ public static class ContractsEmitter
             yield return new("version", Member(entity, "version"), "uint", Required: true);
     }
 
-    internal static string RequestProperty(ModelDocument model, ApiMember member)
+    // A PATCH body changes only the members it carries. Each init accessor records that
+    // System.Text.Json set its member, which it does only for a property present in the body,
+    // null included. The flags are lowercase internal fields, so they cannot collide with the
+    // PascalCase wire members, and serialization, OpenAPI and validation ignore them.
+    private static string PatchRecord(ModelDocument model, ModelEntity entity, string version)
+    {
+        ApiMember[] writable = Members(model, entity).Where(member => member.Writable).ToArray();
+        IEnumerable<string> properties = writable.Select(member =>
+            $"internal readonly bool {Sent(member)};\n" +
+            RequestProperty(model, member, patch: true).Replace(" { get; init; }",
+                $" {{ get; init {{ field = value; {Sent(member)} = true; }} }}", StringComparison.Ordinal));
+        ApiMember[] required = writable.Where(member => member.Required).ToArray();
+        string validation = required.Length == 0 ? "" : $$"""
+
+            IEnumerable<ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
+            {
+                {{string.Join("\n", required.Select(member => $$"""
+                    if ({{Sent(member)}} && {{member.Member}} is null)
+                        yield return new({{Literal($"The {member.WireName} field cannot be null.")}}, [{{Literal(member.WireName)}}]);
+                    """))}}
+            }
+            """;
+        string interfaces = required.Length == 0 ? "" : " : IValidatableObject";
+        return $"public sealed record Patch{entity.Name}Request{interfaces} {{ {string.Join("\n", properties)}{version}{validation} }}";
+    }
+
+    internal static string Sent(ApiMember member) => member.WireName + "Sent";
+
+    internal static string RequestProperty(ModelDocument model, ApiMember member, bool patch = false)
     {
         List<string> annotations = [$"JsonPropertyName({Literal(member.WireName)})"];
-        if (member.Required)
+        if (member.Required && !patch)
             annotations.Add("Required(AllowEmptyStrings = true)");
         string initial = "";
         if (member.Field is ModelField field)
@@ -76,7 +106,7 @@ public static class ContractsEmitter
                 annotations.Add(Range(field));
             if (field.Precision is int precision)
                 annotations.Add($"global::{model.Namespace}.Generated.DecimalPrecision({Number(precision)}, {Number(field.Scale!.Value)})");
-            if (field.Default.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
+            if (!patch && field.Default.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
                 initial = $" = {DefaultValue(model, field)};";
         }
         return $"[{string.Join(", ", annotations)}] public {member.Type}? {member.Member} {{ get; init; }}{initial}";

@@ -141,6 +141,8 @@ public static class ApiRegistrationEmitter
             ModelField[] fields = entity.Fields.Where(field => field.ReadOnly != true && field.Generated is null).ToArray();
             AddInput($"Create{entity.Name}Request", fields, entity.Relations);
             AddInput($"Update{entity.Name}Request", fields, entity.Relations, entity.Concurrency == true);
+            if (entity.Api.Operations.Contains("update"))
+                AddInput($"Patch{entity.Name}Request", fields, entity.Relations, entity.Concurrency == true, patch: true);
             foreach (CustomOperation operation in entity.Api.Custom ?? [])
                 AddInput(CustomOperationEmitter.Request(entity, operation), operation.Input ?? [], []);
         }
@@ -183,9 +185,9 @@ public static class ApiRegistrationEmitter
             }
             """;
 
-        void AddInput(string name, ModelField[] fields, ModelRelation[] relations, bool version = false)
+        void AddInput(string name, ModelField[] fields, ModelRelation[] relations, bool version = false, bool patch = false)
         {
-            string properties = DescribeFields($"{name}Contract", fields, relations);
+            string properties = DescribeFields($"{name}Contract", fields, relations, patch);
             if (version)
                 properties += $"\nDescribeInput({name}Contract, \"version\", true, null, null);";
             if (properties.Length == 0)
@@ -200,14 +202,16 @@ public static class ApiRegistrationEmitter
         }
     }
 
-    private static string DescribeFields(string schema, ModelField[] fields, ModelRelation[] relations)
+    // A PATCH member is optional and has no default: leaving it out keeps the stored value.
+    // A required member stays non-null, since a PATCH cannot clear it.
+    private static string DescribeFields(string schema, ModelField[] fields, ModelRelation[] relations, bool patch)
     {
         IEnumerable<string> statements = fields
-            .Where(field => field.Required == true || field.Format is not null || field.Default.ValueKind != JsonValueKind.Undefined)
+            .Where(field => field.Required == true || field.Format is not null || (!patch && field.Default.ValueKind != JsonValueKind.Undefined))
             .Select(field =>
             {
                 string format = field.Format is string value ? Literal(value) : "null";
-                string defaultJson = field.Default.ValueKind != JsonValueKind.Undefined ? Literal(field.Default.GetRawText()) : "null";
+                string defaultJson = !patch && field.Default.ValueKind != JsonValueKind.Undefined ? Literal(field.Default.GetRawText()) : "null";
                 return $"DescribeInput({schema}, {Literal(field.Name)}, {(field.Required == true ? "true" : "false")}, {format}, {defaultJson});";
             });
         return string.Join("\n", statements.Concat(relations.Where(relation => relation.Kind == "belongsTo" && relation.Required == true)

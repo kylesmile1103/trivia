@@ -81,6 +81,13 @@ public static class ApiRegistration
             DescribeInput(UpdateCustomerRequestContract, "creditLimit", false, null, "0");
         }
 
+        if (document.Components?.Schemas?.TryGetValue("PatchCustomerRequest", out IOpenApiSchema? PatchCustomerRequestSchema) == true && PatchCustomerRequestSchema is OpenApiSchema PatchCustomerRequestContract)
+        {
+            DescribeInput(PatchCustomerRequestContract, "fullName", true, null, null);
+            DescribeInput(PatchCustomerRequestContract, "email", true, "email", null);
+            DescribeInput(PatchCustomerRequestContract, "status", true, null, null);
+        }
+
         if (document.Components?.Schemas?.TryGetValue("CreateAccountRequest", out IOpenApiSchema? CreateAccountRequestSchema) == true && CreateAccountRequestSchema is OpenApiSchema CreateAccountRequestContract)
         {
             DescribeInput(CreateAccountRequestContract, "accountNumber", true, null, null);

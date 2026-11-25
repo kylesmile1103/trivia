@@ -42,8 +42,15 @@ it('FR-AS-05 syncs the bank OpenAPI snapshot without overrides', async () => {
       pagination: { style: 'page', pageParam: 'page', pageSizeParam: 'pageSize', totalPath: 'total' },
     })
   }
-  expect(manifest.resources.find(({ name }) => name === 'Customer')?.customOperations.map(({ operationId }) => operationId))
-    .toEqual(['approveKycCustomer'])
+  // The API serves PUT (full replace) and PATCH (merge) on the item path. Contract-sync keeps PUT
+  // in the update slot, whose request describes the whole record an edit form edits, and lists
+  // PATCH, which the data provider's update sends, as a custom operation.
+  const customer = manifest.resources.find(({ name }) => name === 'Customer')!
+  expect(customer.operations.update).toMatchObject({ method: 'PUT', path: '/api/v1/customers/{id}', operationId: 'updateCustomer' })
+  expect(customer.customOperations.map(({ operationId, method, path }) => ({ operationId, method, path }))).toEqual([
+    { operationId: 'patchCustomer', method: 'PATCH', path: '/api/v1/customers/{id}' },
+    { operationId: 'approveKycCustomer', method: 'POST', path: '/api/v1/customers/{id}/approve-kyc' },
+  ])
 })
 
 

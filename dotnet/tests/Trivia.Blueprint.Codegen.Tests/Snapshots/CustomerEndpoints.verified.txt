@@ -16,6 +16,7 @@ public static partial class CustomerEndpoints
         group.MapGet("/{id}", GetAsync).WithName("getCustomerById").ProducesProblem(404);
         group.MapPost("", CreateAsync).WithName("createCustomer").ProducesValidationProblem().ProducesProblem(409);
         group.MapPut("/{id}", UpdateAsync).WithName("updateCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
+        group.MapPatch("/{id}", PatchAsync).WithName("patchCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
         group.MapDelete("/{id}", DeleteAsync).WithName("deleteCustomer").ProducesProblem(404).ProducesProblem(409);
         group.MapMethods("/{id}/approve-kyc", ["POST"], HandleApproveKycAsync).WithName("approveKycCustomer").ProducesProblem(501).ProducesValidationProblem();
         return group;
@@ -150,6 +151,29 @@ public static partial class CustomerEndpoints
         Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         if (entity is null)
             return TypedResults.NotFound();
+        return await SaveUpdateAsync(entity, input, db, cancellationToken);
+    }
+
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> PatchAsync(Guid id, PatchCustomerRequest patch, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+    {
+        Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (entity is null)
+            return TypedResults.NotFound();
+        UpdateCustomerRequest input = new()
+        {
+            FullName = patch.fullNameSent ? patch.FullName : entity.FullName,
+            Email = patch.emailSent ? patch.Email : entity.Email,
+            Status = patch.statusSent ? patch.Status : entity.Status,
+            CreditLimit = patch.creditLimitSent ? patch.CreditLimit : entity.CreditLimit,
+            Notes = patch.notesSent ? patch.Notes : entity.Notes,
+            BirthDate = patch.birthDateSent ? patch.BirthDate : entity.BirthDate,
+            ExternalRef = patch.externalRefSent ? patch.ExternalRef : entity.ExternalRef
+        };
+        return await SaveUpdateAsync(entity, input, db, cancellationToken);
+    }
+
+    private static async Task<Ok<CustomerResponse>> SaveUpdateAsync(Customer entity, UpdateCustomerRequest input, AppDbContext db, CancellationToken cancellationToken)
+    {
         entity.FullName = input.FullName!;
         entity.Email = input.Email!;
         entity.Status = input.Status.GetValueOrDefault();

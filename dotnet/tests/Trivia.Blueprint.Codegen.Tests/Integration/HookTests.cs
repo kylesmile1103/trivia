@@ -41,6 +41,12 @@ public sealed class HookTests(PostgresFixture postgres)
                     if (entity.FullName == "Rollback")
                         throw new ApiProblemException(409, "Rejected after save.", "hook_rejected");
                 }
+
+                static partial void OnUpdating(Customer entity, UpdateCustomerRequest request, AppDbContext db)
+                {
+                    if (request.Notes == "Reject")
+                        throw new ApiProblemException(400, $"Rejected the update of {request.FullName}.");
+                }
             }
             """);
         await using RunningApi api = await postgres.StartAsync(project);
@@ -62,9 +68,15 @@ public sealed class HookTests(PostgresFixture postgres)
         JsonElement scoped = await api.Client.GetFromJsonAsync<JsonElement>(pathRoot);
         Assert.Equal(1, scoped.GetProperty("total").GetInt32());
         Assert.Equal("Scoped Customer", scoped.GetProperty("items")[0].GetProperty("fullName").GetString());
+        // A PATCH runs the update hooks with the merged record, so a rule written for PUT also holds.
+        using HttpResponseMessage patched = await api.Client.PatchAsJsonAsync(inside.Headers.Location, new { notes = "Reject" });
+        Assert.Equal("Rejected the update of Scoped Customer.",
+            (await CrudTests.ReadProblem(patched, HttpStatusCode.BadRequest)).GetProperty("title").GetString());
         using HttpResponseMessage hidden = await api.Client.GetAsync(outside.Headers.Location);
         await CrudTests.ReadProblem(hidden, HttpStatusCode.NotFound);
         using HttpResponseMessage cannotDelete = await api.Client.DeleteAsync(outside.Headers.Location);
         await CrudTests.ReadProblem(cannotDelete, HttpStatusCode.NotFound);
+        using HttpResponseMessage cannotPatch = await api.Client.PatchAsJsonAsync(outside.Headers.Location, new { notes = "Hidden" });
+        await CrudTests.ReadProblem(cannotPatch, HttpStatusCode.NotFound);
     }
 }

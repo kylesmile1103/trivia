@@ -240,6 +240,75 @@
           }
         }
       },
+      "patch": {
+        "tags": [
+          "Customers"
+        ],
+        "operationId": "patchCustomer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Customers"
@@ -869,6 +938,58 @@
       },
       "JsonDocument": {
         "type": "object"
+      },
+      "PatchCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "maxLength": 120,
+            "minLength": 2,
+            "type": "string",
+            "description": "Legal name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomerStatus"
+              }
+            ]
+          },
+          "creditLimit": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "notes": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "birthDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "externalRef": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
       },
       "ProblemDetails": {
         "type": "object",

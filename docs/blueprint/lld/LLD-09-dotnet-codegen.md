@@ -152,11 +152,24 @@ This section is the contract with the data provider (LLD-10). Change both or nei
 | get | `GET /api/v1/<plural>/{id}` | 200 the record | `get<Entity>ById` |
 | create | `POST /api/v1/<plural>` | 201 the record, with `Location` | `create<Entity>` |
 | update | `PUT /api/v1/<plural>/{id}` | 200 the record | `update<Entity>` |
+| patch | `PATCH /api/v1/<plural>/{id}` | 200 the record | `patch<Entity>` |
 | delete | `DELETE /api/v1/<plural>/{id}` | 204 | `delete<Entity>` |
 | custom | `<method> /api/v1/<plural>/<path>` | 200, or 204 without `returns` | `<name><Entity>` |
 
 Tags are the plural in PascalCase. Schema names are `<Entity>Response`,
-`Create<Entity>Request`, `Update<Entity>Request` and `<Entity>Page`. JSON is camelCase.
+`Create<Entity>Request`, `Update<Entity>Request`, `Patch<Entity>Request` and `<Entity>Page`.
+JSON is camelCase.
+
+⚑ (decided 2026-11-26) The `update` operation maps both verbs: `PUT` replaces every writable
+member (an omitted one takes its default or null), and `PATCH` changes only the members present
+in the body, which is what the data provider's `update` sends. Why: generated edit forms submit
+their own fields only, so a `PUT` from them silently nulled the omitted fields and reset those
+with a default. In a `PATCH` body every member is optional and has no default, validation
+applies to the members present, and a present `null` on a required member is a 400 with that
+member in `errors`. On an entity with `concurrency: true` the `PATCH` body requires `version`
+like the `PUT` body. The document describes both. Contract-sync keeps `PUT` in the manifest's
+update slot (its request is the whole record an edit form edits) and lists `PATCH` as the
+custom operation `patch<Entity>` (`docs/data-provider.md`, classification).
 
 ⚑ Preserve the framework's component IDs for the generated record names. Override the
   enum and JSON schema types through a schema transformer, and apply input defaults,
@@ -230,6 +243,14 @@ namespaces, nullable enabled, no `var` in generated code.
 - **Contracts.** Records. `Create` and `Update` requests carry the writable fields
   (not `readOnly`, not generated, not the key) with validation attributes from the
   constraints. The response carries every field. A `<Entity>Page` record wraps lists.
+  ⚑ (decided 2026-11-26) With the `update` operation, `Patch<Entity>Request` carries the same
+  members and constraints without `Required` or defaults. Each member's `init` accessor also
+  sets an internal `<member>Sent` flag, and it implements `IValidatableObject` to reject a sent
+  `null` on a required member. Why: System.Text.Json calls a setter only for a property present
+  in the body, so the flag records presence while the property keeps its plain type, its
+  DataAnnotations and its OpenAPI schema, which an `Optional<T>` or `JsonElement` member would
+  each lose. The flags are lowercase fields, so they never collide with a PascalCase member,
+  and serialization, OpenAPI and validation ignore them.
 - **Endpoints.** A static partial class with `Map<Entity>Endpoints` and one private static
   method per enabled operation, using typed results so the OpenAPI document knows every
   status. Mapping between entity and records is generated assignment code. No mapper library.
@@ -253,6 +274,11 @@ static partial void OnDeleted(Customer entity, AppDbContext db);
 
 A hook rejects an operation by throwing `ApiProblemException(status, title)`, which the
 generated handler turns into problem details.
+
+⚑ (decided 2026-11-26) A `PATCH` builds an `Update<Entity>Request` from the stored record with
+the sent members laid over it, then saves through the same code as `PUT`, so `OnUpdating` and
+`OnUpdated` run for both verbs with the merged record. Why: a rule a developer wrote in
+`OnUpdating` for `PUT` must not be bypassed by the second verb.
 
 ⚑ Include `OnDeleted` to give deletion both hooks under FR-NC-08. CRUD writes and
   their hooks share an EF transaction, so a rejecting post-save hook rolls back the row
@@ -330,6 +356,8 @@ is added.
 
 ## 9. Open points
 
-- `PATCH` with partial updates. Not generated: Refine's update sends the whole form.
+- ⚑ (decided 2026-11-26) `PATCH` with partial updates is generated beside `PUT` (section 4).
+  Why: Refine's update sends the whole *form*, not the whole record, and an edit form that
+  leaves a field out must not clear it.
 - Whether the tool should run `dotnet format` on scaffold files. No: they are written once,
   from text we control.
