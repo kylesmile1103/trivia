@@ -13,6 +13,23 @@ Briefs and contracts:
 - `docs/data-provider.md`: the contract-sync design and the `bindQuery` contract.
 
 <!-- STATUS:BEGIN -->
+## Blueprint MVP status (2026-11-26)
+
+BankAdmin exercises day 1 and day 2 in one generated .NET, PostgreSQL and Vite/Refine
+solution. The scripted slice validates and ejects the blueprint, builds and type-checks the
+solution, starts Aspire, and checks drift after a model migration. The browser suite covers
+CRUD, server field errors, KYC confirmation, designer edits, undo and re-eject conflict.
+[BankAdmin example](../examples/blueprint-mvp/README.md).
+
+- Run the script with `pnpm exec nx run tools:mvp`. It uses the committed kit and a disposable PostgreSQL
+  database. Releases require a running container runtime and the .NET 10 SDK.
+- The MVP Playwright project uses `TRIVIA_MVP_APP_PORT` and `TRIVIA_MVP_PORT`. Aspire
+  allocates its API and database ports. CI needs Aspire CLI 13.6.5 and a container runtime
+  for this project.
+- The lead still needs to run the prompt in two fresh Claude Code sessions and review the
+  marked decisions with the owner. [Agent exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise)
+  · [Decisions](blueprint/README.md#spec-001011-decisions-pending-review).
+
 ## 1. Status (2026-10-09, session 3)
 
 `main` is pushed to `origin` (github.com/kylesmile1103/trivia), including the setText op, the
