@@ -282,6 +282,10 @@ from `Authentication:Authority` and `Authentication:Audience`, and every group r
 authenticated user. Per-entity roles (`api.roles`) are a later extension. With `none`, nothing
 is added.
 
+⚑ Protect the runtime OpenAPI endpoint as well as the model groups in OIDC mode.
+  The document declares a global HTTP bearer security requirement. Build-time generation
+  remains available to the contract pipeline without contacting the issuer.
+
 ## 8. Tests
 
 - Snapshot tests per emitter on the three-entity fixture of LLD-08 (Verify). A snapshot change

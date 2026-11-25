@@ -52,7 +52,7 @@
 
 ## Phase 9: User Story 8 - Auth (P3)
 
-- [ ] T024 [US8] `auth.mode: "oidc"` in `ApiRegistrationEmitter`: JWT bearer from configuration, groups require authorization, OpenAPI security scheme. Integration test with a test token
+- [x] T024 [US8] `auth.mode: "oidc"` in `ApiRegistrationEmitter`: JWT bearer from configuration, groups require authorization, OpenAPI security scheme. Integration test with a test token
 
 ## Phase 10: Polish
 

@@ -12,7 +12,19 @@ public static class ApiRegistrationEmitter
         ModelDocument model = input.Model;
         string space = model.Namespace;
         string fallback = Literal($"Host=localhost;Database={input.AppName.ToLowerInvariant()};Username=postgres");
-        string maps = string.Join("\n", model.Entities.Select(entity => $"app.Map{entity.Name}Endpoints();"));
+        bool oidc = input.App?.Auth?.Mode == "oidc";
+        string require = oidc ? ".RequireAuthorization()" : "";
+        string maps = string.Join("\n", model.Entities.Select(entity => $"app.Map{entity.Name}Endpoints(){require};"));
+        string authServices = oidc ? """
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+            {
+                options.Authority = configuration["Authentication:Authority"];
+                options.Audience = configuration["Authentication:Audience"];
+                options.IncludeErrorDetails = false;
+            });
+            services.AddAuthorization();
+            """ : "";
+        string authMiddleware = oidc ? "app.UseAuthentication(); app.UseAuthorization();" : "";
         string lists = string.Join(" or ", model.Entities.Where(entity => entity.Api.Operations.Contains("list"))
             .Select(entity => Literal("list" + Pascal(entity.Plural))));
         string addListMetadata = lists.Length == 0 ? "" : $$"""
@@ -26,6 +38,7 @@ public static class ApiRegistrationEmitter
         return Unit($"{space}.Generated", ["System.Text.Json", "System.Text.Json.Nodes",
             "System.Text.Json.Serialization", "Microsoft.AspNetCore.OpenApi", "Microsoft.AspNetCore.Routing",
             "Microsoft.EntityFrameworkCore", "Microsoft.OpenApi", $"global::{space}.Data",
+            .. (oidc ? new[] { "Microsoft.AspNetCore.Authentication.JwtBearer" } : []),
             .. model.Entities.Select(entity => $"global::{Feature(model, entity.Name)}")],
             $$"""
             public static class ApiRegistration
@@ -34,6 +47,7 @@ public static class ApiRegistrationEmitter
                 {
                     services.AddDbContext<AppDbContext>(options =>
                         options.UseNpgsql(configuration.GetConnectionString("AppDb") ?? {{fallback}}));
+                    {{authServices}}
                     services.AddValidation();
                     services.AddProblemDetails();
                     services.AddExceptionHandler<ApiProblemHandler>();
@@ -48,6 +62,7 @@ public static class ApiRegistrationEmitter
                         options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
                         options.AddSchemaTransformer(DescribeSchema);
                         options.AddDocumentTransformer(DescribeInputs);
+                        {{(oidc ? "options.AddDocumentTransformer(DescribeBearerSecurity);" : "")}}
                         {{addListMetadata}}
                     });
                 }
@@ -56,11 +71,13 @@ public static class ApiRegistrationEmitter
                 {
                     app.UseExceptionHandler();
                     app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
-                    app.MapOpenApi();
+                    {{authMiddleware}}
+                    app.MapOpenApi(){{require}};
                     {{maps}}
                 }
 
                 {{SchemaTransformer(model)}}
+                {{(oidc ? BearerSecurity : "")}}
 
                 private static void DescribePageParameters(OpenApiOperation operation)
                 {
@@ -83,6 +100,26 @@ public static class ApiRegistrationEmitter
             }
             """);
     }
+
+    private const string BearerSecurity = """
+        private static Task DescribeBearerSecurity(OpenApiDocument document, OpenApiDocumentTransformerContext context,
+            CancellationToken cancellationToken)
+        {
+            document.Components ??= new OpenApiComponents();
+            document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+            document.Components.SecuritySchemes["bearer"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT"
+            };
+            document.Security = [new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("bearer", document)] = []
+            }];
+            return Task.CompletedTask;
+        }
+        """;
 
     private static string SchemaTransformer(ModelDocument model)
     {
