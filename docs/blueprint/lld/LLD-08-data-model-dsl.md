@@ -207,6 +207,11 @@ backend this tool did not generate.
 - The JSON Schema validates the fixtures under ajv strict mode. The C# side's deserializer
   reads the same fixtures (LLD-09).
 
+⚑ The shared schema emitter writes the model's draft 2020-12 input schema to
+`packages/blueprint/schemas/model.v1.json`, beside the app and page schemas. The path
+matches the package's schema exports. The ajv tests check both acceptance of structurally
+valid documents with semantic errors and rejection of schema-layer failures.
+
 ## 8. Open points
 
 - Soft delete and audit columns (`createdBy`, `updatedAt`) as entity options. Left to hooks
