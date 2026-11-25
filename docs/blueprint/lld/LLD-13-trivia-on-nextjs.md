@@ -139,6 +139,10 @@ The file part of a locator is the path relative to the app root, the same string
 resolves. One fixture suite, the locator fixtures the engine already has, is run through the
 loader to prove equality with the Vite transform (`CLAUDE.md` rule 3).
 
+⚑ The loader takes the app root as an option when the bundler's root can cover a wider
+workspace. It composes an incoming source map with the stamp map so previous transforms
+remain traceable.
+
 ## 4. Designer and launcher (FR-TN-03)
 
 The designer's dev server proxies every path to one target today. It gains a second target for

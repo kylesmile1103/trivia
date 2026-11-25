@@ -536,6 +536,31 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@24.19.1)(jsdom@30.1.2)(vite@8.3.3(@types/node@24.19.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/next:
+    dependencies:
+      '@jridgewell/remapping':
+        specifier: 2.3.5
+        version: 2.3.5
+      '@trivia/dev-service':
+        specifier: workspace:*
+        version: link:../dev-service
+      '@trivia/engine':
+        specifier: workspace:*
+        version: link:../../crates/trivia_napi
+    devDependencies:
+      '@trivia/vite-plugin-ast-locator':
+        specifier: workspace:*
+        version: link:../vite-plugin-ast-locator
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.19.1
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@types/node@24.19.1)(jsdom@30.1.2)(vite@8.3.3(@types/node@24.19.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/trivia-inferencer:
     devDependencies:
       '@refinedev/core':
