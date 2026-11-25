@@ -4,7 +4,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import * as blueprint from '../src/index.js'
-import { FIXTURES } from './helpers.js'
+import { FIXTURES, readFixture } from './helpers.js'
 
 describe('@trivia/blueprint', () => {
   it('is the package the workspace knows', () => {
@@ -21,5 +21,19 @@ describe('@trivia/blueprint', () => {
     expect(outcome.ok && outcome.writes.map((w) => w.file)).toEqual([doc])
     const page = bp.docs[blueprint.pageDocPath('CustomerOverview')]?.doc
     expect(page && blueprint.project(page as blueprint.PageDoc)).toContain('<Card name="summary"')
+  })
+
+  it('resolves the sample component manifests through its entry point alone', () => {
+    const kit = Object.values(readFixture(path.join(FIXTURES, 'manifests/kit-sample')))
+      .map((text) => blueprint.componentManifestSchema.parse(JSON.parse(text)))
+    const components: blueprint.ComponentSchema[] = JSON.parse(
+      fs.readFileSync(path.join(FIXTURES, 'manifests/analyzer/refine-admin.components.json'), 'utf8'),
+    )
+    const { manifests } = blueprint.resolveManifests({ kit, components })
+    expect(manifests).toMatchObject({
+      Button: { installed: true, source: { import: { from: '@/components/ui/button' } } },
+      Card: { installed: false },
+      Input: { installed: true, exposes: [{ name: 'value', type: 'string' }] },
+    })
   })
 })

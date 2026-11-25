@@ -35,3 +35,14 @@ export { checkSchema } from './validate/schema.js'
 export { MIGRATIONS, migrate, type MigrateResult, type Migration, type MigrationTable } from './migrate/index.js'
 export { project } from './project.js'
 export { jsonSchemas } from './schemas.js'
+
+export {
+  componentManifestSchema, manifestJsonSchema,
+  type ComponentManifest, type ComponentSchema, type ExposedValue, type ManifestEvent, type ManifestSlot, type PropSchema,
+} from './manifest/types.js'
+export {
+  resolveManifests,
+  type ManifestAliases, type ManifestInputs, type ManifestResolution, type ResolvedManifest, type ResolvedManifests,
+} from './manifest/resolve.js'
+export { exposedScope, manifestCheck, type ExposedScope } from './manifest/check.js'
+export { manifestsToJsonSchema, type ManifestIndexEntry, type ManifestJsonSchemas } from './manifest/json-schema.js'
