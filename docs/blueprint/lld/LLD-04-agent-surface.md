@@ -161,6 +161,7 @@ Codes come from `docs/api.md`. New in `error.details`:
   designer proxy.
 - MCP: the tools list matches a snapshot; `trivia_blueprint_patch` then `trivia_undo` restores
   the bytes.
-- `e2e/blueprint-mcp.spec.ts`: patch, preview, screenshot, eject, undo, in a browser.
+- ⚑ `e2e/blueprint-mcp.spec.ts` runs patch and byte-exact undo in a browser through the Vite
+  and Next.js designer proxies. Spec 005 adds preview, screenshot and eject steps.
 - A real-session check, as `docs/mcp.md` did: a Claude Code session with only this server
   builds a two-page blueprint. What it trips on is fixed before the phase closes.

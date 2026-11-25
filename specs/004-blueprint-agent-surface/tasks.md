@@ -43,7 +43,7 @@
 
 - [x] T016 [P] `docs/api.md`: the blueprint section with an example per route, pinned by a test as the op examples are
 - [x] T017 [P] `docs/mcp.md`: the five tools and the authoring loop
-- [ ] T018 `e2e/blueprint-mcp.spec.ts`: patch and undo through a browser-run MCP client (preview and eject steps added by spec 005)
+- [x] T018 `e2e/blueprint-mcp.spec.ts`: patch and undo through a browser-run MCP client (preview and eject steps added by spec 005)
 - [ ] T019 Real-session check with Claude Code (SC-001). Fix what it trips on. Note it in `docs/mcp.md`
 - [ ] T020 Run `pnpm check` and `pnpm e2e`
 
