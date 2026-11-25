@@ -42,7 +42,7 @@
 ## Phase 7: Polish
 
 - [x] T019 Edge cases: a `pages/`-only app (empty list and a note), webpack mode, the React Compiler on, Windows separators, port clashes
-- [ ] T020 Docs: `README.md` "Using Trivia in your own Next.js app", `docs/architecture.md` (the new packages), `docs/api.md` (the dev service host), `CLAUDE.md` layout section
+- [x] T020 Docs: `README.md` "Using Trivia in your own Next.js app", `docs/architecture.md` (the new packages), `docs/api.md` (the dev service host), `CLAUDE.md` layout section
 - [ ] T021 Run `pnpm check` and all three Playwright projects
 
 ## Dependencies

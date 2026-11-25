@@ -28,18 +28,19 @@ down to the whitespace and comments.
 5. [Prerequisites](#prerequisites)
 6. [Quick start](#quick-start)
 7. [Using Trivia in your own Vite app](#using-trivia-in-your-own-vite-app)
-8. [Working with AI agents (MCP)](#working-with-ai-agents-mcp)
-9. [The Refine + OpenAPI workflow](#the-refine--openapi-workflow)
-10. [Design guarantees](#design-guarantees)
-11. [Security model](#security-model)
-12. [Development](#development)
-13. [Testing and quality gates](#testing-and-quality-gates)
-14. [Documentation index](#documentation-index)
-15. [Known limitations](#known-limitations)
-16. [Roadmap](#roadmap)
-17. [Contributing](#contributing)
-18. [Acknowledgements and prior art](#acknowledgements-and-prior-art)
-19. [License](#license)
+8. [Using Trivia in your own Next.js app](#using-trivia-in-your-own-nextjs-app)
+9. [Working with AI agents (MCP)](#working-with-ai-agents-mcp)
+10. [The Refine + OpenAPI workflow](#the-refine--openapi-workflow)
+11. [Design guarantees](#design-guarantees)
+12. [Security model](#security-model)
+13. [Development](#development)
+14. [Testing and quality gates](#testing-and-quality-gates)
+15. [Documentation index](#documentation-index)
+16. [Known limitations](#known-limitations)
+17. [Roadmap](#roadmap)
+18. [Contributing](#contributing)
+19. [Acknowledgements and prior art](#acknowledgements-and-prior-art)
+20. [License](#license)
 
 ---
 
@@ -244,10 +245,54 @@ Full reference: [`packages/vite-plugin-ast-locator/README.md`](packages/vite-plu
 
 ---
 
+## Using Trivia in your own Next.js app
+
+The integration supports the App Router on Next.js **16.4.6**. Build Trivia in its workspace,
+then link the integration into your app.
+
+```sh
+cd /path/to/trivia
+pnpm install
+pnpm exec nx build next
+cd /path/to/next-app
+pnpm link /path/to/trivia/packages/next
+```
+
+Wrap your existing Next.js config.
+
+```ts
+// next.config.ts
+import { withTrivia } from '@trivia/next'
+
+export default withTrivia({})
+```
+
+Start Next.js and the local dev service from the app directory. Add `--webpack` to use webpack.
+
+```sh
+pnpm exec trivia-next dev --port 3000 --service-port 4403
+```
+
+The launcher prints the API and MCP URLs. In the Trivia workspace, start the designer with both
+targets and open `http://localhost:4400/__trivia/`.
+
+```sh
+TRIVIA_TARGET=http://127.0.0.1:3000 TRIVIA_API_TARGET=http://127.0.0.1:4403 \
+  pnpm --filter @trivia/designer dev
+```
+
+The designer keeps the canvas on its own origin and sends the API and MCP requests to the service.
+The Next loader runs only in development. Production builds use the app's normal bundler config
+and refuse a leftover `app/(blueprint-preview)/` folder. See [Engine API](docs/api.md) and the
+[Next.js example](examples/next-admin/).
+
+---
+
 ## Working with AI agents (MCP)
 
-The plugin serves a Model Context Protocol endpoint on your dev server at `/@trivia/mcp` (Streamable
-HTTP, stateless, built on the official SDK pinned at 1.30.1). No extra process is needed.
+The dev service serves a Model Context Protocol endpoint at `/@trivia/mcp` (stateless Streamable
+HTTP, official SDK 1.30.1). For Vite, use the app's dev-server URL. For Next.js, use the MCP URL
+printed by `trivia-next dev`.
 
 ```sh
 claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp
