@@ -38,6 +38,14 @@ interface ComponentManifest {
 }
 ```
 
+⚑ Style variants are an optional `variants` object keyed by the style in `components.json`.
+A variant replaces whole fields of the base manifest and cannot change the type. Events use
+the `on<Event>` names supported by the page document. Initial and template values are JSON,
+and props may carry an optional description.
+
+`componentManifestSchema` parses manifest files. `manifestJsonSchema()` generates the
+equivalent draft 2020-12 schema for the files, including style variants.
+
 Example, trimmed:
 
 ```json
