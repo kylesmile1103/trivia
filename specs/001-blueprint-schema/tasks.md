@@ -54,7 +54,7 @@ Tests come before the code they cover and must fail first.
 ## Phase 8: Polish
 
 - [x] T027 [P] Emit `schemas/app.v1.json` and `page.v1.json` from zod at build. Test: ajv strict validates every valid fixture and rejects every schema fixture
-- [ ] T028 [P] Performance test for SC-004 with a generated 200-page blueprint
+- [x] T028 [P] Performance test for SC-004 with a generated 200-page blueprint
 - [ ] T029 Document the format in `docs/blueprint/lld/LLD-01-blueprint-schema.md` where the implementation refined it, and resolve its open points
 - [ ] T030 Run `pnpm check`
 
