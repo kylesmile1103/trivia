@@ -11,7 +11,7 @@
 ## Phase 2: Foundational
 
 - [x] T003 `src/model/types.ts`: the zod schema, name patterns, per-type constraint rules. Round-trip test with array order kept
-- [ ] T004 `src/model/mapping.ts`, and a script test that regenerates `fixtures/model/model-mapping.json` and fails on a difference
+- [x] T004 `src/model/mapping.ts`, and a script test that regenerates `fixtures/model/model-mapping.json` and fails on a difference
 
 ## Phase 3: User Story 1 - Entities and fields (P1)
 

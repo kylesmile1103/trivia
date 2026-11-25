@@ -58,6 +58,10 @@ operations take an uppercase method, a relative path of literal or brace-paramet
 holds the same table in C#. A shared fixture, `model-mapping.json`, is generated from the
 TypeScript table and asserted by a C# test, so the two cannot drift.
 
+⚑ The mapping fixture is keyed by blueprint field type. Each row carries the four target
+forms, with braced names for substitutions and a separate PostgreSQL fallback for
+`string` without `maxLength`. The test regenerates the fixture in memory and compares its bytes.
+
 | Blueprint | C# | PostgreSQL | OpenAPI 3.1 | zod |
 | --- | --- | --- | --- | --- |
 | `string` | `string` | `varchar(n)`, or `text` without `maxLength` | `string` | `z.string()` |
