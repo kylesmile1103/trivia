@@ -148,6 +148,12 @@ The typed client that contract-sync generates is still produced, for custom page
 operations and types. The data provider itself uses plain `fetch`, because Refine's interface
 is generic over the resource name.
 
+⚑ Wire the provider into the Vite template's `<Refine>`. `getMany` sends up to 200 ids
+per request and returns immediately for an empty id list. `deleteOne` supplies the
+requested id for a 204 response. Custom requests use same-origin paths and can append
+query parameters, repeated filters and sorters. Problem details retain the field-message
+arrays Refine's form adapter expects.
+
 ## 3. The contract loop (FR-AS-04, FR-AS-05, FR-AS-08)
 
 ```

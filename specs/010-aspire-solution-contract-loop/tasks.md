@@ -27,7 +27,7 @@
 
 ## Phase 5: User Story 2 - The web app talks to the API (P1)
 
-- [ ] T011 [US2] Unit tests for the data provider's request building (pagination, sorters, each filter operator, `getMany`, custom) and error mapping, then `templates/vite-refine/src/providers/data-provider.ts`
+- [x] T011 [US2] Unit tests for the data provider's request building (pagination, sorters, each filter operator, `getMany`, custom) and error mapping, then `templates/vite-refine/src/providers/data-provider.ts`
 - [ ] T012 [US2] A Node script in the integration run that drives the data provider against the real API: list with paging, sort and each operator, one validation error mapped to fields
 - [ ] T013 [US2] The `/api` proxy in the template's `vite.config.ts` from the service discovery variables, the `API_URL` fallback and the clear error. Unit test of the config function
 
