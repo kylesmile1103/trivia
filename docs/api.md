@@ -77,8 +77,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   fails, files already changed by earlier ops in the batch are restored and the error returned).
   Unchanged results (`changed: false`) create no entry. A new entry clears the redo stack.
 - History entries store `{ file, before, after }` per changed file. Undo writes `before` only if
-  the file still equals `after` (else 409 `conflict`, history untouched); redo is symmetric. All
-  writes go through the engine's atomic, parse-validated write. History lives in the dev-service
+  the file still equals `after` (else 409 `conflict`, history untouched). Redo uses the opposite
+  guard. Source restores go through the engine's atomic, parse-validated write. Blueprint
+  restores use guarded JSON snapshots in the same history. History lives in the dev-service
   process (lost on restart) and is capped at 100 entries.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
@@ -542,6 +543,7 @@ schema or reference error returns 422 `invalid_result` without writing.
 
 ```http
 POST /@trivia/api/blueprint/patch
+Content-Type: application/json
 
 {"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
 ```
@@ -558,6 +560,7 @@ required registry items and diagnostics.
 
 ```http
 POST /@trivia/api/blueprint/preview
+Content-Type: application/json
 
 {"page":"Customers"}
 ```
@@ -567,6 +570,7 @@ guarded source operations, files, requirements, warnings, a lock and a label.
 
 ```http
 POST /@trivia/api/blueprint/plan
+Content-Type: application/json
 
 {"pages":["Customers"]}
 ```
@@ -575,6 +579,7 @@ POST /@trivia/api/blueprint/plan
 
 ```http
 POST /@trivia/api/blueprint/ejected
+Content-Type: application/json
 
 {"pages":["Customers"],"entry":"Eject customers"}
 ```
@@ -584,6 +589,7 @@ the trivia-dotnet integration is available.
 
 ```http
 POST /@trivia/api/blueprint/backend
+Content-Type: application/json
 
 {"mode":"plan"}
 ```

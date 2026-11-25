@@ -234,3 +234,35 @@ it.each([
   expect(await response.json()).toMatchObject({ ok: false, error: { code: 'unsupported', message: expect.stringContaining(`spec ${spec}`) } })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
 })
+
+it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
+  const docs = fs.readFileSync(new URL('../../../docs/api.md', import.meta.url), 'utf8')
+  const section = docs.split(/^## Blueprint$/m)[1]!
+  const examples = new Map([...section.matchAll(/^```http\n([\s\S]*?)\n^```$/gm)].map(([, text]) => {
+    const [head, body] = text!.split('\n\n')
+    const [request, ...headers] = head!.split('\n')
+    const [method, url] = request!.split(' ')
+    return [url!, { init: { method: method!, headers: new Headers(headers.map((line) => {
+      const colon = line.indexOf(':')
+      return [line.slice(0, colon), line.slice(colon + 1).trim()]
+    })), ...(body !== undefined && { body }) } }]
+  }))
+  const prefix = '/@trivia/api/blueprint'
+  async function send(suffix: string, status = 200) {
+    const route = prefix + suffix
+    const example = examples.get(route)
+    expect(example, route).toBeDefined()
+    const response = await fetch(running.url + route, example!.init)
+    expect(response.status, route).toBe(status)
+    return response.json()
+  }
+
+  expect(examples.size).toBe(8)
+  expect(await send('')).toMatchObject({ ok: true, data: { exists: false } })
+  expect(await send('/components')).toMatchObject({ ok: true, data: { schemas: { Button: { type: 'object' } } } })
+  expect(await send('/patch')).toMatchObject({ ok: true, data: { entry: 'Add customers' } })
+  expect(await send(`${pagePath}&projection=1`)).toMatchObject({ ok: true, data: { projection: expect.stringContaining('Customers') } })
+  for (const route of ['/preview', '/plan', '/ejected', '/backend']) {
+    expect(await send(route, 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
+  }
+})
