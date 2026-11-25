@@ -228,9 +228,8 @@ includes setup advice when the designer has no active screenshot poll.
 {"name":"trivia_blueprint_preview","arguments":{"page":"Customers"}}
 ```
 
-`trivia_blueprint_eject` accepts a label and optional page names. The compiler will use
-one shared undo entry for the source files and lock. The tool currently returns
-`unsupported`.
+`trivia_blueprint_eject` accepts a label and optional page names. It writes source files,
+registrations, and the lock in one edit. Use its `entry` with `trivia_undo` to undo that edit.
 
 ```json
 {"name":"trivia_blueprint_eject","arguments":{"pages":["Customers"],"label":"Eject customers"}}

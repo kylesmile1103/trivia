@@ -156,18 +156,33 @@ it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a han
   expect((await tool('trivia_get_selection')).structuredContent).toMatchObject({ history: { undoLabel: entry } })
 })
 
-it.each([
-  ['trivia_blueprint_preview', { page: 'Customers' }, 'running Vite app host'],
-  ['trivia_blueprint_eject', { pages: ['Customers'], label: 'Eject customers' }, '005'],
-])('FR-AG-02 reserves %s with a structured unavailable response', async (name, args, spec) => {
-  const result = await tool(name, args)
+it('FR-AG-02 explains how to enable preview on the standalone host', async () => {
+  const result = await tool('trivia_blueprint_preview', { page: 'Customers' })
   expect(result).toMatchObject({
     isError: true, structuredContent: {
-      error: { code: 'unsupported', message: expect.stringContaining(spec === '005' ? 'spec 005' : spec) },
-      next: expect.stringContaining(spec === '005' ? 'spec 005' : 'Vite Refine app host'),
+      error: { code: 'unsupported', message: expect.stringContaining('running Vite app host') },
+      next: expect.stringContaining('Vite Refine app host'),
     },
   })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
+})
+
+it('ejects and undoes generated source and lock in one Agent entry', async () => {
+  const draft = { ...listPage('DraftEject'), kind: 'custom', route: '/draft-eject', resource: undefined }
+  expect((await tool('trivia_blueprint_patch', { ops: [draft], label: 'Draft' })).isError).not.toBe(true)
+  const app = path.join(root, 'src/App.tsx')
+  const before = fs.readFileSync(app)
+  const entry = 'Agent: Eject draft'
+  const result = await tool('trivia_blueprint_eject', { pages: [draft.name], label: 'Eject draft' })
+  expect(result).toMatchObject({ structuredContent: { entry, files: [expect.stringMatching(/DraftEject\.tsx$/)] } })
+  const [file] = result.structuredContent!.files as string[]
+  const lock = path.join(root, 'blueprint/blueprint.lock.json')
+  expect(fs.readFileSync(path.join(root, file!), 'utf8')).toContain('function DraftEject')
+  expect(JSON.parse(fs.readFileSync(lock, 'utf8')).pages).toHaveProperty(draft.name)
+  expect((await tool('trivia_undo', { label: entry })).isError).not.toBe(true)
+  expect(fs.readFileSync(app)).toEqual(before)
+  expect(fs.existsSync(path.join(root, file!))).toBe(false)
+  expect(fs.existsSync(lock)).toBe(false)
 })
 
 it('NFR-14 executes the documented blueprint authoring calls', async () => {
@@ -191,9 +206,8 @@ it('NFR-14 executes the documented blueprint authoring calls', async () => {
   expect((await call('trivia_blueprint_get/components')).structuredContent).toMatchObject({ schemas: { Button: { type: 'object' } } })
   expect((await call('trivia_blueprint_patch')).structuredContent).toMatchObject({ entry: 'Agent: Add customers', summary: { pages: [{ errors: 0 }] } })
   expect((await call('trivia_blueprint_get/doc')).structuredContent).toMatchObject({ doc: { name: 'Customers' }, projection: expect.stringContaining('Customers') })
-  for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject']) {
-    expect(await call(toolName)).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
-  }
+  expect(await call('trivia_blueprint_preview')).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
+  expect(await call('trivia_blueprint_eject')).toMatchObject({ isError: true, structuredContent: { error: { code: 'conflict' } } })
   vi.stubEnv('PATH', root)
   try {
     expect(await call('trivia_blueprint_backend')).toMatchObject({

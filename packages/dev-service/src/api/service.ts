@@ -12,9 +12,9 @@ import { LOCK_FILE, projectFacts, readLock, type CompileContext } from '@trivia/
 
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
-import { validateEjectLock } from '../blueprint/plan.js'
+import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
-import { summarize, type PatchResult } from '../blueprint/summary.js'
+import { readSummary, summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
 import { generateRefinePage } from '../refine/scaffold.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
@@ -385,6 +385,23 @@ export class EngineService {
         throw new ApiError('conflict', 'The latest edit is not the requested blueprint eject entry.')
       }
       return { lockRev: revOfText(written) }
+    })
+  }
+
+  planBlueprintEject(pages?: string[]): Promise<EjectPlan> {
+    return planEject({ pages }, this)
+  }
+
+  ejectBlueprint(pages: string[] | undefined, label?: string, source: EditSource = {}) {
+    return this.#queue.run(async () => {
+      const plan = await this.planBlueprintEject(pages)
+      const entry = label ?? plan.label
+      const result = this.#transact(plan.ops, entry, source)
+      return {
+        ...result, entry: result.changed ? entry : null,
+        files: plan.files, requires: plan.requires, warnings: plan.warnings,
+        summary: await readSummary(this.blueprint),
+      }
     })
   }
 

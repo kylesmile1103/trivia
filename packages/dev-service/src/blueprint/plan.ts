@@ -4,10 +4,8 @@ import { z } from 'zod'
 
 import type { EngineService, Json } from '../api/service.js'
 import { ApiError } from '../engine.js'
-import type { ApplyResult } from '../types.js'
 import { compilerError, type RegistryItem } from './preview.js'
 import { readBytes, type BlueprintWorkspace } from './store.js'
-import type { BlueprintSummary } from './summary.js'
 
 export interface EjectPlan {
   ops: Array<Json & { op: string }>
@@ -17,8 +15,6 @@ export interface EjectPlan {
   lock: Lock
   label: string
 }
-
-type EjectResult = ApplyResult & { files: string[]; requires: RegistryItem[]; summary: BlueprintSummary }
 
 const pages = z.array(z.string().min(1))
 export const planInput = z.strictObject({ pages: pages.optional() })
@@ -85,8 +81,4 @@ export function validateEjectLock(workspace: BlueprintWorkspace, ops: readonly J
   } catch (error) {
     compilerError(error)
   }
-}
-
-export function ejectBlueprint(_request: z.infer<typeof ejectInput>): EjectResult {
-  throw new ApiError('unsupported', 'Ejecting blueprint pages needs the page compiler from spec 005.')
 }
