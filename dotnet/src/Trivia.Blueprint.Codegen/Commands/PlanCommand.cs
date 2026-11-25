@@ -27,9 +27,15 @@ internal static class PlanCommand
     {
         Option<string> blueprint = new("--blueprint") { Required = true, Description = "The blueprint directory." };
         Option<string> root = new("--root") { Required = true, Description = "The output solution directory." };
+        Option<string> web = new("--web-dir")
+        {
+            Description = "The solution-relative directory for the web app.",
+            DefaultValueFactory = _ => "web"
+        };
         Command command = new(name, description);
         command.Options.Add(blueprint);
         command.Options.Add(root);
+        command.Options.Add(web);
         if (flag is not null)
             command.Options.Add(flag);
 
@@ -40,7 +46,7 @@ internal static class PlanCommand
             try
             {
                 LoadedBlueprint input = ModelLoader.Load(parse.GetValue(blueprint)!);
-                FilePlan plan = ApiPlan.Create(rootPath, input, force: name == "write" && enabled);
+                FilePlan plan = ApiPlan.Create(rootPath, input, force: name == "write" && enabled, webDirectory: parse.GetValue(web)!);
                 (int exitCode, FilePlan result, bool content) = action(plan, rootPath, enabled);
                 Print(output, result, content);
                 return exitCode;

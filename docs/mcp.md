@@ -244,8 +244,10 @@ If the tool returns `conflict`, read the named routes or files before retrying. 
 `mode: "plan"` to inspect proposed files and diagnostics, then use `mode: "write"` to
 generate. `force: true` lets a generation write replace or remove modified generated
 files. A separate write-mode call with `migration` adds a named EF migration after
-generation. Inspect `written` and `diagnostics` in the result. An `unsupported` error
-includes installation guidance in `error.details.hint`.
+generation. Inspect `written` and `diagnostics` in the result. After a successful write
+or migration, `next` gives the build command and working directory, then
+`trivia_sync_openapi` with the generated contract path, and `trivia_contract_drift`.
+An `unsupported` error includes installation guidance in `error.details.hint`.
 
 ```json
 {"name":"trivia_blueprint_backend","arguments":{"mode":"plan"}}

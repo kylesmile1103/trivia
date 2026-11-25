@@ -1,8 +1,10 @@
 using {{Namespace}}.Generated;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 builder.Services.AddGeneratedServices(builder.Configuration);
 
 WebApplication app = builder.Build();
 app.MapGeneratedEndpoints();
+app.MapDefaultEndpoints();
 app.Run();

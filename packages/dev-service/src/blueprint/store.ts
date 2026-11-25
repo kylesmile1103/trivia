@@ -6,6 +6,7 @@ import {
   type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type DeferredComponents, type Diagnostic, type DocEntry, type ManifestResolution,
   type ApplyOutcome,
 } from '@trivia/blueprint'
+import { LOCK_FILE, readLock } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { ApiError, type EngineBinding, unwrap } from '../engine.js'
@@ -144,7 +145,15 @@ export class BlueprintWorkspace implements BlueprintStore {
   }
 
   context(manifests = this.manifests(), contract = this.contract()) {
-    return validationContext(manifests, contract, this.#engine, deferred)
+    const context = validationContext(manifests, contract, this.#engine, deferred)
+    const lock = this.readDocumentText(LOCK_FILE)
+    try {
+      const { model } = readLock(lock)
+      if (model) context.modelBaseline = model
+    } catch {
+      // The blueprint summary reports a malformed lock. It cannot provide a model baseline.
+    }
+    return context
   }
 
   async apply(ops: readonly unknown[]): Promise<ApplyOutcome> {

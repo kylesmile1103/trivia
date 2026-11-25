@@ -3,11 +3,33 @@ import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import astLocator from '@trivia/vite-plugin-ast-locator'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv, type ProxyOptions, type ServerOptions } from 'vite'
 
-export default defineConfig({
+function serverOptions(env: NodeJS.ProcessEnv): ServerOptions {
+  const target = env.services__api__https__0 || env.services__api__http__0 || env.API_URL
+  const proxy: ProxyOptions = target ? { target, changeOrigin: true } : {
+    target: 'http://127.0.0.1',
+    bypass(request, response) {
+      response?.writeHead(503, { 'content-type': 'application/problem+json' }).end(JSON.stringify({
+        title: 'API endpoint is not configured',
+        detail: 'Start the solution with Aspire or set API_URL to the backend address.',
+      }))
+      // Vite stops here when the response has ended and bypass returns a URL.
+      return request.url ?? '/api'
+    },
+  }
+  const port = Number(env.PORT)
+  const assignedPort = Number.isInteger(port) && port > 0 && port <= 65535
+  return {
+    ...(assignedPort ? { port, strictPort: true } : {}),
+    proxy: { '^/api(?:/|\\?|$)': proxy },
+  }
+}
+
+export default defineConfig(({ mode }) => ({
   plugins: [astLocator(), react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-})
+  server: serverOptions({ ...loadEnv(mode, process.cwd(), 'API_URL'), ...process.env }),
+}))

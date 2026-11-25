@@ -42,7 +42,11 @@
     "targets": {
       "test": {
         "dependsOn": ["^build", { "projects": ["plugin"], "target": "build" }],
-        "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*", "{workspaceRoot}/tools/blueprint/check-kit-manifests.cjs", "{workspaceRoot}/packages/blueprint/fixtures/manifests/kit-sample/**/*"]
+        "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*",
+          "{workspaceRoot}/tools/blueprint/check-kit-manifests.cjs", "{workspaceRoot}/packages/blueprint/fixtures/manifests/kit-sample/**/*",
+          "{workspaceRoot}/dotnet/tests/Trivia.Blueprint.Codegen.Tests/Snapshots/BankOpenApi.verified.txt",
+          "{workspaceRoot}/dotnet/Directory.Packages.props", "{workspaceRoot}/dotnet/src/**/*",
+          "{workspaceRoot}/packages/blueprint/fixtures/model/valid/bank/model.blueprint.json"]
       }
     }
   }

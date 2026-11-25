@@ -38,6 +38,7 @@ export const DIAGNOSTIC_CODES = [
   'invalid_root',
   'missing_slot',
   'file_name_mismatch',
+  'breaking_change',
   // An injected check (layers 3 to 5) that threw.
   'check_failed',
 ] as const

@@ -20,8 +20,8 @@ Decisions made without the owner are marked ⚑.
 
 | File | Runs on | Jobs |
 | --- | --- | --- |
-| `ci.yml` | pull requests, pushes to `main` and `ci/**`, manual, called by `release.yml` | `gate`, `e2e`, `desktop`, `workflows`, `ci-ok` |
-| `nightly.yml` | daily 03:17 UTC, manual, pushes that change it | `full` (4 OS) |
+| `ci.yml` | pull requests, pushes to `main` and `ci/**`, manual, called by `release.yml` | `gate`, `integration`, `e2e`, `desktop`, `workflows`, `ci-ok` |
+| `nightly.yml` | daily 03:17 UTC, manual, pushes that change it | `full` (4 OS), `integration`, `e2e` |
 | `release.yml` | manual, `main` only | `gate` (calls `ci.yml`), `release` |
 | `codeql.yml` | pull requests and pushes to `main`, weekly | `analyze` (JavaScript/TypeScript, Rust, Actions) |
 | `dependency-review.yml` | pull requests | `review` |
@@ -34,7 +34,8 @@ cache, the Nx cache, and `pnpm install --frozen-lockfile`.
 
 | Job | Runner | What | Why there |
 | --- | --- | --- | --- |
-| `gate` | `ubuntu-24.04` | `nx run-many -t build typecheck lint test --exclude shell` (+ .NET when `dotnet/` exists) | The local gate. Linux is the fastest and cheapest runner, and has Docker for the .NET tests. |
+| `gate` | `ubuntu-24.04` | `nx run-many -t build typecheck lint test --exclude shell` (+ .NET when `dotnet/` exists) | The local gate. Linux is the fastest and cheapest runner. |
+| `integration` | `ubuntu-24.04` | `nx run dotnet:integration`: the generated API against PostgreSQL, the Aspire AppHost, Compose publishing (Docker, .NET 10, `dotnet-ef`, the Aspire CLI 13.6.5 from its install script) | The container tests, kept out of `pnpm check` so the local gate needs no Docker (LLD-10). Linux runners have Docker. |
 | `e2e` | `ubuntu-24.04` | `pnpm e2e` (Playwright, Chromium, + .NET for `trivia-dotnet`), report uploaded on failure | Runs beside `gate`, not after it: both build what they need, and the wall time is the longer of the two. |
 | `desktop` | `macos-15` (Apple silicon) | `nx run-many -t lint test -p shell` | The Tauri shell ships for macOS only, and on Linux it would need WebKitGTK headers. ⚑ |
 | `workflows` | `ubuntu-24.04` | actionlint over `.github/workflows` | A broken workflow fails in review, not after merge. |
@@ -73,8 +74,8 @@ there within a day instead of hiding behind a stale pass.
 ### `nightly.yml`: everything, uncached, everywhere
 
 `pnpm check --skip-nx-cache` on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` and
-`windows-2025`, the shell included (Linux installs the WebKitGTK headers first), and `pnpm e2e`
-on Linux. `fail-fast` is off, so one broken platform does not hide the others. Windows checks
+`windows-2025`, the shell and the .NET tests included (Linux installs the WebKitGTK headers
+first), and the container tests and `pnpm e2e` on Linux. `fail-fast` is off, so one broken platform does not hide the others. Windows checks
 out with `core.autocrlf false`: the byte-exact fixtures must stay byte-exact. A nightly failure
 does not block anyone; it is a signal to look.
 

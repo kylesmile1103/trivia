@@ -1,6 +1,8 @@
 // Validation in layers (LLD-01 section 5, FR-BP-05). Pure, never throws. Each layer sees only
 // the documents no earlier layer found an error in, so one mistake is reported once, where it
 // is, rather than again by every layer that trips over it.
+import { breakingModelChanges } from '../model/baseline.js'
+import { modelSchema } from '../model/types.js'
 import { validateModel } from '../model/validate.js'
 import type { Blueprint } from '../store.js'
 import type { Diagnostic } from '../types/diagnostics.js'
@@ -27,6 +29,11 @@ const failedDocs = (diagnostics: readonly Diagnostic[]) =>
 export function validate(blueprint: Blueprint, ctx: ValidationContext = {}): Diagnostic[] {
   const out = validateStructure(blueprint)
   const failed = failedDocs(out)
+  const model = blueprint.docs[MODEL_DOC]
+  if (ctx.modelBaseline && model?.kind === 'model' && model.doc && !failed.has(MODEL_DOC) && model.rev !== ctx.modelBaseline.rev) {
+    const parsed = modelSchema.safeParse(model.doc)
+    if (parsed.success) out.push(...breakingModelChanges(parsed.data, model.rev, ctx.modelBaseline))
+  }
   const layers: Array<[string, LayerCheck | undefined]> = [
     ['manifests', ctx.manifests],
     ['contract', ctx.contract],

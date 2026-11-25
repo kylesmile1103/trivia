@@ -55,6 +55,7 @@ public static partial class CustomerEndpoints
 
     private static IQueryable<Customer> ApplyFilter(IQueryable<Customer> query, ListFilter filter) => filter.Field switch
     {
+        "id" when filter.Operator == "in" => FilterId(query, filter),
         "status" => FilterStatus(query, filter),
         "email" => FilterEmail(query, filter),
         _ => throw ListQuery.Invalid("filter", $"Unknown filter field '{filter.Field}'.")};
@@ -95,6 +96,25 @@ public static partial class CustomerEndpoints
             "ne" => query.Where(row => row.Email != value),
             "contains" => query.Where(row => row.Email.Contains(value)),
             "startswith" => query.Where(row => row.Email.StartsWith(value)),
+            _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
+    }
+
+    private static IQueryable<Customer> FilterId(IQueryable<Customer> query, ListFilter filter)
+    {
+        if (filter.Operator == "in")
+        {
+            Guid[] values = ListQuery.Values(filter, text => ListQuery.Uuid(text, filter.Field));
+            return query.Where(row => values.Contains(row.Id!));
+        }
+
+        if (filter.Operator is not ("eq" or "ne"))
+            throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.");
+        string text = filter.Value;
+        Guid value = ListQuery.Uuid(text, filter.Field);
+        return filter.Operator switch
+        {
+            "eq" => query.Where(row => row.Id == value),
+            "ne" => query.Where(row => row.Id != value),
             _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
     }
 

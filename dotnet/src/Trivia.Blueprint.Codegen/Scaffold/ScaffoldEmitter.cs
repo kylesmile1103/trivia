@@ -7,15 +7,36 @@ namespace Trivia.Blueprint.Codegen.Scaffold;
 
 internal static class ScaffoldEmitter
 {
-    internal static IEnumerable<EmittedFile> Emit(LoadedBlueprint input, string api)
+    private static readonly string[] Projects = ["AppHost", "ServiceDefaults", "MigrationService"];
+
+    internal static IEnumerable<EmittedFile> Emit(LoadedBlueprint input, string api, string webDirectory)
     {
         string app = input.AppName;
         string space = input.Model.Namespace;
+        bool next = input.App?.Targets.Web == "next-refine";
         yield return new($"{app}.slnx", FileKind.Scaffold, Render("Solution.slnx", space, app));
+        yield return new(".config/dotnet-tools.json", FileKind.Scaffold, Render("dotnet-tools.json", space, app));
         yield return new("Directory.Packages.props", FileKind.Scaffold, DependencyVersions());
-        yield return new($"{api}/{app}.Api.csproj", FileKind.Scaffold, Render("Api.csproj", space, app));
+        yield return new($"{api}/{app}.Api.csproj", FileKind.Scaffold,
+            Render("Api.csproj", space, app).Replace("{{WebDirectory}}", webDirectory, StringComparison.Ordinal));
         yield return new($"{api}/Program.cs", FileKind.Scaffold, Render("Program.cs", space, app));
         yield return new($"{api}/Data/AppDbContext.cs", FileKind.Scaffold, Render("AppDbContext.cs", space, app));
+        foreach (string project in Projects)
+            yield return new($"src/{app}.{project}/{app}.{project}.csproj", FileKind.Scaffold,
+                Render($"{project}/{project}.csproj", space, app));
+        yield return new($"src/{app}.AppHost/Program.cs", FileKind.Scaffold,
+            Render("AppHost/Program.cs", space, app)
+                .Replace("{{WebDirectory}}", webDirectory, StringComparison.Ordinal)
+                .Replace("{{WebResource}}", next ? "AddNextJsApp" : "AddViteApp", StringComparison.Ordinal)
+                .Replace("{{WebPublishing}}", next ? "" : ".PublishAsStaticWebsite(\"/api\", api)", StringComparison.Ordinal));
+        yield return new($"src/{app}.AppHost/Properties/launchSettings.json", FileKind.Scaffold,
+            Render("AppHost/launchSettings.json", space, app));
+        yield return new($"src/{app}.ServiceDefaults/Extensions.cs", FileKind.Scaffold,
+            Render("ServiceDefaults/Extensions.cs", space, app));
+        yield return new($"src/{app}.MigrationService/Program.cs", FileKind.Scaffold,
+            Render("MigrationService/Program.cs", space, app));
+        yield return new($"src/{app}.MigrationService/Worker.cs", FileKind.Scaffold,
+            Render("MigrationService/Worker.cs", space, app));
         foreach (ModelEntity entity in input.Model.Entities)
         {
             string feature = $"{api}/Features/{entity.Name}/{entity.Name}";
@@ -40,8 +61,9 @@ internal static class ScaffoldEmitter
 
     private static string DependencyVersions()
     {
-        XElement template = XElement.Parse(ReadResource("Scaffold/Api.csproj.txt"));
-        HashSet<string> references = template.Descendants("PackageReference")
+        IEnumerable<string> templates = Projects.Select(project => $"{project}/{project}").Prepend("Api");
+        HashSet<string> references = templates
+            .SelectMany(template => XElement.Parse(ReadResource($"Scaffold/{template}.csproj.txt")).Descendants("PackageReference"))
             .Select(reference => (string)reference.Attribute("Include")!)
             .ToHashSet(StringComparer.Ordinal);
         XElement dependencies = XElement.Parse(ReadResource("PackageVersions"));
@@ -55,7 +77,9 @@ internal static class ScaffoldEmitter
 
     private static string ReadResource(string name)
     {
-        using Stream resource = typeof(ScaffoldEmitter).Assembly.GetManifestResourceStream(name)!;
+        using Stream resource = typeof(ScaffoldEmitter).Assembly.GetManifestResourceStream(name)
+            ?? typeof(ScaffoldEmitter).Assembly.GetManifestResourceStream(name.Replace('/', '\\').Replace("Scaffold\\", "Scaffold/", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException($"Missing scaffold resource: {name}");
         using StreamReader reader = new(resource);
         return reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
     }

@@ -1,0 +1,36 @@
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using {{Namespace}}.Data;
+
+namespace {{App}}.MigrationService;
+
+internal sealed class Worker(IServiceScopeFactory scopes, IHostApplicationLifetime lifetime, ILogger<Worker> logger)
+    : BackgroundService
+{
+    private static readonly ActivitySource Traces = new("{{App}}.MigrationService");
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using Activity? activity = Traces.StartActivity("Apply EF Core migrations");
+        try
+        {
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.CreateExecutionStrategy().ExecuteAsync(db.Database.MigrateAsync, stoppingToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception error)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            logger.LogError(error, "Failed to apply EF Core migrations");
+            Environment.ExitCode = 1;
+        }
+        finally
+        {
+            lifetime.StopApplication();
+        }
+    }
+}

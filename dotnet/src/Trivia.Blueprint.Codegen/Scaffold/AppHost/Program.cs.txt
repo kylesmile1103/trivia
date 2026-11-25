@@ -1,0 +1,34 @@
+using Microsoft.Extensions.Configuration;
+
+var builder = DistributedApplication.CreateBuilder(args);
+// Fail with Aspire's runtime diagnosis if the container engine does not become ready.
+builder.Configuration["DcpPublisher:ContainerRuntimeInitializationTimeout"] ??= "00:00:10";
+builder.AddDockerComposeEnvironment("compose").WithDashboard(false);
+
+var postgres = builder.AddPostgres("postgres");
+if (builder.Configuration.GetValue("Trivia:UseDataVolume", true))
+    postgres.WithDataVolume();
+var db = postgres.AddDatabase("appdb");
+
+var migrations = builder.AddProject<Projects.{{App}}_MigrationService>("migrations")
+    .WithReference(db, connectionName: "AppDb")
+    .WaitFor(db);
+
+var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.ExcludeLaunchProfile = true)
+    .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
+    .WithReference(db, connectionName: "AppDb")
+    .WaitForCompletion(migrations)
+    .WithHttpHealthCheck("/health");
+
+if (builder.Configuration.GetValue("Trivia:StartWeb", true))
+{
+    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}")
+        .WithPnpm()
+        .WithReference(api)
+        .WaitFor(api);
+#pragma warning disable ASPIREJAVASCRIPT001 // Static website publishing is experimental in Aspire 13.6.
+    web{{WebPublishing}}.WithExternalHttpEndpoints();
+#pragma warning restore ASPIREJAVASCRIPT001
+}
+
+builder.Build().Run();

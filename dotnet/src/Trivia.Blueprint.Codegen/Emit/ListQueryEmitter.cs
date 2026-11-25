@@ -171,6 +171,15 @@ public static class ListQueryEmitter
         ApiMember[] allowed = Allowed(entity, members, entity.Api.Filterable).ToArray();
         string arms = string.Join("\n", allowed.Select(member =>
             $"{Literal(member.WireName)} => Filter{member.Member}(query, filter),"));
+        ApiMember key = members[0];
+        if (!allowed.Any(member => member.WireName == "id"))
+        {
+            // Refine getMany addresses the primary key through id:in, even when the API
+            // does not expose the key as a general-purpose filter.
+            arms = $"\"id\" when filter.Operator == \"in\" => Filter{key.Member}(query, filter),\n" + arms;
+            if (!allowed.Contains(key))
+                allowed = [.. allowed, key];
+        }
         string methods = string.Join("\n", allowed.Select(member => FilterMethod(model, entity, member)));
         return $$"""
             private static IQueryable<{{entity.Name}}> ApplyFilter(IQueryable<{{entity.Name}}> query, ListFilter filter)

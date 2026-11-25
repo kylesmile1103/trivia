@@ -610,7 +610,9 @@ diagnostics. `mode: "write"` applies the generation plan. Set `force: true` on a
 allow replacement or removal of modified generated files. After generation, a separate
 write-mode request with `migration` runs that named EF migration.
 
-The result is `{ files, written, diagnostics, log }`. Each file has a `path`, `kind` and
+The result is `{ files, written, diagnostics, log, next? }`. After a successful write
+or migration, `next` gives the build command and working directory, then the MCP calls
+for contract sync and drift. Each file has a `path`, `kind` and
 `action`, including `delete` for retired generated files and `refused` for blocked writes.
 `written` is true when the CLI successfully changes at least one file. The log holds
 bounded stderr. The CLI owns the backend file plan. If the SDK or tool is unavailable,

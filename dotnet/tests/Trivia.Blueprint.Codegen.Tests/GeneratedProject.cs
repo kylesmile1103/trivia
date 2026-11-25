@@ -14,19 +14,41 @@ internal sealed class GeneratedProject : IDisposable
     public string DocumentPath { get; }
     public string SolutionPath { get; }
 
-    public GeneratedProject(LoadedBlueprint input)
+    public GeneratedProject(LoadedBlueprint input) : this(input.AppName)
     {
         PlanWriter.Write(Root, ApiPlan.Create(Root, input));
-        string name = input.AppName + ".Api";
+    }
+
+    private GeneratedProject(string appName)
+    {
+        string name = appName + ".Api";
         ApiDirectory = Path.Combine(Root, "src", name);
         ApiAssembly = Path.Combine(ApiDirectory, "bin", "Debug", "net10.0", name + ".dll");
-        DocumentPath = Path.Combine(ApiDirectory, "obj", "openapi.json");
-        SolutionPath = Path.Combine(Root, input.AppName + ".slnx");
+        DocumentPath = Path.Combine(Root, "web", "openapi", "api.openapi.json");
+        SolutionPath = Path.Combine(Root, appName + ".slnx");
+    }
+
+    public static async Task<GeneratedProject> WriteAsync(string blueprint)
+    {
+        GeneratedProject project = new(ModelLoader.Load(blueprint).AppName);
+        try
+        {
+            using StringWriter output = new();
+            using StringWriter errors = new();
+            int status = await Program.RunAsync(["write", "--blueprint", blueprint, "--root", project.Root], output, errors);
+            Assert.True(status == 0, output.ToString() + errors);
+            return project;
+        }
+        catch
+        {
+            project.Dispose();
+            throw;
+        }
     }
 
     public async Task<string> BuildAsync()
     {
-        using Process process = Start("dotnet", Root, ["build", SolutionPath, "-warnaserror", "--nologo"]);
+        using Process process = Start("dotnet", Root, ["build", Path.GetFileName(SolutionPath), "-warnaserror", "--nologo", "--disable-build-servers"]);
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
         Task<string> stderr = process.StandardError.ReadToEndAsync();
         using CancellationTokenSource timeout = new(TimeSpan.FromMinutes(2));

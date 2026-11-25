@@ -4,7 +4,8 @@
     "dotnet": [
       "{projectRoot}/**/*",
       "{workspaceRoot}/packages/blueprint/schemas/app.v1.json",
-      "{workspaceRoot}/packages/blueprint/schemas/model.v1.json"
+      "{workspaceRoot}/packages/blueprint/schemas/model.v1.json",
+      "{workspaceRoot}/packages/blueprint-compiler/templates/vite-refine/src/providers/data-provider.ts"
     ]
   },
   "targets": {
@@ -15,10 +16,16 @@
       "cache": true
     },
     "test": {
-      "command": "dotnet test dotnet/Trivia.Blueprint.slnx",
+      "command": "dotnet test dotnet/Trivia.Blueprint.slnx --filter Category!=Integration",
       "dependsOn": ["build"],
       "inputs": ["dotnet", "{workspaceRoot}/packages/blueprint/fixtures/model/**/*"],
       "cache": true,
+      "parallelism": false
+    },
+    "integration": {
+      "command": "dotnet test dotnet/Trivia.Blueprint.slnx --filter Category=Integration",
+      "dependsOn": ["build"],
+      "cache": false,
       "parallelism": false
     },
     "tool": {

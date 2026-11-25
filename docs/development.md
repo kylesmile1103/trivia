@@ -51,6 +51,7 @@ the project are in [`docs/HANDOFF.md`](HANDOFF.md).
 | Builds | `pnpm build` | Every package, plus production builds of the designer and the examples. |
 | End to end | `pnpm e2e` | Playwright projects `playground`, `refine` and `next`, each with its own servers. |
 | Desktop shell | `nx test shell` | The shell's own Cargo workspace. |
+| Containers | `nx run dotnet:integration` | The generated API against PostgreSQL, the Aspire AppHost and Compose publishing. Needs Docker and the Aspire CLI; not part of `pnpm check`. |
 | Tooling | `nx test tools` | The generator, the release version actions and changelog rules. |
 
 Playwright ports come from the environment so you can run beside a live session:

@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="src/{{App}}.Api/{{App}}.Api.csproj" />
+  <Project Path="src/{{App}}.AppHost/{{App}}.AppHost.csproj" />
+  <Project Path="src/{{App}}.MigrationService/{{App}}.MigrationService.csproj" />
+  <Project Path="src/{{App}}.ServiceDefaults/{{App}}.ServiceDefaults.csproj" />
 </Solution>

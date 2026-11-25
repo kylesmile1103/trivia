@@ -7,8 +7,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { APP_DOC, revOfText } from '@trivia/blueprint'
-import { LOCK_FILE, projectFacts, readLock, type CompileContext } from '@trivia/blueprint-compiler'
+import { APP_DOC, loadDocument, MODEL_DOC, modelSchema, revOfText, summarizeModel } from '@trivia/blueprint'
+import { LOCK_FILE, projectFacts, readLock, serializeLock, type CompileContext } from '@trivia/blueprint-compiler'
 
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
@@ -368,6 +368,21 @@ export class EngineService {
   /** Keep backend generation ordered with its model edits. The CLI owns its file plan. */
   blueprintBackend(request: BackendRequest): Promise<BackendResult> {
     return this.#queue.run(() => runBackend(this.blueprint, request))
+  }
+
+  recordGeneratedModel(modelRev: string): Promise<void> {
+    return this.#queue.run(() => {
+      const text = this.blueprint.readDocumentText(MODEL_DOC)
+      const entry = text === null ? null : loadDocument(MODEL_DOC, text)
+      if (entry?.kind !== 'model' || !entry.doc || entry.rev !== modelRev) {
+        throw new ApiError('conflict', 'The model changed during backend generation. Run the backend command again.')
+      }
+      const model = modelSchema.safeParse(entry.doc)
+      if (!model.success) throw new ApiError('invalid_result', 'The generated model no longer matches the blueprint schema.')
+      const before = this.blueprint.readDocumentText(LOCK_FILE)
+      const after = serializeLock({ ...readLock(before), model: summarizeModel(model.data, modelRev) })
+      this.#commitDocuments([{ file: LOCK_FILE, before, after }], 'Record generated model')
+    })
   }
 
   #commitDocuments(writes: readonly FileChange[], label: string): string | null {

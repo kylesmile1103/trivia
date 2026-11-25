@@ -42,7 +42,6 @@ internal static class MigrateCommand
                 ? ModelLoader.Load(source)
                 : null;
             string relative = LocateProject(root, input?.AppName);
-            string project = Ownership.Resolve(root, relative);
             string migrationsPath = Path.GetDirectoryName(relative)!.Replace(Path.DirectorySeparatorChar, '/') + "/" + Migrations;
             string directory = Ownership.Resolve(root, migrationsPath, directory: true);
             HashSet<string> before = MigrationFiles(directory).ToHashSet(StringComparer.Ordinal);
@@ -51,12 +50,23 @@ internal static class MigrateCommand
                 ? RenameRewriter.ReadTables(File.ReadAllText(snapshot))
                 : new Dictionary<string, string>();
 
-            (int build, string buildOutput) = await RunDotnet(root, ["build", project, "-warnaserror", "--nologo"], cancellationToken);
+            // A relative path keeps NuGet project identities consistent when the working directory
+            // is an OS alias, such as /var on macOS.
+            (int build, string buildOutput) = await RunDotnet(root, ["build", relative, "-warnaserror", "--nologo", "--disable-build-servers"], cancellationToken);
             if (build != 0)
                 return Fail(output, new("migration_build_failed", relative, "", buildOutput));
 
-            string[] arguments = ["ef", "migrations", "add", name, "--project", project,
-                "--startup-project", project, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
+            bool localTool = HasLocalTool(root);
+            if (localTool)
+            {
+                (int restore, string restoreOutput) = await RunDotnet(root,
+                    ["tool", "restore", "--tool-manifest", ".config/dotnet-tools.json"], cancellationToken);
+                if (restore != 0)
+                    return Fail(output, new("migration_tool_restore_failed", ".config/dotnet-tools.json", "", restoreOutput));
+            }
+            string[] tool = localTool ? ["tool", "run", "dotnet-ef", "--"] : ["ef"];
+            string[] arguments = [.. tool, "migrations", "add", name, "--project", relative,
+                "--startup-project", relative, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
             (int status, string message) = await RunDotnet(root, arguments, cancellationToken);
             if (status != 0)
                 return Fail(output, new("migration_failed", relative, "", message));
@@ -77,11 +87,22 @@ internal static class MigrateCommand
             output.WriteLine(JsonSerializer.Serialize(new { diagnostics = exception.Diagnostics }, ModelLoader.Json));
             return 1;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException or
             ArgumentException or Win32Exception or OperationCanceledException)
         {
             return Fail(output, new("migration_failed", "", "", exception.Message));
         }
+    }
+
+    private static bool HasLocalTool(string root)
+    {
+        string manifest = Ownership.Resolve(root, ".config/dotnet-tools.json");
+        if (!File.Exists(manifest))
+            return false;
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(manifest));
+        return document.RootElement.ValueKind == JsonValueKind.Object &&
+            document.RootElement.TryGetProperty("tools", out JsonElement tools) &&
+            tools.ValueKind == JsonValueKind.Object && tools.TryGetProperty("dotnet-ef", out _);
     }
 
     private static string LocateProject(string root, string? app)
@@ -116,6 +137,8 @@ internal static class MigrateCommand
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        // The EF CLI invokes MSBuild too. Reusable nodes can outlive it and keep these pipes open.
+        start.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         foreach (string argument in arguments)
             start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new IOException("Could not start dotnet.");
