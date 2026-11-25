@@ -69,9 +69,13 @@ actual `/__blueprint/` path, so it follows navigation and replaces the missing-l
 for these routes.
 
 **Eject.** `POST /blueprint/plan`. A 422 with `requires` shows the `shadcn add` command to
-copy. Otherwise the dialog lists the files and the route and resource changes. Confirm
-dispatches the plan's ops through the action bus (`dispatch`, `shared/state/actions.ts`), so it
-is one entry of the shared history, then calls `POST /blueprint/ejected`. The canvas navigates
+copy. ⚑ Refine items use their registry URL. Local items are listed for manual installation.
+Otherwise the dialog lists the files and the route and resource changes. Confirm
+dispatches the plan's ops through the action bus (`dispatchBatch`, `shared/state/actions.ts`).
+⚑ The live DevHost plan includes the lock as the final op in that source transaction. For a
+changed batch, `POST /blueprint/ejected` verifies that shared history entry. An unchanged
+re-eject opens the route without verifying an entry it did not create. The dialog lists the
+files named by the ops, including route registration and the lock. The canvas navigates
 to the real route, where every element is now selectable.
 
 **Model editor (Phase 2).** A list of entities, and for the selected one a grid of fields

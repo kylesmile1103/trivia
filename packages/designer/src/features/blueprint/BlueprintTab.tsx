@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 
 import { blueprintApi, problemOf } from './api'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
+import { EjectDialog } from './EjectDialog'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
 import { PagesList } from './PagesList'
 import { createBlueprintStore } from './store'
@@ -20,6 +21,7 @@ export function BlueprintTab() {
   const root = useRef<HTMLElement>(null)
   const editor = useRef<HTMLElement>(null)
   const [focusRequest, setFocusRequest] = useState<BlueprintDiagnostic | null>(null)
+  const [eject, setEject] = useState<BlueprintPageSummary | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
@@ -91,6 +93,7 @@ export function BlueprintTab() {
       {summary && (
         <PagesList
           summary={summary} openPath={path} busy={pending !== null || previewing}
+          onEject={setEject}
           onPreview={(item) => { void preview(item) }}
           onOpen={(doc) => { setAdding(false); void open(doc) }}
           onAdd={() => { void open(null); setAdding(true) }} onInitialize={initialize}
@@ -108,6 +111,7 @@ export function BlueprintTab() {
             : !loadError && <p role="status">Loading page…</p>}
         </section>
       )}
+      {eject && <EjectDialog page={eject} onClose={() => setEject(null)} onRefresh={() => { void refresh() }} />}
       <Diagnostics diagnostics={findings} onActivate={activateDiagnostic} showPath={path === null && !adding} />
       {!summary && !loadError && <p role="status" className="text-muted-foreground">Loading blueprint…</p>}
     </section>

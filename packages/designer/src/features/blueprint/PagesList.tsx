@@ -10,9 +10,10 @@ interface PagesListProps {
   onAdd?(): void
   onInitialize(): void
   onPreview?(page: BlueprintPageSummary): void
+  onEject?(page: BlueprintPageSummary): void
 }
 
-export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onInitialize, onPreview }: PagesListProps) {
+export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onInitialize, onPreview, onEject }: PagesListProps) {
   if (!summary.exists) {
     return (
       <div className="space-y-2">
@@ -48,8 +49,11 @@ export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onIn
               <p className="text-xs text-muted-foreground">
                 {page.errors} {page.errors === 1 ? 'error' : 'errors'} · {page.warnings} {page.warnings === 1 ? 'warning' : 'warnings'}
               </p>
-              {page.status === 'draft' && onPreview && (
-                <Button size="xs" variant="outline" disabled={busy} aria-label={`Preview ${page.name}`} onClick={() => onPreview(page)}>Preview</Button>
+              {page.status === 'draft' && (
+                <div className="flex flex-wrap gap-1">
+                  {onPreview && <Button size="xs" variant="outline" disabled={busy} aria-label={`Preview ${page.name}`} onClick={() => onPreview(page)}>Preview</Button>}
+                  {onEject && <Button size="xs" variant="outline" disabled={busy} aria-label={`Eject ${page.name}`} onClick={() => onEject(page)}>Eject</Button>}
+                </div>
               )}
             </li>
           ))}
