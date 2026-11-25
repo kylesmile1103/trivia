@@ -1,8 +1,7 @@
 # Implementation Plan: MVP slice
 
 **Branch**: `011-mvp-crud-admin` | **Date**: 2026-11-25 | **Spec**: [spec.md](spec.md)
-**Design**: HLD sections 4 and 9, BRD section 7. No LLD: this feature adds tests and an example,
-not a component.
+**Design**: HLD sections 4 and 9, BRD section 7, and [LLD-11](../../docs/blueprint/lld/LLD-11-mvp-crud-admin.md) for the example and acceptance harness.
 
 ## Summary
 
