@@ -28,3 +28,7 @@ function golden(fixture: string, name: string) {
 it('FR-RC-01 and FR-RC-04: emits ordered static nodes and derives component imports', () => {
   golden('static', 'StaticPage')
 })
+
+it('FR-RC-03: lowers state and an exposed input to controlled props and text', () => {
+  golden('state', 'SearchPanel')
+})

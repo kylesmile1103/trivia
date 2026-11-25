@@ -111,6 +111,9 @@ Lowering:
 4. **Exposed values.** A node with an exposed value gets `valueProp={state}` and
    `changeProp={(…) => setState(arg)}` by the manifest's `via`. When an action is bound to the
    same event, the handler sets the state first, then runs the steps.
+
+   ⚑ A static value prop seeds the exposed state. The emitter omits unread state bindings and
+   unused setters from the destructuring it writes.
 5. **Actions.** Steps compile in order inside one `async` handler:
    - `setState`: the setter call;
    - `navigate`: Refine's `useGo`;

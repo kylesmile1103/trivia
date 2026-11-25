@@ -25,7 +25,7 @@
 ## Phase 4: User Story 2 - Custom pages (P1)
 
 - [x] T011 [US2] Golden fixture 1 (static nodes, intrinsic elements, `className`), then `lower/jsx.ts` and `print/jsx.ts`, `print/module.ts`
-- [ ] T012 [US2] Golden fixture 2 (state and exposed values), then `lower/names.ts` and the value and change wiring
+- [x] T012 [US2] Golden fixture 2 (state and exposed values), then `lower/names.ts` and the value and change wiring
 - [ ] T013 [US2] Golden fixture 3 (queries, bindings on query fields), then `lower/scope.ts`, `lower/queries.ts`, `targets/vite-refine/refine-hooks.ts`
 - [ ] T014 [US2] Golden fixture 4 (every action step, including `call` with its handler stub), then `lower/actions.ts`
 - [ ] T015 [US2] Golden fixture 5 (`when`, `each`, slots with wrapper parts)

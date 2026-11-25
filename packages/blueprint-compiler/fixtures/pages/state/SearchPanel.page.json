@@ -1,0 +1,21 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000001",
+  "name": "SearchPanel",
+  "kind": "custom",
+  "route": "/search",
+  "root": "n_00000000000000000000000000",
+  "nodes": {
+    "n_00000000000000000000000000": { "type": "main", "name": "page", "parent": null, "slot": null, "order": "a0" },
+    "n_00000000000000000000000001": { "type": "Input", "name": "search", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a0" },
+    "n_00000000000000000000000002": { "type": "p", "name": "caption", "parent": "n_00000000000000000000000000", "slot": "children", "order": "a1" }
+  },
+  "props": {
+    "n_00000000000000000000000001": { "placeholder": "Type", "value": "seed" }
+  },
+  "state": { "prefix": { "type": "string", "initial": "Search" } },
+  "bindings": {
+    "n_00000000000000000000000002": { "children": "state.prefix + \": \" + ui.search.value" }
+  }
+}

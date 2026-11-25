@@ -18,7 +18,7 @@ export function printModule(ir: PageIR, facts: ProjectFacts): string {
   const indent = (code: string) => code.split('\n').map((line) => '  ' + line).join('\n')
   const declarations = [
     ...ir.state.map(({ name, setter, type, initial }) => statement(
-      'const [' + name + ', ' + setter + '] = useState<' + type + '>(' + initial + ')', style)),
+      'const [' + name + (setter ? ', ' + setter : '') + '] = useState<' + type + '>(' + initial + ')', style)),
     ...[...ir.hooks, ...ir.queries, ...ir.mutations].map((hook) => printHook(hook, style)),
   ]
   const body = [

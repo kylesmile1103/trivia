@@ -1,4 +1,4 @@
-import type { BlueprintNode, CustomPage, ResolvedManifest } from '@trivia/blueprint'
+import { toPointer, type BlueprintNode, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError } from '../compile.js'
 import type { AttributeIR, JsxIR } from '../ir.js'
@@ -8,6 +8,8 @@ export function lowerJsx(
   page: CustomPage,
   manifestOf: (type: string) => ResolvedManifest,
   component: (manifest: ResolvedManifest) => string,
+  expression: (pointer: string) => string,
+  wire: (id: string, props: Map<string, AttributeIR['value']>) => void,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -21,16 +23,21 @@ export function lowerJsx(
     const node = page.nodes[id]!
     const manifest = manifestOf(node.type)
     const tag = component(manifest)
-    const data: Record<string, unknown> = { ...page.props[id], ...page.styles[id] }
-    const text = data.children
-    delete data.children
-    const props: AttributeIR[] = Object.entries(data).sort(([a], [b]) => compareBytes(a, b))
-      .map(([name, value]) => ({ name, value: { kind: 'static', value } }))
+    const attributes = new Map<string, AttributeIR['value']>(Object.entries({ ...page.props[id], ...page.styles[id] })
+      .map(([name, value]) => [name, { kind: 'static', value }]))
+    for (const name of Object.keys(page.bindings[id] ?? {})) {
+      attributes.set(name, { kind: 'expr', code: expression(toPointer(['bindings', id, name])) })
+    }
+    wire(id, attributes)
+    const content = attributes.get('children')
+    const asChild = content?.kind === 'expr' || (content?.kind === 'static' && typeof content.value === 'string')
+    if (asChild) attributes.delete('children')
+    const props = [...attributes].sort(([a], [b]) => compareBytes(a, b)).map(([name, value]) => ({ name, value }))
     const nodes = (childrenByParent.get(id) ?? []).sort(([a, left], [b, right]) =>
       compareBytes(left.order, right.order) || compareBytes(a, b))
     const children: JsxIR[] = []
-    if (typeof text === 'string') children.push({ kind: 'text', value: text })
-    else if (text !== undefined) props.push({ name: 'children', value: { kind: 'static', value: text } })
+    if (content?.kind === 'expr') children.push({ kind: 'expr', code: content.code })
+    if (content?.kind === 'static' && typeof content.value === 'string') children.push({ kind: 'text', value: content.value })
     for (const [child, model] of nodes) {
       if (!manifest.slots.some((slot) => slot.name === model.slot && slot.kind === 'nodes')) {
         throw new CompileError('invalid_result', manifest.type + ' has no node slot ' + model.slot)

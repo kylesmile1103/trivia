@@ -18,7 +18,7 @@ export interface EmittedModule {
 
 export interface CompileContext {
   facts: ProjectFacts
-  engine: { annotate(code: string, file: string): unknown; emitExpressions(requestJson: string): string }
+  engine: { annotate(code: string, file: string): unknown; emitExpressions(requestJson: string): string; analyzeExpressions(requestJson: string): string }
   validation?: ValidationContext
   manifests?: ResolvedManifests
   contract?: TriviaManifest | null

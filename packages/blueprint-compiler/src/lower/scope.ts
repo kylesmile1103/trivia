@@ -17,6 +17,39 @@ interface EmittedExpression {
   diagnostics?: NativeFinding[]
 }
 
+export interface ExpressionAnalysis {
+  id: string
+  tier: 'static' | 'server' | 'client'
+  deps: string[]
+  diagnostics?: NativeFinding[]
+}
+
+export function analyzePageExpressions(page: PageDoc, engine: CompileContext['engine'], ui?: UiExpressionScope): ExpressionAnalysis[] {
+  const request = expressionRequest(page, ui)
+  if (!request.expressions.length) return []
+  request.expressions.sort((a, b) => compareBytes(a.id, b.id))
+  return readResults<ExpressionAnalysis>(engine.analyzeExpressions(JSON.stringify(request)), page)
+}
+
+function readResults<T extends { id: string; diagnostics?: NativeFinding[] }>(response: string, page: PageDoc): T[] {
+  const result = JSON.parse(response) as {
+    ok: boolean
+    data?: { unit: 'utf16'; results: T[] }
+    error?: { message: string }
+  }
+  if (!result.ok || !result.data || result.data.unit !== 'utf16') {
+    throw new CompileError('internal', result.error?.message ?? 'The expression compiler returned no output.')
+  }
+  const doc = pageDocPath(page.name)
+  const diagnostics = result.data.results.flatMap(({ id, diagnostics }) => (diagnostics ?? []).map(({ start, end, ...finding }): Diagnostic => ({
+    ...finding, doc, pointer: id, span: { start, end, unit: 'utf16' },
+  })))
+  if (diagnostics.some(({ severity }) => severity === 'error')) {
+    throw new CompileError('invalid_result', 'Invalid expressions in ' + page.name, { diagnostics })
+  }
+  return result.data.results
+}
+
 export function emitPageExpressions(
   page: PageDoc,
   engine: CompileContext['engine'],
@@ -32,22 +65,8 @@ export function emitPageExpressions(
     ...input,
     ...(locals && { locals: Object.fromEntries(Object.entries(locals).filter(([name]) => !renameLocals.has(name))) }),
   })).sort((a, b) => compareBytes(a.id, b.id))
-  const result = JSON.parse(engine.emitExpressions(JSON.stringify({ expressions: inputs, rename }))) as {
-    ok: boolean
-    data?: { unit: 'utf16'; results: EmittedExpression[] }
-    error?: { message: string }
-  }
-  if (!result.ok || !result.data || result.data.unit !== 'utf16') {
-    throw new CompileError('internal', result.error?.message ?? 'The expression emitter returned no output.')
-  }
-  const doc = pageDocPath(page.name)
-  const diagnostics = result.data.results.flatMap(({ id, diagnostics }) => (diagnostics ?? []).map(({ start, end, ...finding }): Diagnostic => ({
-    ...finding, doc, pointer: id, span: { start, end, unit: 'utf16' },
-  })))
-  if (diagnostics.some(({ severity }) => severity === 'error')) {
-    throw new CompileError('invalid_result', 'Cannot emit expressions for ' + page.name, { diagnostics })
-  }
-  const codes = new Map(result.data.results.map(({ id, ts }) => [id, ts]))
+  const results = readResults<EmittedExpression>(engine.emitExpressions(JSON.stringify({ expressions: inputs, rename })), page)
+  const codes = new Map(results.map(({ id, ts }) => [id, ts]))
   return (id) => codes.get(id) ?? missing(id)
 }
 

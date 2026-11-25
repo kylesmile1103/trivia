@@ -22,7 +22,7 @@ export interface ImportIR {
 
 export interface StateIR {
   name: string
-  setter: string
+  setter?: string
   type: string
   initial: string
 }
