@@ -205,7 +205,7 @@ function AddNode({ page, selected, components, busy, onAdd }: {
     <form aria-label="Add node" className="space-y-2 border-t pt-2" onSubmit={(event) => {
       event.preventDefault()
       if (!validType) return
-      const input = new FormData(event.currentTarget).get('nodeName')
+      const input = new FormData(event.currentTarget).get('blueprintNodeName')
       const name = String(input ?? '').trim() || suggested
       void onAdd(validType, name, current.name).then((saved) => { if (saved) setType('') })
     }}>
@@ -221,7 +221,7 @@ function AddNode({ page, selected, components, busy, onAdd }: {
             {choices.map((component) => <option key={component.type} value={component.type}>{component.type}{component.installed ? '' : ' (not installed)'}</option>)}
           </select>
         )}</Field>
-        {validType && <Field label="Node name">{(id) => <Input id={id} name="nodeName" pattern="[a-z][A-Za-z0-9]*" placeholder={suggested} />}</Field>}
+        {validType && <Field label="Node name">{(id) => <Input id={id} name="blueprintNodeName" pattern="[a-z][A-Za-z0-9]*" placeholder={suggested} />}</Field>}
         <Button type="submit" size="xs" variant="outline" disabled={!validType}>Add node</Button>
       </fieldset>
     </form>

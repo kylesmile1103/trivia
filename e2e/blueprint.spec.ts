@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const root = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
@@ -96,4 +97,153 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
     fs.rmSync(path.join(blueprint, doc), { force: true })
     for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
   }
+})
+
+test.describe('Blueprint panel', () => {
+  const appRoot = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
+  const blueprint = path.join(appRoot, 'blueprint')
+  const appFile = path.join(appRoot, 'src/App.tsx')
+  const generated = path.join(appRoot, 'src/pages/accounts/create.tsx')
+  const lock = path.join(blueprint, 'blueprint.lock.json')
+  const pages = ['AccountIntake', 'SearchDraft', 'ConcurrentDraft']
+  const files = [
+    appFile, generated, lock, path.join(blueprint, 'app.blueprint.json'),
+    ...pages.map((name) => path.join(blueprint, 'pages', `${name}.page.json`)),
+  ]
+
+  const read = (file: string): Buffer | null => fs.existsSync(file) ? fs.readFileSync(file) : null
+  let baseline: Map<string, Buffer | null>
+  let newDirs: string[]
+
+  test.beforeEach(() => {
+    baseline = new Map(files.map((file) => [file, read(file)]))
+    newDirs = [path.join(blueprint, 'pages'), blueprint].filter((dir) => !fs.existsSync(dir))
+  })
+
+  test.afterEach(() => {
+    for (const [file, original] of baseline) {
+      if (!original) fs.rmSync(file, { force: true })
+      else if (!read(file)?.equals(original)) fs.writeFileSync(file, original)
+    }
+    for (const dir of newDirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+  })
+
+  const canvas = (page: Page) => page.frameLocator('iframe[title="App canvas"]')
+  const panel = (page: Page) => page.getByRole('region', { name: 'Blueprint pages' })
+  const editor = (page: Page) => page.getByRole('region', { name: 'Page editor' })
+
+  async function openBlueprint(page: Page) {
+    await page.goto('/__trivia/')
+    await expect(canvas(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 35_000 })
+    await page.getByRole('tab', { name: 'Blueprint' }).click()
+    if (baseline.get(path.join(blueprint, 'app.blueprint.json')) === null) {
+      const create = panel(page).getByRole('button', { name: 'Create blueprint' })
+      await create.click()
+    }
+    await expect(panel(page).getByRole('button', { name: 'Add page' })).toBeEnabled()
+  }
+
+  async function createPage(page: Page, name: string, route: string, kind = 'custom') {
+    await panel(page).getByRole('button', { name: 'Add page' }).click()
+    await editor(page).getByLabel('Name', { exact: true }).fill(name)
+    await editor(page).getByLabel('Route', { exact: true }).fill(route)
+    await editor(page).getByLabel('Kind', { exact: true }).selectOption(kind)
+    if (kind !== 'custom') await editor(page).getByLabel('Resource', { exact: true }).selectOption('Account')
+    await editor(page).getByRole('button', { name: 'Create page' }).click()
+    await expect(editor(page).getByRole('heading', { name, exact: true })).toBeVisible()
+  }
+
+  test('FR-DS-02 FR-DS-04 FR-DS-07 creates, previews, ejects and undoes an account page', async ({ page }) => {
+    await openBlueprint(page)
+    await createPage(page, 'AccountIntake', '/blueprint-account-intake', 'create')
+    const title = editor(page).getByLabel('Title', { exact: true })
+    await title.fill('Blueprint account intake')
+    await title.press('Enter')
+    await panel(page).getByRole('button', { name: 'Preview AccountIntake' }).click()
+    await expect(page.getByText('Preview of a draft page. Eject to edit it on the canvas.')).toBeVisible()
+    await expect(canvas(page).getByText('Blueprint account intake', { exact: true })).toBeVisible({ timeout: 35_000 })
+    await expect(canvas(page).getByText('Customer ID', { exact: true })).toBeVisible()
+    expect(read(generated)).toBeNull()
+
+    await panel(page).getByRole('button', { name: 'Eject AccountIntake' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Eject AccountIntake' })
+    await expect(dialog.getByText('src/pages/accounts/create.tsx', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('src/App.tsx', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('blueprint/blueprint.lock.json', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('/blueprint-account-intake', { exact: true })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Confirm eject' }).click()
+    await expect(panel(page).getByRole('button', { name: 'Eject AccountIntake again' })).toBeVisible()
+    await expect(canvas(page).locator('[data-ast-node^="src/pages/accounts/create.tsx#"]').first()).toBeVisible({ timeout: 35_000 })
+    await expect(page.getByText('Preview of a draft page. Eject to edit it on the canvas.')).toHaveCount(0)
+    expect(read(appFile)?.equals(baseline.get(appFile)!)).toBe(false)
+    expect(read(lock)?.toString('utf8')).toContain('AccountIntake')
+
+    await page.getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => read(generated)).toBeNull()
+    await expect.poll(() => read(appFile)).toEqual(baseline.get(appFile))
+    await expect.poll(() => read(lock)).toEqual(baseline.get(lock))
+    await expect(panel(page).getByRole('button', { name: 'Preview AccountIntake' })).toBeVisible()
+  })
+
+  test('FR-DS-03 previews text bound to the value exposed by a manifest input', async ({ page }) => {
+    await openBlueprint(page)
+    await createPage(page, 'SearchDraft', '/blueprint-search')
+    const tree = editor(page).getByRole('region', { name: 'Blueprint nodes' })
+    await tree.getByLabel('Component', { exact: true }).selectOption('Input')
+    await tree.getByLabel('Node name', { exact: true }).fill('search')
+    await tree.getByRole('button', { name: 'Add node' }).click()
+    await tree.getByRole('button', { name: 'Select search (Input)' }).click()
+    const props = editor(page).getByRole('group', { name: 'Node properties' })
+    await expect(props.getByText('ui.search.value', { exact: true })).toBeVisible()
+    const placeholder = props.getByLabel('placeholder', { exact: true })
+    await placeholder.fill('Search blueprint here')
+    await placeholder.press('Enter')
+    await tree.getByRole('button', { name: 'Select page (div)' }).click()
+    await props.getByLabel('children mode', { exact: true }).selectOption('binding')
+    await props.getByLabel('children expression', { exact: true }).fill('ui.search.value')
+    await props.getByRole('button', { name: 'Save expression' }).click()
+
+    await panel(page).getByRole('button', { name: 'Preview SearchDraft' }).click()
+    await page.getByRole('radio', { name: 'Interact' }).or(page.getByRole('button', { name: 'Interact' })).first().click()
+    const input = canvas(page).getByPlaceholder('Search blueprint here')
+    await expect(input).toBeVisible({ timeout: 35_000 })
+    await input.fill('bound blueprint text')
+    await expect(canvas(page).getByText('bound blueprint text', { exact: true })).toBeVisible()
+  })
+
+  test('FR-DS-07 refuses a stale save after a concurrent MCP patch and loads the agent revision', async ({ page }) => {
+    await openBlueprint(page)
+    await createPage(page, 'ConcurrentDraft', '/blueprint-concurrent')
+    const doc = 'pages/ConcurrentDraft.page.json'
+    const mcp = '/@trivia/mcp'
+    const headers = { accept: 'application/json, text/event-stream', 'mcp-protocol-version': LATEST_PROTOCOL_VERSION }
+    const initialize = await page.request.post(mcp, { headers, data: { jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+      protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'blueprint-conflict-e2e', version: '0' },
+    } } })
+    expect(initialize.ok(), await initialize.text()).toBe(true)
+    const initialized = await page.request.post(mcp, { headers, data: { jsonrpc: '2.0', method: 'notifications/initialized' } })
+    expect(initialized.status()).toBe(202)
+    let saves = 0
+    await page.route('**/@trivia/api/blueprint/patch', async (intercepted) => {
+      saves++
+      if (saves === 1) {
+        const { ops } = intercepted.request().postDataJSON() as { ops: Array<{ baseRev: string }> }
+        const result = await page.request.post(mcp, { headers, data: {
+          jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'trivia_blueprint_patch', arguments: {
+            label: 'Set the concurrent route', ops: [{ op: 'setPageMeta', doc, baseRev: ops[0]!.baseRev, route: '/blueprint-agent' }],
+          } },
+        } })
+        expect(await result.json()).toMatchObject({ result: { structuredContent: { entry: 'Agent: Set the concurrent route' } } })
+      }
+      await intercepted.continue()
+    })
+
+    const route = editor(page).getByLabel('Route', { exact: true })
+    await route.fill('/blueprint-designer')
+    await route.press('Enter')
+    await expect(panel(page).getByRole('alert')).toContainText('Your change was not applied')
+    await expect(route).toHaveValue('/blueprint-agent')
+    expect(read(path.join(blueprint, doc))?.toString('utf8')).toContain('/blueprint-agent')
+    expect(saves).toBe(1)
+  })
 })
