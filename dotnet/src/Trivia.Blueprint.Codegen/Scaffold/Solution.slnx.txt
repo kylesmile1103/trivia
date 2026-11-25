@@ -1,0 +1,3 @@
+<Solution>
+  <Project Path="src/{{App}}.Api/{{App}}.Api.csproj" />
+</Solution>

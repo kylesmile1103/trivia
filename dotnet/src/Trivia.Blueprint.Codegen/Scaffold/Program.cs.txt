@@ -1,0 +1,8 @@
+using {{Namespace}}.Generated;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.Services.AddGeneratedServices(builder.Configuration);
+
+WebApplication app = builder.Build();
+app.MapGeneratedEndpoints();
+app.Run();

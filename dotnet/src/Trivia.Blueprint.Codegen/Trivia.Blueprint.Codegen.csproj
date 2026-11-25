@@ -13,6 +13,8 @@
   <ItemGroup>
     <EmbeddedResource Include="../../../packages/blueprint/schemas/app.v1.json" LogicalName="Schemas/app.v1.json" />
     <EmbeddedResource Include="../../../packages/blueprint/schemas/model.v1.json" LogicalName="Schemas/model.v1.json" />
+    <EmbeddedResource Include="../../Directory.Packages.props" LogicalName="PackageVersions" />
+    <EmbeddedResource Include="Scaffold/*.txt" WithCulture="false" LogicalName="Scaffold/%(Filename)%(Extension)" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="JsonSchema.Net" />

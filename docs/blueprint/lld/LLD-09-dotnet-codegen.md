@@ -124,9 +124,11 @@ src/<App>.Api/
 src/<App>.AppHost/, .ServiceDefaults/, .MigrationService/     scaffold (LLD-10)
 ```
 
-`Program.cs` only calls `AddServiceDefaults`, `AddGeneratedServices`, `MapDefaultEndpoints`
-and `MapGeneratedEndpoints`. Everything that depends on the model, auth included, is behind
-those two generated methods, so a model change never needs an edit to a scaffold file.
+⚑ The standalone `Program.cs` calls `AddGeneratedServices` and `MapGeneratedEndpoints`.
+  LLD-10 will add `AddServiceDefaults` and `MapDefaultEndpoints` when it supplies their project.
+  The PostgreSQL connection comes from `ConnectionStrings:AppDb`, with a local development
+  default. The emitted package versions are selected from the generator's central pins.
+  Model-dependent setup, including auth, stays behind the generated methods.
 
 ## 4. API conventions (FR-NC-06, FR-NC-07, FR-NC-10)
 

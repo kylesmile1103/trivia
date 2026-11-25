@@ -20,7 +20,7 @@
 ## Phase 3: User Story 1 - A working API (P1)
 
 - [x] T009 [US1] Snapshot tests, then `EntityEmitter`, `EnumEmitter` (with literal-value converters), `DbContextEmitter`
-- [ ] T010 [US1] Scaffold text: `Program.cs`, the API csproj, the solution file, entity and context partials
+- [x] T010 [US1] Scaffold text: `Program.cs`, the API csproj, the solution file, entity and context partials
 - [ ] T011 [US1] Build test: write the bank fixture to a temp folder, `dotnet build -warnaserror`
 - [ ] T012 [US1] Snapshot tests, then `ContractsEmitter` (records with validation attributes) and `EndpointsEmitter` for get, create, update, delete with typed results
 - [ ] T013 [US1] `ApiProblemEmitter` and `ApiRegistrationEmitter` (context, validation, OpenAPI, problem details, exception handler, group mapping)
