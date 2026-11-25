@@ -132,6 +132,25 @@ describe('the designer started with --host', () => {
     expect(received).toEqual([])
   })
 
+  it('NFR-05 refuses every blueprint route before forwarding to the dev service', async () => {
+    const routes = [
+      ['GET', ''], ['GET', '/doc'], ['GET', '/components'],
+      ['POST', '/patch'], ['POST', '/preview'], ['POST', '/plan'], ['POST', '/ejected'], ['POST', '/backend'],
+    ]
+    for (const [method, suffix] of routes) {
+      const url = `/@trivia/api/blueprint${suffix}`
+      // Inject a peer address so the check runs even on hosts without a LAN interface.
+      designer.httpServer!.prependOnceListener('request', (req) => {
+        Object.defineProperty(req.socket, 'remoteAddress', { value: '192.0.2.10', configurable: true })
+      })
+      const reply = await send(url, { method, from: '127.0.0.1' })
+      expect([reply.status, reply.body.error?.code], url).toEqual([403, 'forbidden'])
+    }
+    expect(received).toEqual([])
+    expect((await send('/@trivia/api/blueprint', { from: '127.0.0.1' })).status).toBe(200)
+    expect(received).toEqual(['GET /@trivia/api/blueprint'])
+  })
+
   it.skipIf(LAN === undefined)('refuses the MCP endpoint to another machine too, in any spelling', async () => {
     const lan = LAN as string
     const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' })

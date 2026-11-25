@@ -177,16 +177,20 @@ const NEXT: Partial<Record<ErrorCode, string>> = {
   unresolved_component: 'Pass an import for the component (trivia_list_components gives its importSource).',
 }
 
-export function registerTools(server: McpServer, service: EngineService, log: (message: string) => void): void {
+type ToolRunner = (
+  body: () => Promise<{ data: Record<string, unknown>; summary: string }>,
+  next?: Partial<Record<ErrorCode, string>>,
+  structuredErrors?: boolean,
+) => Promise<CallToolResult>
+
+const reads = { readOnlyHint: true, openWorldHint: false } as const
+
+export function registerTools(server: McpServer, service: EngineService, log: (message: string) => void, includeBlueprints: boolean): void {
   /**
    * Run a tool body; engine refusals become tool errors the agent can act on. `next` replaces
    * NEXT's advice for codes that mean something else from this tool.
    */
-  const run = async (
-    body: () => Promise<{ data: Record<string, unknown>; summary: string }>,
-    next: Partial<Record<ErrorCode, string>> = {},
-    structuredErrors = false,
-  ): Promise<CallToolResult> => {
+  const run: ToolRunner = async (body, next = {}, structuredErrors = false) => {
     try {
       const { data, summary } = await body()
       return { content: [{ type: 'text', text: `${summary}\n${JSON.stringify(data, null, 2)}` }], structuredContent: data }
@@ -218,8 +222,6 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
     const node = service.inspect(at) as Node
     return { ...node, component: componentOf(node.name) }
   }
-
-  const reads = { readOnlyHint: true, openWorldHint: false } as const
 
   server.registerTool(
     'trivia_get_selection',
@@ -602,6 +604,32 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       }),
   )
 
+  if (includeBlueprints) registerBlueprintTools(server, service, run)
+
+  server.registerTool(
+    'trivia_undo',
+    {
+      title: 'Undo an edit',
+      description:
+        'Undo the most recent entry of the undo history the designer shares, which may be the user\'s. Pass the label you ' +
+        'expect to undo (history.undoLabel from your last trivia_apply result, or from trivia_get_selection): the undo is ' +
+        'refused when the next entry is another one. Agents\' entries are labelled "Agent: …"; the others are the user\'s.',
+      inputSchema: { label: z.string().min(1).describe('The undoLabel to undo, e.g. "Agent: Make Save outline"') },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ label }) =>
+      run(async () => {
+        const result = await service.undo(label)
+        return { data: { ...result }, summary: `Undid "${label}".` }
+      }, {
+        conflict:
+          'Nothing was undone. If another entry is next, it may be the user\'s own edit: tell the user rather than undoing ' +
+          'it. If the file was edited since, Trivia can no longer undo that entry: tell the user.',
+      }),
+  )
+}
+
+function registerBlueprintTools(server: McpServer, service: EngineService, run: ToolRunner): void {
   server.registerTool(
     'trivia_blueprint_get',
     {
@@ -654,27 +682,5 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         invalid_op: 'Check the tool schema for the refused op and read the document before trying again.',
         invalid_result: 'Fix the diagnostics in the batch and resubmit it with the same revisions.',
       }, true),
-  )
-
-  server.registerTool(
-    'trivia_undo',
-    {
-      title: 'Undo an edit',
-      description:
-        'Undo the most recent entry of the undo history the designer shares, which may be the user\'s. Pass the label you ' +
-        'expect to undo (history.undoLabel from your last trivia_apply result, or from trivia_get_selection): the undo is ' +
-        'refused when the next entry is another one. Agents\' entries are labelled "Agent: …"; the others are the user\'s.',
-      inputSchema: { label: z.string().min(1).describe('The undoLabel to undo, e.g. "Agent: Make Save outline"') },
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-    },
-    ({ label }) =>
-      run(async () => {
-        const result = await service.undo(label)
-        return { data: { ...result }, summary: `Undid "${label}".` }
-      }, {
-        conflict:
-          'Nothing was undone. If another entry is next, it may be the user\'s own edit: tell the user rather than undoing ' +
-          'it. If the file was edited since, Trivia can no longer undo that entry: tell the user.',
-      }),
   )
 }

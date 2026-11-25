@@ -176,6 +176,8 @@ loop in a browser, and a screenshot taken by the real designer).
 ## Blueprint authoring
 
 The shared dev service supports blueprint reads and guarded patches on Vite and Next.js.
+Blueprint tools are available on loopback connections, including when Vite allows remote
+source editing.
 Call `trivia_blueprint_get` with no arguments for the summary, with `what: "doc"` and a
 summary path for a document, or with `what: "components"` for the component catalog. Set
 `projection: true` on a page read to include its TSX projection.

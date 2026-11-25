@@ -141,7 +141,9 @@ Codes come from `docs/api.md`. New in `error.details`:
 
 ## 5. Security
 
-- Same guard as every `/@trivia/api/` route, and the designer's proxy applies it too.
+- ⚑ Blueprint routes and tools require loopback even when Vite enables `allowRemote` for
+  the existing source API. The MCP server omits blueprint tools from non-loopback requests.
+- Same Host and Origin guard as every `/@trivia/api/` route, and the designer's proxy applies it too.
 - `path` parameters are resolved inside the blueprint directory. Anything else is 422
   `path_outside_root`.
 - `backend.ts` starts `dotnet` with an argument array, a fixed executable name, the solution

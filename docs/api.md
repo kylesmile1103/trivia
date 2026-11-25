@@ -502,7 +502,9 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
 
 Vite and Next.js serve the same blueprint API. Paths in blueprint requests and results are
 relative to the blueprint directory, which defaults to `blueprint` and is configurable on Vite.
-`dir` in the summary is relative to the project root.
+`dir` in the summary is relative to the project root. Blueprint endpoints require loopback even with Vite's
+`allowRemote: true`. Paths that traverse outside the blueprint directory or contain
+symlinks return 422 `path_outside_root`.
 
 `GET /@trivia/api/blueprint` returns `{ dir, exists, app, model, pages, diagnostics, next }`.
 A missing directory still returns 200 with `exists: false` and a suggested first op. Each

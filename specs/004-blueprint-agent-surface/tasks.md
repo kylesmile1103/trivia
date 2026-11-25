@@ -33,7 +33,7 @@
 
 ## Phase 6: User Story 5 - Guard (P1)
 
-- [ ] T014 [US5] Guard tests for every blueprint route, direct and through the designer proxy (`packages/designer/server/api-guard.test.ts`), and `path_outside_root`
+- [x] T014 [US5] Guard tests for every blueprint route, direct and through the designer proxy (`packages/designer/server/api-guard.test.ts`), and `path_outside_root`
 
 ## Phase 7: User Story 4 - Preview, eject, backend stubs (P2)
 

@@ -212,3 +212,13 @@ it('FR-AG-05 includes revisions when the byte guard detects an edit after planni
   expect(await response.json()).toMatchObject({ error: { code: 'conflict', details: { revs: { [doc]: revOfText(edited) } } } })
   expect(fs.readFileSync(path.join(root, 'blueprint', doc), 'utf8')).toBe(edited)
 })
+
+it('NFR-05 refuses traversal, absolute paths and paths through symlinks', async () => {
+  fs.mkdirSync(path.join(root, 'blueprint'))
+  fs.symlinkSync(path.join(root, 'src'), path.join(root, 'blueprint', 'symlink'), 'junction')
+  for (const file of ['../trivia.manifest.json', '/app.blueprint.json', 'C:\\outside.json', 'symlink/App.tsx', 'pages//Customers.page.json']) {
+    const response = await get(`/doc?path=${encodeURIComponent(file)}`)
+    expect(response.status, file).toBe(422)
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: 'path_outside_root' } })
+  }
+})
