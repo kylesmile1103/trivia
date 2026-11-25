@@ -9,6 +9,7 @@ import path from 'node:path'
 
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
+import { summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
@@ -299,14 +300,30 @@ export class EngineService {
 
   /** Commit guarded writes relative to the blueprint directory in the shared edit queue. */
   writeDocuments(writes: readonly FileChange[], label: string): Promise<string | null> {
-    return this.#queue.run(() => {
-      commitDocuments(fs.realpathSync(this.#options.host.root), this.blueprint.dir, writes)
-      const changes = writes.filter(({ before, after }) => before !== after)
-        .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
-      if (changes.length === 0) return null
-      this.#history.record({ label, changes, documents: true })
-      return label
+    return this.#queue.run(() => this.#commitDocuments(writes, label))
+  }
+
+  /** Plan and commit a blueprint patch while holding the edit queue. */
+  patchBlueprint(ops: readonly unknown[], label: string): Promise<PatchResult> {
+    return this.#queue.run(async () => {
+      const applied = await this.blueprint.apply(ops)
+      if (!applied.ok) {
+        const { code, message, op, details } = applied.error
+        throw new ApiError(code, message, op === undefined ? details : { ...details, op })
+      }
+      const summary = summarize(this.blueprint, applied.blueprint, applied.result.diagnostics)
+      const entry = this.#commitDocuments(applied.writes, label)
+      return { ...applied.result, entry, summary }
     })
+  }
+
+  #commitDocuments(writes: readonly FileChange[], label: string): string | null {
+    commitDocuments(fs.realpathSync(this.#options.host.root), this.blueprint.dir, writes)
+    const changes = writes.filter(({ before, after }) => before !== after)
+      .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
+    if (changes.length === 0) return null
+    this.#history.record({ label, changes, documents: true })
+    return label
   }
 
   undo(): Promise<HistoryResult> {

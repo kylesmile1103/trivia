@@ -91,6 +91,8 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
   lock; `edited` when it differs or the file is gone.
 - A blueprint that does not exist is not an error: `exists: false`, and `createPage` or
   `setApp` creates the directory on the first patch.
+- ⚑ Patch plans, derives the summary from the result snapshot, and commits while holding
+  the shared queue. This keeps the summary and revision map tied to the committed patch.
 - `patch`: 409 `conflict` on a stale `baseRev` with the current revs in `error.details`, so the
   caller can re-read only what moved (FR-AG-05).
 - `preview`: 422 `invalid_result` when the page has error diagnostics, with them attached.

@@ -1,5 +1,6 @@
 import { BLUEPRINT_VERSION, loadDocument, manifestsToJsonSchema, project } from '@trivia/blueprint'
 
+import type { EngineService } from '../api/service.js'
 import type { Route } from '../api/http.js'
 import { ApiError } from '../engine.js'
 import type { BlueprintWorkspace } from './store.js'
@@ -26,8 +27,15 @@ export function readComponents(workspace: BlueprintWorkspace) {
   return { components: index, schemas }
 }
 
-export function registerBlueprintRoutes(routes: Map<string, Route>, workspace: BlueprintWorkspace): void {
+export function registerBlueprintRoutes(routes: Map<string, Route>, service: EngineService): void {
+  const workspace = service.blueprint
   routes.set('/blueprint', { GET: () => readSummary(workspace) })
   routes.set('/blueprint/doc', { GET: (url) => readDoc(workspace, url.searchParams.get('path'), url.searchParams.get('projection') === '1') })
   routes.set('/blueprint/components', { GET: () => readComponents(workspace) })
+  routes.set('/blueprint/patch', { POST: (_url, { ops, label }) => {
+    if (!Array.isArray(ops) || ops.length === 0 || typeof label !== 'string' || label.trim() === '') {
+      throw new ApiError('invalid_op', 'Pass { ops: BlueprintOp[] (non-empty), label: string (non-blank) }')
+    }
+    return service.patchBlueprint(ops, label.trim())
+  } })
 }

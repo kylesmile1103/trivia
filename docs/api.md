@@ -530,3 +530,16 @@ type names to JSON Schemas for their props.
 ```http
 GET /@trivia/api/blueprint/components
 ```
+
+`POST /@trivia/api/blueprint/patch` accepts `{ ops, label }`. Each op names a `doc` and its
+`baseRev` from a read, or `null` when the document must be absent. A successful response
+contains `{ changed, revs, created, diagnostics, entry, summary }`. `entry` is the undo label,
+or `null` when the patch changes no bytes. Use `summary.next` with the diagnostics.
+Manifest, contract and expression errors can be saved in a draft. A patch that introduces a
+schema or reference error returns 422 `invalid_result` without writing.
+
+```http
+POST /@trivia/api/blueprint/patch
+
+{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
+```

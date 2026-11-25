@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { APP_DOC, validate, type AppDoc, type Diagnostic, type PageKind } from '@trivia/blueprint'
+import { APP_DOC, validate, type AppDoc, type ApplyResult, type Blueprint, type Diagnostic, type PageKind } from '@trivia/blueprint'
 import { z } from 'zod'
 
 import { ApiError } from '../engine.js'
@@ -26,6 +26,11 @@ export interface BlueprintSummary {
   pages: BlueprintPageSummary[]
   diagnostics: Diagnostic[]
   next: string
+}
+
+export interface PatchResult extends ApplyResult {
+  entry: string | null
+  summary: BlueprintSummary
 }
 
 const LOCK = 'blueprint.lock.json'
@@ -58,7 +63,11 @@ function fileHash(root: string, file: string): string | null {
 
 export async function readSummary(workspace: BlueprintWorkspace): Promise<BlueprintSummary> {
   const blueprint = await workspace.read()
-  const diagnostics = validate(blueprint, workspace.context())
+  return summarize(workspace, blueprint, validate(blueprint, workspace.context()))
+}
+
+export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, findings: readonly Diagnostic[]): BlueprintSummary {
+  const diagnostics = [...findings]
   const locks = readLock(workspace, diagnostics)
   const counts = new Map<string, { errors: number; warnings: number }>()
   for (const finding of diagnostics) {

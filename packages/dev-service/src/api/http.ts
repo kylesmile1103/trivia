@@ -196,7 +196,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ['/redo', { POST: () => service.redo() }],
   ])
 
-  registerBlueprintRoutes(routes, service.blueprint)
+  registerBlueprintRoutes(routes, service)
 
   const dispatch = async (req: IncomingMessage, url: URL, signal: AbortSignal): Promise<unknown> => {
     checkCaller(req, options)

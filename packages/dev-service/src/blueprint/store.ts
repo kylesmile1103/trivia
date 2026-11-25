@@ -4,7 +4,7 @@ import path from 'node:path'
 import {
   APP_DOC, MODEL_DOC, apply, componentManifestSchema, loadBlueprint, resolveManifests, ulidSource,
   type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type Diagnostic, type ManifestResolution,
-  type StoreApplyOutcome,
+  type ApplyOutcome,
 } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
@@ -110,13 +110,12 @@ export class BlueprintWorkspace implements BlueprintStore {
     return validationContext(this.manifests(), this.#json(this.#manifestPath) as TriviaManifest | null, this.#engine)
   }
 
-  async apply(ops: readonly unknown[]): Promise<StoreApplyOutcome> {
-    const outcome = apply(await this.read(), ops, {
+  async apply(ops: readonly unknown[]): Promise<ApplyOutcome> {
+    return apply(await this.read(), ops, {
       ids: this.#ids,
       ctx: this.context(),
       expressions: { renameReferences: this.#engine.renameReferences },
     })
-    return outcome.ok ? { ok: true, result: outcome.result, writes: outcome.writes } : outcome
   }
 
   #json(file: string): unknown {
