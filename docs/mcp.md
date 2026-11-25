@@ -186,6 +186,19 @@ summary path for a document, or with `what: "components"` for the component cata
 {"name":"trivia_blueprint_get","arguments":{"what":"summary"}}
 ```
 
+Read the catalog before choosing node types or props. It includes JSON Schemas, availability,
+slots, events and exposed values.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"components"}}
+```
+
+After the customers page exists, read it for its current revision and node IDs.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"doc","path":"pages/Customers.page.json","projection":true}}
+```
+
 Call `trivia_blueprint_patch` with one or more operations and a label. Use `baseRev: null`
 when creating a document. Use the read's revision for an existing document and the current
 type for a node or parent guard. A successful patch returns its `revs`, new IDs under
@@ -194,6 +207,15 @@ type for a node or parent guard. A successful patch returns its `revs`, new IDs 
 ```json
 {"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}}
 ```
+
+After each patch, inspect `summary.pages[].errors`, `diagnostics` and `summary.next`. A draft
+can be saved with an invalid resource. The `unknown_resource` diagnostic names the resources
+available in the contract, so you can correct it with `setPageMeta` and the new revision.
+Fix each reported error and re-read the summary to verify the draft. If a patch returns
+`conflict`, read the documents named by `error.details.revs` before retrying.
+
+To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agent: ` prefix.
+`trivia_get_selection` also returns the next undo label in `history.undoLabel`.
 
 `trivia_blueprint_preview` accepts a page name and optional `includeCode`. After the page
 compiler lands in spec 005, use the returned route in the designer and call

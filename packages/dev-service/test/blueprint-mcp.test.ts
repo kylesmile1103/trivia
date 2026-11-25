@@ -169,3 +169,29 @@ it.each([
   })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
 })
+
+it('NFR-14 executes the documented blueprint authoring calls', async () => {
+  const docs = fs.readFileSync(new URL('../../../docs/mcp.md', import.meta.url), 'utf8')
+  const section = docs.split(/^## Blueprint authoring$/m)[1]!
+  const examples = [...section.matchAll(/^```json\n([\s\S]*?)\n^```$/gm)].map(([, json]) =>
+    JSON.parse(json!) as { name: string; arguments: Record<string, unknown> })
+  const names = examples.map(({ name, arguments: args }) => args.what ? `${name}/${args.what}` : name)
+  async function call(name: string) {
+    const example = examples[names.indexOf(name)]
+    expect(example, name).toBeDefined()
+    return tool(example!.name, example!.arguments)
+  }
+
+  expect(names).toHaveLength(7)
+  expect(new Set(names)).toEqual(new Set([
+    'trivia_blueprint_get/summary', 'trivia_blueprint_get/components', 'trivia_blueprint_get/doc',
+    'trivia_blueprint_patch', 'trivia_blueprint_preview', 'trivia_blueprint_eject', 'trivia_blueprint_backend',
+  ]))
+  expect((await call('trivia_blueprint_get/summary')).structuredContent).toMatchObject({ exists: false })
+  expect((await call('trivia_blueprint_get/components')).structuredContent).toMatchObject({ schemas: { Button: { type: 'object' } } })
+  expect((await call('trivia_blueprint_patch')).structuredContent).toMatchObject({ entry: 'Agent: Add customers', summary: { pages: [{ errors: 0 }] } })
+  expect((await call('trivia_blueprint_get/doc')).structuredContent).toMatchObject({ doc: { name: 'Customers' }, projection: expect.stringContaining('Customers') })
+  for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject', 'trivia_blueprint_backend']) {
+    expect(await call(toolName)).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
+  }
+})
