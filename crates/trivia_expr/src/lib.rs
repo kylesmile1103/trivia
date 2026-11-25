@@ -5,3 +5,203 @@ pub mod parse;
 
 #[doc(hidden)]
 pub mod utf16;
+
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct Scope {
+    pub roots: BTreeMap<String, Root>,
+    pub locals: Locals,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Root {
+    pub tier: RootTier,
+    pub members: Option<Members>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum Members {
+    Names(Vec<String>),
+    Shaped(BTreeMap<String, Option<Members>>),
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Locals {
+    Names(Vec<String>),
+    Tiered(BTreeMap<String, Tier>),
+}
+
+impl Default for Locals {
+    fn default() -> Self { Self::Names(Vec::new()) }
+}
+
+impl Locals {
+    pub fn tier(&self, name: &str) -> Option<Tier> {
+        match self {
+            Self::Names(names) => names.iter().any(|local| local == name).then_some(Tier::Client),
+            Self::Tiered(tiers) => tiers.get(name).copied(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Tier {
+    #[default]
+    Static,
+    Server,
+    Client,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RootTier {
+    Static,
+    Server,
+    Client,
+    Query,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ExpressionInput {
+    pub id: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defines: Option<String>,
+    #[serde(default)]
+    pub locals: Locals,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AnalyzeRequest {
+    #[serde(default)]
+    pub scope: Scope,
+    pub expressions: Vec<ExpressionInput>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Unit {
+    Utf16,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct Diagnostic {
+    pub code: &'static str,
+    pub severity: Severity,
+    pub start: usize,
+    pub end: usize,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct Analysis {
+    pub id: String,
+    pub ok: bool,
+    pub deps: Vec<String>,
+    pub tier: Tier,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct AnalyzeResponse {
+    pub unit: Unit,
+    pub results: Vec<Analysis>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmitRequest {
+    pub expressions: Vec<ExpressionInput>,
+    #[serde(default)]
+    pub rename: BTreeMap<String, String>,
+    #[serde(default)]
+    pub arrow_body: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RenameRequest {
+    pub expressions: Vec<ExpressionInput>,
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct EmitResult {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ts: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct EmitResponse {
+    pub unit: Unit,
+    pub results: Vec<EmitResult>,
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+    use serde_json::{from_str, json, to_value};
+
+    #[test]
+    fn fr_ex_08_page_scope_and_expression_wire_format() {
+        let request: AnalyzeRequest = from_str(r#"{
+            "scope": {
+                "roots": {
+                    "params": {"tier":"server", "members":["id"]},
+                    "search": {"tier":"server", "members":null},
+                    "data": {"tier":"query", "members":["customers"]},
+                    "ui": {"tier":"client", "members":{"search":["value"]}}
+                },
+                "locals":["row"]
+            },
+            "expressions":[{"id":"/a","source":"data.customers","defines":"data.orders","locals":{"item":"server"}}]
+        }"#).unwrap();
+        assert_eq!(request.scope.roots["data"].tier, RootTier::Query);
+        assert_eq!(request.scope.roots["search"].members, None);
+        assert_eq!(request.scope.roots["ui"].members, Some(Members::Shaped(BTreeMap::from([
+            ("search".into(), Some(Members::Names(vec!["value".into()]))),
+        ]))));
+        assert_eq!(request.scope.locals.tier("row"), Some(Tier::Client));
+        assert_eq!(request.expressions[0].locals.tier("item"), Some(Tier::Server));
+        assert_eq!(request.expressions[0].defines.as_deref(), Some("data.orders"));
+    }
+
+    #[test]
+    fn fr_ex_08_response_labels_diagnostic_units() {
+        let response = AnalyzeResponse {
+            unit: Unit::Utf16,
+            results: vec![Analysis {
+                id: "/a".into(), ok: false, deps: vec![], tier: Tier::Static,
+                diagnostics: vec![Diagnostic {
+                    code: "expr_unknown_root", severity: Severity::Error,
+                    start: 1, end: 5, message: "Unknown root".into(),
+                }],
+            }],
+        };
+        assert_eq!(to_value(response).unwrap(), json!({
+            "unit": "utf16",
+            "results": [{"id":"/a", "ok":false, "deps":[], "tier":"static", "diagnostics":[{
+                "code":"expr_unknown_root", "severity":"error", "start":1, "end":5, "message":"Unknown root"
+            }]}]
+        }));
+        let emitted = EmitResult { id: "/a".into(), ts: Some("42".into()), diagnostics: vec![] };
+        assert_eq!(to_value(emitted).unwrap(), json!({"id":"/a", "ts":"42"}));
+    }
+}

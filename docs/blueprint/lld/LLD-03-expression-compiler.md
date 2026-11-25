@@ -56,6 +56,11 @@ A free identifier that is neither a root, a local, an arrow parameter nor an all
 `expr_unknown_root`. A member outside a root's list is `expr_unknown_member`. Arrow parameters
 shadow roots, with a warning.
 
+- ⚑ Known member shapes accept arrays of names, nested objects, and `null` for an open shape.
+  The same representation can describe both `ui` and each query's result fields.
+- ⚑ Page-wide and per-expression `locals` accept a name array (all `client`) or a name-to-tier
+  object. Per-expression locals take precedence, so one batch can include nested repeat scopes.
+
 ## 3. Analysis
 
 `analyze(request) -> response`, batched:
@@ -76,7 +81,7 @@ shadow roots, with a warning.
   the highest tier of that query's parameter expressions. An `event`, `item` under a client
   `each`, `row` or `value` local makes the expression `client`.
 - **Cycles.** The caller passes every expression of a page with the entity it defines (a
-  query's parameters define `data.<name>`). The crate builds the graph and reports each cycle
+  query's parameters define `data.<name>`, sent as the optional `defines` field). The crate builds the graph and reports each cycle
   once as `expr_cycle`, with the path in the message, on every expression taking part.
 
 Diagnostics carry `start` and `end` as UTF-16 code units from the start of the expression
@@ -102,6 +107,10 @@ the top level is wrapped in parentheses only when the caller asks for an arrow b
 
 `renameReferences` uses the same splice to rewrite `ui.<old>` to `ui.<new>` in stored sources,
 for the `renameNode` op (LLD-01).
+
+- ⚑ Emit accepts a batch-wide `arrowBody` flag. `renameReferences` accepts `{ expressions, from, to }`
+  with unqualified node names. Both responses label spans with `unit: "utf16"` and return either
+  `ts` or `diagnostics` for each input, preserving the rest of the batch when one input fails.
 
 ## 5. napi surface
 
