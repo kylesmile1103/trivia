@@ -252,9 +252,9 @@ function followSelection(): () => void {
   })
 }
 
-function mountCanvas(engine: FakeEngine) {
+function mountCanvas(engine: FakeEngine, renderImmediately = true) {
   let app = appDocument()
-  render(app, engine.children)
+  if (renderImmediately) render(app, engine.children)
   // Never attached to the document, so it has no browsing context of its own and never fires a
   // load event the test didn't send; its document is whichever `app` is current.
   const iframe = document.createElement('iframe')
@@ -286,6 +286,7 @@ function mountCanvas(engine: FakeEngine) {
   return {
     view: (): CanvasView => views.at(-1) ?? EMPTY_VIEW,
     doc: () => app.doc,
+    renderFromSource: () => render(app, engine.children),
     /** HMR: Vite re-imports the page's module, and React re-renders the app from the source as it is now. */
     hmr() {
       this.hotUpdate(FILE)
@@ -399,6 +400,21 @@ async function open(children: string[]) {
   await idle()
   return canvas
 }
+
+it('refreshes the Layers snapshot when a loaded document renders its first locators later', async () => {
+  engine.children = ['button']
+  canvas = mountCanvas(engine, false)
+  await idle()
+  expect(canvas.controller.api.layers()).toEqual([])
+  const revision = designer.getState().revision
+
+  canvas.renderFromSource()
+  await idle()
+
+  expect(canvas.view().status).toBe('ready')
+  expect(designer.getState().revision).toBe(revision + 1)
+  expect(canvas.controller.api.layers()[0]).toMatchObject({ locator: ROOT })
+})
 
 describe('gestures made before an edit has rendered', () => {
   it('a drag is refused, then moves the node the user grabbed once the app re-rendered', async () => {
@@ -653,6 +669,19 @@ describe('a click while the app updates is deferred, not dropped', () => {
 })
 
 describe('the canvas is busy for a bounded time after an edit', () => {
+  it('FR-TN-05 settles a Next edit after the edited file renders without a Vite resource request', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    designer.getState().setHealth({ ...designer.getState().health!, host: 'next' })
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    c.doc().body.setAttribute('data-clock', '12:00')
+    await quiet()
+    expect(c.view().updating).toBe(true)
+    c.renderFromSource()
+    expect(await untilSettled(c, 600)).toBeLessThan(600)
+    expect(engine.children).toEqual(['h2', 'button'])
+  })
+
   it('settles at a deadline when the app never stops changing its DOM', async () => {
     const c = await open(['h2', 'button', 'p'])
     // A ticker: the app changes its DOM every 20 ms (an animation library, a clock).

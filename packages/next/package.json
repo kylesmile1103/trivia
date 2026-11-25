@@ -1,0 +1,61 @@
+{
+  "name": "@trivia/next",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Dev-time Trivia integration for Next.js App Router",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./loader": "./src/loader.cjs"
+  },
+  "files": [
+    "dist",
+    "src/loader.cjs",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "vitest": "^5.0.3",
+    "@trivia/vite-plugin-ast-locator": "workspace:*"
+  },
+  "nx": {
+    "name": "next",
+    "targets": {
+      "test": {
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "inputs": [
+          "default",
+          "^production",
+          "fixtures",
+          "{workspaceRoot}/crates/trivia_oxc_engine/tests/fixtures/**/*"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@jridgewell/remapping": "2.3.5",
+    "@trivia/dev-service": "workspace:*",
+    "@trivia/engine": "workspace:*",
+    "typescript": "~6.0.2"
+  },
+  "peerDependencies": {
+    "next": "16.4.6"
+  },
+  "bin": {
+    "trivia-next": "./bin/trivia-next.js"
+  }
+}

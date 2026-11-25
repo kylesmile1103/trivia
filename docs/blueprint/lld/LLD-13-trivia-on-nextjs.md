@@ -1,6 +1,6 @@
 # LLD-13: Trivia on Next.js
 
-- Spec: `specs/013-trivia-on-nextjs` · Requirements: FR-TN-01 to FR-TN-07 · ADR-0015
+- Spec: `specs/013-trivia-on-nextjs` · Requirements: FR-TN-01 to FR-TN-07 · ADR-0017
 - Code: `packages/dev-service` (`@trivia/dev-service`, extracted), `packages/next`
   (`@trivia/next`), small changes in `packages/designer/server/` and
   `packages/vite-plugin-ast-locator`.
@@ -10,21 +10,43 @@ by hand or emitted.
 
 ## 1. Spike first
 
-Before any refactor, a throwaway app answers these. Each answer is recorded in this file.
+⚑ Pin Next.js **16.4.6**, verified with Node 22.23.3 and React/React DOM 19.2.7.
+The scratch App Router app ran on Turbopack with a `*.tsx` rule, a webpack-style loader
+calling the built native `annotate` binding, and a MagicString map. Chromium probed the
+rendered page, watched it through atomic renames, and fetched the map for a client stack frame.
 
 1. Does a loader registered under `turbopack.rules` for `*.tsx` receive the original TSX,
    before the compiler? Can it return TSX that is then compiled normally?
+   **Yes.** The loader checked for `title: string` in the raw input. The rule declared a
+   loader with no `as` override, and Next compiled the returned TSX with its original suffix.
 2. Does its source map survive, so stack traces and the debugger still point at user lines?
+   **Yes with the default compiler configuration.** A callback map with the original path
+   and `sourcesContent` mapped the browser stack from its JS chunk to the error at
+   `app/source-map/page.tsx:4:17` and supplied the original TSX to the debugger. With React
+   Compiler enabled, Next still mapped to the right file and line, but used the stamped TSX as
+   `sourcesContent`, so columns after a locator moved. An inline map reproduced that caveat.
 3. Do `data-ast-node` attributes on host elements in server components reach the DOM?
+   **Yes.** The server `<h1>` was `app/page.tsx#Page#0.0` and the client button was
+   `app/client.tsx#Client#0` in Chromium.
 4. After the engine's atomic write (temp file and rename), does Fast Refresh pick the change
    up, for a client component and for a server component?
+   **Yes.** Both text changes reached the same open document after a sibling temporary
+   file was renamed over its source. The client counter kept its state through its refresh.
 5. Does the React Compiler, when on, change anything about the first-attribute rule
    (`CLAUDE.md` rule 5)?
+   **No.** With `babel-plugin-react-compiler` 1.0.0 enabled, the compiled client bundle used
+   the compiler runtime and a button with `{...props}` still received the locator of its
+   use in the server page, `app/page.tsx#Page#0.2`.
 6. Can a file under `app/(blueprint-preview)/` be added and removed while `next dev` runs
    (LLD-12 section 6)?
+   **Yes, using Next's escaped underscore convention.** The literal `__blueprint`
+   directory under the group returned 404. Renaming it to `%5F_blueprint` made
+   `/__blueprint/Lead` render an unstamped heading, and deleting the group restored 404
+   without a restart.
 
-If 1 or 2 fails with Turbopack: fall back to a Babel-based loader, then to an SWC plugin built
-from the same Rust crate, and record the choice as a new ADR that supersedes ADR-0015.
+⚑ ADR-0017 supersedes ADR-0015. Keep the verified Turbopack loader and use
+`app/(blueprint-preview)/%5F_blueprint/<Name>/` on disk when spec 012 adds blueprint previews.
+Its public URL is still `/__blueprint/<Name>`.
 
 ## 2. The dev service (FR-TN-02, FR-TN-07)
 
@@ -34,11 +56,12 @@ routes reader, and soon the blueprint adapter. Only the transform and a few look
 
 ```
 packages/dev-service/
-  src/service.ts        EngineService (moved)
-  src/http.ts           a Node (req, res, next) handler for /@trivia/api
-  src/guard.ts          the loopback, Host and Origin checks (moved)
+  src/api/service.ts    EngineService (moved)
+  src/api/http.ts       a Node (req, res, next) handler for /@trivia/api
+  src/api/guard.ts      the loopback, Host and Origin checks (moved)
   src/mcp/              the MCP server and tools (moved)
-  src/refine/, src/blueprint/, src/routes/        the adapters (moved)
+  src/refine/, src/routes/                        the adapters (moved)
+  src/engine.ts, src/types.ts                     the native binding and API types (moved)
   src/host.ts           what a host must provide
   src/standalone.ts     a local HTTP server around http.ts and mcp
   bin/trivia-dev.js
@@ -51,9 +74,9 @@ interface DevHost {
   uiDir: string
   importBase: string
   resolveModule(specifier: string, from: string): Promise<string | null>
-  readRoutes(): Promise<AppRoute[]>                 // host-specific
+  readRoutes(source: RouteSource): Promise<RouteEntry[]> // host-specific
   preview: PreviewHost                              // virtual modules (Vite) or files (Next.js)
-  allowedHosts: string[] | true
+  allowedHosts: readonly string[] | true
 }
 ```
 
@@ -63,8 +86,25 @@ change. The move is done as pure file moves first (so `git log --follow` works, 
 earlier reorganization), then the interface is introduced. The plugin's suite and the e2e suite
 are the proof of FR-TN-07, and must pass after each of the two steps.
 
+⚑ Lead ordering decision: spec 004 is built on top of this branch and adds its blueprint
+routes under `packages/dev-service`. This extraction has no `blueprint/` directory to move.
+⚑ Preserve the `api/` directory so all service modules can move byte for byte.
+⚑ Unit tests move with their modules. The HTTP and MCP integration tests keep their
+assertions and stay where their Vite servers run.
+⚑ The Vite gate exposed a Data panel race when a field moved before the next row action
+could be clicked. Rows use their field keys and keep actions laid out through a refresh.
+Hover and keyboard focus reveal the controls.
+
+⚑ `readRoutes` receives the service's read-only engine helpers. The service merges Refine
+labels into the host's `RouteEntry` results, so each host uses the same `AppRoute` contract.
+`PreviewHost.publish` receives the compiled page and returns the URL the host made available.
+
 `standalone.ts` listens on `127.0.0.1` only, on a port chosen by the launcher, and applies the
 same guard. It serves nothing but `/@trivia/api` and `/@trivia/mcp`.
+
+⚑ The `trivia-dev` CLI can run without an app process. It takes `--root`, `--port`,
+`--ui-dir` and `--import-base`. Port zero lets the OS allocate a loopback port. Its static
+resolver confines imports to the real project root. Compiling a preview requires an app host.
 
 ## 3. Stamping (FR-TN-01, FR-TN-06)
 
@@ -95,9 +135,17 @@ the loader for `.tsx` and `.jsx` under the project, excluding `node_modules` and
 folder, through `turbopack.rules` and through a `pre` rule in the webpack config. In a
 production build it only checks that no preview folder is left behind.
 
+⚑ `withTrivia` accepts a config object or factory and preserves the app's existing bundler
+rules. The application root defaults to the current directory, with an explicit `root` option
+for configs loaded from a different working directory.
+
 The file part of a locator is the path relative to the app root, the same string the engine
 resolves. One fixture suite, the locator fixtures the engine already has, is run through the
 loader to prove equality with the Vite transform (`CLAUDE.md` rule 3).
+
+⚑ The loader takes the app root as an option when the bundler's root can cover a wider
+workspace. It composes an incoming source map with the stamp map so previous transforms
+remain traceable.
 
 ## 4. Designer and launcher (FR-TN-03)
 
@@ -113,9 +161,23 @@ paths under `/@trivia/`:
 `server/api-guard.ts` keeps checking API requests before forwarding. The canvas stays
 same-origin (rule 7).
 
+⚑ Configure the second proxy with `TRIVIA_API_TARGET`. `TRIVIA_TARGET` remains the app
+target. The dev service receives only the API and MCP path families.
+
 `trivia-next dev` (the bin of `@trivia/next`) starts `next dev`, the dev service with a `next`
 host, and prints the MCP URL. `Ctrl+C` stops both, and the dev service removes its preview
 files on the way out.
+
+⚑ The launcher uses the app's own Next CLI, passes arguments without a shell and runs the
+dev service in the launcher process. Both listeners use IPv4 loopback. The app port defaults
+to 3000 (or `PORT`) and `--service-port` defaults to an OS-selected port.
+⚑ The Next host resolves local imports with the app's TypeScript or JavaScript config.
+It reads shadcn's UI alias, with `--ui-dir` and `--import-base` overrides for custom layouts.
+⚑ Refine previews use `%5F_blueprint/refine-<id>/page.tsx` under the preview group.
+The native guarded writer preserves existing files and cleans only files this launch created
+with their expected content, plus the empty directories it created.
+⚑ Preview cleanup checks that each directory still resolves to its original path inside the
+project before removing it, so a later symlink cannot redirect that removal.
 
 ## 5. Routes and pages (FR-TN-04)
 
@@ -127,16 +189,28 @@ read from the resources array wherever the `<Refine>` element lives.
 
 The `pages/` router is not supported. An app with only `pages/` gets an empty list and a note.
 
+⚑ Use `app/`, falling back to `src/app/` as Next does. `next-app-router` entries point to
+the declaring page file even when it re-exports its component. Both catch-all forms use the
+existing `*` representation. The route reader decodes the escaped leading underscore and
+omits the transient preview group from the Pages tab.
+⚑ For Next, the Refine resource search covers project source outside `src/`, including
+providers used by App Router layouts.
+
 ## 6. Editing server and client components (FR-TN-05)
 
 The engine edits files. It does not care which kind of component a file holds. What changes:
 
 - **Refresh.** After a write, Next.js refreshes a client component in place and re-renders a
-  server component through an RSC refresh. The designer must re-read locators after the DOM
-  settles in both cases. To verify first: how the designer learns of a re-render today. If it
-  listens to Vite's HMR events, replace that with a host-neutral signal: the dev service
-  reports the write, and the canvas waits for the next DOM mutation to settle before
-  re-resolving the selection.
+  server component through an RSC refresh. `features/canvas/frame-session.ts` listens for iframe
+  loads and observes DOM mutations. It does not subscribe to Vite's HMR socket. Its resource
+  observer does depend on Vite's `?t=<timestamp>` module requests to match an edit to its
+  render; on Next.js it would fall back to a timeout. ⚑ Keep this correlation for Vite.
+  For Next.js, `/health` identifies the host and the edit response supplies the files. The
+  frame watches their stamped nodes for mutations since the edit was sent, then waits for
+  the DOM to settle before re-resolving the selection, with the existing bounded wait.
+  The iframe still receives its own HMR connection through the app proxy.
+  ⚑ If a document attaches before its first stamped render, the canvas bumps its revision
+  once that render is available so the Layers panel can replace its initial empty tree.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
@@ -144,6 +218,12 @@ The engine edits files. It does not care which kind of component a file holds. W
 - **Refine tools.** The page analysis finds `useTable` and form pages in client modules as it
   does on Vite. Route registration differs (files, not `<Route>`), which the adapter learns
   through `DevHost.kind`.
+  ⚑ Next scaffolds client `page.tsx` modules with default exports, using the existing
+  resource's leading route group when available. The same plan adds the Refine resource
+  action. It refuses an already claimed URL pattern, including dynamic parameter renames.
+  ⚑ Undo prunes empty App Router directories created by the edit. Turbopack can continue
+  serving its cached page after just the file disappears. Pre-existing directories and any
+  directory holding user files are preserved.
 
 ## 7. Tests
 
@@ -152,14 +232,26 @@ The engine edits files. It does not care which kind of component a file holds. W
   component page. A third Playwright project runs a subset of the existing suites on it:
   select, inspect, `updateProp`, `setText`, insert, move, undo and redo, the Pages tab, the
   columns tool on a list page, and one edit to a server component.
+
+  ⚑ The example keeps the bank contract and mock data, ports Refine routing to
+  `@refinedev/nextjs-router` 7.0.5, and serves the mock through an App Router route handler.
+  Its root server page embeds a small client component so both edit paths are testable.
+  ⚑ The `next` Playwright project defaults to app/designer/service ports 5175/4402/4403,
+  configurable through `TRIVIA_NEXT_APP_PORT`, `TRIVIA_NEXT_PORT` and `TRIVIA_NEXT_API_PORT`.
 - The dev service: the plugin's API and MCP suites run unchanged through the Vite host, and a
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a
   foreign Origin.
-- A production check: `next build` of the example has no `data-ast-node` in its output.
+- ⚑ The example's build runs `next build` and scans its emitted assets for `data-ast-node`
+  and `@trivia/`. The scanner skips the separate development output and build cache.
 
 ## 8. Open points
 
-- Windows paths in locators under Turbopack. Normalize to forward slashes at the loader.
+- ⚑ The loader uses Windows-relative path rules for drive and UNC roots and keeps forward
+  slashes in locators. The tests cover mixed separators and a different drive.
+- ⚑ The launcher reports a Pages Router-only project and rejects a shared explicit app and
+  API port up front. An occupied app port exits with Next's error and closes the new service.
+- The built integration was checked in the scratch app with webpack and with React Compiler
+  on Turbopack. Both stamped client and server JSX and preserved usage-site attribute order.
 - Whether the dev service should also host the designer's static files, so one process serves
   everything for Next.js apps. Later.

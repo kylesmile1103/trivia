@@ -43,7 +43,7 @@ beforeEach(() => {
   navigate = vi.fn()
   setCanvasApi({ navigate } as unknown as CanvasApi)
   vi.spyOn(engine, 'routes').mockResolvedValue(ROUTES)
-  designer.setState({ canvasPath: '/customers?page=2', revision: 0 })
+  designer.setState({ canvasPath: '/customers?page=2', revision: 0, health: null })
 })
 
 afterEach(async () => {
@@ -65,6 +65,13 @@ async function open(): Promise<void> {
 }
 
 describe('the Pages tab', () => {
+  it('explains the empty list when the Next host finds no App Router pages', async () => {
+    designer.getState().setHealth({ host: 'next', root: '/repo', uiDir: 'components/ui', importBase: '@/components/ui', version: 'test' })
+    vi.mocked(engine.routes).mockResolvedValue([])
+    await open()
+    expect(document.body.textContent).toContain('Pages Router is unsupported')
+    expect(rows()).toEqual([])
+  })
   it('lists each route with its label, URL and page file, and marks where the canvas is', async () => {
     await open()
     expect(rows().map((r) => r.querySelector('[data-label]')!.textContent)).toEqual([

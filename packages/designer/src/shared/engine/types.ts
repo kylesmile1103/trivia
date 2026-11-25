@@ -92,6 +92,7 @@ export interface Health {
   uiDir: string
   importBase: string
   version: string
+  host?: 'next'
 }
 
 export type AttrKind = 'string' | 'expression' | 'shorthand' | 'element' | 'spread'
@@ -360,7 +361,7 @@ export interface AppRoute {
   params: string[]
   index: boolean
   catchAll: boolean
-  router: 'react-router' | 'tanstack-router'
+  router: 'react-router' | 'tanstack-router' | 'next-app-router'
   component: string | null
   /** The component's module, project-relative; null for a package. */
   file: string | null

@@ -7,13 +7,14 @@ import { apiGuard, isApiUpgrade } from './server/api-guard.ts'
 
 /**
  * The designer lives under /__trivia/ and proxies every other path — HTTP and WebSocket —
- * to the user's Vite dev server. The canvas iframe loads "/" from this same origin, so the
+ * to the user's app server. The canvas iframe loads "/" from this same origin, so the
  * designer can read `iframe.contentDocument` directly, and the user app's HMR socket passes
- * through untouched. So does the engine API (/@trivia/api, served by vite-plugin-ast-locator),
+ * through untouched. The engine API and MCP can have their own upstream (for Next.js),
  * but only for this machine: the proxy hides its client from the plugin, so `apiGuard` makes
  * the plugin's checks here (docs/api.md, Envelope).
  */
 const target = process.env.TRIVIA_TARGET ?? 'http://localhost:5173'
+const apiTarget = process.env.TRIVIA_API_TARGET
 
 export default defineConfig({
   base: '/__trivia/',
@@ -31,6 +32,9 @@ export default defineConfig({
     port: Number(process.env.TRIVIA_PORT ?? 4400),
     strictPort: true,
     proxy: {
+      ...(apiTarget ? {
+        '^/@trivia/(?:api(?:[/?#]|$)|mcp(?:[?#]|$))': { target: apiTarget, changeOrigin: true },
+      } : {}),
       '^/(?!__trivia(?:[/?#]|$))': {
         target,
         changeOrigin: true,
