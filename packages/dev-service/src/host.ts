@@ -23,4 +23,11 @@ export interface DevHost {
   allowedHosts: readonly string[] | true
   /** Capture host state before file creation/removal. The callback runs after a successful write. */
   trackFileWrites?(creating: readonly string[], removing: readonly string[]): () => void
+  /**
+   * The project-relative files a successful edit, undo or redo just wrote. A host reloads them
+   * itself instead of waiting for its file watcher, which can miss a write (an edit and its undo
+   * a few milliseconds apart) and then keep serving the module it transformed before. Must not
+   * throw: the write has already happened.
+   */
+  filesChanged?(files: readonly string[]): void
 }
