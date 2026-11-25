@@ -5,7 +5,7 @@ import { compareBytes, serialize } from '../serialize.js'
 import { loadDocument, type Blueprint, type DocEntry } from '../store.js'
 import { applyError, type ApplyError, type Diagnostic } from '../types/diagnostics.js'
 import { blueprintOpSchema, type BlueprintOp, type OpName, type OpOf } from '../types/ops.js'
-import { validateStructure } from '../validate/index.js'
+import { validate, validateStructure } from '../validate/index.js'
 import { setApp, setNav } from './app.js'
 import { Draft, Refusal, type ApplyOptions } from './draft.js'
 import { removeQuery, removeState, setActions, setQuery, setState } from './logic.js'
@@ -120,6 +120,8 @@ export function apply(blueprint: Blueprint, ops: readonly unknown[], options: Ap
     ok: true,
     writes,
     blueprint: next,
-    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: structure },
+    // Manifest, contract and expression findings come back with the result but never block:
+    // a draft may be incomplete.
+    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: validate(next, options.ctx) },
   }
 }
