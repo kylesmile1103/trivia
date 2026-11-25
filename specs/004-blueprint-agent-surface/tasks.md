@@ -29,7 +29,7 @@
 
 ## Phase 5: User Story 3 - Undo (P1)
 
-- [ ] T013 [US3] Test `trivia_blueprint_patch` then `trivia_undo` with the same label, and the labelled entry in `trivia_get_selection`'s history
+- [x] T013 [US3] Test `trivia_blueprint_patch` then `trivia_undo` with the same label, and the labelled entry in `trivia_get_selection`'s history
 
 ## Phase 6: User Story 5 - Guard (P1)
 

@@ -341,8 +341,14 @@ export class EngineService {
     return label
   }
 
-  undo(): Promise<HistoryResult> {
-    return this.#queue.run(() => this.#travel('undo'))
+  undo(expectedLabel?: string): Promise<HistoryResult> {
+    return this.#queue.run(() => {
+      const next = this.#history.nextUndo?.label ?? null
+      if (expectedLabel !== undefined && next !== expectedLabel) {
+        throw new ApiError('conflict', `the next undo is ${next === null ? 'nothing' : `"${next}"`}, not "${expectedLabel}"; nothing was undone`)
+      }
+      return this.#travel('undo')
+    })
   }
 
   redo(): Promise<HistoryResult> {

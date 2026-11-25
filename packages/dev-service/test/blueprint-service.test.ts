@@ -111,3 +111,13 @@ it('NFR-05 refuses a document outside the configured directory', async () => {
   })
   expect(fs.readdirSync(root)).toEqual([])
 })
+
+it('FR-AG-03 checks the expected undo label inside the edit queue', async () => {
+  await service.writeDocuments([{ file: APP, before: null, after: before }], 'First')
+  const pending = service.writeDocuments([{ file: APP, before, after }], 'Second')
+  const undo = service.undo('First')
+  await pending
+  await expect(undo).rejects.toMatchObject({ code: 'conflict', message: expect.stringContaining('Second') })
+  expect(read(APP)).toEqual(Buffer.from(after))
+  expect(service.history().undoLabel).toBe('Second')
+})

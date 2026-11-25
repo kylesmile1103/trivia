@@ -111,6 +111,8 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
 | `trivia_blueprint_eject` | `{ pages?, label }` | `ApplyResult & { files, requires, summary }` |
 | `trivia_blueprint_backend` | `{ mode, migration?, force? }` | `BackendResult` |
 
+- ⚑ `trivia_undo` checks its expected label in the shared queue, alongside the actual undo,
+  so a queued edit cannot change which entry is undone.
 - `trivia_blueprint_eject` plans, applies through the same batch path as `trivia_apply`, then
   records the lock. One `Agent: <label>` undo entry, which `trivia_undo` takes back (FR-AG-07).
 - `trivia_blueprint_preview` returns the route. The agent then calls `trivia_screenshot`

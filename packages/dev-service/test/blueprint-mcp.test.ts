@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -111,4 +112,45 @@ it('FR-AG-04 scripts an MCP-only authoring loop for two pages and fixes the diag
   })
   const summary = await tool('trivia_blueprint_get')
   expect(summary.structuredContent).toEqual(fixed.structuredContent?.summary)
+})
+
+it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a hand edit', async () => {
+  const app = 'app.blueprint.json'
+  const page = listPage()
+  const setup = await tool('trivia_blueprint_patch', {
+    label: 'Create the bank',
+    ops: [{ op: 'setApp', doc: app, baseRev: null, name: 'Bank', targets: { web: 'vite-refine' } }, page],
+  })
+  expect(setup.isError).not.toBe(true)
+  const files = [app, page.doc].map((file) => path.join(root, 'blueprint', file))
+  const originals = files.map((file) => {
+    const text = fs.readFileSync(file, 'utf8').replaceAll('\n', '\r\n') + '\r\n'
+    fs.writeFileSync(file, text)
+    return Buffer.from(text)
+  })
+  const drafts = await tool('trivia_blueprint_get')
+  const summary = drafts.structuredContent as { app: { rev: string }; pages: [{ rev: string }] }
+  const args = {
+    label: 'Update both documents',
+    ops: [
+      { op: 'setApp', doc: app, baseRev: summary.app.rev, name: 'BackOffice' },
+      { op: 'setPageMeta', doc: page.doc, baseRev: summary.pages[0].rev, resource: 'Account' },
+    ],
+  }
+  const updated = await tool('trivia_blueprint_patch', args)
+  const entry = 'Agent: Update both documents'
+  expect(updated).toMatchObject({ structuredContent: { entry, changed: true } })
+  expect((await tool('trivia_get_selection')).structuredContent).toMatchObject({ history: { undoLabel: entry } })
+  expect(files.map((file) => fs.readFileSync(file))).not.toEqual(originals)
+  expect((await tool('trivia_undo', { label: entry })).isError).not.toBe(true)
+  expect(files.map((file) => fs.readFileSync(file))).toEqual(originals)
+
+  expect((await tool('trivia_blueprint_patch', args)).isError).not.toBe(true)
+  fs.appendFileSync(files[1]!, '\n')
+  const edited = files.map((file) => fs.readFileSync(file))
+  const refused = await tool('trivia_undo', { label: entry })
+  expect(refused.isError).toBe(true)
+  expect(refused.content).toEqual([expect.objectContaining({ text: expect.stringContaining('conflict') })])
+  expect(files.map((file) => fs.readFileSync(file))).toEqual(edited)
+  expect((await tool('trivia_get_selection')).structuredContent).toMatchObject({ history: { undoLabel: entry } })
 })

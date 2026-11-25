@@ -669,11 +669,7 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
     },
     ({ label }) =>
       run(async () => {
-        const next = service.history().undoLabel
-        if (next !== label) {
-          throw new ApiError('conflict', `the next undo is ${next === null ? 'nothing' : `"${next}"`}, not "${label}"; nothing was undone`)
-        }
-        const result = await service.undo()
+        const result = await service.undo(label)
         return { data: { ...result }, summary: `Undid "${label}".` }
       }, {
         conflict:
