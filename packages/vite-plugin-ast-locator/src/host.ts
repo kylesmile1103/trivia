@@ -22,5 +22,19 @@ export function createViteHost(server: ViteDevServer, paths: ProjectPaths): DevH
     readRoutes: (source) => discoverRoutes({ ...source, root, resolve: resolveModule }),
     preview: { publish: (id) => `${PREVIEW_PREFIX}${id}.tsx` },
     allowedHosts: server.config.server.allowedHosts,
+    // Reload what the engine wrote through Vite itself. Its file watcher can miss one of two
+    // quick writes to a file (an edit, then its undo), and the canvas then stays on the module
+    // it transformed in between, reloads included: seen on Linux CI. Reloading invalidates the
+    // module and sends the update; a watcher event that does arrive just repeats it.
+    filesChanged: (files) => {
+      const client = server.environments.client
+      for (const file of files) {
+        for (const mod of client.moduleGraph.getModulesByFile(path.join(root, file)) ?? []) {
+          client.reloadModule(mod).catch((error: unknown) => {
+            server.config.logger.warn(`[trivia] could not reload ${file}: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        }
+      }
+    },
   }
 }
