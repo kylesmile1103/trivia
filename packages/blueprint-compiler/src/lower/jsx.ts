@@ -9,7 +9,7 @@ export function lowerJsx(
   manifestOf: (type: string) => ResolvedManifest,
   component: (manifest: ResolvedManifest) => string,
   expression: (pointer: string) => string,
-  wire: (id: string, props: Map<string, AttributeIR['value']>) => void,
+  wire: (id: string, tag: string, props: Map<string, AttributeIR['value']>) => void,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -28,7 +28,7 @@ export function lowerJsx(
     for (const name of Object.keys(page.bindings[id] ?? {})) {
       attributes.set(name, { kind: 'expr', code: expression(toPointer(['bindings', id, name])) })
     }
-    wire(id, attributes)
+    wire(id, tag, attributes)
     const content = attributes.get('children')
     const asChild = content?.kind === 'expr' || (content?.kind === 'static' && typeof content.value === 'string')
     if (asChild) attributes.delete('children')

@@ -127,6 +127,9 @@ Lowering:
    - `toast`: Refine's `useNotification`;
    - `call`: an import from `src/handlers/<page>.ts`, called with `{ event, state, setters }`.
      The file is created with a typed stub when missing, and never overwritten.
+
+   ⚑ The stub types the declared page state and setters and exposes the triggering event as
+   unknown, since multiple event types can call one handler.
 6. **JSX.** Nodes in `order`, per slot. `when` becomes `{cond && <X/>}`. `each` becomes
    `{list.map((item, index) => <X key={…}/>)}`. Slot wrappers come from the manifest's
    `parts`. Static props print as attributes by the rules `updateProp` uses (strings as

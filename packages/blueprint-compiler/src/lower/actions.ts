@@ -4,8 +4,9 @@ import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 import { CompileError } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
 import type { HookIR, ImportIR, StepIR } from '../ir.js'
-import { quote } from '../print/style.js'
+import { compareBytes, property, quote, statement } from '../print/style.js'
 import { handlerFile, refineName, relativeModule } from '../targets/vite-refine/files.js'
+import { queryStatus } from '../targets/vite-refine/refine-hooks.js'
 
 interface ActionContext {
   contract?: TriviaManifest | null | undefined
@@ -75,7 +76,7 @@ export function actionLowerer(context: ActionContext) {
           return mutate(resource, step, step.input === undefined ? '{}' : expr('input'), step.id === undefined ? undefined : expr('id'))
         }
         case 'refetch':
-          return { await: true, code: ref(context.query?.(step.query), 'Unknown query ' + step.query) + '.query.refetch()' }
+          return { await: true, code: ref(context.query?.(step.query), 'Unknown query ' + step.query) + '.' + queryStatus.refetch + '()' }
         case 'toast': {
           const type = step.variant === 'error' ? 'error' : 'success'
           return { code: use('useNotification', 'notification') + '.open?.({ type: ' + str(type) + ', message: ' + expr('message') + ' })' }
@@ -106,4 +107,29 @@ export function operationUrl(path: string, param: (name: string) => string, styl
     if (index % 2) return ['encodeURIComponent(String(' + param(part) + '))']
     return part ? [quote(part, style)] : []
   }).join(' + ')
+}
+
+/** One module is shared by all call steps on a page. Eject only creates it when absent. */
+export function handlerStub(
+  page: string,
+  calls: Iterable<string>,
+  state: Readonly<Record<string, { type: string }>>,
+  style: PrintStyle,
+): { file: string; code: string } | undefined {
+  const handlers = [...new Set(calls)].sort(compareBytes)
+  if (!handlers.length) return
+  const entries = Object.entries(state).sort(([a], [b]) => compareBytes(a, b))
+  const shape = (format: (type: string) => string) => entries.length
+    ? '{\n' + entries.map(([name, { type }]) => '    ' + statement(property(name, style) + ': ' + format(type), style)).join('\n') + '\n  }'
+    : '{}'
+  const code = [
+    'export interface ActionContext {',
+    '  ' + statement('event: unknown', style),
+    '  ' + statement('state: ' + shape((type) => type), style),
+    '  ' + statement('setters: ' + shape((type) => '(value: ' + type + ') => void'), style),
+    '}',
+    ...handlers.flatMap((name) => ['', 'export function ' + name + '(_context: ActionContext): void {}']),
+    '',
+  ].join('\n')
+  return { file: handlerFile(page), code }
 }

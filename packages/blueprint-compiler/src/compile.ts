@@ -14,6 +14,7 @@ export interface EmittedModule {
   component: string
   importPath: string
   route: string
+  handler?: { file: string; code: string }
 }
 
 export interface CompileContext {
@@ -63,6 +64,7 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   emitted.code = emitted.code.replace(/\r\n?/g, '\n')
   try {
     context.engine.annotate(emitted.code, emitted.file)
+    if (emitted.handler) context.engine.annotate(emitted.handler.code, emitted.handler.file)
   } catch (error) {
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)
   }

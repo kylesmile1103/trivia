@@ -21,7 +21,7 @@ export interface ImportIR {
 }
 
 export interface StateIR {
-  name: string
+  name?: string
   setter?: string
   type: string
   initial: string

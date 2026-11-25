@@ -1,10 +1,10 @@
 import type { ContractOptions, ContractPage } from '@trivia/blueprint'
 import type { ManifestResource } from '@trivia/contract-sync'
 
-import { CompileError, type CompileContext } from './compile.js'
+import { CompileError, type CompileContext, type EmittedModule } from './compile.js'
 import type { ProjectFacts } from './facts.js'
 import type { ImportIR } from './ir.js'
-import { actionLowerer, capitalize } from './lower/actions.js'
+import { actionLowerer, capitalize, handlerStub } from './lower/actions.js'
 import { Names } from './lower/names.js'
 import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower/scope.js'
 import { printHook } from './print/module.js'
@@ -38,7 +38,7 @@ export function generateContract(
   resource: ManifestResource,
   context: CompileContext,
   generator: ContractPageGenerator,
-): ReturnType<ContractPageGenerator> {
+): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> {
   const { facts } = context
   const { rowActions = [], headerActions = [] } = page.options
   if (!rowActions.length && !headerActions.length) {
@@ -91,7 +91,7 @@ export function generateContract(
     const callback = '(event) => void ' + name + '(event' + (forRow ? ', row.original' : '') + ').catch(console.error)'
     return '<Button type="button" onClick={' + callback + '}>' + text + '</Button>'
   }
-  return generator({
+  const output = generator({
     resource, kind: page.kind, facts, options: page.options,
     actions: {
       imports: [
@@ -108,4 +108,6 @@ export function generateContract(
       dependencies: row.map(({ name }) => name),
     },
   })
+  const handler = handlerStub(page.name, lower.calls.keys(), {}, style)
+  return { ...output, ...(handler && { handler }) }
 }
