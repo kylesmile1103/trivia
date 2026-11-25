@@ -1,7 +1,11 @@
 import { globSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { componentManifestSchema, loadBlueprint, type ComponentManifest } from '@trivia/blueprint'
+import { componentManifestSchema, exposedScope, expressionCheck, loadBlueprint, manifestCheck, resolveManifests, type ComponentManifest, type ComponentSchema } from '@trivia/blueprint'
+
+import * as engine from '@trivia/engine'
+
+import { compilePage, projectFacts, type CompileContext } from '../src/index.js'
 
 const kit = new URL('../kit/', import.meta.url)
 export const fixtureDir = new URL('../fixtures/kit/', import.meta.url)
@@ -31,4 +35,28 @@ export function missingKitTypes(manifests: readonly Pick<ComponentManifest, 'typ
     for (const { type } of Object.values(entry.doc.nodes)) types.add(type)
   }
   return manifests.map(({ type }) => type).filter((type) => !types.has(type))
+}
+
+
+export const kitApp = new URL('../../../examples/blueprint-kit/', import.meta.url)
+
+export function kitContext(app = kitApp): CompileContext {
+  const config = JSON.parse(read('components.json', app))
+  const checked = JSON.parse(engine.components(fileURLToPath(app), 'src/components/ui', config.aliases.ui))
+  if (!checked.ok) throw new Error(checked.error.message)
+  const { manifests } = resolveManifests({
+    kit: kitManifests(), components: checked.data as ComponentSchema[], aliases: { ...config.aliases, style: config.style },
+  })
+  const facts = projectFacts({ aliases: config.aliases })
+  return {
+    engine, facts, manifests,
+    validation: {
+      manifests: manifestCheck(manifests),
+      expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),
+    },
+  }
+}
+
+export function compileKitPage(name: string, context = kitContext()) {
+  return compilePage(loadBlueprint(fixture()), name, context)
 }

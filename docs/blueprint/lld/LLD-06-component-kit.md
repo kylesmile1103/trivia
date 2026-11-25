@@ -39,6 +39,11 @@ Prop names differ by shadcn base. Each manifest carries variants keyed by the pr
 `components.json` style, checked against the real component source in a fixture (LLD-02
 section 6). Radix and Base UI are covered first.
 
+⚑ Manifest slots describe the outer registry parts. Authors place deeper parts such as
+`BreadcrumbItem` and `DropdownMenuItem` as ordinary nodes in those slots. The resolver
+keeps a project's installed filename for a uniquely resolved shadcn export, so a renamed
+component continues compiling with its project alias.
+
 ## 3. `DataTable` (FR-KT-02, FR-KT-04, FR-KT-05)
 
 A node of type `DataTable` in a custom page:

@@ -116,7 +116,9 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
       continue
     }
     const component = matching[0]
-    const from = declaredFrom ?? component?.importSource ?? 'ui'
+    const from = source.import.from === 'ui' && ui && component
+      ? ui + '/' + component.importSource.split('/').at(-1)
+      : declaredFrom ?? component?.importSource ?? 'ui'
     const known = new Set(component?.props.map(({ name }) => name))
     if (component && overrideTypes.has(type)) inspectOverride(manifest, style, variant, known, diagnostics)
     const descriptions: Array<[string, string]> = []

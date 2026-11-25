@@ -1,0 +1,24 @@
+{
+  "type": "Badge",
+  "source": {
+    "registry": "shadcn",
+    "item": "badge",
+    "import": {
+      "name": "Badge",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "children",
+      "kind": "text"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {
+    "children": "Badge"
+  }
+}

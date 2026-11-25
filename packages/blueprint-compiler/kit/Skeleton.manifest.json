@@ -1,0 +1,17 @@
+{
+  "type": "Skeleton",
+  "source": {
+    "registry": "shadcn",
+    "item": "skeleton",
+    "import": {
+      "name": "Skeleton",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

@@ -1,0 +1,26 @@
+{
+  "type": "Breadcrumb",
+  "source": {
+    "registry": "shadcn",
+    "item": "breadcrumb",
+    "import": {
+      "name": "Breadcrumb",
+      "from": "ui"
+    },
+    "parts": {
+      "list": "BreadcrumbList"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "list",
+      "kind": "nodes",
+      "wrapper": "BreadcrumbList"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

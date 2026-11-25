@@ -84,6 +84,8 @@ For each type:
    - ⚑ When several files export that name, use the exact module specifier if it selects
      one candidate. Otherwise omit the ambiguous type and report `ambiguous_component`
      with the candidate files and the manifest override that would select one.
+   - ⚑ When a `from: "ui"` export resolves uniquely, the import uses the installed filename
+     under the project's UI alias, including when the file was renamed (LLD-06).
    - Found: `props` is the analyzer's list. The manifest may only annotate props that exist
      (mark one as an event, add a description). The user's file wins on options and defaults.
      ⚑ Descriptions of recognized props are in `propDescriptions`, keeping the analyzer list
