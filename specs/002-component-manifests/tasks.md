@@ -42,7 +42,7 @@
 ## Phase 8: Polish
 
 - [x] T016 Edge cases: missing `components.json`, duplicate export names, Base UI variant selection
-- [ ] T017 Run `pnpm check`
+- [x] T017 Run `pnpm check`
 
 ## Dependencies
 
