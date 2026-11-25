@@ -102,12 +102,17 @@ Lowering:
    | `data.<q>.result` | The response of a `custom` query |
    | `data.<q>.isLoading`, `.error` | Status of any query |
 
-   The mapping to Refine's return shape lives in one file, `targets/refine-hooks.ts`, written
+   The mapping to Refine's return shape lives in one file, `targets/vite-refine/refine-hooks.ts`, written
    against the pinned `@refinedev/core` types and covered by a `tsc` test. Do not write it
    from memory: Refine 5 changed these shapes.
 3. **Queries.** `list` becomes `useList`, `one` becomes `useOne`, `custom` becomes
    `useCustom`. Parameters are emitted expressions. `enabled` maps to the hook's query options.
    A `DataTable` node does not use a page query: the composite owns its `useTable` (LLD-06).
+
+   ⚑ Dependent queries follow topological order. Refine pagination and sort keys go to the
+   corresponding hook options; remaining list parameters become filters. Custom query path
+   parameters are URL-encoded; the rest go to the provider's query, header or payload config.
+   A list total is zero until Refine supplies it.
 4. **Exposed values.** A node with an exposed value gets `valueProp={state}` and
    `changeProp={(…) => setState(arg)}` by the manifest's `via`. When an action is bound to the
    same event, the handler sets the state first, then runs the steps.

@@ -5,7 +5,9 @@ import { CompileError, type CompileContext } from './compile.js'
 import type { ProjectFacts } from './facts.js'
 import type { ImportIR } from './ir.js'
 import { actionLowerer, capitalize } from './lower/actions.js'
-import { emitPageExpressions } from './lower/scope.js'
+import { Names } from './lower/names.js'
+import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower/scope.js'
+import { printHook } from './print/module.js'
 import { quote, statement } from './print/style.js'
 
 export interface ContractPageInput {
@@ -48,15 +50,12 @@ export function generateContract(
 
   // The shared scaffolder uses its established quoting convention.
   const style = { quotes: 'double', semicolons: true } as const
-  const expression = emitPageExpressions(page, context.engine, { event: '_event', row: '_row' },
+  const names = new Names(['columns', 'table', 'form', 'record', 'onFinish', 'formLoading', '_event', '_row'])
+  const name = (preferred: string) => names.take(preferred)
+  const depsOfExpressions = new Set(analyzePageExpressions(page, context.engine).flatMap(({ deps }) => deps))
+  const route = routeScope(depsOfExpressions, names)
+  const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
-  const used = new Set<string>()
-  const name = (preferred: string) => {
-    let available = preferred
-    for (let index = 2; used.has(available); index++) available = preferred + index
-    used.add(available)
-    return available
-  }
   const lower = actionLowerer({
     contract: context.contract, page: page.name, file: facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
@@ -75,8 +74,8 @@ export function generateContract(
   const row = definitions('rowActions', rowActions)
   const header = definitions('headerActions', headerActions)
   const hooks = [...lower.hooks.values()]
-  const deps = hooks.map(({ name, hook }) => hook === 'useGo' ? name
-    : hook === 'useNotification' ? name + '.open' : name + '.mutateAsync')
+  const deps = [...route.locals, ...hooks.map(({ name, hook }) => hook === 'useGo' ? name
+    : hook === 'useNotification' ? name + '.open' : name + '.mutateAsync')]
   const nodeType = 'MouseEvent<HTMLButtonElement>'
   const rowType = resource.entity?.typeName ?? 'Record<string, unknown>'
   const print = (action: typeof row[number], forRow: boolean): string => {
@@ -96,11 +95,11 @@ export function generateContract(
     resource, kind: page.kind, facts, options: page.options,
     actions: {
       imports: [
-        ...lower.imports, { source: 'react', name: 'MouseEvent', kind: 'type' },
+        ...route.imports, ...lower.imports, { source: 'react', name: 'MouseEvent', kind: 'type' },
         ...(row.length ? [{ source: 'react', name: 'useCallback' }] : []),
       ],
       setup: [
-        ...hooks.map(({ name, hook }) => 'const ' + name + ' = ' + hook + '();'),
+        ...[...route.hooks, ...hooks].map((hook) => printHook(hook, style)),
         ...row.map((action) => print(action, true)),
         ...header.map((action) => print(action, false)),
       ].join('\n\n'),

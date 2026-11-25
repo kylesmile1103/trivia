@@ -10,9 +10,17 @@ const kit = ['Button', 'Card', 'Input'].map((type) => JSON.parse(fs.readFileSync
   '../../blueprint/fixtures/manifests/kit-sample/' + type + '.manifest.json', import.meta.url,
 ), 'utf8')) as ComponentManifest)
 
+const contract: NonNullable<CompileContext['contract']> = JSON.parse(fs.readFileSync(new URL(
+  '../../../examples/refine-admin/trivia.manifest.json', import.meta.url,
+), 'utf8'))
+const account = contract.resources.find(({ name }) => name === 'Account')!
+account.customOperations.push({
+  ...account.operations.get!, kind: 'custom', operationId: 'getAccountStats', sdkFn: 'getAccountStats',
+  path: '/api/v1/accounts/{id}/stats',
+})
 const context: CompileContext = {
   facts: projectFacts(),
-  engine,
+  engine, contract,
   manifests: Object.fromEntries(kit.map((manifest) => [manifest.type, { ...manifest, installed: true }])),
 }
 
@@ -31,4 +39,8 @@ it('FR-RC-01 and FR-RC-04: emits ordered static nodes and derives component impo
 
 it('FR-RC-03: lowers state and an exposed input to controlled props and text', () => {
   golden('state', 'SearchPanel')
+})
+
+it('FR-RC-03: binds list, one and custom query results and orders dependent hooks', () => {
+  golden('queries', 'AccountQueries')
 })

@@ -8,13 +8,14 @@ import { refineName, relativeModule } from '../targets/vite-refine/files.js'
 import { capitalize } from './actions.js'
 import { lowerJsx } from './jsx.js'
 import { Names } from './names.js'
-import { analyzePageExpressions, emitPageExpressions } from './scope.js'
+import { prepareQueries } from './queries.js'
+import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope.js'
 
 const intrinsic = resolveManifests({ kit: [], components: [] }).manifests
 
 export function lowerCustom(page: CustomPage, context: CompileContext): EmittedModule {
-  if ([page.queries, page.actions, page.control].some((entries) => Object.keys(entries).length)) {
-    throw new CompileError('unsupported', 'This custom page needs query, action or control-flow lowering.')
+  if ([page.actions, page.control].some((entries) => Object.keys(entries).length)) {
+    throw new CompileError('unsupported', 'This custom page needs action or control-flow lowering.')
   }
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
@@ -22,7 +23,9 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const file = facts.pagesDir + '/' + dir + '/' + page.name + '.tsx'
   const imports: ImportIR[] = []
   const missing = new Map<string, RegistryItem>()
-  const names = new Names([page.name, 'useState', 'event', 'value'])
+  const names = new Names([
+    page.name, 'useState', 'event', 'value', 'useList', 'useOne', 'useCustom', 'useParams', 'useSearchParams', 'useGetIdentity',
+  ])
   const identifiers = new Map<string, string>()
   let client = false
 
@@ -83,7 +86,11 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     exposed.set(id, values)
   }
   if (state.length) imports.push({ name: 'useState', source: 'react' })
-  const expression = emitPageExpressions(page, context.engine, rename, ui)
+  const route = routeScope(deps, names)
+  const query = prepareQueries(page, context, names, analysis)
+  const expression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename }, ui)
+  const queries = query.lower(expression)
+  imports.push(...route.imports, ...query.imports)
   const wire = (id: string, attributes: Map<string, AttributeIR['value']>): void => {
     const changes = new Map<string, { arg: string; steps: string[] }>()
     for (const value of exposed.get(id) ?? []) {
@@ -103,7 +110,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const jsx = lowerJsx(page, manifestOf, component, expression, wire)
   const ir: PageIR = {
     name: page.name, file, route: page.route, client: client || state.length > 0 || analysis.some(({ tier }) => tier === 'client'),
-    imports, jsx, state, queries: [], mutations: [], hooks: [], handlers: [],
+    imports, jsx, state, queries, mutations: [], hooks: route.hooks, handlers: [],
   }
   return {
     code: printModule(ir, facts), file, route: page.route, component: page.name,

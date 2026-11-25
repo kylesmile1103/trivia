@@ -73,3 +73,33 @@ export function emitPageExpressions(
 function missing(pointer: string): never {
   throw new CompileError('internal', 'Missing emitted expression at ' + pointer)
 }
+
+export function routeScope(deps: ReadonlySet<string>, names: import('./names.js').Names) {
+  const rename: Record<string, string> = {}
+  const imports: import('../ir.js').ImportIR[] = []
+  const hooks: import('../ir.js').HookIR[] = []
+  const locals: string[] = []
+  const has = (root: string) => [...deps].some((dep) => dep.startsWith(root + '.'))
+  if (has('params')) {
+    const name = names.take('params')
+    rename['params'] = name
+    imports.push({ name: 'useParams', source: 'react-router' })
+    hooks.push({ name, hook: 'useParams' })
+    locals.push(name)
+  }
+  if (has('search')) {
+    const name = names.take('searchParams')
+    rename['search'] = 'Object.fromEntries(' + name + ')'
+    imports.push({ name: 'useSearchParams', source: 'react-router' })
+    hooks.push({ name: '[' + name + ']', hook: 'useSearchParams' })
+    locals.push(name)
+  }
+  if (has('user')) {
+    const name = names.take('user')
+    rename['user'] = '(' + name + ' ?? { id: undefined, name: undefined, roles: [] })'
+    imports.push({ name: 'useGetIdentity', source: '@refinedev/core' })
+    hooks.push({ name: '{ data: ' + name + ' }', hook: 'useGetIdentity', type: '{ id: string; name: string; roles: string[] }' })
+    locals.push(name)
+  }
+  return { rename, imports, hooks, locals }
+}
