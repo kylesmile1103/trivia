@@ -140,3 +140,66 @@ fn fr_ex_02_checks_free_roots_known_members_and_arrow_scopes() {
     assert_eq!(results.last().unwrap().diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
         ["expr_shadowed_root", "expr_unsupported_syntax"]);
 }
+
+#[test]
+fn fr_ex_03_fr_ex_04_extract_ordered_dependencies_and_propagate_query_tiers() {
+    use trivia_expr::{analyze, AnalyzeRequest, Tier};
+    use Tier::{Client, Server, Static};
+
+    let request: AnalyzeRequest = serde_json::from_str(r#"{
+      "scope": {"roots": {
+        "params": {"tier":"server", "members":null},
+        "state": {"tier":"client", "members":["limit"]},
+        "data": {"tier":"query", "members":["customers", "orders", "filtered", "indirect", "unfiltered"]},
+        "ui": {"tier":"client", "members":{"search":["value"]}}
+      }, "locals":["event"]},
+      "expressions": [
+        {"id":"text", "source":"`${data.customers.total} of ${state.limit} (${data.customers.items.length})`"},
+        {"id":"order", "source":"ui?.search.value + state['limit'] + params.key + state.limit"},
+        {"id":"literal", "source":"'Customers'"},
+        {"id":"forward", "source":"data.orders.items"},
+        {"id":"orders-key", "defines":"data.orders", "source":"data.customers.items[0]"},
+        {"id":"customers-key", "defines":"data.customers", "source":"params.id"},
+        {"id":"customers-limit", "defines":"data.customers", "source":"10"},
+        {"id":"clock", "source":"Date['now']()"},
+        {"id":"empty", "source":"data.unfiltered.total"},
+        {"id":"dynamic", "source":"data[params.key]"},
+        {"id":"whole", "source":"Object.keys(state).length"},
+        {"id":"local", "source":"event.target.value"},
+        {"id":"server-local", "source":"item.id", "locals":{"item":"server"}},
+        {"id":"shadow", "source":"[1].map(state => state.limit)"},
+        {"id":"type", "source":"(state as typeof event).limit"},
+        {"id":"filtered", "defines":"data.filtered", "source":"state.limit"},
+        {"id":"indirect", "defines":"data.indirect", "source":"data.filtered.total"},
+        {"id":"indirect-read", "source":"data.indirect.items"}
+      ]
+    }"#).unwrap();
+    let expected: &[(&str, &[&str], Tier)] = &[
+        ("text", &["data.customers", "state.limit"], Client),
+        ("order", &["ui.search", "state.limit", "params.key"], Client),
+        ("literal", &[], Static),
+        ("forward", &["data.orders"], Server),
+        ("orders-key", &["data.customers"], Server),
+        ("customers-key", &["params.id"], Server),
+        ("customers-limit", &[], Static),
+        ("clock", &[], Client),
+        ("empty", &["data.unfiltered"], Static),
+        ("dynamic", &["data.*", "params.key"], Client),
+        ("whole", &["state.*"], Client),
+        ("local", &[], Client),
+        ("server-local", &[], Server),
+        ("shadow", &[], Static),
+        ("type", &["state.limit"], Client),
+        ("filtered", &["state.limit"], Client),
+        ("indirect", &["data.filtered"], Client),
+        ("indirect-read", &["data.indirect"], Client),
+    ];
+    let results = analyze(request).results;
+    assert_eq!(results.len(), expected.len());
+    for (result, &(id, deps, tier)) in results.iter().zip(expected) {
+        assert!(result.ok, "{id}: {:?}", result.diagnostics);
+        assert_eq!(result.id, id);
+        assert_eq!(result.deps, deps, "{id}");
+        assert_eq!(result.tier, tier, "{id}");
+    }
+}

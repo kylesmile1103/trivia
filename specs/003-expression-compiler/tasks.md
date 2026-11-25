@@ -23,7 +23,7 @@
 
 ## Phase 4: User Story 2 - Dependencies and tiers (P1)
 
-- [ ] T010 [US2] Tests for dependency lists and tiers, including query-derived tiers
+- [x] T010 [US2] Tests for dependency lists and tiers, including query-derived tiers
 - [ ] T011 [US2] `src/deps.rs`
 
 ## Phase 5: User Story 3 - Cycles (P2)
