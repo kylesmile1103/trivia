@@ -11,7 +11,7 @@
 ## Phase 2: Foundational
 
 - [x] T003 Scaffold text for `AppHost`, `ServiceDefaults` and `MigrationService` in `Scaffold/`, added to the file plan as scaffold files and to the solution file
-- [ ] T004 Extend the build test: the whole generated solution builds, AppHost included
+- [x] T004 Extend the build test: the whole generated solution builds, AppHost included
 
 ## Phase 3: User Story 1 - One command (P1)
 
