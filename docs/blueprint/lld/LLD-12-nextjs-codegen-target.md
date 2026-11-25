@@ -192,6 +192,11 @@ For a route that needs dynamic parameters, a small entry adapter passes matching
 search parameters to the compiled page. Preview creation and cleanup share the service
 queue with source and draft edits, including eject plans applied through the batch API.
 
+The LLD-13 spike created an escaped preview segment while Turbopack was running. Next
+served the new page with its heading free of locators, then returned 404 after removing
+the file without a restart. The host tests exercise the same on-disk layout and verify
+cleanup on eject, deletion, and shutdown. [LLD-13 spike](LLD-13-trivia-on-nextjs.md#1-spike-first).
+
 ## 7. Template and AppHost (FR-NX-06)
 
 `templates/next-refine/` mirrors the Vite template: App Router, Tailwind v4, `components.json`
@@ -245,10 +250,13 @@ queries. The generated template keeps signed-out requests anonymous and exposes 
 - Boundary algorithm: unit tests on small trees (two inputs sharing state under a static
   card, a static header above a table, a fully static page, nested groups).
 - Golden files for the kit and MVP fixtures on this target. `tsc` and `next build` on the
-  emitted app (FR-NX-08), the build in CI only.
+  emitted app (FR-NX-08). CI enables the production build with
+  `TRIVIA_NEXT_BUILD=1 pnpm exec nx test blueprint-compiler`.
 - Serialization: a function prop crossing a boundary is refused with the node named.
 - e2e: under the AppHost with the fixture API, the show page's first HTML response already
   contains the record's fields, checked with a plain HTTP request and no JavaScript.
+  The `blueprint-next` project also checks hydration, the API rewrite, catch-all
+  parameters, HTTP 404 and 500 behavior, and forwarded credentials.
 - Preview files: created, visible at the preview route, removed on eject and on stop.
 
 ## 10. Open points

@@ -62,3 +62,13 @@ it('FR-NX-04 rewrites the same-origin API under Aspire and builds standalone out
   expect(config).toContain("output: 'standalone'")
   expect(existsSync(new URL('public/', template))).toBe(true)
 })
+
+it('documents the verified generated Next workflow and production gate', () => {
+  const readme = readFileSync(new URL('../../../docs/blueprint/README.md', import.meta.url), 'utf8')
+  const next = readme.split('## Run a generated .NET and Next.js app')[1]?.split('\n## ')[0]
+  expect(next).toContain('trivia-blueprint new backoffice --target next-refine --api dotnet-minimal')
+  expect(next).toContain('trivia-blueprint backend --migration Initial')
+  expect(next).toContain('trivia-blueprint eject')
+  expect(next).toContain('aspire run')
+  expect(next).toContain('TRIVIA_NEXT_BUILD=1 pnpm exec nx test blueprint-compiler')
+})

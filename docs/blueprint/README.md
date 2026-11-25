@@ -5,8 +5,8 @@ React + shadcn and ASP.NET Core codebase, which Trivia then edits. These documen
 the Openblocks port assessment and Kyle's choices after it (strategy C, clean room, one-way
 eject, minimal API slices on PostgreSQL, Phases 0 to 3 in depth).
 
-See the task lists in `specs/` for implementation status. The setup below uses the .NET
-and Vite solution from spec 010.
+See the task lists in `specs/` for implementation status. The generated .NET solution
+supports Vite and Next.js.
 
 ## Run a generated .NET and Vite app
 
@@ -36,6 +36,35 @@ container runtime, run `aspire doctor` for its status and start the selected run
 For a nested web folder such as `clients/admin`, pass `--web-dir clients/admin` to
 `new` and `backend` from the solution directory. You can also run `backend` and
 `eject` from the web folder.
+
+## Run a generated .NET and Next.js app
+
+Use the same toolchain and choose the Next.js target when creating the project.
+
+```sh
+trivia-blueprint new backoffice --target next-refine --api dotnet-minimal
+cd backoffice
+# Run the printed pnpm and shadcn setup in web/, then author the model and pages in web/blueprint/.
+trivia-blueprint backend --migration Initial
+trivia-blueprint eject
+aspire run
+```
+
+Open the web endpoint in Aspire after migration. Generated show and edit routes fetch
+their initial records on the server. Browser requests to `/api` use the same origin as
+the web app and Next.js rewrites them to the backend.
+
+When running Next.js outside Aspire, set `TRIVIA_API_ORIGIN` to the API origin before
+starting development or building for production. To expose the current identity to a
+server expression, set `TRIVIA_IDENTITY_PATH` to a trusted path on that API.
+
+The designer and MCP can preview drafts at `/__blueprint/<Name>`. Pass values for
+dynamic route parameters in the preview URL's query string. Stop the Trivia dev service
+to clean up previews before building for production.
+
+Run `TRIVIA_NEXT_BUILD=1 pnpm exec nx test blueprint-compiler` to typecheck and build an
+emitted app. The `blueprint-next` Playwright project exercises the generated app through
+Aspire with the API and PostgreSQL. [Next.js code generation](lld/LLD-12-nextjs-codegen-target.md).
 
 ## Reading order
 
@@ -97,12 +126,12 @@ points to and the constitution.
 | Decision | Where | Why it matters |
 | --- | --- | --- |
 | Generated frontends are Refine + shadcn apps, not plain TanStack Query | ADR-0009 | It is what lets the existing day-2 tools work on emitted apps, and it departs from the research report's suggestion |
-| Trivia on Next.js through a stamping loader and a separate dev service | ADR-0015 | Unproven until the spike in spec 013 |
+| Trivia on Next.js through a stamping loader and a separate dev service | ADR-0017 | The spec 013 spike verified Turbopack loader and route discovery behavior |
 | Dependencies of expressions are computed, not stored in the document | ADR-0006 | Departs from the research report |
 | The JSX-like projection is read-only | ADR-0005 | Agents write through ops only |
 | New files follow the project's semicolon and quote style, with no formatter run | ADR-0007 | Determinism over house formatting |
 | A fifth designer tab with icons and tooltips | LLD-07 | Layout work in a 272 px column |
-| Previews on Next.js are files in a gitignored folder | LLD-12 | The least proven part of that design |
+| Previews on Next.js are files in a gitignored folder | LLD-12 | The spec 013 spike verified that Next.js discovers new routes and removes them during development |
 | Day 1 joins the product for this track | ADR-0002, BRD section 8 | It supersedes a line of `docs/product.md`, which is not yet edited |
 
 BRD section 10 lists four open questions with the defaults taken.
@@ -117,10 +146,9 @@ BRD section 10 lists four open questions with the defaults taken.
   the MCP tools (`docs/mcp.md`), the manifest shape (`docs/data-provider.md`), the product
   decisions and slices (`docs/product.md`), the layout rules (`docs/architecture.md`,
   `CLAUDE.md`), and that `createFile` writes only `.tsx` and `.jsx`.
-- **Not verified, and marked so where it is used:** exact API names in Aspire 13, .NET 10's
-  minimal API validation and build-time OpenAPI output, Refine 5's hook result shapes and its
-  Next.js server-side options, Turbopack's loader behaviour, whether the engine's
-  `restoreFiles` accepts non-source paths. Each has a first task that reads the current
-  documentation or code (constitution, principle IX).
+- **From the Next.js implementation:** the emitted app builds with Next.js 16.4.6 and
+  runs through Aspire 13.6.5. Playwright checks record HTML before hydration, same-origin
+  API requests, and HTTP status handling. The spec 013 spike verified Turbopack's loader
+  behavior and its discovery of preview routes created on disk.
 - **Estimates** (6 to 9 months to the MVP) are the research's and are inference.
 - The licence reading in ADR-0001 is not legal advice.
