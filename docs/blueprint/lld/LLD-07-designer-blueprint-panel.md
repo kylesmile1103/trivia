@@ -65,6 +65,10 @@ binding. Exposed values and events are listed with the names expressions should 
 It does not reuse the inspector's editors directly: features do not import features. The prop
 editor widgets the two share move to `shared/components/` first. ⚑ If that refactor is larger
 than a day, the panel ships with plain inputs and the move becomes its own task.
+⚑ The enum widget is shared. The canvas inspector's text widget keeps its selection and
+HMR lifecycle. The mode selector proposes a change locally until a value is saved. Event
+steps use the same JSON editor as contract actions. Expression diagnostics underline a
+source excerpt beside the editable expression using the reported UTF-16 range.
 
 **Preview.** Calls `POST /blueprint/preview`, then `canvas.navigate(route)`. Preview elements
 carry no locators, so the canvas shows a banner: "Preview of a draft page. Eject to edit it on

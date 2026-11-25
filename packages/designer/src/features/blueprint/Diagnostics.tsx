@@ -8,6 +8,9 @@ export function focusDiagnosticField(root: HTMLElement, pointer: string): boolea
     .filter((field) => !field.matches(':disabled') && !field.closest('[hidden]'))
     .sort((a, b) => (b.dataset.pointer?.length ?? 0) - (a.dataset.pointer?.length ?? 0))
   const field = fields.find(({ dataset }) => dataset.pointer === pointer || (dataset.pointer && pointer.startsWith(dataset.pointer + '/')))
+  for (let detail = field?.closest('details'); detail; detail = detail.parentElement?.closest('details')) {
+    detail.open = true
+  }
   field?.focus()
   return field !== undefined
 }

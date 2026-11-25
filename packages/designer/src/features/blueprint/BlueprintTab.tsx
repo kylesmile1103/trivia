@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { blueprintApi, problemOf } from './api'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { EjectDialog } from './EjectDialog'
+import { NodeProps } from './NodeProps'
 import { NodeTree } from './NodeTree'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
 import { PagesList } from './PagesList'
@@ -148,10 +149,16 @@ export function BlueprintTab() {
 
   useEffect(() => {
     if (!focusRequest || pending || (focusRequest.doc === path && !document && !loadError)) return
+    const [, map, key] = focusRequest.pointer.split('/')
+    const node = map === 'actions' ? key?.split('.')[0] : key
+    if (document?.path === focusRequest.doc && document.doc && 'nodes' in document.doc && node && document.doc.nodes[node] && selectedNode !== node) {
+      setNodeSelection({ page: document.doc.id, node })
+      return
+    }
     const region = editor.current ?? root.current
     if (region && !focusDiagnosticField(region, focusRequest.pointer)) region.focus()
     setFocusRequest(null)
-  }, [focusRequest, pending, path, document, loadError])
+  }, [focusRequest, pending, path, document, loadError, selectedNode])
 
   return (
     <section ref={root} tabIndex={-1} aria-label="Blueprint pages" className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -183,10 +190,16 @@ export function BlueprintTab() {
             ? <PageForm key={page?.rev ?? 'new'} document={page} resources={resources} busy={pending !== null || loadError !== null} save={save} />
             : !loadError && <p role="status">Loading page…</p>}
           {custom && (catalogError ? <p role="alert" className="text-destructive">{catalogError}</p> : catalog && selectedNode ? (
-            <NodeTree
-              key={custom.doc.id} document={custom} catalog={catalog} selected={selectedNode} busy={pending !== null || loadError !== null}
-              onSelect={(node) => setNodeSelection({ page: custom.doc.id, node })} save={save}
-            />
+            <>
+              <NodeTree
+                key={custom.doc.id} document={custom} catalog={catalog} selected={selectedNode} busy={pending !== null || loadError !== null}
+                onSelect={(node) => setNodeSelection({ page: custom.doc.id, node })} save={save}
+              />
+              <NodeProps
+                key={selectedNode} document={custom} catalog={catalog} nodeId={selectedNode} diagnostics={findings}
+                busy={pending !== null || loadError !== null} commit={commit}
+              />
+            </>
           ) : <p role="status">Loading component manifests…</p>)}
         </section>
       )}
