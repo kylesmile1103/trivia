@@ -145,6 +145,16 @@ impl Workspace {
         fs::read_to_string(&path).map_err(|source| EngineError::Io { path: rel.to_string(), source })
     }
 
+    /// Read an op's input; the whole-file replace contract distinguishes a missing target.
+    pub fn read_for_op(&self, rel: &str, op: &Op) -> Result<String> {
+        self.read(rel).map_err(|error| match error {
+            EngineError::Io { path, source }
+                if matches!(op, Op::ReplaceFile { .. }) && source.kind() == std::io::ErrorKind::NotFound =>
+                    EngineError::FileNotFound(path),
+            other => other,
+        })
+    }
+
     /// Read the target file fresh, apply `op`, and write atomically if anything changed.
     /// The write is refused (`conflict`) if the file changed while the edit was computed.
     /// `createFile` writes its new file (`before` is then empty).
@@ -159,7 +169,7 @@ impl Workspace {
             return Ok(Applied { outcome: ops::created(file, content)?, before: String::new() });
         }
         let file = op.file()?;
-        let before = self.read(&file)?;
+        let before = self.read_for_op(&file, op)?;
         let outcome = ops::apply_op(&before, &file, op)?;
         if outcome.changed {
             self.write(&file, &outcome.code, Some(&before))?;

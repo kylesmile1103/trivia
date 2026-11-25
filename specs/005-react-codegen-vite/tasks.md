@@ -11,7 +11,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T004 Engine: tests for `replaceFile` (round trip, hash mismatch 409, missing 404, parse error 400, CRLF), then `crates/trivia_oxc_engine/src/ops/replace_file.rs`, the `Op` variant, the napi and HTTP pass-through, the `docs/api.md` example and its pin in `tests/errors.rs`
+- [x] T004 Engine: tests for `replaceFile` (round trip, hash mismatch 409, missing 404, parse error 400, CRLF), then `crates/trivia_oxc_engine/src/ops/replace_file.rs`, the `Op` variant, the napi and HTTP pass-through, the `docs/api.md` example and its pin in `tests/errors.rs`
 - [ ] T005 Extract the page generator interface from `src/refine/scaffold.ts` (contract, facts and options in, code out). Plugin suite unchanged and green
 - [ ] T006 [P] `src/ir.ts` and `src/facts.ts`
 - [ ] T007 [P] `src/print/imports.ts` and `src/print/style.ts` (semicolons and quotes from facts), with tests

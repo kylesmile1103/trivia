@@ -55,6 +55,7 @@ mod move_across;
 mod move_node;
 mod remove;
 mod replace;
+mod replace_file;
 mod set_text;
 mod update_prop;
 mod values;
@@ -182,6 +183,8 @@ pub enum Op {
         #[serde(default)]
         if_missing: bool,
     },
+    /// Replace the source of an existing file guarded by its complete SHA-256 hash.
+    ReplaceFile { file: String, expected_hash: String, content: String },
     /// Insert `value` (one expression, as source text) into the array literal at `path`
     /// (a value path, `crate::values`), before element `index`; appended without one.
     InsertElement {
@@ -230,7 +233,7 @@ impl Op {
     /// The file this op edits.
     pub fn file(&self) -> Result<String> {
         match self {
-            Op::CreateFile { file, .. } => return Ok(file.clone()),
+            Op::CreateFile { file, .. } | Op::ReplaceFile { file, .. } => return Ok(file.clone()),
             Op::InsertElement { path, .. }
             | Op::RemoveElement { path }
             | Op::MoveElement { path, .. }
@@ -251,6 +254,7 @@ impl Op {
             Op::Move { source, .. } | Op::MoveNode { source, .. } => source,
             Op::BindQuery(binding) => &binding.target,
             Op::CreateFile { .. }
+            | Op::ReplaceFile { .. }
             | Op::InsertElement { .. }
             | Op::RemoveElement { .. }
             | Op::MoveElement { .. }
@@ -293,8 +297,14 @@ pub struct Outcome {
 
 /// Apply `op` to `source` (the content of `file`). Pure: no I/O.
 pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
-    // Value edits parse on their own: they address literals, not JSX.
+    // Whole-file and value edits parse on their own, without building a JSX table.
     match op {
+        Op::ReplaceFile { file: target, expected_hash, content } => {
+            if target != file {
+                return Err(EngineError::InvalidOp(format!("replaceFile addresses {target}, not {file}")));
+            }
+            return replace_file::replace_file(source, file, expected_hash, content);
+        }
         Op::InsertElement { path, index, value, imports } => return values::insert_element(source, file, path, *index, value, imports),
         Op::RemoveElement { path } => return values::remove_element(source, file, path),
         Op::MoveElement { path, index } => return values::move_element(source, file, path, *index),
@@ -351,7 +361,8 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
         Op::CreateFile { .. } => Err(EngineError::InvalidOp(
             "createFile writes a new file: apply it through the workspace (applyOps), not to existing text".into(),
         )),
-        Op::InsertElement { .. }
+        Op::ReplaceFile { .. }
+        | Op::InsertElement { .. }
         | Op::RemoveElement { .. }
         | Op::MoveElement { .. }
         | Op::SetProperty { .. }

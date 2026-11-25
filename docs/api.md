@@ -15,7 +15,7 @@ Every response is JSON: `{ "ok": true, "data": … }` or
 `{ "ok": false, "error": { "code": "…", "message": "…" } }`.
 
 HTTP status: 200 for ok. Errors: 400 `invalid_locator` `invalid_op` `invalid_snippet` `parse_error`;
-403 `forbidden` (caller not on this machine, below); 404 `node_not_found`; 409 `stale_locator` `conflict`;
+403 `forbidden` (caller not on this machine, below); 404 `node_not_found` `file_not_found`; 409 `stale_locator` `conflict`;
 422 `unsupported` `unresolved_component` `invalid_result` `path_outside_root`; 500 `io_error` `internal`.
 
 Requests that change files must be `POST` with `content-type: application/json`.
@@ -340,6 +340,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 { "op": "setCallArgument", "path": "src/pages/customers/edit.tsx#module#customerSchema.notes", "method": "max", "index": 0, "value": "500" }
 { "op": "insertCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.fullName", "call": "max(120, \"Enter at most 120 characters.\")", "before": ["optional", "refine"] }
 { "op": "removeCall", "path": "src/pages/customers/edit.tsx#module#customerSchema.phone", "method": "optional" }
+{ "op": "replaceFile", "file": "src/pages/summary/Summary.tsx",
+  "expectedHash": "sha256:8ee4edc1ba342472bcd80bb951ce4df7ff1124d8c79a36086ba55fa1af1da1cf",
+  "content": "export const Summary = () => <main>Summary</main>\n" }
 ```
 
 - `value: null` removes the prop. Strings become `"…"` attributes; booleans, numbers, arrays
@@ -362,6 +365,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
   undo deletes it (only if it still holds what was written) and redo writes it again. The
   binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).
+- `replaceFile` writes the full source of a previously generated `.tsx` or `.jsx` file.
+  The expected hash is lowercase SHA-256 of the original bytes, prefixed with `sha256:`.
+  The op returns 404 `file_not_found` if the target is missing, 409 `conflict` if the hash
+  differs, or 400 `parse_error` if either version fails to parse. Undo can restore the
+  original bytes, including line endings. An identical replacement creates no history entry.
 - **Value ops** (`insertElement`, `removeElement`, `moveElement`, `setProperty`,
   `removeProperty`) edit object and array literals rather than JSX. They address them by
   **value path** `<file>#<scope>#<head><step>*` (`crate::values`):

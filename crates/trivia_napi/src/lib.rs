@@ -176,7 +176,7 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                     Some(slot) => slot,
                     None => {
                         // Only a createFile may name a file that doesn't exist yet.
-                        let text = if creates && !ws.exists(&file).map_err(step)? { None } else { Some(ws.read(&file).map_err(step)?) };
+                        let text = if creates && !ws.exists(&file).map_err(step)? { None } else { Some(ws.read_for_op(&file, &op).map_err(step)?) };
                         files.push(Working { file: file.clone(), before: text.clone(), current: text });
                         files.len() - 1
                     }

@@ -21,6 +21,7 @@ const STATUS: Record<ErrorCode, number> = {
   parse_error: 400,
   forbidden: 403,
   node_not_found: 404,
+  file_not_found: 404,
   stale_locator: 409,
   conflict: 409,
   unsupported: 422,

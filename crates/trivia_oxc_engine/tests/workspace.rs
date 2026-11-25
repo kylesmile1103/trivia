@@ -318,3 +318,35 @@ fn create_file_if_missing_keeps_an_existing_file() {
     assert!(dir.path().join("src/New.tsx").exists());
 }
 
+
+#[test]
+fn fr_rc_09_replace_file_checks_the_original_bytes_and_parses_the_replacement() {
+    let (dir, ws) = project();
+    let file = "src/App.tsx";
+    let before = "export const Old = () => <div>café</div>\r\n";
+    let after = "export const New = () => <div>new</div>\r\n";
+    let old_hash = "sha256:8ee4edc1ba342472bcd80bb951ce4df7ff1124d8c79a36086ba55fa1af1da1cf";
+    let new_hash = "sha256:3c002b0267c22e07a13e7d7e69a4f4f265469f897ec5c7bfcd8068cf8ce10a15";
+    let op = |file: &str, hash: &str, content: &str| {
+        serde_json::from_value::<Op>(serde_json::json!({
+            "op": "replaceFile", "file": file, "expectedHash": hash, "content": content,
+        })).unwrap()
+    };
+
+    dir.write(file, before);
+    assert_eq!(code(ws.apply(&op("src/Missing.tsx", old_hash, after))), "file_not_found");
+    assert_eq!(code(ws.apply(&op(file, old_hash, "export const = <"))), "parse_error");
+    assert_eq!(ws.read(file).unwrap(), before);
+    let result = ws.apply(&op(file, old_hash, after)).unwrap();
+    assert!(result.outcome.changed);
+    assert_eq!(result.outcome.locator, None);
+    assert_eq!(result.before, before);
+    assert_eq!(result.outcome.code, after);
+    assert_eq!(fs::read(dir.path().join(file)).unwrap(), after.as_bytes());
+
+    assert_eq!(code(ws.apply(&op(file, old_hash, before))), "conflict");
+    assert_eq!(ws.read(file).unwrap(), after);
+    assert!(!ws.apply(&op(file, new_hash, after)).unwrap().outcome.changed);
+    assert!(ws.apply(&op(file, new_hash, before)).unwrap().outcome.changed);
+    assert_eq!(fs::read(dir.path().join(file)).unwrap(), before.as_bytes());
+}

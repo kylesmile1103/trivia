@@ -175,6 +175,9 @@ its bytes (409 `conflict` on mismatch, 404 when missing), parses `content` (400 
 on diagnostics), and writes atomically. It is the one op that replaces untouched code, and the
 hash guard is what makes that safe.
 
+⚑ The 404 code is `file_not_found`. After a hash match, the engine also parses the original
+source so a batch rollback or undo can restore it through the ordinary guarded write path.
+
 ## 7. CLI and templates (FR-RC-12)
 
 `trivia-blueprint`, the package's bin:

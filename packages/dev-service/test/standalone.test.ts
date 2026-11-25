@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
@@ -99,4 +100,40 @@ describe('FR-TN-02: standalone dev service', () => {
       else expect(result).toMatchObject({ jsonrpc: '2.0', error: { code: -32000 } })
     }
   })
+})
+
+it('FR-RC-09 applies replaceFile as an atomic HTTP batch with byte-exact undo', async () => {
+  const file = path.join(root, FILE)
+  const before = ORIGINAL.replaceAll('\n', '\r\n')
+  await fs.writeFile(file, before)
+  const content = before.replace('Before', 'After')
+  const expectedHash = `sha256:${createHash('sha256').update(before).digest('hex')}`
+  const op = { op: 'replaceFile', file: FILE, expectedHash, content }
+
+  const response = await post('/batch', { ops: [op], label: 'Replace generated page' })
+  expect(response.status, await response.clone().text()).toBe(200)
+  expect(await response.json()).toMatchObject({ ok: true, data: { changed: true } })
+  expect(await fs.readFile(file)).toEqual(Buffer.from(content))
+
+  const refuse = async (replacement: typeof op, status: number, code: string) => {
+    const response = await post('/apply', { op: replacement })
+    expect(response.status).toBe(status)
+    expect(await response.json()).toMatchObject({ ok: false, error: { code } })
+  }
+  await refuse(op, 409, 'conflict')
+  const unrelated = 'src/Unrelated.tsx'
+  const batch = await post('/batch', { ops: [{ op: 'createFile', file: unrelated, content: ORIGINAL }, op] })
+  expect(batch.status).toBe(409)
+  await expect(fs.stat(path.join(root, unrelated))).rejects.toMatchObject({ code: 'ENOENT' })
+  await refuse({ ...op, file: 'src/Missing.tsx' }, 404, 'file_not_found')
+  await refuse({
+    ...op,
+    expectedHash: `sha256:${createHash('sha256').update(content).digest('hex')}`,
+    content: 'export const = <',
+  }, 400, 'parse_error')
+  expect(await fs.readFile(file)).toEqual(Buffer.from(content))
+  expect((await post('/undo', {})).status).toBe(200)
+  expect(await fs.readFile(file)).toEqual(Buffer.from(before))
+  expect((await post('/redo', {})).status).toBe(200)
+  expect(await fs.readFile(file)).toEqual(Buffer.from(content))
 })

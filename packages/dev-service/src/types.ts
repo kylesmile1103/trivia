@@ -4,6 +4,7 @@
 export type ErrorCode =
   | 'invalid_locator'
   | 'node_not_found'
+  | 'file_not_found'
   | 'stale_locator'
   | 'parse_error'
   | 'unsupported'

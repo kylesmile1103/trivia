@@ -30,6 +30,8 @@ pub enum EngineError {
     /// The file on disk is not the text the caller based its write on (edited elsewhere).
     #[error("{0}")]
     Conflict(String),
+    #[error("file `{0}` does not exist")]
+    FileNotFound(String),
     #[error("{path}: {source}")]
     Io { path: String, source: std::io::Error },
     #[error("internal engine error: {0}")]
@@ -52,6 +54,7 @@ impl EngineError {
             Self::InvalidOp(_) => "invalid_op",
             Self::PathOutsideRoot(_) => "path_outside_root",
             Self::Conflict(_) => "conflict",
+            Self::FileNotFound(_) => "file_not_found",
             Self::Io { .. } => "io_error",
             Self::Internal(_) => "internal",
         }
