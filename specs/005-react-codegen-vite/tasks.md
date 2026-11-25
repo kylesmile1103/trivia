@@ -49,7 +49,7 @@
 
 ## Phase 7: User Story 5 - CLI and template (P2)
 
-- [ ] T027 [US5] `templates/vite-refine/` from the fixture app's shape, without component sources
+- [x] T027 [US5] `templates/vite-refine/` from the fixture app's shape, without component sources
 - [ ] T028 [US5] `src/cli.ts`: `validate`, `compile`, `eject --dry-run`, `new`, with exit codes 0, 1, 2 and tests in `test/cli.test.ts`
 
 ## Phase 8: Polish

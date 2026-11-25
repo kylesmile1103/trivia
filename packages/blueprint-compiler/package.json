@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "templates"
   ],
   "bin": {
     "trivia-blueprint": "./bin/trivia-blueprint.js"
