@@ -5,7 +5,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Verify how `restoreFiles` treats non-source paths (read `crates/trivia_oxc_engine/src/workspace.rs` and its tests). Record the answer in LLD-04 section 1
+- [x] T001 Verify how `restoreFiles` treats non-source paths (read `crates/trivia_oxc_engine/src/workspace.rs` and its tests). Record the answer in LLD-04 section 1
 - [ ] T002 Add `blueprintDir` to `AstLocatorOptions` (`src/options.ts`), default `blueprint`, resolved inside the root
 
 ## Phase 2: Foundational

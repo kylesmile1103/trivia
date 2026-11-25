@@ -1,11 +1,15 @@
 # LLD-04: Agent surface (HTTP and MCP)
 
 - Spec: `specs/004-blueprint-agent-surface` · Requirements: FR-AG-01 to FR-AG-07 · ADR-0013
-- Code: `packages/vite-plugin-ast-locator/src/blueprint/` (the adapter), routes registered in
+- Code: `packages/dev-service/src/blueprint/` (the adapter), routes registered in
   `src/api/http.ts`, tools in `src/mcp/tools.ts`. Contracts go into `docs/api.md` and
   `docs/mcp.md` with the first endpoint.
 
 ## 1. The adapter
+
+⚑ Spec 013 moved the HTTP API, MCP endpoint and Refine adapter into `packages/dev-service`.
+The blueprint routes, store and tools live there too, so both Vite and Next.js serve them
+through the same `DevHost` service.
 
 ```
 src/blueprint/
@@ -30,9 +34,10 @@ writeDocuments(writes: FileWrite[], label: string): Promise<HistoryEntryRef>
 It runs in the service's edit queue, checks each path is inside the blueprint directory, checks
 each file still has its `before` bytes (else 409 `conflict`), writes with a temp file and a
 rename, and records one history entry of before and after snapshots. Undo and redo restore
-them through the existing guarded restore. To verify first: that the engine's `restoreFiles`
-accepts paths that are not source files. If it does not, the restore for these entries is done
-in `history.ts` with the same guard.
+them through the guarded document writer. ⚑ The native `restoreFiles` preflights through
+`Workspace::exists`, which only accepts `.tsx` and `.jsx`, and reparses replacement source
+through `Workspace::restore`. JSON snapshots use a guarded writer in `blueprint/`; the shared
+history dispatches document entries to it and source entries to the native engine.
 
 ## 2. HTTP (FR-AG-01)
 
@@ -126,7 +131,7 @@ Codes come from `docs/api.md`. New in `error.details`:
 
 ## 6. Tests
 
-- Plugin tests on a copy of `examples/refine-admin`: create a page by patch, read it back,
+- Dev-service tests on a copy of `examples/refine-admin`: create a page by patch, read it back,
   undo, redo; a stale `baseRev`; two patches in a row from one read (the second is refused).
 - The guard: a non-loopback caller gets 403 on every blueprint route, including through the
   designer proxy.
