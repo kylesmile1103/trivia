@@ -1,0 +1,3122 @@
+[
+  {
+    "acceptsChildren": true,
+    "baseElement": "AvatarPrimitive.Root",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "Avatar",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "default",
+          "sm",
+          "lg"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "AvatarPrimitive.Image",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "AvatarImage",
+    "props": [
+      {
+        "kind": "string",
+        "name": "src",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "alt",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "AvatarPrimitive.Fallback",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "AvatarFallback",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "AvatarBadge",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "AvatarGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/avatar.tsx",
+    "importSource": "@/components/ui/avatar",
+    "name": "AvatarGroupCount",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/badge.tsx",
+    "importSource": "@/components/ui/badge",
+    "name": "Badge",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "default",
+          "secondary",
+          "destructive",
+          "outline",
+          "ghost",
+          "link"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "nav",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "Breadcrumb",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "ol",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbList",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "li",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbItem",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "a",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbLink",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "href",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "target",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbPage",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "li",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/breadcrumb.tsx",
+    "importSource": "@/components/ui/breadcrumb",
+    "name": "BreadcrumbEllipsis",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "button",
+    "file": "src/components/ui/button.tsx",
+    "importSource": "@/components/ui/button",
+    "name": "Button",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "default",
+          "outline",
+          "secondary",
+          "ghost",
+          "destructive",
+          "link"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "default",
+          "xs",
+          "sm",
+          "lg",
+          "icon",
+          "icon-xs",
+          "icon-sm",
+          "icon-lg"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "button",
+          "submit",
+          "reset"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DayPicker",
+    "file": "src/components/ui/calendar.tsx",
+    "importSource": "@/components/ui/calendar",
+    "name": "Calendar",
+    "props": [
+      {
+        "default": "ghost",
+        "kind": "unknown",
+        "name": "buttonVariant",
+        "optional": true,
+        "source": "declared",
+        "typeText": "React.ComponentProps<typeof Button>[\"variant\"]"
+      },
+      {
+        "kind": "unknown",
+        "name": "classNames",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayPicker> & { buttonVariant?: React.ComponentProps<typeof Button>[\"variant\"] })[\"classNames\"]"
+      },
+      {
+        "default": true,
+        "kind": "boolean",
+        "name": "showOutsideDays",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "default": "label",
+        "kind": "string",
+        "name": "captionLayout",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "unknown",
+        "name": "locale",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayPicker> & { buttonVariant?: React.ComponentProps<typeof Button>[\"variant\"] })[\"locale\"]"
+      },
+      {
+        "kind": "unknown",
+        "name": "formatters",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayPicker> & { buttonVariant?: React.ComponentProps<typeof Button>[\"variant\"] })[\"formatters\"]"
+      },
+      {
+        "kind": "unknown",
+        "name": "components",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayPicker> & { buttonVariant?: React.ComponentProps<typeof Button>[\"variant\"] })[\"components\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof DayPicker>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DayButton",
+    "file": "src/components/ui/calendar.tsx",
+    "importSource": "@/components/ui/calendar",
+    "name": "CalendarDayButton",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "locale",
+        "optional": true,
+        "source": "declared",
+        "typeText": "Partial<Locale>"
+      },
+      {
+        "kind": "unknown",
+        "name": "day",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> })[\"day\"]"
+      },
+      {
+        "kind": "unknown",
+        "name": "modifiers",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> })[\"modifiers\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof DayButton>"
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "CheckboxPrimitive.Root",
+    "file": "src/components/ui/checkbox.tsx",
+    "importSource": "@/components/ui/checkbox",
+    "name": "Checkbox",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "defaultChecked",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CollapsiblePrimitive.Root",
+    "file": "src/components/ui/collapsible.tsx",
+    "importSource": "@/components/ui/collapsible",
+    "name": "Collapsible",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CollapsiblePrimitive.CollapsibleTrigger",
+    "file": "src/components/ui/collapsible.tsx",
+    "importSource": "@/components/ui/collapsible",
+    "name": "CollapsibleTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CollapsiblePrimitive.CollapsibleContent",
+    "file": "src/components/ui/collapsible.tsx",
+    "importSource": "@/components/ui/collapsible",
+    "name": "CollapsibleContent",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "Command",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Dialog",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandDialog",
+    "props": [
+      {
+        "default": "Command Palette",
+        "kind": "string",
+        "name": "title",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": "Search for a command to run...",
+        "kind": "string",
+        "name": "description",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "showCloseButton",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "declared"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Dialog>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.Input",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandInput",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.Input>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.List",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandList",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.List>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.Empty",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandEmpty",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.Empty>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.Group",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.Group>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.Separator",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.Separator>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "CommandPrimitive.Item",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandItem",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof CommandPrimitive.Item>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/command.tsx",
+    "importSource": "@/components/ui/command",
+    "name": "CommandShortcut",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Root",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "Dialog",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Trigger",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Portal",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogPortal",
+    "props": []
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Close",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogClose",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Overlay",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogOverlay",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Content",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogContent",
+    "props": [
+      {
+        "default": true,
+        "kind": "boolean",
+        "name": "showCloseButton",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogHeader",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogFooter",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "showCloseButton",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Title",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogTitle",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DialogPrimitive.Description",
+    "file": "src/components/ui/dialog.tsx",
+    "importSource": "@/components/ui/dialog",
+    "name": "DialogDescription",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Root",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenu",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Portal",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuPortal",
+    "props": []
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Trigger",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Content",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuContent",
+    "props": [
+      {
+        "default": "start",
+        "kind": "string",
+        "name": "align",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "default": 4,
+        "kind": "number",
+        "name": "sideOffset",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Group",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Item",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuItem",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "inset",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "default",
+          "destructive"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.CheckboxItem",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuCheckboxItem",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "inset",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "checked",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & { inset?: boolean })[\"checked\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.RadioGroup",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuRadioGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.RadioItem",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuRadioItem",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "inset",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Label",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuLabel",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "inset",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "DropdownMenuPrimitive.Separator",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuShortcut",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.Sub",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuSub",
+    "props": []
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.SubTrigger",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuSubTrigger",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "inset",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "DropdownMenuPrimitive.SubContent",
+    "file": "src/components/ui/dropdown-menu.tsx",
+    "importSource": "@/components/ui/dropdown-menu",
+    "name": "DropdownMenuSubContent",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "fieldset",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldSet",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "legend",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldLegend",
+    "props": [
+      {
+        "default": "legend",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "legend",
+          "label"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "Field",
+    "props": [
+      {
+        "default": "vertical",
+        "kind": "enum",
+        "name": "orientation",
+        "optional": true,
+        "options": [
+          "vertical",
+          "horizontal",
+          "responsive"
+        ],
+        "source": "variant"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldContent",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Label",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldLabel",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Label>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldTitle",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "p",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldDescription",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/field.tsx",
+    "importSource": "@/components/ui/field",
+    "name": "FieldError",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "errors",
+        "optional": true,
+        "source": "declared",
+        "typeText": "Array<{ message?: string } | undefined>"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": null,
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormField",
+    "props": [],
+    "unresolvedTypes": [
+      "ControllerProps<TFieldValues, TName>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormItem",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "LabelPrimitive.Root",
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormLabel",
+    "props": [
+      {
+        "kind": "string",
+        "name": "htmlFor",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Slot.Root",
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormControl",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "p",
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormDescription",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "p",
+    "file": "src/components/ui/form.tsx",
+    "importSource": "@/components/ui/form",
+    "name": "FormMessage",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroupAddon",
+    "props": [
+      {
+        "default": "inline-start",
+        "kind": "enum",
+        "name": "align",
+        "optional": true,
+        "options": [
+          "inline-start",
+          "inline-end",
+          "block-start",
+          "block-end"
+        ],
+        "source": "variant"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Button",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroupButton",
+    "props": [
+      {
+        "default": "xs",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "xs",
+          "sm",
+          "icon-xs",
+          "icon-sm"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": "button",
+        "kind": "string",
+        "name": "type",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "default": "ghost",
+        "kind": "string",
+        "name": "variant",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Button>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "span",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroupText",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "input",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroupInput",
+    "props": [
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "text",
+          "email",
+          "password",
+          "number",
+          "search",
+          "tel",
+          "url",
+          "date",
+          "time",
+          "datetime-local",
+          "month",
+          "week",
+          "color",
+          "file",
+          "range",
+          "checkbox",
+          "radio",
+          "hidden"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "name",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "textarea",
+    "file": "src/components/ui/input-group.tsx",
+    "importSource": "@/components/ui/input-group",
+    "name": "InputGroupTextarea",
+    "props": [
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "number",
+        "name": "rows",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "input",
+    "file": "src/components/ui/input.tsx",
+    "importSource": "@/components/ui/input",
+    "name": "Input",
+    "props": [
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "text",
+          "email",
+          "password",
+          "number",
+          "search",
+          "tel",
+          "url",
+          "date",
+          "time",
+          "datetime-local",
+          "month",
+          "week",
+          "color",
+          "file",
+          "range",
+          "checkbox",
+          "radio",
+          "hidden"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "name",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "LabelPrimitive.Root",
+    "file": "src/components/ui/label.tsx",
+    "importSource": "@/components/ui/label",
+    "name": "Label",
+    "props": [
+      {
+        "kind": "string",
+        "name": "htmlFor",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "PopoverPrimitive.Root",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "Popover",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "PopoverPrimitive.Trigger",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "PopoverPrimitive.Content",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverContent",
+    "props": [
+      {
+        "default": "center",
+        "kind": "string",
+        "name": "align",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "default": 4,
+        "kind": "number",
+        "name": "sideOffset",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "PopoverPrimitive.Anchor",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverAnchor",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverHeader",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "h2",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverTitle",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "p",
+    "file": "src/components/ui/popover.tsx",
+    "importSource": "@/components/ui/popover",
+    "name": "PopoverDescription",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Root",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "Select",
+    "props": [
+      {
+        "kind": "string",
+        "name": "defaultValue",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Group",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Value",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectValue",
+    "props": [
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Trigger",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectTrigger",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "sm",
+          "default"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Content",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectContent",
+    "props": [
+      {
+        "default": "item-aligned",
+        "kind": "enum",
+        "name": "position",
+        "optional": true,
+        "options": [
+          "item-aligned",
+          "popper"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "default": "center",
+        "kind": "enum",
+        "name": "align",
+        "optional": true,
+        "options": [
+          "start",
+          "center",
+          "end"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Label",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectLabel",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.Item",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectItem",
+    "props": [
+      {
+        "kind": "string",
+        "name": "value",
+        "optional": false,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "SelectPrimitive.Separator",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.ScrollUpButton",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectScrollUpButton",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SelectPrimitive.ScrollDownButton",
+    "file": "src/components/ui/select.tsx",
+    "importSource": "@/components/ui/select",
+    "name": "SelectScrollDownButton",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "SeparatorPrimitive.Root",
+    "file": "src/components/ui/separator.tsx",
+    "importSource": "@/components/ui/separator",
+    "name": "Separator",
+    "props": [
+      {
+        "default": "horizontal",
+        "kind": "enum",
+        "name": "orientation",
+        "optional": true,
+        "options": [
+          "horizontal",
+          "vertical"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "default": true,
+        "kind": "boolean",
+        "name": "decorative",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Root",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "Sheet",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Trigger",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Close",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetClose",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Content",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetContent",
+    "props": [
+      {
+        "default": "right",
+        "kind": "enum",
+        "name": "side",
+        "optional": true,
+        "options": [
+          "top",
+          "right",
+          "bottom",
+          "left"
+        ],
+        "source": "declared"
+      },
+      {
+        "default": true,
+        "kind": "boolean",
+        "name": "showCloseButton",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetHeader",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetFooter",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Title",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetTitle",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "SheetPrimitive.Description",
+    "file": "src/components/ui/sheet.tsx",
+    "importSource": "@/components/ui/sheet",
+    "name": "SheetDescription",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarProvider",
+    "props": [
+      {
+        "default": true,
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "boolean",
+        "name": "open",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "onOpenChange",
+        "optional": true,
+        "source": "declared",
+        "typeText": "(open: boolean) => void"
+      },
+      {
+        "kind": "unknown",
+        "name": "style",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<\"div\"> & { defaultOpen?: boolean open?: boolean onOpenChange?: (open: boolean) => void })[\"style\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "Sidebar",
+    "props": [
+      {
+        "default": "left",
+        "kind": "enum",
+        "name": "side",
+        "optional": true,
+        "options": [
+          "left",
+          "right"
+        ],
+        "source": "declared"
+      },
+      {
+        "default": "sidebar",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "sidebar",
+          "floating",
+          "inset"
+        ],
+        "source": "declared"
+      },
+      {
+        "default": "offcanvas",
+        "kind": "enum",
+        "name": "collapsible",
+        "optional": true,
+        "options": [
+          "offcanvas",
+          "icon",
+          "none"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "dir",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "(React.ComponentProps<\"div\"> & { side?: \"left\" | \"right\" variant?: \"sidebar\" | \"floating\" | \"inset\" collapsible?: \"offcanvas\" | \"icon\" | \"none\" })[\"dir\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Button",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarTrigger",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "onClick",
+        "optional": true,
+        "source": "intrinsic",
+        "typeText": "React.ComponentProps<typeof Button>[\"onClick\"]"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Button>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "button",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarRail",
+    "props": [
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "button",
+          "submit",
+          "reset"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "main",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarInset",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Input",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarInput",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Input>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarHeader",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarFooter",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Separator",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarSeparator",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Separator>"
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarContent",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarGroup",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarGroupLabel",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "button",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarGroupAction",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "button",
+          "submit",
+          "reset"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarGroupContent",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "ul",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenu",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "li",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuItem",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "button",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuButton",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "variant",
+        "optional": true,
+        "options": [
+          "default",
+          "outline"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "default",
+          "sm",
+          "lg"
+        ],
+        "source": "variant"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "isActive",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "tooltip",
+        "optional": true,
+        "source": "declared",
+        "typeText": "string | React.ComponentProps<typeof TooltipContent>"
+      },
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "button",
+          "submit",
+          "reset"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "button",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuAction",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "showOnHover",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "enum",
+        "name": "type",
+        "optional": true,
+        "options": [
+          "button",
+          "submit",
+          "reset"
+        ],
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuBadge",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuSkeleton",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "showIcon",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "ul",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuSub",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "li",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuSubItem",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "a",
+    "file": "src/components/ui/sidebar.tsx",
+    "importSource": "@/components/ui/sidebar",
+    "name": "SidebarMenuSubButton",
+    "props": [
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "asChild",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": "md",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "sm",
+          "md"
+        ],
+        "source": "declared"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "isActive",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "href",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "target",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "div",
+    "file": "src/components/ui/skeleton.tsx",
+    "importSource": "@/components/ui/skeleton",
+    "name": "Skeleton",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "SwitchPrimitive.Root",
+    "file": "src/components/ui/switch.tsx",
+    "importSource": "@/components/ui/switch",
+    "name": "Switch",
+    "props": [
+      {
+        "default": "default",
+        "kind": "enum",
+        "name": "size",
+        "optional": true,
+        "options": [
+          "sm",
+          "default"
+        ],
+        "source": "declared"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "defaultChecked",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "table",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "Table",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "thead",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableHeader",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "tbody",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableBody",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "tfoot",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableFooter",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "tr",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableRow",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "th",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableHead",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "td",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableCell",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "caption",
+    "file": "src/components/ui/table.tsx",
+    "importSource": "@/components/ui/table",
+    "name": "TableCaption",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": "textarea",
+    "file": "src/components/ui/textarea.tsx",
+    "importSource": "@/components/ui/textarea",
+    "name": "Textarea",
+    "props": [
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "boolean",
+        "name": "disabled",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "number",
+        "name": "rows",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "string",
+        "name": "id",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "TooltipPrimitive.Provider",
+    "file": "src/components/ui/tooltip.tsx",
+    "importSource": "@/components/ui/tooltip",
+    "name": "TooltipProvider",
+    "props": [
+      {
+        "default": 0,
+        "kind": "number",
+        "name": "delayDuration",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "TooltipPrimitive.Root",
+    "file": "src/components/ui/tooltip.tsx",
+    "importSource": "@/components/ui/tooltip",
+    "name": "Tooltip",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "defaultOpen",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "TooltipPrimitive.Trigger",
+    "file": "src/components/ui/tooltip.tsx",
+    "importSource": "@/components/ui/tooltip",
+    "name": "TooltipTrigger",
+    "props": [
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "TooltipPrimitive.Content",
+    "file": "src/components/ui/tooltip.tsx",
+    "importSource": "@/components/ui/tooltip",
+    "name": "TooltipContent",
+    "props": [
+      {
+        "default": 0,
+        "kind": "number",
+        "name": "sideOffset",
+        "optional": true,
+        "source": "intrinsic"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ]
+  }
+]
