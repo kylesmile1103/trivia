@@ -66,11 +66,15 @@ test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
 
   assert.deepEqual((await triviaRequest(dev.url, '/refine/drift')).pages, [])
   const before = backendFiles(root)
-  await reviseCustomerModel(dev.url)
+  const segment = await reviseCustomerModel(dev.url, web)
+  const { added, removed } = lineChanges(segment.before, segment.after)
+  assert.ok(added > 0 && added + removed < 10, 'A single field must change fewer than ten model lines')
+  t.diagnostic('SC-004: ' + (added + removed) + ' changed lines in the field patch (+' + added + ' / -' + removed + ')')
   const migration = await blueprint(root, 'backend', '--migration', 'Segment')
   assert.match(migration, /src\/pages\/customers\/edit\.tsx +Field Notes sends .notes./)
   const after = backendFiles(root)
-  assertMigration(before, after)
+  const generatedFiles = assertMigration(before, after)
+  t.diagnostic('SC-004: ' + generatedFiles + ' changed .g.cs files plus one EF migration')
 
   const { pages } = await triviaRequest(dev.url, '/refine/drift')
   assert.equal(pages.length, 1)
@@ -122,4 +126,18 @@ function assertMigration(before, after) {
   const backend = changed.filter((file) => !migrations.includes(file))
   assert.ok(backend.some((file) => file.endsWith('/Customer.g.cs')), backend.join('\n'))
   assert.ok(backend.every((file) => file.endsWith('.g.cs')), backend.join('\n'))
+  return backend.length
+}
+
+
+// A single ordered field insertion has one changed region, bounded by identical lines.
+function lineChanges(before, after) {
+  const old = before.split('\n')
+  const next = after.split('\n')
+  const shorter = Math.min(old.length, next.length)
+  let prefix = 0
+  while (prefix < shorter && old[prefix] === next[prefix]) prefix++
+  let suffix = 0
+  while (suffix < shorter - prefix && old.at(-1 - suffix) === next.at(-1 - suffix)) suffix++
+  return { added: next.length - prefix - suffix, removed: old.length - prefix - suffix }
 }

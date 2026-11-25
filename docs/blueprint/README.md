@@ -37,6 +37,20 @@ For a nested web folder such as `clients/admin`, pass `--web-dir clients/admin` 
 `new` and `backend` from the solution directory. You can also run `backend` and
 `eject` from the web folder.
 
+## MVP acceptance measurements
+
+On the Apple silicon reference machine with warm dependency and PostgreSQL image caches:
+
+- **SC-004.** Adding `segment` after declaring its enum adds **five blueprint lines**.
+  The full backend regeneration changes **six `.g.cs` files** and one EF migration,
+  including its designer file and the existing model snapshot.
+- **SC-005.** The browser rendered the customers list in **42.3 seconds** from an empty
+  temporary directory. The measurement includes scaffolding, dependency restore,
+  backend generation, contract sync, eject, startup and the first list render.
+  It starts after Chromium launches and ends when the Status column appears.
+
+See the fixture, setup and exact authoring prompt. [BankAdmin example](../../examples/blueprint-mvp/README.md).
+
 ## Reading order
 
 1. [BRD.md](BRD.md): why, for whom, what is in and out, success measures.

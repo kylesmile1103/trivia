@@ -45,3 +45,9 @@
   existing model snapshot. The test compares every other backend source file by content.
 - ⚑ The browser's drift case starts a second, isolated AppHost on the revised solution and
   forwards the list request to its real API while keeping the Vite and designer ports fixed.
+
+## Measurements
+
+- ⚑ The startup measurement begins at the disposable app launcher and ends when Chromium
+  renders the Status column. It excludes Chromium startup and includes dependency restore.
+  The field diff counts the added and removed lines between the unchanged prefix and suffix.

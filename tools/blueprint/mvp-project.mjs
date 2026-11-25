@@ -130,7 +130,7 @@ export async function applyRefineChange(origin, tool, file, changes) {
   return triviaRequest(origin, '/batch', { ops, label })
 }
 
-export async function reviseCustomerModel(origin) {
+export async function reviseCustomerModel(origin, web) {
   const doc = 'model.blueprint.json'
   const entity = 'Customer'
   const { rev: baseRev } = await triviaRequest(origin, '/blueprint/doc?path=' + doc)
@@ -141,6 +141,8 @@ export async function reviseCustomerModel(origin) {
       { op: 'removeField', doc, baseRev, entity, field: 'notes' },
     ],
   })
+  const model = path.join(web, 'blueprint', doc)
+  const before = readFileSync(model, 'utf8')
   await triviaRequest(origin, '/blueprint/patch', {
     label: 'Add customer segment',
     ops: [{
@@ -148,6 +150,7 @@ export async function reviseCustomerModel(origin) {
       field: { name: 'segment', type: 'enum', enum: 'CustomerSegment' },
     }],
   })
+  return { before, after: readFileSync(model, 'utf8') }
 }
 
 export async function followCustomerDrift(origin, fix) {

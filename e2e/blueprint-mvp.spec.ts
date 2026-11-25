@@ -220,7 +220,7 @@ test('FR-AS-08: the new segment column displays records from the regenerated API
   const web = await devRoot(request)
   const solution = path.dirname(web)
   await applyRefineChange(origin, 'fields', editFile, [{ action: 'add', field: 'notes' }])
-  await reviseCustomerModel(origin)
+  await reviseCustomerModel(origin, web)
   await blueprint(solution, 'backend', '--migration', 'Segment')
   const { pages } = await triviaRequest(origin, '/refine/drift')
   const removed = pages.find((page: { file: string }) => page.file === editFile)
