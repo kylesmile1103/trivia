@@ -5,7 +5,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Write `fixtures/model/valid/bank/model.blueprint.json` by hand: Customer, Account, Transaction, every type, constraint and relation kind, one custom operation
+- [x] T001 Write `fixtures/model/valid/bank/model.blueprint.json` by hand: Customer, Account, Transaction, every type, constraint and relation kind, one custom operation
 - [ ] T002 [P] Reserved word data files with a header naming source and date: `reserved/csharp.json`, `postgres.json`, `generator.json`
 
 ## Phase 2: Foundational
