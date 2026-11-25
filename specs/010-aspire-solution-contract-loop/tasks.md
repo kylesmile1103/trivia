@@ -16,7 +16,7 @@
 ## Phase 3: User Story 1 - One command (P1)
 
 - [x] T005 [US1] `MigrationService/Worker.cs`: migrate inside an execution strategy, then stop. The API waits for completion and never migrates
-- [ ] T006 [US1] `Integration/AppHostTests.cs` with `Aspire.Hosting.Testing`: start without the web app, wait for the API to be healthy, run CRUD through its client. Trait for the container runtime
+- [x] T006 [US1] `Integration/AppHostTests.cs` with `Aspire.Hosting.Testing`: start without the web app, wait for the API to be healthy, run CRUD through its client. Trait for the container runtime
 
 ## Phase 4: User Story 3 - The contract flows (P1)
 

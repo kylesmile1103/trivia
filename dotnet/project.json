@@ -15,10 +15,16 @@
       "cache": true
     },
     "test": {
-      "command": "dotnet test dotnet/Trivia.Blueprint.slnx",
+      "command": "dotnet test dotnet/Trivia.Blueprint.slnx --filter Category!=Integration",
       "dependsOn": ["build"],
       "inputs": ["dotnet", "{workspaceRoot}/packages/blueprint/fixtures/model/**/*"],
       "cache": true,
+      "parallelism": false
+    },
+    "integration": {
+      "command": "dotnet test dotnet/Trivia.Blueprint.slnx --filter Category=Integration",
+      "dependsOn": ["build"],
+      "cache": false,
       "parallelism": false
     }
   }

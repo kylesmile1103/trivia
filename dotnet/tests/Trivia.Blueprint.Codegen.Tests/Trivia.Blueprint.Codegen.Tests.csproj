@@ -13,6 +13,9 @@
     <ProjectReference Include="../../src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="Verify.Xunit" />
     <PackageReference Include="Npgsql" />

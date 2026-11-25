@@ -1,6 +1,11 @@
+using Microsoft.Extensions.Configuration;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
-var db = builder.AddPostgres("postgres").WithDataVolume().AddDatabase("appdb");
+var postgres = builder.AddPostgres("postgres");
+if (builder.Configuration.GetValue("Trivia:UseDataVolume", true))
+    postgres.WithDataVolume();
+var db = postgres.AddDatabase("appdb");
 
 var migrations = builder.AddProject<Projects.{{App}}_MigrationService>("migrations")
     .WithReference(db, connectionName: "AppDb")
@@ -12,9 +17,12 @@ var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.Exc
     .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 
-builder.{{WebResource}}("web", "../../web")
-    .WithPnpm()
-    .WithReference(api)
-    .WaitFor(api);
+if (builder.Configuration.GetValue("Trivia:StartWeb", true))
+{
+    builder.{{WebResource}}("web", "../../web")
+        .WithPnpm()
+        .WithReference(api)
+        .WaitFor(api);
+}
 
 builder.Build().Run();

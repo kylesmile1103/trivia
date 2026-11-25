@@ -82,6 +82,11 @@ for captured builds so a surviving worker does not hold their output pipes open.
 is the JavaScript integration's Next.js resource. The Next.js template itself belongs to
 spec 007.
 
+⚑ `Trivia:StartWeb` and `Trivia:UseDataVolume` default to true and can be disabled for API
+integration tests. The test loads the generated AppHost assembly, uses the normal migration
+command, and asks Aspire for its allocated API endpoint. No ports or persistent data are shared
+between test runs.
+
 ### AppHost (FR-AS-01, FR-AS-02)
 
 ```csharp
@@ -199,7 +204,9 @@ Azure targets are Aspire's own features and need no work here.
   solution, AppHost included.
 - An Aspire integration test (`Aspire.Hosting.Testing`): start the AppHost without the web
   app, wait for the API to be healthy, exercise CRUD through its HTTP client. Needs a container
-  runtime, so it carries a trait and runs in CI and before a release.
+  runtime. ⚑ `Category=Integration` covers the Aspire test and the existing PostgreSQL
+  integration suite. Run `pnpm exec nx run dotnet:integration` on Linux with Docker and the
+  Aspire CLI bundle installed. The `pnpm check` gate runs the other .NET tests.
 - The contract test of step 4.
 - The data provider against the API in that same integration run, through a small Node script:
   list with paging, sorting and each filter operator, one validation error mapped to fields.
