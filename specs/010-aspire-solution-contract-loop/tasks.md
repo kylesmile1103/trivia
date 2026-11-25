@@ -39,7 +39,7 @@
 
 ## Phase 7: User Story 5 - Publish (P3)
 
-- [ ] T017 [US5] A Docker Compose environment in the AppHost scaffold. A test that runs the publish and checks the compose file names four services
+- [x] T017 [US5] A Docker Compose environment in the AppHost scaffold. A test that runs the publish and checks the compose file names four services
 
 ## Phase 8: Polish
 

@@ -239,11 +239,20 @@ meets `unknown_resource`.
 
 ## 5. Publishing (FR-AS-09, should)
 
-The AppHost includes a Docker Compose environment, so `aspire publish` writes a compose file
-with PostgreSQL, the migration job, the API and the web app (static files behind a small web
-server for the Vite target, a Node container for Next.js). It is verified by a test that runs
-the publish and checks the compose file parses and names all four services. Kubernetes and
-Azure targets are Aspire's own features and need no work here.
+The AppHost includes a Docker Compose environment. The integration test runs
+`aspire publish` and parses the YAML with YamlDotNet **18.1.0**. It asserts the
+PostgreSQL, migration, API and web services.
+
+⚑ Use Aspire's YARP static website publishing for Vite, with the same `/api` prefix in
+production. Opt in to its experimental API at the one call site. The Compose environment
+omits the dashboard. The local development run still starts it. The Next.js hosting
+integration prepares a Node container when the app provides the standalone Next.js
+template from spec 012.
+
+⚑ Let `Aspire.AppHost.Sdk/13.6.5` supply the matching AppHost package implicitly.
+The 13.6.5 CLI fails to parse a bracketed central version for that package.
+Other direct hosting dependencies stay pinned centrally.
+[Compose publishing](https://aspire.dev/deployment/docker-compose/).
 
 ## 6. Tests
 

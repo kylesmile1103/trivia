@@ -13,6 +13,7 @@ internal static class ScaffoldEmitter
     {
         string app = input.AppName;
         string space = input.Model.Namespace;
+        bool next = input.App?.Targets.Web == "next-refine";
         yield return new($"{app}.slnx", FileKind.Scaffold, Render("Solution.slnx", space, app));
         yield return new(".config/dotnet-tools.json", FileKind.Scaffold, Render("dotnet-tools.json", space, app));
         yield return new("Directory.Packages.props", FileKind.Scaffold, DependencyVersions());
@@ -24,8 +25,8 @@ internal static class ScaffoldEmitter
                 Render($"{project}/{project}.csproj", space, app));
         yield return new($"src/{app}.AppHost/Program.cs", FileKind.Scaffold,
             Render("AppHost/Program.cs", space, app)
-                .Replace("{{WebResource}}", input.App?.Targets.Web == "next-refine" ? "AddNextJsApp" : "AddViteApp",
-                    StringComparison.Ordinal));
+                .Replace("{{WebResource}}", next ? "AddNextJsApp" : "AddViteApp", StringComparison.Ordinal)
+                .Replace("{{WebPublishing}}", next ? "" : ".PublishAsStaticWebsite(\"/api\", api)", StringComparison.Ordinal));
         yield return new($"src/{app}.AppHost/Properties/launchSettings.json", FileKind.Scaffold,
             Render("AppHost/launchSettings.json", space, app));
         yield return new($"src/{app}.ServiceDefaults/Extensions.cs", FileKind.Scaffold,

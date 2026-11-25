@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
+builder.AddDockerComposeEnvironment("compose").WithDashboard(false);
 
 var postgres = builder.AddPostgres("postgres");
 if (builder.Configuration.GetValue("Trivia:UseDataVolume", true))
@@ -19,10 +20,13 @@ var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.Exc
 
 if (builder.Configuration.GetValue("Trivia:StartWeb", true))
 {
-    builder.{{WebResource}}("web", "../../web")
+    var web = builder.{{WebResource}}("web", "../../web")
         .WithPnpm()
         .WithReference(api)
         .WaitFor(api);
+#pragma warning disable ASPIREJAVASCRIPT001 // Static website publishing is experimental in Aspire 13.6.
+    web{{WebPublishing}}.WithExternalHttpEndpoints();
+#pragma warning restore ASPIREJAVASCRIPT001
 }
 
 builder.Build().Run();

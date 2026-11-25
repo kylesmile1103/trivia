@@ -21,6 +21,7 @@
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="Verify.Xunit" />
+    <PackageReference Include="YamlDotNet" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
