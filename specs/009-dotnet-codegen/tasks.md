@@ -60,6 +60,7 @@
 - [x] T026 [P] Performance test for SC-004 with a generated 50-entity model
 - [x] T027 Edge cases: non-identifier enum values, self-relations, empty model, newer blueprint version
 - [ ] T028 Fill `src/blueprint/backend.ts` in the plugin: run `trivia-dotnet` with an argument array and a timeout, map its JSON to `BackendResult`, the missing-`dotnet` message. Replace the stub of spec 004 and its MCP tool
+  Deferred: needs spec 004 (the blueprint backend service and MCP stub are absent from this branch)
 - [ ] T029 Update LLD-09 with verified API names. Run `dotnet test` (all traits) and `pnpm check`
 
 ## Dependencies
