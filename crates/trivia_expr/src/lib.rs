@@ -4,7 +4,8 @@
 pub mod parse;
 
 #[doc(hidden)]
-pub mod utf16;
+mod utf16;
+mod subset;
 
 use std::collections::BTreeMap;
 
@@ -152,6 +153,41 @@ pub struct EmitResult {
 pub struct EmitResponse {
     pub unit: Unit,
     pub results: Vec<EmitResult>,
+}
+
+const MAX_EXPRESSIONS: usize = 10_000;
+
+impl Diagnostic {
+    fn at(source: &str, code: &'static str, severity: Severity, span: oxc_span::Span, message: impl Into<String>) -> Self {
+        let (start, end) = utf16::to_utf16(source, span);
+        Self { code, severity, start, end, message: message.into() }
+    }
+
+    fn from_parse(source: &str, error: parse::ParseError) -> Self {
+        Self::at(source, error.code, Severity::Error, error.span, error.message)
+    }
+
+    fn batch_limit() -> Self {
+        Self {
+            code: "expr_too_large", severity: Severity::Error, start: 0, end: 0,
+            message: "Batch exceeds 10 000 expressions".to_owned(),
+        }
+    }
+}
+
+pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
+    let results = request.expressions.into_iter().enumerate().map(|(index, input)| {
+        let source = &input.source;
+        let diagnostics = if index >= MAX_EXPRESSIONS {
+            vec![Diagnostic::batch_limit()]
+        } else {
+            parse::parse(source, |expression| subset::check(source, expression))
+                .unwrap_or_else(|error| vec![Diagnostic::from_parse(source, error)])
+        };
+        let ok = diagnostics.iter().all(|diagnostic| diagnostic.severity != Severity::Error);
+        Analysis { id: input.id, ok, deps: Vec::new(), tier: Tier::Static, diagnostics }
+    }).collect();
+    AnalyzeResponse { unit: Unit::Utf16, results }
 }
 
 #[cfg(test)]

@@ -20,6 +20,13 @@ Refused with `expr_unsupported_syntax`: assignment and update, `new`, `await`, `
 `this`, `super`, `delete`, the comma operator, function expressions and declarations, tagged
 templates, `import()`, JSX, regular expression literals, class expressions.
 
+- ⚑ The operator allowlist covers arithmetic, relational and equality symbols, and the listed
+  logical and unary operators. Bitwise operators, `in`, `instanceof`, `void`, bigint literals,
+  and postfix TypeScript `!` are outside the subset.
+- ⚑ Callbacks are synchronous expression-bodied arrows supplied directly as call arguments.
+  Parentheses around a callback are allowed. Object literals support data properties, computed
+  keys, shorthand and spread. Methods and accessors are rejected.
+
 Allowlist, as data in `allow.rs`:
 
 - String: `trim`, `toLowerCase`, `toUpperCase`, `startsWith`, `endsWith`, `includes`,

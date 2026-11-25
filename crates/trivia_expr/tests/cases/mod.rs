@@ -32,7 +32,7 @@ pub const REFUSED: &[(&str, &str, usize, usize)] = &[
     ("state.count++", "expr_unsupported_syntax", 0, 13),
     ("new Date()", "expr_unsupported_syntax", 0, 10),
     ("await item", "expr_unsupported_syntax", 0, 10),
-    ("yield 1", "expr_unsupported_syntax", 6, 7),
+    ("yield 1", "expr_unsupported_syntax", 0, 5),
     ("this.x", "expr_unsupported_syntax", 0, 4),
     ("super.x", "expr_unsupported_syntax", 0, 5),
     ("delete item.x", "expr_unsupported_syntax", 0, 13),

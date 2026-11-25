@@ -17,7 +17,7 @@
 ## Phase 3: User Story 1 - Diagnostics (P1)
 
 - [x] T006 [US1] `tests/tables.rs`: the accepted and refused tables of LLD-03 section 1, one line per form with code and span
-- [ ] T007 [US1] `src/subset.rs`: the syntax walk
+- [x] T007 [US1] `src/subset.rs`: the syntax walk
 - [ ] T008 [P] [US1] `src/allow.rs` and the purity check (`expr_impure_call`)
 - [ ] T009 [US1] `src/scope.rs`: roots, locals, arrow parameters, shadow warning, `expr_unknown_root`, `expr_unknown_member`
 
