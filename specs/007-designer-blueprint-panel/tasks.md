@@ -32,7 +32,7 @@
 ## Phase 6: User Story 3 - Custom pages (P2)
 
 - [x] T012 [US3] `NodeTree.tsx` over the flat maps with the shared drop rules, add from manifests (not-installed types marked), remove
-- [ ] T013 [US3] `ExpressionInput.tsx` showing a diagnostic at its UTF-16 span
+- [x] T013 [US3] `ExpressionInput.tsx` showing a diagnostic at its UTF-16 span
 - [ ] T014 [US3] `NodeProps.tsx`: editors by prop kind, the static or binding toggle, events and exposed names. Time-box moving the inspector's widgets to `shared/components/`
 
 ## Phase 7: e2e (Phase 1 exit)
