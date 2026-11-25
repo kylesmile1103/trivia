@@ -90,6 +90,8 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
 - ⚑ A malformed lock yields an `invalid_lock` warning and draft statuses. An unreadable or
   unsafe lock target counts as edited. A missing document read returns 404 `node_not_found`;
   a malformed document returns 422 `invalid_result` with its diagnostics.
+- ⚑ The model summary lists entity names in document order with the revision of the file
+  on disk. The canonical op union supplies the model input schemas to MCP.
 - `status`: `draft` when the lock has no entry; `ejected` when the file's hash matches the
   lock; `edited` when it differs or the file is gone.
 - ⚑ The starter hint and published `setApp` schema call out the web target required on

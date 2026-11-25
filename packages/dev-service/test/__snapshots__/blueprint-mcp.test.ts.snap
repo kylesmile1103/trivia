@@ -389,3 +389,61 @@ exports[`FR-AG-02 lists blueprint tools and their guarded input shapes 2`] = `
   },
 ]
 `;
+
+exports[`FR-DM-07 advertises model payloads and summarizes a patched model with its disk revision 1`] = `
+{
+  "moveField": [
+    "entity",
+    "field",
+    "index",
+  ],
+  "removeEntity": [
+    "entity",
+  ],
+  "removeEnum": [
+    "name",
+  ],
+  "removeField": [
+    "entity",
+    "field",
+  ],
+  "removeRelation": [
+    "entity",
+    "relation",
+  ],
+  "renameEntity": [
+    "entity",
+    "name",
+  ],
+  "renameField": [
+    "entity",
+    "field",
+    "name",
+  ],
+  "setEntity": [
+    "entity",
+  ],
+  "setEntityApi": [
+    "api",
+    "entity",
+  ],
+  "setEnum": [
+    "enum",
+  ],
+  "setField": [
+    "entity",
+    "field",
+  ],
+  "setIndexes": [
+    "entity",
+    "indexes",
+  ],
+  "setModel": [
+    "namespace",
+  ],
+  "setRelation": [
+    "entity",
+    "relation",
+  ],
+}
+`;

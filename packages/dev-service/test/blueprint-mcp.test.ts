@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { MODEL_DOC, modelOpSchema, revOfText } from '@trivia/blueprint'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
@@ -80,7 +81,7 @@ it('FR-AG-02 lists blueprint tools and their guarded input shapes', async () => 
 })
 
 interface OperationSchema {
-  properties: { op: { const: string }; targets?: { description?: string } }
+  properties: { op: { const: string }; doc?: { const: string }; targets?: { description?: string } }
   required: string[]
 }
 
@@ -206,4 +207,39 @@ it('SC-001 tells a first-time author that creating the app requires a web target
   }
   const setApp = (items.oneOf ?? items.anyOf)!.find(({ properties }) => properties.op.const === 'setApp')
   expect(setApp?.properties.targets?.description).toContain('required when baseRev is null')
+})
+
+it('FR-DM-07 advertises model payloads and summarizes a patched model with its disk revision', async () => {
+  const { tools } = await client.listTools()
+  const patch = tools.find(({ name }) => name === 'trivia_blueprint_patch')
+  const { items } = patch?.inputSchema.properties?.ops as {
+    items: { oneOf?: OperationSchema[]; anyOf?: OperationSchema[] }
+  }
+  const variants = (items.oneOf ?? items.anyOf ?? []).filter(({ properties }) => properties.doc?.const === MODEL_DOC)
+  expect(variants.map(({ properties }) => properties.op.const)).toEqual(modelOpSchema.options.map((schema) => schema.shape.op.value))
+
+  const initial = await tool('trivia_blueprint_patch', {
+    label: 'Model two entities',
+    ops: [
+      { op: 'setModel', doc: MODEL_DOC, baseRev: null, namespace: 'Bank' },
+      ...['Customer', 'Account'].map((name) => ({
+        op: 'setEntity', doc: MODEL_DOC, baseRev: null, entity: {
+          name, plural: name.toLowerCase() + 's', key: { name: 'id', type: 'uuid' },
+        },
+      })),
+    ],
+  })
+  expect(initial.isError).not.toBe(true)
+  const rev = revOfText(fs.readFileSync(path.join(root, 'blueprint', MODEL_DOC), 'utf8'))
+  const entities = ['Customer', 'Account']
+  expect(initial.structuredContent).toMatchObject({
+    revs: { [MODEL_DOC]: rev }, summary: { model: { rev, entities } },
+  })
+  expect((await tool('trivia_blueprint_get')).structuredContent).toMatchObject({ model: { rev, entities } })
+  expect((await tool('trivia_blueprint_get', { what: 'doc', path: MODEL_DOC })).structuredContent).toMatchObject({
+    rev, doc: { namespace: 'Bank', entities: entities.map((name) => ({ name })) },
+  })
+  expect(Object.fromEntries(variants.map(({ properties }) => [
+    properties.op.const, Object.keys(properties).filter((key) => !['op', 'doc', 'baseRev'].includes(key)).sort(),
+  ]))).toMatchSnapshot()
 })

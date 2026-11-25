@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { APP_DOC, validate, type AppDoc, type ApplyResult, type Blueprint, type Diagnostic, type PageKind } from '@trivia/blueprint'
+import { APP_DOC, MODEL_DOC, modelSchema, validate, type AppDoc, type ApplyResult, type Blueprint, type Diagnostic, type PageKind } from '@trivia/blueprint'
 import { z } from 'zod'
 
 import { ApiError } from '../engine.js'
@@ -89,6 +89,8 @@ export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, f
     })
   }
   const app = blueprint.docs[APP_DOC]
+  const model = blueprint.docs[MODEL_DOC]
+  const modelDoc = modelSchema.safeParse(model?.doc)
   const errors = diagnostics.filter(({ severity }) => severity === 'error').length
   const next = errors > 0
     ? 'Review the diagnostics and patch the affected documents using their current revisions.'
@@ -98,7 +100,7 @@ export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, f
   return {
     dir: workspace.dir, exists: blueprint.exists,
     app: app?.kind === 'app' && app.doc ? { rev: app.rev, name: app.doc.name, targets: app.doc.targets } : null,
-    model: null,
+    model: model && modelDoc.success ? { rev: model.rev, entities: modelDoc.data.entities.map(({ name }) => name) } : null,
     pages, diagnostics, next,
   }
 }

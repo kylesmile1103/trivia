@@ -508,6 +508,7 @@ relative to the blueprint directory, which defaults to `blueprint` and is config
 symlinks return 422 `path_outside_root`.
 
 `GET /@trivia/api/blueprint` returns `{ dir, exists, app, model, pages, diagnostics, next }`.
+`model` contains the model revision and entity names when a valid model exists.
 A missing directory still returns 200 with `exists: false` and a suggested first op. Each
 page has `name, path, rev, route, kind, status, errors, warnings`. A page in the lock also
 has a project-relative `file`. Its status is `ejected` when that file's bytes match the lock

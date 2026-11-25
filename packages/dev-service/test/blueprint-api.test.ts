@@ -277,3 +277,16 @@ it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
     expect(await send(route, 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
   }
 })
+
+it('FR-DM-07 keeps the summary readable for a model with only the legacy envelope', async () => {
+  writeBlueprint('model.blueprint.json', JSON.stringify({
+    $schema: 'https://trivia.dev/schemas/blueprint/model.v1.json', blueprintVersion: 1,
+  }))
+  const response = await get()
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({
+    ok: true, data: { model: null, diagnostics: expect.arrayContaining([
+      expect.objectContaining({ doc: 'model.blueprint.json', code: 'schema_violation', pointer: '/entities' }),
+    ]) },
+  })
+})

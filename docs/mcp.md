@@ -214,6 +214,9 @@ available in the contract, so you can correct it with `setPageMeta` and the new 
 Fix each reported error and re-read the summary to verify the draft. If a patch returns
 `conflict`, read the documents named by `error.details.revs` before retrying.
 
+The patch schema includes the guarded model ops, such as `setModel` and `setEntity`. Read
+`model.blueprint.json` before editing it. The summary gives its revision and entity names.
+
 To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agent: ` prefix.
 `trivia_get_selection` also returns the next undo label in `history.undoLabel`.
 
