@@ -38,3 +38,25 @@ it('FR-MF-02: uses the project’s brand variant and drops the removed kit optio
     .toMatchObject({ options: ['default', 'brand'], default: 'brand' })
   expect(manifests.Button?.events).toEqual(button.events)
 })
+
+it('FR-MF-02: resolves kit imports using the project’s ui alias and keeps explicit imports', () => {
+  const input = kit.find(({ type }) => type === 'Input')!
+  const explicit = { ...input, source: { ...input.source, import: { name: 'Input', from: '~forms/input' } } }
+  const { manifests } = resolveManifests({
+    kit: [button, explicit], components, aliases: { ui: '~design/' },
+  })
+  expect(manifests.Button?.source.import).toEqual({ name: 'Button', from: '~design/button' })
+  expect(manifests.Input?.source.import).toEqual({ name: 'Input', from: '~forms/input' })
+  expect(button.source.import.from).toBe('ui')
+})
+
+it('FR-MF-05: picks override metadata before taking the analyzer’s props', () => {
+  const override = { ...button, props: [], slots: [{ name: 'label', kind: 'text' as const }] }
+  const inputs = {
+    kit, overrides: [override], components, aliases: { ui: '~design' },
+  }
+  const result = resolveManifests(inputs)
+  expect(result.manifests.Button?.slots).toEqual(override.slots)
+  expect(result.manifests.Button?.props).toEqual(components.find(({ name }) => name === 'Button')?.props)
+  expect(JSON.stringify(resolveManifests(structuredClone(inputs)))).toBe(JSON.stringify(result))
+})
