@@ -33,7 +33,7 @@
 
 ## Phase 5: User Story 5 - Agents (P2)
 
-- [ ] T017 [US5] MCP through the launcher's URL: the tools list equals the Vite one. A scripted client test
+- [x] T017 [US5] MCP through the launcher's URL: the tools list equals the Vite one. A scripted client test
 
 ## Phase 6: User Story 6 - Never in production (P1)
 
