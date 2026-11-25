@@ -168,7 +168,10 @@ is generic over the resource name.
   The document's operation ids, tags, schema names and list shape (LLD-09) are chosen so the
   manifest's resources, operations and pagination come out without overrides. A test asserts
   it: the fixture model's OpenAPI document, through contract-sync, gives a manifest with one
-  resource per entity, all five operations, `listItemsPath: "items"` and page pagination.
+  resource per entity, the five CRUD slots, `listItemsPath: "items"` and page pagination.
+  ⚑ Assert the populated slots against each fixture entity's enabled operations. The bank
+  exposes all five on Customer, and list and get on Account and Transaction. Contract-sync
+  consumes the Verify snapshot unchanged by accepting a leading UTF-8 BOM on JSON inputs.
 - **Step 5.** Nothing new: `GET /@trivia/api/refine/drift` and `trivia_contract_drift`.
 
 `trivia-blueprint backend [--migration <Name>]` runs steps 1 to 4 in order, stops at the first

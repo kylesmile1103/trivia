@@ -59,7 +59,7 @@ export function parseSpecText(text: string, origin: string, format?: 'json' | 'y
   const asJson = format === 'json' || (format === undefined && looksLikeJson(text))
   let parsed: unknown
   try {
-    parsed = asJson ? JSON.parse(text) : yaml.load(text, { schema: yamlSchema(), filename: origin })
+    parsed = asJson ? JSON.parse(text.replace(/^\uFEFF/, '')) : yaml.load(text, { schema: yamlSchema(), filename: origin })
   } catch (cause) {
     throw new ContractSyncError(
       'input_parse_failed',
