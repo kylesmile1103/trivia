@@ -22,7 +22,7 @@
 
 ## Phase 4: User Story 2 - Boundaries (P1)
 
-- [ ] T009 [US2] Unit tests for `boundaries.ts` on small trees: shared state under a static card, a static header above a table, a fully static page, nested groups, a crossing function prop
+- [x] T009 [US2] Unit tests for `boundaries.ts` on small trees: shared state under a static card, a static header above a table, a fully static page, nested groups, a crossing function prop
 - [ ] T010 [US2] `next-refine/boundaries.ts`: client need per node, union-find groups, lowest common ancestor, merge, crossing props, `boundary_not_serializable`
 - [ ] T011 [US2] Golden files for the kit fixture's custom pages with split modules
 
