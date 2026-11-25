@@ -49,3 +49,12 @@ await assert.rejects(
 );
 const many = await provider.getMany({ resource, ids: [inserted[0].id, inserted[2].id] });
 assert.deepEqual(new Set(many.data.map(({ id }) => id)), new Set([inserted[0].id, inserted[2].id]));
+
+// An edit form sends its own fields only; the members it leaves out keep their values.
+const noted = (await provider.create({
+  resource, variables: { fullName: 'Drew Fourth', email: 'drew@example.test', status: 'active', notes: 'Prefers email' },
+})).data;
+const edited = await provider.update({ resource, id: noted.id, variables: { fullName: 'Drew Edited', email: noted.email } });
+assert.equal(edited.data.fullName, 'Drew Edited');
+const reloaded = (await provider.getOne({ resource, id: noted.id })).data;
+assert.deepEqual({ notes: reloaded.notes, status: reloaded.status }, { notes: 'Prefers email', status: 'active' });

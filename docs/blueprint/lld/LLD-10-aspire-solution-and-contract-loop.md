@@ -145,7 +145,7 @@ beyond `@refinedev/core`. It implements Refine's `DataProvider` for LLD-09 secti
 | Refine | API |
 | --- | --- |
 | `getList` with pagination, sorters, filters | `GET /api/v1/<resource>?page&pageSize&sort&filter…`, returning `items` and `total` |
-| `getOne`, `create`, `update`, `deleteOne` | The matching route. `update` is `PUT` |
+| `getOne`, `create`, `update`, `deleteOne` | The matching route. ⚑ (decided 2026-11-26) `update` is `PATCH`, because an edit form sends only its own fields and `PUT` would clear the rest (LLD-09 section 4) |
 | `getMany` | `filter=id:in:<ids>` |
 | `custom` | The given method and URL, under `/api/v1` |
 | Filter operators | `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains`, `startswith`, `in`, `null` map one to one. Others throw a clear error |

@@ -130,7 +130,8 @@ export function createDataProvider(send: typeof fetch = globalThis.fetch): DataP
     },
     getOne: ({ resource, id, meta }) => record(item(resource, id), "GET", undefined, meta?.headers),
     create: ({ resource, variables, meta }) => record(collection(resource), "POST", variables, meta?.headers),
-    update: ({ resource, id, variables, meta }) => record(item(resource, id), "PUT", variables, meta?.headers),
+    // PATCH changes only the members sent, so a form that edits some fields keeps the others.
+    update: ({ resource, id, variables, meta }) => record(item(resource, id), "PATCH", variables, meta?.headers),
     async deleteOne<TData extends BaseRecord, TVariables>({ resource, id, variables, meta }: DeleteOneParams<TVariables>) {
       const data = await request<TData>(item(resource, id), "DELETE", variables, meta?.headers);
       return { data: data ?? { id } as TData };
