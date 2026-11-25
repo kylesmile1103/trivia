@@ -1,8 +1,10 @@
 using System.CommandLine;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Microsoft.CodeAnalysis.CSharp;
+using Trivia.Blueprint.Codegen.Migrations;
 using Trivia.Blueprint.Codegen.Model;
 using Trivia.Blueprint.Codegen.Plan;
 
@@ -44,6 +46,10 @@ internal static class MigrateCommand
             string migrationsPath = Path.GetDirectoryName(relative)!.Replace(Path.DirectorySeparatorChar, '/') + "/" + Migrations;
             string directory = Ownership.Resolve(root, migrationsPath, directory: true);
             HashSet<string> before = MigrationFiles(directory).ToHashSet(StringComparer.Ordinal);
+            string snapshot = Ownership.Resolve(root, migrationsPath + "/AppDbContextModelSnapshot.cs");
+            IReadOnlyDictionary<string, string> previousTables = input is not null && File.Exists(snapshot)
+                ? RenameRewriter.ReadTables(File.ReadAllText(snapshot))
+                : new Dictionary<string, string>();
 
             (int build, string buildOutput) = await RunDotnet(root, ["build", project, "-warnaserror", "--nologo"], cancellationToken);
             if (build != 0)
@@ -61,8 +67,9 @@ internal static class MigrateCommand
                 return Fail(output, new("migration_missing", migrationsPath, "", "EF did not produce exactly one new migration."));
 
             string migration = Path.GetRelativePath(root, added[0]).Replace(Path.DirectorySeparatorChar, '/');
-            _ = Ownership.Resolve(root, migration);
-            output.WriteLine(JsonSerializer.Serialize(new { migration, diagnostics = Array.Empty<Diagnostic>() }, ModelLoader.Json));
+            string migrationFile = Ownership.Resolve(root, migration);
+            IReadOnlyList<MigrationRename> renames = input is null ? [] : RewriteNewMigration(migrationFile, input.Model, previousTables);
+            output.WriteLine(JsonSerializer.Serialize(new { migration, renames, diagnostics = Array.Empty<Diagnostic>() }, ModelLoader.Json));
             return 0;
         }
         catch (BlueprintInputException exception)
@@ -128,6 +135,32 @@ internal static class MigrateCommand
             throw;
         }
         return (process.ExitCode, (await stdout + await stderr).Trim());
+    }
+
+    private static IReadOnlyList<MigrationRename> RewriteNewMigration(string file,
+        ModelDocument model, IReadOnlyDictionary<string, string> previousTables)
+    {
+        if (!model.Entities.Any(entity => entity.RenamedFrom is not null || entity.Fields.Any(field => field.RenamedFrom is not null)))
+            return [];
+        byte[] bytes = File.ReadAllBytes(file);
+        bool hasBom = bytes.AsSpan().StartsWith(Encoding.UTF8.GetPreamble());
+        string source = Encoding.UTF8.GetString(bytes.AsSpan(hasBom ? 3 : 0));
+        RenameResult rewritten = RenameRewriter.Rewrite(source, model, previousTables);
+        if (rewritten.Renames.Count == 0)
+            return [];
+        string temporary = $"{file}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.WriteAllText(temporary, rewritten.Source, new UTF8Encoding(encoderShouldEmitUTF8Identifier: hasBom));
+            if (!File.ReadAllBytes(file).AsSpan().SequenceEqual(bytes))
+                throw new IOException("The new migration changed while applying rename hints.");
+            File.Move(temporary, file, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+        return rewritten.Renames;
     }
 
     private static int Fail(TextWriter output, Diagnostic diagnostic)

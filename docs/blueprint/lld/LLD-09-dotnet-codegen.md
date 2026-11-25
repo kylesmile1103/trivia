@@ -270,6 +270,10 @@ op. Migrations are applied by the migration service at start (LLD-10), never by 
   Build the project with warnings as errors before invoking EF, which expects restored
   project metadata. EF maintains its model snapshot. Earlier migration and designer files
   remain untouched.
+⚑ Resolve an old table's actual plural from EF's preceding model snapshot. Rewrite only
+  equivalent and unambiguous drop/add pairs with matching Up and Down statements. Keep
+  table pairs that also recreate indexes and column pairs that change storage shape in
+  EF's original form. Apply Roslyn-derived spans to preserve surrounding migration text.
 
 ## 7. Auth (FR-NC-13, should)
 

@@ -48,7 +48,7 @@
 ## Phase 8: User Story 7 - Migrations (P2)
 
 - [x] T022 [US7] `migrate <Name>`: run `dotnet ef migrations add` with an argument array, never touch older migrations
-- [ ] T023 [US7] `Migrations/RenameRewriter`: turn a matching drop and add pair into a rename in the migration this run created. Tests on sample migration files
+- [x] T023 [US7] `Migrations/RenameRewriter`: turn a matching drop and add pair into a rename in the migration this run created. Tests on sample migration files
 
 ## Phase 9: User Story 8 - Auth (P3)
 
