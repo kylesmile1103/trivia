@@ -81,7 +81,9 @@ safety net.
 panel re-reads the summary after every history change.
 
 **Empty states.** No blueprint: one button creates `app.blueprint.json` with the detected
-target. No contract: contract kinds are disabled, with a pointer to the Data tab's sync.
+target. No contract: contract kinds are disabled, with a pointer to the Data tab's sync. ⚑ Initialization uses
+`App` as the initial document name and selects the web target from the designer's
+existing health response (`next-refine` for Next, `vite-refine` for Vite).
 
 ## 3. State and concurrency
 
