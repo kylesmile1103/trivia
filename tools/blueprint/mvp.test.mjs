@@ -9,10 +9,13 @@ import {
   run, startMvpApi, startMvpDevService, triviaRequest,
 } from './mvp-project.mjs'
 
+const missing = missingMvpPrerequisite()
+
 test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
-  skip: missingMvpPrerequisite(),
+  skip: process.env.TRIVIA_MVP_REQUIRED !== '1' && missing,
   timeout: 600_000,
 }, async (t) => {
+  if (missing) throw new Error(missing)
   const root = mkdtempSync(path.join(tmpdir(), 'trivia-mvp-'))
   let api
   let dev

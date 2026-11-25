@@ -39,7 +39,11 @@ For a nested web folder such as `clients/admin`, pass `--web-dir clients/admin` 
 
 ## MVP acceptance measurements
 
-On the Apple silicon reference machine with warm dependency and PostgreSQL image caches:
+Run `pnpm exec nx run tools:mvp` for the scripted slice. Real releases run this target
+before tagging and require the .NET 10 SDK and a running container runtime.
+
+Measurements on the Apple silicon reference machine used warm dependency and PostgreSQL
+image caches.
 
 - **SC-004.** Adding `segment` after declaring its enum adds **five blueprint lines**.
   The full backend regeneration changes **six `.g.cs` files** and one EF migration,

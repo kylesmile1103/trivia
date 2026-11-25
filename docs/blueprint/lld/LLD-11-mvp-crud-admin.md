@@ -51,3 +51,9 @@
 - ⚑ The startup measurement begins at the disposable app launcher and ends when Chromium
   renders the Status column. It excludes Chromium startup and includes dependency restore.
   The field diff counts the added and removed lines between the unchanged prefix and suffix.
+
+## Release check
+
+- ⚑ A real release runs the uncached `tools:mvp` target before Nx can tag. It requires
+  the .NET SDK and a running container runtime. The release passes required mode through
+  to the Node test so that a lost prerequisite fails the release. Dry runs describe the check.
