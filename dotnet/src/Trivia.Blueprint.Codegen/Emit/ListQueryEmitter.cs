@@ -133,11 +133,11 @@ public static class ListQueryEmitter
             private static async Task<Ok<{{name}}Page>> ListAsync(
                 [FromQuery] string? page, [FromQuery] string? pageSize, [FromQuery] string? sort,
                 [FromQuery(Name = "filter")] string[]? filters, [FromQuery] string? q,
-                AppDbContext db, CancellationToken cancellationToken)
+                AppDbContext db, HttpContext http, CancellationToken cancellationToken)
             {
                 int number = ListQuery.PageNumber(page, "page", 1, int.MaxValue);
                 int size = ListQuery.PageNumber(pageSize, "pageSize", 20, 200);
-                IQueryable<{{name}}> query = db.{{name}}Set.AsNoTracking();
+                IQueryable<{{name}}> query = Scoped(db, http, tracked: false);
                 foreach (ListFilter filter in ListQuery.Filters(filters))
                     query = ApplyFilter(query, filter);
                 {{search}}

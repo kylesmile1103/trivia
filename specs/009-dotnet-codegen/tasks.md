@@ -38,7 +38,7 @@
 
 ## Phase 6: User Story 5 - Extension points (P1)
 
-- [ ] T019 [US5] Partial-method hooks in the endpoints emitter and the scaffold half. Integration test with a rejecting `OnCreating` and a scoping `ConfigureQuery`
+- [x] T019 [US5] Partial-method hooks in the endpoints emitter and the scaffold half. Integration test with a rejecting `OnCreating` and a scoping `ConfigureQuery`
 - [ ] T020 [US5] Custom operations: generated route and partial declaration, one scaffold stub file per operation returning 501, `todo` entries in the plan. Integration test before and after implementing
 
 ## Phase 7: User Story 6 - Contract (P1)

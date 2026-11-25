@@ -16,8 +16,11 @@ internal static class ScaffoldEmitter
         yield return new($"{api}/Program.cs", FileKind.Scaffold, Render("Program.cs", space, app));
         yield return new($"{api}/Data/AppDbContext.cs", FileKind.Scaffold, Render("AppDbContext.cs", space, app));
         foreach (ModelEntity entity in input.Model.Entities)
-            yield return new($"{api}/Features/{entity.Name}/{entity.Name}.cs", FileKind.Scaffold,
-                Render("Entity.cs", space, app, entity.Name));
+        {
+            string feature = $"{api}/Features/{entity.Name}/{entity.Name}";
+            yield return new($"{feature}.cs", FileKind.Scaffold, Render("Entity.cs", space, app, entity.Name));
+            yield return new($"{feature}Endpoints.cs", FileKind.Scaffold, Render("Endpoints.cs", space, app, entity.Name));
+        }
     }
 
     private static string Render(string template, string space, string app, string entity = "")

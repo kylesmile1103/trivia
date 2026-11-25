@@ -1,0 +1,8 @@
+using {{Namespace}}.Data;
+
+namespace {{Namespace}}.Features.{{Entity}};
+
+public static partial class {{Entity}}Endpoints
+{
+    // Implement any of the partial hooks declared in {{Entity}}Endpoints.g.cs.
+}

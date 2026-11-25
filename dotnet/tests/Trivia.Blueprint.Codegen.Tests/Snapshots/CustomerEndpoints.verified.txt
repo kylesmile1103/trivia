@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using global::BackOffice.Data;
 using global::BackOffice.Generated;
 
@@ -19,11 +20,11 @@ public static partial class CustomerEndpoints
         return group;
     }
 
-    private static async Task<Ok<CustomerPage>> ListAsync([FromQuery] string? page, [FromQuery] string? pageSize, [FromQuery] string? sort, [FromQuery(Name = "filter")] string[]? filters, [FromQuery] string? q, AppDbContext db, CancellationToken cancellationToken)
+    private static async Task<Ok<CustomerPage>> ListAsync([FromQuery] string? page, [FromQuery] string? pageSize, [FromQuery] string? sort, [FromQuery(Name = "filter")] string[]? filters, [FromQuery] string? q, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
     {
         int number = ListQuery.PageNumber(page, "page", 1, int.MaxValue);
         int size = ListQuery.PageNumber(pageSize, "pageSize", 20, 200);
-        IQueryable<Customer> query = db.CustomerSet.AsNoTracking();
+        IQueryable<Customer> query = Scoped(db, http, tracked: false);
         foreach (ListFilter filter in ListQuery.Filters(filters))
             query = ApplyFilter(query, filter);
         if (!string.IsNullOrEmpty(q))
@@ -96,9 +97,9 @@ public static partial class CustomerEndpoints
             _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
     }
 
-    private static async Task<Results<Ok<CustomerResponse>, NotFound>> GetAsync(Guid id, AppDbContext db, CancellationToken cancellationToken)
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> GetAsync(Guid id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
     {
-        Customer? entity = await db.CustomerSet.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        Customer? entity = await Scoped(db, http, tracked: false).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         return entity is null ? TypedResults.NotFound() : TypedResults.Ok(ToResponse(entity));
     }
 
@@ -114,14 +115,18 @@ public static partial class CustomerEndpoints
             BirthDate = input.BirthDate,
             ExternalRef = input.ExternalRef
         };
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnCreating(entity, input, db);
         db.CustomerSet.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        OnCreated(entity, db);
+        await transaction.CommitAsync(cancellationToken);
         return TypedResults.Created(FormattableString.Invariant($"/api/v1/customers/{entity.Id}"), ToResponse(entity));
     }
 
-    private static async Task<Results<Ok<CustomerResponse>, NotFound>> UpdateAsync(Guid id, UpdateCustomerRequest input, AppDbContext db, CancellationToken cancellationToken)
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> UpdateAsync(Guid id, UpdateCustomerRequest input, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
     {
-        Customer? entity = await db.CustomerSet.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         if (entity is null)
             return TypedResults.NotFound();
         entity.FullName = input.FullName!;
@@ -131,19 +136,41 @@ public static partial class CustomerEndpoints
         entity.Notes = input.Notes;
         entity.BirthDate = input.BirthDate;
         entity.ExternalRef = input.ExternalRef;
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnUpdating(entity, input, db);
         await db.SaveChangesAsync(cancellationToken);
+        OnUpdated(entity, db);
+        await transaction.CommitAsync(cancellationToken);
         return TypedResults.Ok(ToResponse(entity));
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(Guid id, AppDbContext db, CancellationToken cancellationToken)
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(Guid id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
     {
-        Customer? entity = await db.CustomerSet.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         if (entity is null)
             return TypedResults.NotFound();
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnDeleting(entity, db);
         db.CustomerSet.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
+        OnDeleted(entity, db);
+        await transaction.CommitAsync(cancellationToken);
         return TypedResults.NoContent();
     }
 
+    private static IQueryable<Customer> Scoped(AppDbContext db, HttpContext http, bool tracked)
+    {
+        IQueryable<Customer> query = tracked ? db.CustomerSet : db.CustomerSet.AsNoTracking();
+        ConfigureQuery(ref query, http);
+        return query;
+    }
+
     private static CustomerResponse ToResponse(Customer entity) => new(entity.Id, entity.FullName, entity.Email, entity.Status, entity.CreditLimit, entity.Notes, entity.CreatedAt, entity.BirthDate, entity.ExternalRef);
+    static partial void ConfigureQuery(ref IQueryable<Customer> query, HttpContext http);
+    static partial void OnCreating(Customer entity, CreateCustomerRequest request, AppDbContext db);
+    static partial void OnCreated(Customer entity, AppDbContext db);
+    static partial void OnUpdating(Customer entity, UpdateCustomerRequest request, AppDbContext db);
+    static partial void OnUpdated(Customer entity, AppDbContext db);
+    static partial void OnDeleting(Customer entity, AppDbContext db);
+    static partial void OnDeleted(Customer entity, AppDbContext db);
 }

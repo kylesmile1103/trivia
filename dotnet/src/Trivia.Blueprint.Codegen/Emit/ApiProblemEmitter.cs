@@ -52,13 +52,13 @@ public static class ApiProblemEmitter
                     IReadOnlyDictionary<string, string[]>? errors = null)
                 {
                     if (status == 400)
-                        return errors is null ? InvalidRequest("request") : TypedResults.ValidationProblem(errors, title: title);
+                        return errors is null ? InvalidRequest("request", title) : TypedResults.ValidationProblem(errors, title: title);
                     Dictionary<string, object?>? extensions = code is null ? null : new() { ["code"] = code };
                     return TypedResults.Problem(statusCode: status, title: title, extensions: extensions);
                 }
 
-                private static IResult InvalidRequest(string field)
-                    => TypedResults.ValidationProblem(new Dictionary<string, string[]> { [field] = ["The request value is invalid."] });
+                private static IResult InvalidRequest(string field, string? title = null)
+                    => TypedResults.ValidationProblem(new Dictionary<string, string[]> { [field] = ["The request value is invalid."] }, title: title);
 
                 private static string JsonField(JsonException exception)
                     => exception.Path is { Length: > 2 } path && path.StartsWith("$.", StringComparison.Ordinal)

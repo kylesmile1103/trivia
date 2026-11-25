@@ -224,10 +224,15 @@ static partial void OnCreated(Customer entity, AppDbContext db);
 static partial void OnUpdating(Customer entity, UpdateCustomerRequest request, AppDbContext db);
 static partial void OnUpdated(Customer entity, AppDbContext db);
 static partial void OnDeleting(Customer entity, AppDbContext db);
+static partial void OnDeleted(Customer entity, AppDbContext db);
 ```
 
 A hook rejects an operation by throwing `ApiProblemException(status, title)`, which the
 generated handler turns into problem details.
+
+⚑ Include `OnDeleted` to give deletion both hooks under FR-NC-08. CRUD writes and
+  their hooks share an EF transaction, so a rejecting post-save hook rolls back the row
+  change. `ConfigureQuery` scopes list, get, update and delete lookups.
 
 A custom operation is routed in the generated half and declared as a partial method with a
 return type, which C# requires to be implemented. Its body lives in its own scaffold file,

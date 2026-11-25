@@ -32,9 +32,9 @@ public static class EndpointsEmitter
                     Register("Get", "/{id}", "GetAsync", $"get{name}ById", ".ProducesProblem(404)");
                     handlers.Add($$"""
                         private static async Task<Results<Ok<{{response}}>, NotFound>> GetAsync(
-                            {{keyType}} id, AppDbContext db, CancellationToken cancellationToken)
+                            {{keyType}} id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
                         {
-                            {{name}}? entity = await {{dbSet}}.AsNoTracking().SingleOrDefaultAsync({{criteria}});
+                            {{name}}? entity = await Scoped(db, http, tracked: false).SingleOrDefaultAsync({{criteria}});
                             return entity is null ? TypedResults.NotFound() : TypedResults.Ok(ToResponse(entity));
                         }
                         """);
@@ -49,8 +49,12 @@ public static class EndpointsEmitter
                             Create{{name}}Request input, AppDbContext db, CancellationToken cancellationToken)
                         {
                             {{name}} entity = new() { {{string.Join(", ", initial)}} };
+                            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                            OnCreating(entity, input, db);
                             {{dbSet}}.Add(entity);
                             await db.SaveChangesAsync(cancellationToken);
+                            OnCreated(entity, db);
+                            await transaction.CommitAsync(cancellationToken);
                             return TypedResults.Created(FormattableString.Invariant($"{{route}}/{entity.{{key}}}"), ToResponse(entity));
                         }
                         """);
@@ -62,13 +66,17 @@ public static class EndpointsEmitter
                             .Select(field => $"entity.{Member(entity, field.Name)} = DateTimeOffset.UtcNow;")));
                     handlers.Add($$"""
                         private static async Task<Results<Ok<{{response}}>, NotFound>> UpdateAsync(
-                            {{keyType}} id, Update{{name}}Request input, AppDbContext db, CancellationToken cancellationToken)
+                            {{keyType}} id, Update{{name}}Request input, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
                         {
-                            {{name}}? entity = await {{dbSet}}.SingleOrDefaultAsync({{criteria}});
+                            {{name}}? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync({{criteria}});
                             if (entity is null)
                                 return TypedResults.NotFound();
                             {{assignments}}
+                            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                            OnUpdating(entity, input, db);
                             await db.SaveChangesAsync(cancellationToken);
+                            OnUpdated(entity, db);
+                            await transaction.CommitAsync(cancellationToken);
                             return TypedResults.Ok(ToResponse(entity));
                         }
                         """);
@@ -77,13 +85,17 @@ public static class EndpointsEmitter
                     Register("Delete", "/{id}", "DeleteAsync", $"delete{name}", ".ProducesProblem(404).ProducesProblem(409)");
                     handlers.Add($$"""
                         private static async Task<Results<NoContent, NotFound>> DeleteAsync(
-                            {{keyType}} id, AppDbContext db, CancellationToken cancellationToken)
+                            {{keyType}} id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
                         {
-                            {{name}}? entity = await {{dbSet}}.SingleOrDefaultAsync({{criteria}});
+                            {{name}}? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync({{criteria}});
                             if (entity is null)
                                 return TypedResults.NotFound();
+                            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                            OnDeleting(entity, db);
                             {{dbSet}}.Remove(entity);
                             await db.SaveChangesAsync(cancellationToken);
+                            OnDeleted(entity, db);
+                            await transaction.CommitAsync(cancellationToken);
                             return TypedResults.NoContent();
                         }
                         """);
@@ -93,7 +105,7 @@ public static class EndpointsEmitter
 
         string projection = string.Join(", ", members.Select(member => "entity." + member.Member));
         return Unit(Feature(model, name), ["System", "Microsoft.AspNetCore.Http.HttpResults",
-            "Microsoft.AspNetCore.Mvc", "Microsoft.EntityFrameworkCore",
+            "Microsoft.AspNetCore.Mvc", "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Storage",
             $"global::{model.Namespace}.Data", $"global::{model.Namespace}.Generated"],
             $$"""
             public static partial class {{name}}Endpoints
@@ -107,7 +119,22 @@ public static class EndpointsEmitter
 
                 {{string.Join("\n\n", handlers)}}
 
+                private static IQueryable<{{name}}> Scoped(AppDbContext db, HttpContext http, bool tracked)
+                {
+                    IQueryable<{{name}}> query = tracked ? {{dbSet}} : {{dbSet}}.AsNoTracking();
+                    ConfigureQuery(ref query, http);
+                    return query;
+                }
+
                 private static {{response}} ToResponse({{name}} entity) => new({{projection}});
+
+                static partial void ConfigureQuery(ref IQueryable<{{name}}> query, HttpContext http);
+                static partial void OnCreating({{name}} entity, Create{{name}}Request request, AppDbContext db);
+                static partial void OnCreated({{name}} entity, AppDbContext db);
+                static partial void OnUpdating({{name}} entity, Update{{name}}Request request, AppDbContext db);
+                static partial void OnUpdated({{name}} entity, AppDbContext db);
+                static partial void OnDeleting({{name}} entity, AppDbContext db);
+                static partial void OnDeleted({{name}} entity, AppDbContext db);
             }
             """);
 
