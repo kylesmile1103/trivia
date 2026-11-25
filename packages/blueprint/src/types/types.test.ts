@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { isOrderKey, keysBetween } from '../order.js'
 import { appSchema } from './app.js'
 import { NAME, NODE_ID, ORDER_KEY, PAGE_ID, PAGE_NAME, ROUTE } from './common.js'
 import { modelSchema } from './model.js'
@@ -109,6 +110,14 @@ describe('id and name patterns (FR-BP-03)', () => {
       expect([good, ORDER_KEY.test(good)]).toEqual([good, true])
     }
     for (const bad of ['a', 'a00', 'a0V0', 'b0', '0a', 'a-1', '']) expect([bad, ORDER_KEY.test(bad)]).toEqual([bad, false])
+  })
+
+  it('the schema pattern for order keys agrees with isOrderKey (order.ts)', () => {
+    const keys = [
+      ...keysBetween(null, null, 300), ...keysBetween(null, 'a0', 300), ...keysBetween('a0', 'a1', 300),
+      'A' + '0'.repeat(26), 'A' + '0'.repeat(26) + 'V', 'a', 'a00', 'b0', 'zz', '0a', 'a0V0', '', 'Zz',
+    ]
+    for (const key of keys) expect([key, ORDER_KEY.test(key)]).toEqual([key, isOrderKey(key)])
   })
 
   it('routes are absolute paths with optional :params', () => {

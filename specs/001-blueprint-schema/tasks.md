@@ -17,7 +17,7 @@ Tests come before the code they cover and must fail first.
 - [ ] T006 Round-trip tests in `src/serialize.test.ts` (canonical fixture, shuffled keys, defaults omitted, final newline)
 - [ ] T007 `src/serialize.ts`: canonical JSON and `rev()`
 - [x] T008 [P] `src/ids.ts` with an injectable source, and tests
-- [ ] T009 [P] `src/order.ts` fractional keys, with the 1 000-insert test
+- [x] T009 [P] `src/order.ts` fractional keys, with the 1 000-insert test
 
 ## Phase 3: User Story 1 - Describe a page (P1)
 
