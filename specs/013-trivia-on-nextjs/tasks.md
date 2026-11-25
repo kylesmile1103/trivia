@@ -7,7 +7,7 @@
 
 - [x] T001 [US1] In a scratch App Router app on the Next.js version to pin: answer the six questions of LLD-13 section 1 with a minimal loader calling `@trivia/engine` `annotate`. Write each answer into LLD-13
 - [x] T002 [US1] If a question fails with Turbopack, try the Babel loader, then the SWC plugin. Record the outcome as an ADR superseding ADR-0015 when it differs
-- [ ] T003 [US1] Read how the designer learns that the canvas re-rendered (`packages/designer/src/features/canvas`). Note whether it depends on Vite's HMR socket
+- [x] T003 [US1] Read how the designer learns that the canvas re-rendered (`packages/designer/src/features/canvas`). Note whether it depends on Vite's HMR socket
 
 ## Phase 2: User Story 2 - Extract the dev service (P1)
 

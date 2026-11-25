@@ -154,11 +154,13 @@ The `pages/` router is not supported. An app with only `pages/` gets an empty li
 The engine edits files. It does not care which kind of component a file holds. What changes:
 
 - **Refresh.** After a write, Next.js refreshes a client component in place and re-renders a
-  server component through an RSC refresh. The designer must re-read locators after the DOM
-  settles in both cases. To verify first: how the designer learns of a re-render today. If it
-  listens to Vite's HMR events, replace that with a host-neutral signal: the dev service
-  reports the write, and the canvas waits for the next DOM mutation to settle before
-  re-resolving the selection.
+  server component through an RSC refresh. `features/canvas/frame-session.ts` listens for iframe
+  loads and observes DOM mutations. It does not subscribe to Vite's HMR socket. Its resource
+  observer does depend on Vite's `?t=<timestamp>` module requests to match an edit to its
+  render; on Next.js it would fall back to a timeout. ⚑ Keep this correlation for Vite.
+  For Next.js, use the edit response as the signal and wait for the DOM to settle before
+  re-resolving the selection. The iframe still receives its own HMR connection through the
+  app proxy.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
