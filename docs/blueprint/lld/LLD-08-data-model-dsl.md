@@ -106,6 +106,16 @@ In the API a `belongsTo` shows as its foreign key field (`customerId`). Nested o
 embedded in responses in version 1, which keeps list pages and forms flat, as the Refine
 generator expects.
 
+⚑ An inverse matches the exact entity and foreign-key names, including in self-relations.
+Indexes and API lists can reference the entity key, declared fields and implied foreign keys.
+`invalid_constraint` reports an implied key that would collide with a declared member or
+another implied key, and `setNull` on a required relation.
+
+⚑ An unmatched relation's guarded `setRelation` hint uses the foreign key without its `Id`
+suffix or the lowercased source type as the inverse name. If that name is taken, it appends
+`Relation` and a number as needed. If the implied key would collide, the diagnostic
+explains what name to free before adding the inverse.
+
 ## 4. Ops (FR-DM-07, FR-DM-08)
 
 BlueprintOps on `model.blueprint.json` (LLD-01 section 4):

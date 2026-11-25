@@ -6,10 +6,20 @@ import { MODEL_DOC } from '../types/ops.js'
 import csharp from './reserved/csharp.json' with { type: 'json' }
 import generator from './reserved/generator.json' with { type: 'json' }
 import postgres from './reserved/postgres.json' with { type: 'json' }
-import type { ModelDoc, ModelField } from './types.js'
+import type { ModelDoc, ModelEntity, ModelField, ModelFieldType, ModelRelation } from './types.js'
 
 type Path = readonly PropertyKey[]
-type Report = (code: string, path: Path, message: string) => void
+interface SetRelationFix {
+  op: 'setRelation'
+  doc: typeof MODEL_DOC
+  baseRev: string
+  entity: string
+  relation: Extract<ModelRelation, { kind: 'belongsTo' }>
+}
+export interface ModelDiagnostic extends Omit<Diagnostic, 'hint'> {
+  hint?: { ops?: SetRelationFix[]; text?: string }
+}
+type Report = (code: string, path: Path, message: string, hint?: ModelDiagnostic['hint']) => void
 
 const csharpKeywords = new Set(csharp.words)
 const postgresKeywords = new Set(postgres.words)
@@ -133,10 +143,104 @@ function checkField(field: ModelField, path: Path, enums: ReadonlyMap<string, re
   if (problem) report('invalid_default', [...path, 'default'], `Invalid default for ${field.name}: ${problem}`)
 }
 
-export function validateModel(model: ModelDoc): Diagnostic[] {
-  const diagnostics: Diagnostic[] = []
-  const report: Report = (code, path, message) => {
-    diagnostics.push({ code, severity: 'error', doc: MODEL_DOC, pointer: toPointer(path), message })
+/** The key, stored fields and implied foreign keys exposed to indexes and the flat API. */
+export function modelFieldTypes(entity: ModelEntity, entities: ReadonlyMap<string, ModelEntity>): Map<string, ModelFieldType | undefined> {
+  const fields = new Map<string, ModelFieldType | undefined>([[entity.key.name, entity.key.type]])
+  for (const field of entity.fields) if (!fields.has(field.name)) fields.set(field.name, field.type)
+  for (const relation of entity.relations) {
+    if (relation.kind === 'belongsTo' && !fields.has(relation.foreignKey)) {
+      fields.set(relation.foreignKey, entities.get(relation.to)?.key.type)
+    }
+  }
+  return fields
+}
+
+function inverseHint(entity: ModelEntity, target: ModelEntity, foreignKey: string, baseRev: string): ModelDiagnostic['hint'] {
+  const taken = new Set([
+    target.key.name, ...target.fields.map((field) => field.name),
+    ...target.relations.flatMap((relation) => relation.kind === 'belongsTo' ? [relation.name, relation.foreignKey] : [relation.name]),
+  ].map((name) => name.toLowerCase()))
+  if (reservedBy(foreignKey) || taken.has(foreignKey.toLowerCase())) {
+    return { text: `Free the name "${foreignKey}" on ${target.name} before adding its belongsTo relation` }
+  }
+  taken.add(foreignKey.toLowerCase())
+  const base = foreignKey.endsWith('Id') ? foreignKey.slice(0, -2) : entity.name[0]!.toLowerCase() + entity.name.slice(1)
+  let name = base
+  for (let suffix = 1; taken.has(name.toLowerCase()) || reservedBy(name); suffix++) {
+    name = `${base}Relation${suffix === 1 ? '' : suffix}`
+  }
+  return { ops: [{
+    op: 'setRelation', doc: MODEL_DOC, baseRev, entity: target.name,
+    relation: { name, kind: 'belongsTo', to: entity.name, foreignKey },
+  }] }
+}
+
+function checkEntityReferences(
+  entity: ModelEntity,
+  path: Path,
+  entities: ReadonlyMap<string, ModelEntity>,
+  enums: ReadonlyMap<string, readonly string[]>,
+  baseRev: string,
+  report: Report,
+): void {
+  const checkEnum = (field: ModelField, fieldPath: Path) => {
+    if (field.type === 'enum' && !enums.has(field.enum)) {
+      report('dangling_reference', [...fieldPath, 'enum'], `No enum named "${field.enum}"`)
+    }
+  }
+  entity.fields.forEach((field, i) => checkEnum(field, [...path, 'fields', i]))
+
+  const memberNames = new Map<string, string>([[entity.key.name.toLowerCase(), entity.key.name]])
+  for (const field of entity.fields) memberNames.set(field.name.toLowerCase(), field.name)
+  for (const relation of entity.relations) memberNames.set(relation.name.toLowerCase(), relation.name)
+
+  entity.relations.forEach((relation, i) => {
+    const relationPath = [...path, 'relations', i]
+    const target = entities.get(relation.to)
+    if (!target) report('dangling_reference', [...relationPath, 'to'], `No entity named "${relation.to}"`)
+    if (relation.kind === 'belongsTo') {
+      const fkPath = [...relationPath, 'foreignKey']
+      const folded = relation.foreignKey.toLowerCase()
+      const member = memberNames.get(folded)
+      if (member !== undefined) {
+        const type = target ? ` of type ${target.key.type}` : ''
+        report('invalid_constraint', fkPath, `The implied foreign key "${relation.foreignKey}"${type} collides with "${member}" on ${entity.name}`)
+      } else {
+        checkName(relation.foreignKey, fkPath, report)
+        memberNames.set(folded, relation.foreignKey)
+      }
+      if (relation.required && relation.onDelete === 'setNull') {
+        report('invalid_constraint', [...relationPath, 'onDelete'], 'setNull requires a nullable foreign key')
+      }
+    } else if (target && !target.relations.some((candidate) =>
+      candidate.kind === 'belongsTo' && candidate.to === entity.name && candidate.foreignKey === relation.foreignKey)) {
+      report('unmatched_relation', [...relationPath, 'foreignKey'],
+        `${target.name} needs a belongsTo relation to ${entity.name} with foreign key "${relation.foreignKey}"`,
+        inverseHint(entity, target, relation.foreignKey, baseRev))
+    }
+  })
+
+  const fields = modelFieldTypes(entity, entities)
+  const checkFieldRef = (name: string, fieldPath: Path) => {
+    if (!fields.has(name)) report('dangling_reference', fieldPath, `No field named "${name}" on ${entity.name}`)
+  }
+  entity.indexes.forEach((index, i) => index.fields.forEach((field, j) => checkFieldRef(field, [...path, 'indexes', i, 'fields', j])))
+  for (const list of ['filterable', 'sortable', 'searchable'] as const) {
+    entity.api[list]?.forEach((field, i) => checkFieldRef(field, [...path, 'api', list, i]))
+  }
+  entity.api.custom?.forEach((operation, i) => {
+    const opPath = [...path, 'api', 'custom', i]
+    operation.input?.forEach((field, j) => checkEnum(field, [...opPath, 'input', j]))
+    if (operation.returns !== undefined && !entities.has(operation.returns)) {
+      report('dangling_reference', [...opPath, 'returns'], `No entity named "${operation.returns}"`)
+    }
+  })
+}
+
+export function validateModel(model: ModelDoc, baseRev: string): ModelDiagnostic[] {
+  const diagnostics: ModelDiagnostic[] = []
+  const report: Report = (code, path, message, hint) => {
+    diagnostics.push({ code, severity: 'error', doc: MODEL_DOC, pointer: toPointer(path), message, ...(hint ? { hint } : {}) })
   }
   for (const part of model.namespace.split('.')) {
     if (csharpKeywords.has(part.toLowerCase())) report('reserved_name', ['namespace'], `"${part}" is reserved by C#`)
@@ -155,6 +259,9 @@ export function validateModel(model: ModelDoc): Diagnostic[] {
       values.add(value)
     })
   })
+
+  const entities = new Map<string, ModelEntity>()
+  for (const entity of model.entities) if (!entities.has(entity.name)) entities.set(entity.name, entity)
 
   model.entities.forEach((entity, index) => {
     const path = ['entities', index]
@@ -192,6 +299,7 @@ export function validateModel(model: ModelDoc): Diagnostic[] {
         checkField(field, inputPath, enums, report)
       })
     })
+    checkEntityReferences(entity, path, entities, enums, baseRev, report)
   })
   return diagnostics
 }

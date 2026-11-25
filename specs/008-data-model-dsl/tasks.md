@@ -19,7 +19,7 @@
 
 ## Phase 4: User Story 2 - Relations (P1)
 
-- [ ] T006 [US2] Fixtures and checks for `dangling_reference`, `unmatched_relation` (with its fixing op), implied foreign keys, key type agreement, self-relations
+- [x] T006 [US2] Fixtures and checks for `dangling_reference`, `unmatched_relation` (with its fixing op), implied foreign keys, key type agreement, self-relations
 
 ## Phase 5: User Story 3 - Ops (P1)
 
