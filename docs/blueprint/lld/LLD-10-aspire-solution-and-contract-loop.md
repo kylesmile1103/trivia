@@ -196,7 +196,16 @@ the model's allowlist.
   removed, syncs it, and checks the fixes over the same HTTP route. This test uses .NET 10.
 
 `trivia-blueprint backend [--migration <Name>]` runs steps 1 to 4 in order, stops at the first
-failure, and prints the drift summary. For agents, `trivia_blueprint_backend` covers steps 1
+failure with its output, and prints the drift summary. ⚑ Run it from the solution or
+its `web/` directory. All commands use argument arrays. The CLI uses the dev service's
+standalone Refine adapter to report drift without starting a server.
+
+⚑ Scaffold a local `.config/dotnet-tools.json` pinned to `dotnet-ef` **10.0.12**.
+The migration command restores and uses that local tool when declared. Older solutions
+can still use their installed `dotnet ef`.
+[EF tool package](https://www.nuget.org/packages/dotnet-ef/10.0.12).
+
+For agents, `trivia_blueprint_backend` covers steps 1
 and 2, and its result's `next` field names the rest: build, then `trivia_sync_openapi`, then
 `trivia_contract_drift`. The build is not hidden inside a tool, because it can take minutes
 and its errors belong to the developer's terminal.
@@ -204,12 +213,16 @@ and its errors belong to the developer's terminal.
 ## 4. First run of a new app
 
 ```
-trivia-blueprint new backoffice        template + empty blueprint
+trivia-blueprint new backoffice --api dotnet-minimal
 (author the model and pages)           designer, agent or hand
 trivia-blueprint backend --migration Initial
 trivia-blueprint eject                 pages, resources, routes
 aspire run
 ```
+
+⚑ The explicit `--api dotnet-minimal` layout places the Vite app and its blueprint in
+`web/` and leaves room for the solution's `src/` directory. The existing web-only `new`
+command keeps its flat layout. Run the printed frontend setup commands inside `web/`.
 
 Pages for model entities validate only after step 4 of the loop has produced the contract
 (LLD-08 section 6), so the backend comes before eject. The CLI's `eject` says so when it

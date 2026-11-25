@@ -14,6 +14,7 @@ internal static class ScaffoldEmitter
         string app = input.AppName;
         string space = input.Model.Namespace;
         yield return new($"{app}.slnx", FileKind.Scaffold, Render("Solution.slnx", space, app));
+        yield return new(".config/dotnet-tools.json", FileKind.Scaffold, Render("dotnet-tools.json", space, app));
         yield return new("Directory.Packages.props", FileKind.Scaffold, DependencyVersions());
         yield return new($"{api}/{app}.Api.csproj", FileKind.Scaffold, Render("Api.csproj", space, app));
         yield return new($"{api}/Program.cs", FileKind.Scaffold, Render("Program.cs", space, app));

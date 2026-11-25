@@ -56,7 +56,16 @@ internal static class MigrateCommand
             if (build != 0)
                 return Fail(output, new("migration_build_failed", relative, "", buildOutput));
 
-            string[] arguments = ["ef", "migrations", "add", name, "--project", relative,
+            bool localTool = HasLocalTool(root);
+            if (localTool)
+            {
+                (int restore, string restoreOutput) = await RunDotnet(root,
+                    ["tool", "restore", "--tool-manifest", ".config/dotnet-tools.json"], cancellationToken);
+                if (restore != 0)
+                    return Fail(output, new("migration_tool_restore_failed", ".config/dotnet-tools.json", "", restoreOutput));
+            }
+            string[] tool = localTool ? ["tool", "run", "dotnet-ef", "--"] : ["ef"];
+            string[] arguments = [.. tool, "migrations", "add", name, "--project", relative,
                 "--startup-project", relative, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
             (int status, string message) = await RunDotnet(root, arguments, cancellationToken);
             if (status != 0)
@@ -78,11 +87,22 @@ internal static class MigrateCommand
             output.WriteLine(JsonSerializer.Serialize(new { diagnostics = exception.Diagnostics }, ModelLoader.Json));
             return 1;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException or
             ArgumentException or Win32Exception or OperationCanceledException)
         {
             return Fail(output, new("migration_failed", "", "", exception.Message));
         }
+    }
+
+    private static bool HasLocalTool(string root)
+    {
+        string manifest = Ownership.Resolve(root, ".config/dotnet-tools.json");
+        if (!File.Exists(manifest))
+            return false;
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(manifest));
+        return document.RootElement.ValueKind == JsonValueKind.Object &&
+            document.RootElement.TryGetProperty("tools", out JsonElement tools) &&
+            tools.ValueKind == JsonValueKind.Object && tools.TryGetProperty("dotnet-ef", out _);
     }
 
     private static string LocateProject(string root, string? app)
