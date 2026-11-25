@@ -141,3 +141,66 @@ it('FR-MF-06: reserves lowercase types for the curated intrinsics', () => {
   })
   expect(result.diagnostics).toEqual([])
 })
+
+it('uses analyzer imports with no components.json, and derives ui from the components alias', () => {
+  const analyzed = components.find(({ name }) => name === 'Button')!
+  expect(resolveManifests({ kit: [button], components: [analyzed] }).manifests.Button?.source.import.from)
+    .toBe(analyzed.importSource)
+  expect(resolveManifests({ kit: [button], components: [analyzed], aliases: { components: '~components/' } })
+    .manifests.Button?.source.import.from).toBe('~components/ui/button')
+})
+
+it('selects the declared module among duplicate exports and rejects unresolved ambiguity', () => {
+  const original = components.find(({ name }) => name === 'Button')!
+  const duplicate = { ...original, file: 'src/other/button.tsx', importSource: '~other/button', props: [] }
+  const candidates = [duplicate, original]
+  const aliased = resolveManifests({ kit: [button], components: candidates, aliases: { ui: '@/components/ui' } })
+  expect(aliased.diagnostics).toEqual([])
+  expect(aliased.manifests.Button?.props).toEqual(original.props)
+  const override = { ...button, source: { ...button.source, import: { name: 'Button', from: '~other/button' } }, props: [] }
+  const explicit = resolveManifests({ kit: [button], overrides: [override], components: candidates })
+  expect(explicit.manifests.Button?.props).toEqual([])
+  expect(explicit.manifests.Button?.source.import.from).toBe('~other/button')
+
+  for (const kit of [[], [button]]) {
+    const ambiguous = resolveManifests({ kit, components: candidates })
+    expect(ambiguous.manifests.Button).toBeUndefined()
+    expect(ambiguous.diagnostics).toMatchObject([{
+      code: 'ambiguous_component', severity: 'error',
+      message: expect.stringContaining('src/components/ui/button.tsx, src/other/button.tsx'),
+      hint: { text: expect.stringContaining('blueprint/manifests/Button.manifest.json') },
+    }])
+    expect(resolveManifests({ kit, components: [...candidates].reverse() })).toEqual(ambiguous)
+  }
+})
+
+it('selects the exact Base UI style and uses the Radix fallback for other styles', () => {
+  const sliders: Record<string, ComponentSchema[]> = JSON.parse(
+    readFileSync(join(FIXTURES, 'manifests/analyzer/shadcn-4.21.3.slider.components.json'), 'utf8'),
+  )
+  // shadcn@4.21.3: Slider spreads the props of the underlying Radix or Base UI Root.
+  const sliderManifest = componentManifestSchema.parse({
+    type: 'Slider',
+    source: { registry: 'shadcn', item: 'slider', import: { name: 'Slider', from: 'ui' } },
+    props: [],
+    slots: [],
+    events: [{ name: 'onValueCommit', prop: 'onValueCommit', payload: 'number[]' }],
+    exposes: [],
+    client: true,
+    template: {},
+    variants: {
+      'base-nova': {
+        events: [{ name: 'onValueCommit', prop: 'onValueCommitted', payload: 'number | number[]' }],
+      },
+    },
+  })
+  const base = resolveManifests({ kit: [sliderManifest], components: sliders['base-nova']!, aliases: { style: 'base-nova' } })
+    .manifests.Slider
+  expect(base?.props).toEqual(sliders['base-nova']?.[0]?.props)
+  expect(base?.events).toEqual(sliderManifest.variants?.['base-nova']?.events)
+  expect(base).not.toHaveProperty('variants')
+  for (const style of ['radix-nova', 'base-vega']) {
+    const resolved = resolveManifests({ kit: [sliderManifest], components: sliders['radix-nova']!, aliases: { style } })
+    expect(resolved.manifests.Slider?.events).toEqual(sliderManifest.events)
+  }
+})

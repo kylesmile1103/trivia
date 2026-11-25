@@ -71,12 +71,19 @@ resolver never hardcodes `@/components/ui` (`CLAUDE.md` rule 9).
 - `kit`: the kit's manifest files;
 - `overrides`: `blueprint/manifests/*.manifest.json`;
 - `components`: the analyzer's `ComponentSchema[]` for this project;
-- `aliases`: from `components.json`.
+- `aliases`: from `components.json`. ⚑ The caller supplies `ui` and `components` from
+  the aliases and `style` from the same file. If `ui` is absent, use `<components>/ui`.
+  With neither alias, an installed component uses its analyzer import source. A missing
+  component keeps the unresolved `ui` marker until the project supplies one.
 
 For each type:
 
-1. Start from the override if there is one, else the kit manifest, else nothing.
+1. Start from the override if there is one, else the kit manifest, else nothing. Apply
+   the exact style variant when present. Otherwise use that manifest's base fields.
 2. Find the analyzer's schema by import name.
+   - ⚑ When several files export that name, use the exact module specifier if it selects
+     one candidate. Otherwise omit the ambiguous type and report `ambiguous_component`
+     with the candidate files and the manifest override that would select one.
    - Found: `props` is the analyzer's list. The manifest may only annotate props that exist
      (mark one as an event, add a description). The user's file wins on options and defaults.
      ⚑ Descriptions of recognized props are in `propDescriptions`, keeping the analyzer list
@@ -145,6 +152,11 @@ to unknown keys. Layer 3 checks the values supplied in a draft.
 - A deleted `ui/select.tsx` gives `missing_component` with the registry hint.
 - A local component (`refine-ui`'s data table) gets a derived manifest.
 - An override replaces a kit manifest, and one that annotates a missing prop is a diagnostic.
+- The Slider analyzer fixture comes from the [Base UI wrapper](https://raw.githubusercontent.com/shadcn-ui/ui/shadcn%404.21.3/apps/v4/registry/bases/base/ui/slider.tsx)
+  and [Radix wrapper](https://raw.githubusercontent.com/shadcn-ui/ui/shadcn%404.21.3/apps/v4/registry/bases/radix/ui/slider.tsx)
+  at shadcn 4.21.3. The [Base UI primitive](https://base-ui.com/react/components/slider)
+  calls its commit prop `onValueCommitted`, while the installed Radix primitive calls it
+  `onValueCommit`.
 - Kit manifests validate against the manifest JSON Schema. Every `via.valueProp` and
   `changeProp` exists in the current shadcn source of that item (a fixture, refreshed with the
   kit).

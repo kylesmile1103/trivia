@@ -1,0 +1,117 @@
+{
+  "base-nova": [
+    {
+      "acceptsChildren": true,
+      "baseElement": null,
+      "file": "base/slider.tsx",
+      "importSource": "~design/slider",
+      "name": "Slider",
+      "props": [
+        {
+          "kind": "unknown",
+          "name": "defaultValue",
+          "optional": true,
+          "source": "intrinsic",
+          "typeText": "SliderPrimitive.Root.Props[\"defaultValue\"]"
+        },
+        {
+          "kind": "unknown",
+          "name": "value",
+          "optional": true,
+          "source": "intrinsic",
+          "typeText": "SliderPrimitive.Root.Props[\"value\"]"
+        },
+        {
+          "default": 0,
+          "kind": "number",
+          "name": "min",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "default": 100,
+          "kind": "number",
+          "name": "max",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "kind": "className",
+          "name": "className",
+          "optional": true,
+          "source": "intrinsic"
+        }
+      ],
+      "unresolvedTypes": [
+        "SliderPrimitive.Root.Props"
+      ]
+    }
+  ],
+  "radix-nova": [
+    {
+      "acceptsChildren": false,
+      "baseElement": "SliderPrimitive.Root",
+      "file": "radix/slider.tsx",
+      "importSource": "~design/slider",
+      "name": "Slider",
+      "props": [
+        {
+          "default": 0,
+          "kind": "number",
+          "name": "min",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "default": 100,
+          "kind": "number",
+          "name": "max",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "kind": "number",
+          "name": "step",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "kind": "boolean",
+          "name": "disabled",
+          "optional": true,
+          "source": "intrinsic"
+        },
+        {
+          "kind": "enum",
+          "name": "orientation",
+          "optional": true,
+          "options": [
+            "horizontal",
+            "vertical"
+          ],
+          "source": "intrinsic"
+        },
+        {
+          "kind": "unknown",
+          "name": "defaultValue",
+          "optional": true,
+          "source": "intrinsic",
+          "typeText": "React.ComponentProps<typeof SliderPrimitive.Root>[\"defaultValue\"]"
+        },
+        {
+          "kind": "unknown",
+          "name": "value",
+          "optional": true,
+          "source": "intrinsic",
+          "typeText": "React.ComponentProps<typeof SliderPrimitive.Root>[\"value\"]"
+        },
+        {
+          "kind": "className",
+          "name": "className",
+          "optional": true,
+          "source": "intrinsic"
+        }
+      ]
+    }
+  ]
+}
