@@ -17,8 +17,11 @@ const original = fs.readFileSync(APP, 'utf8')
 const NEW = ['create', 'edit', 'show'].map((k) => path.join(ACCOUNTS, `${k}.tsx`))
 
 test.afterEach(async () => {
-  await restore(APP, original)
-  for (const file of NEW) fs.rmSync(file, { force: true })
+  try {
+    await restore(APP, original)
+  } finally {
+    for (const file of NEW) fs.rmSync(file, { force: true })
+  }
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

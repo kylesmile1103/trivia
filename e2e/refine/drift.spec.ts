@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
-import { restore, writeWhole } from '../files'
+import { restoreAll, writeWhole } from '../files'
 
 const ROOT = fileURLToPath(new URL('../../examples/refine-admin/', import.meta.url))
 const SPEC = path.join(ROOT, 'openapi/bank.openapi.json')
@@ -32,7 +32,7 @@ function snapshot(): Map<string, string> {
 const before = snapshot()
 
 test.afterEach(async () => {
-  for (const [file, text] of before) await restore(file, text)
+  await restoreAll(before)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { expect, test, type Page } from '@playwright/test'
 
-import { restore } from './files'
+import { restoreAll } from './files'
 
 const DOC = 'pages/BlueprintE2e.page.json'
 
@@ -132,11 +132,13 @@ test('FR-AG-06 previews, screenshots and ejects a draft through the Vite MCP end
     expect(fs.existsSync(source)).toBe(false)
     expect(fs.existsSync(lock) ? fs.readFileSync(lock) : null).toEqual(priorLock)
   } finally {
-    await restore(app, original)
-    if (priorLock) await restore(lock, priorLock)
-    else fs.rmSync(lock, { force: true })
-    fs.rmSync(source, { force: true })
-    fs.rmSync(draft, { force: true })
-    for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+    try {
+      await restoreAll(priorLock ? [[app, original], [lock, priorLock]] : [[app, original]])
+    } finally {
+      if (!priorLock) fs.rmSync(lock, { force: true })
+      fs.rmSync(source, { force: true })
+      fs.rmSync(draft, { force: true })
+      for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+    }
   }
 })

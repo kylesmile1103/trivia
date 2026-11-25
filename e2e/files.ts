@@ -50,19 +50,27 @@ function moduleUrl(file: string): string | null {
   for (const [root, port] of VITE_APPS) {
     const rel = path.relative(root, file)
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) || rel.split(path.sep).includes('node_modules')) continue
-    return `http://localhost:${port}/${rel.split(path.sep).map(encodeURIComponent).join('/')}`
+    // encodeURI, as Vite decodes request paths with decodeURI: `%40` (from encodeURIComponent)
+    // would stay `%40`, and `src/api/generated/@tanstack/…` would fall through to index.html.
+    return `http://localhost:${port}` + encodeURI('/' + rel.split(path.sep).join('/'))
   }
   return null
 }
 
-/** The sources Vite transformed the module at `url` from, or why there are none. */
-async function served(url: string): Promise<string[] | string> {
+/**
+ * The sources Vite transformed the module at `url` from, `true` for a module with no code at run
+ * time, or why there are none.
+ */
+async function served(url: string): Promise<string[] | true | string> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(5_000) })
     const code = await response.text()
     if (!response.ok) return `HTTP ${response.status}`
     const map = /\/\/# sourceMappingURL=data:application\/json;(?:charset=utf-8;)?base64,([A-Za-z0-9+/=]+)\s*$/.exec(code)?.[1]
-    if (map === undefined) return 'no inline source map'
+    // A module of types only (types.gen.ts) compiles to `export {};` and gets no source map.
+    // Nothing runs from it, so there is nothing to be stale.
+    if (map === undefined && /^\s*(?:export\s*\{\s*\};?)?\s*$/.test(code)) return true
+    if (map === undefined) return `no inline source map (${response.headers.get('content-type')})`
     const sources = (JSON.parse(Buffer.from(map, 'base64').toString('utf8')) as { sourcesContent?: unknown[] }).sourcesContent
     return (sources ?? []).filter((source): source is string => typeof source === 'string')
   } catch (error) {
@@ -91,14 +99,14 @@ async function converge(file: string, data: Buffer, rewrite: boolean): Promise<v
   if (url === null) return
   const text = data.toString('utf8')
   for (let attempt = 1; ; attempt++) {
-    let last: string[] | string = []
+    let last: string[] | true | string = []
     const deadline = Date.now() + TRY_MS
     do {
       last = await served(url)
-      if (Array.isArray(last) && last.includes(text)) return
+      if (last === true || (Array.isArray(last) && last.includes(text))) return
       await sleep(POLL_MS)
     } while (Date.now() < deadline)
-    const why = Array.isArray(last) ? 'a module transformed from other content' : last
+    const why = typeof last === 'string' ? last : 'a module transformed from other content'
     if (attempt === TRIES) {
       throw new Error(`${path.relative(examples, file)}: ${new URL(url).origin} still serves ${why} after ${TRIES * TRY_MS} ms` +
         (rewrite ? ` and ${TRIES - 1} rewrites` : ', with no rewrite: the plugin did not replay a dropped change (vite-plugin-ast-locator/src/watch.ts)'))
@@ -118,16 +126,28 @@ export async function writeWhole(file: string, data: string | Uint8Array): Promi
   await converge(file, want, true)
 }
 
-/**
- * Put `file` back to `original` when it differs (a file that is gone counts as different). Either
- * way, wait until the dev server serves the original: an undo whose change event was dropped
- * leaves the file right on disk and the module stale.
- */
+/** Put `file` back to `original`: `restoreAll` for one file. */
 export async function restore(file: string, original: string | Uint8Array): Promise<void> {
-  const want = bytes(original)
-  const now = fs.existsSync(file) ? fs.readFileSync(file) : null
-  if (now === null || !now.equals(want)) await writeWhole(file, want)
-  else await converge(file, want, true)
+  await restoreAll([[file, original]])
+}
+
+/**
+ * Put each file back to its original when it differs (a file that is gone counts as different).
+ * Then, for every one of them, wait until the dev server serves the original: an undo whose
+ * change event was dropped leaves the file right on disk and the module stale. Every file is
+ * written before any is checked, so a check that fails (with every stale file named) leaves
+ * none of them edited.
+ */
+export async function restoreAll(files: Iterable<readonly [file: string, original: string | Uint8Array]>): Promise<void> {
+  const wanted = [...files].map(([file, original]) => [file, bytes(original)] as const)
+  const stale = wanted.filter(([file, want]) => !(fs.existsSync(file) && fs.readFileSync(file).equals(want)))
+  if (stale.length > 0) await sleep(CHANGE_THROTTLE_MS)
+  for (const [file, want] of stale) renameOver(file, want)
+  const failures: string[] = []
+  for (const [file, want] of wanted) {
+    await converge(file, want, true).catch((error: unknown) => failures.push(error instanceof Error ? error.message : String(error)))
+  }
+  if (failures.length > 0) throw new Error(failures.join('\n'))
 }
 
 /**

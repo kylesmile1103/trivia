@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
-import { restore, writeWhole } from './files'
+import { restoreAll, writeWhole } from './files'
 
 const root = fileURLToPath(new URL('../examples/blueprint-kit/', import.meta.url))
 const fixture = new URL('../packages/blueprint-compiler/fixtures/kit/', import.meta.url)
@@ -52,12 +52,13 @@ test.beforeAll(async ({ request }) => {
 })
 
 test.afterAll(async () => {
-  for (const [file, before] of originals) {
-    if (before === null) fs.rmSync(file, { force: true })
-    else await restore(file, before)
-  }
-  for (const dir of [...newDirectories].sort((a, b) => b.length - a.length)) {
-    if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+  try {
+    await restoreAll([...originals].flatMap(([file, before]) => (before === null ? [] : [[file, before] as const])))
+  } finally {
+    for (const [file, before] of originals) if (before === null) fs.rmSync(file, { force: true })
+    for (const dir of [...newDirectories].sort((a, b) => b.length - a.length)) {
+      if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+    }
   }
 })
 

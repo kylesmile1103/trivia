@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { type Page, expect, test } from '@playwright/test'
 
-import { restore } from '../files'
+import { restoreAll } from '../files'
 
 const CLIENT_LIST = fileURLToPath(new URL('../../examples/next-admin/src/features/bank/customers/list.tsx', import.meta.url))
 const PROVIDER = fileURLToPath(new URL('../../examples/next-admin/src/providers/bank-providers.tsx', import.meta.url))
@@ -12,10 +12,11 @@ const originals = new Map([CLIENT_LIST, PROVIDER].map((file) => [file, fs.readFi
 const app = (page: Page) => page.frameLocator('iframe[title="App canvas"]')
 
 test.afterEach(async () => {
-  for (const [file, original] of originals) {
-    await restore(file, original)
+  try {
+    await restoreAll(originals)
+  } finally {
+    fs.rmSync(CREATE, { force: true })
   }
-  fs.rmSync(CREATE, { force: true })
 })
 
 test('FR-TN-04 lists Next route patterns and files, and the Refine columns tool edits a page', async ({ page }) => {

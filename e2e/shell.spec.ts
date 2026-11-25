@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
-import { restore } from './files'
+import { restoreAll } from './files'
 
 const playground = path.resolve(import.meta.dirname, '../examples/playground')
 const DASHBOARD = path.join(playground, 'src/pages/Dashboard.tsx')
@@ -28,9 +28,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  for (const [file, bytes] of originals) {
-    await restore(file, bytes)
-  }
+  await restoreAll(originals)
 })
 
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }

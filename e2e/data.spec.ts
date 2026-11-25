@@ -15,9 +15,12 @@ const FORMS = `${PLAYGROUND}src/components/forms`
 const original = fs.readFileSync(DASHBOARD, 'utf8')
 
 test.afterEach(async () => {
-  await restore(DASHBOARD, original)
-  fs.rmSync(DATA_TABLE, { force: true })
-  fs.rmSync(FORMS, { recursive: true, force: true })
+  try {
+    await restore(DASHBOARD, original)
+  } finally {
+    fs.rmSync(DATA_TABLE, { force: true })
+    fs.rmSync(FORMS, { recursive: true, force: true })
+  }
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

@@ -16,8 +16,11 @@ const SHOW = path.join(ROOT, 'src/pages/transactions/show.tsx')
 const original = fs.readFileSync(APP, 'utf8')
 
 test.afterEach(async () => {
-  await restore(APP, original)
-  fs.rmSync(SHOW, { force: true })
+  try {
+    await restore(APP, original)
+  } finally {
+    fs.rmSync(SHOW, { force: true })
+  }
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
