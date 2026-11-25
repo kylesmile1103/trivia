@@ -27,6 +27,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@trivia/engine": "workspace:*",
     "@types/node": "^24.13.3",
     "ajv": "^8.20.0",
     "typescript": "~6.0.2",

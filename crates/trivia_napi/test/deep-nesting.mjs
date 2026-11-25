@@ -10,6 +10,7 @@
 //
 //   pnpm build:engine && node crates/trivia_napi/test/deep-nesting.mjs
 
+import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const FILE = 'src/App.tsx'
+const EXPRESSION_CALLS = ['analyzeExpressions', 'emitExpressions', 'renameReferences']
 
 /** JSX children holding `depth` levels of one construct. */
 const CONSTRUCTS = {
@@ -48,6 +50,30 @@ const component = (inner) => `export function App() {\n  return <div>${inner}</d
 async function child(fn, construct, depth) {
   const engine = await import(path.join(here, '..', 'index.js'))
   const deep = CONSTRUCTS[construct](depth)
+  if (EXPRESSION_CALLS.includes(fn)) {
+    const request = {
+      expressions: [{ id: 'deep', source: deep.slice(1, -1) }, { id: 'sibling', source: 'ui.search.value' }],
+      scope: { roots: { ui: { tier: 'client', members: { search: ['value'] } } } },
+      rename: { 'ui.search.value': 'searchValue' },
+      from: 'search',
+      to: 'query',
+    }
+    const result = JSON.parse(engine[fn](JSON.stringify(request)))
+    assert.equal(result.ok, true)
+    assert.equal(result.data.unit, 'utf16')
+    assert.deepEqual(result.data.results.map(({ id }) => id), ['deep', 'sibling'])
+    const [limited, sibling] = result.data.results
+    assert.equal(limited.diagnostics[0].code, 'expr_too_large')
+    if (fn === 'analyzeExpressions') {
+      assert.equal(limited.ok, false)
+      assert.equal(sibling.ok, true)
+      assert.deepEqual(sibling.deps, ['ui.search'])
+    } else {
+      assert.equal(limited.ts, undefined)
+      assert.equal(sibling.ts, fn === 'emitExpressions' ? 'searchValue' : 'ui.query.value')
+    }
+    return 'ok limit diagnosed and sibling returned'
+  }
   // `insert` sends the deep text as a snippet into a small file, as POST /apply would.
   // Value reads look at bindings, so there the deep code is a binding's value.
   const src =
@@ -118,6 +144,11 @@ if (!fs.existsSync(path.join(here, '..', 'index.js'))) {
 // succeed. `either`: an error envelope is as good as a result; only a dead process fails.
 // `refused`: the call must fail cleanly (an error envelope, or a throw for `annotate`).
 const cases = [
+  ...EXPRESSION_CALLS.flatMap((fn) => [
+    [fn, 'brackets', 2_047, 'result'],
+    [fn, 'nots', 4_095, 'result'],
+    [fn, 'brackets', 100_000, 'result'],
+  ]),
   // Past the main thread's crash points (5 000 brackets, 18 000 elements).
   ...['annotate', 'inspect', 'outline', 'applyOp', 'applyOps', 'components', 'restore', 'restoreFiles', 'describeValues', 'mentions'].map((fn) => [
     fn,

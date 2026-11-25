@@ -1,6 +1,7 @@
 import path from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { renameReferences } from '@trivia/engine'
+import { describe, expect, it, vi } from 'vitest'
 
 import { FIXTURES, readFixture, renderWrites } from '../../test/helpers.js'
 import { sequenceSource } from '../ids.js'
@@ -130,6 +131,48 @@ describe('renameNode (T014)', () => {
     const after = page(run([{ op: 'renameNode', node: n(3), expectedType: 'h1', name: 'heading' }], bp, { expressions }))
     expect(after.bindings[n(5)]?.title).toBe('ui.heading.text')
     expect(after.control[n(4)]).toEqual({ when: 'ui["heading"] && true' })
+  })
+
+  it('batches the native rename across stored expressions while respecting repeat aliases', () => {
+    const bp = blueprint((p) => {
+      p.bindings[n(5)].title = "ui /* keep */ .title.text + ui?.title.text + 'ui.title'"
+      p.bindings[n(7)].children = 'ui.title.text'
+      p.control[n(7)] = { each: "ui['title'].items", as: 'ui', key: 'ui.title.id' }
+      p.queries.selected.params.id = 'ui[`title`].id'
+      p.actions[`${n(4)}.onClick`][1].message = 'ui.title.text'
+      p.props[n(3)].children = 'ui.title'
+    })
+    const rename = vi.fn(renameReferences)
+    const outcome = run([{ op: 'renameNode', node: n(3), expectedType: 'h1', name: 'heading' }], bp, {
+      expressions: { renameReferences: rename },
+    })
+    const after = page(outcome)
+    expect(rename).toHaveBeenCalledTimes(1)
+    expect(after.nodes[n(3)]?.name).toBe('heading')
+    expect(after.bindings[n(5)]?.title).toBe("ui /* keep */ .heading.text + ui?.heading.text + 'ui.title'")
+    expect(after.bindings[n(7)]?.children).toBe('ui.title.text')
+    expect(after.control[n(7)]).toEqual({ each: "ui['heading'].items", as: 'ui', key: 'ui.title.id' })
+    expect(after.queries.selected?.params.id).toBe('ui[`heading`].id')
+    expect(after.actions[`${n(4)}.onClick`]?.[1]).toEqual({ do: 'toast', message: 'ui.heading.text' })
+    expect(after.props[n(3)]?.children).toBe('ui.title')
+    expect(outcome.ok && outcome.writes.map(({ file }) => file)).toEqual([DOC])
+  })
+
+  it('refuses the whole batch if a possibly affected source cannot be renamed', () => {
+    const bp = blueprint((p) => {
+      p.bindings[n(5)].title = 'ui.title.text'
+      p.control[n(4)].when = 'ui.title +'
+    })
+    const outcome = run([{ op: 'renameNode', node: n(3), expectedType: 'h1', name: 'heading' }], bp, {
+      expressions: { renameReferences },
+    })
+    expect(outcome).toMatchObject({ ok: false, error: { code: 'invalid_op', op: 0, details: {
+      pointers: [`/control/${n(4)}/when`],
+      diagnostics: [{ code: 'expr_unsupported_syntax' }],
+    } } })
+    expect(outcome).not.toHaveProperty('writes')
+    expect((bp.docs[DOC]?.doc as CustomPage).nodes[n(3)]?.name).toBe('title')
+    expect((bp.docs[DOC]?.doc as CustomPage).bindings[n(5)]?.title).toBe('ui.title.text')
   })
 
   it('refuses without the expression tools when an expression refers to the node, naming where', () => {

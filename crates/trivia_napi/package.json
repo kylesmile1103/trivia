@@ -28,7 +28,7 @@
   },
   "nx": {
     "name": "engine",
-    "implicitDependencies": ["oxc-engine"],
+    "implicitDependencies": ["oxc-engine", "expression-compiler"],
     "targets": {
       "build": {
         "inputs": ["production", "^production", "rust"],

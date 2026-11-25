@@ -4,7 +4,8 @@
 import { mentionsNode, expressionsOf, rewriteExpressions } from '../expressions.js'
 import { newId } from '../ids.js'
 import type { OpOf } from '../types/ops.js'
-import { NODE_MAPS } from '../types/page.js'
+import { NODE_MAPS, type CustomPage } from '../types/page.js'
+import { expressionInputs, readExpressionEnvelope, type ExpressionBinding, type NativeDiagnostic } from '../validate/expressions.js'
 import { editCustomPage, orderAt, refuse, requireFreeName, requireNode, subtree, type Draft } from './draft.js'
 
 export function addNode(draft: Draft, op: OpOf<'addNode'>): void {
@@ -49,8 +50,11 @@ export function renameNode(draft: Draft, op: OpOf<'renameNode'>): void {
   requireFreeName(page, op.name, op.node)
   const from = node.name
   const tools = draft.options.expressions
-  if (tools) {
-    rewriteExpressions(page, (expr) => tools.renameNodeReference(expr, from, op.name))
+  if (tools?.renameReferences) {
+    renamePageReferences(page, op.doc, tools.renameReferences, from, op.name)
+  } else if (tools?.renameNodeReference) {
+    const rename = tools.renameNodeReference.bind(tools)
+    rewriteExpressions(page, (expr) => rename(expr, from, op.name))
   } else {
     // Without the expression compiler a reference cannot be rewritten safely: refuse rather
     // than leave it pointing at a name that no longer exists.
@@ -62,4 +66,29 @@ export function renameNode(draft: Draft, op: OpOf<'renameNode'>): void {
     }
   }
   node.name = op.name
+}
+
+type RenameResponse = { unit: 'utf16'; results: Array<{ id: string; ts?: string; diagnostics?: NativeDiagnostic[] }> }
+
+function renamePageReferences(page: CustomPage, doc: string, rename: ExpressionBinding, from: string, to: string): void {
+  const expressions = expressionInputs(page)
+  if (expressions.length === 0) return
+  const { unit, results } = readExpressionEnvelope<RenameResponse>(rename(JSON.stringify({ from, to, expressions })))
+  const byPointer = new Map(results.map((result) => [result.id, result]))
+  if (results.length !== expressions.length || byPointer.size !== results.length) {
+    refuse('invalid_op', 'The expression compiler returned an incomplete rename')
+  }
+  const blocked = expressions.filter(({ id }) => {
+    const result = byPointer.get(id)
+    return typeof result?.ts !== 'string' || result.diagnostics?.some(({ severity }) => severity === 'error')
+  })
+  if (blocked.length > 0) {
+    refuse('invalid_op', `Could not safely rename ui.${from} in ${blocked.length} expression(s)`, {
+      pointers: blocked.map(({ id }) => id),
+      diagnostics: blocked.flatMap(({ id: pointer }) => (byPointer.get(pointer)?.diagnostics ?? []).map(
+        ({ start, end, ...finding }) => ({ ...finding, doc, pointer, span: { start, end, unit } }),
+      )),
+    })
+  }
+  rewriteExpressions(page, (source, pointer) => byPointer.get(pointer)?.ts ?? source)
 }

@@ -1,0 +1,20 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "expression-compiler",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "command": "cargo build -p trivia_expr",
+      "inputs": ["production", "rust"],
+      "outputs": []
+    },
+    "test": {
+      "command": "cargo test -p trivia_expr && cargo bench -p trivia_expr --bench analyze",
+      "inputs": ["default", "rust"]
+    },
+    "lint": {
+      "command": "cargo clippy -p trivia_expr --all-targets -- -D warnings",
+      "inputs": ["default", "rust"]
+    }
+  }
+}
