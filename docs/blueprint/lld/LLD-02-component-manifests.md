@@ -87,8 +87,9 @@ For each type:
    intrinsic list, no `exposes`, `client: true` when it has events.
 4. Lowercase types are HTML elements. `intrinsics.ts` lists the supported tags (`div`, `span`,
    `p`, `h1` to `h4`, `section`, `header`, `footer`, `main`, `ul`, `li`, `a`, `img`, `form`,
-   `label`) with a curated prop list each, a `children` slot, and `client: false` unless a
-   node binds an event.
+   `label`) with a curated prop list each. ⚑ Non-void tags accept node children and a string
+   `children` prop. The void tag `img` has neither. Intrinsics have no module import and
+   default to `client: false`. A compiler determines whether a particular node uses events.
 
 Nothing is installed during resolution (FR-MF-03).
 

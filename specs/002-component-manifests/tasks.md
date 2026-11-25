@@ -11,7 +11,7 @@
 ## Phase 2: Foundational
 
 - [x] T003 `src/manifest/types.ts`: the zod schema and types, including per-base variants
-- [ ] T004 [P] `src/manifest/intrinsics.ts` with the tag list and props of LLD-02 section 3
+- [x] T004 [P] `src/manifest/intrinsics.ts` with the tag list and props of LLD-02 section 3
 
 ## Phase 3: User Story 1 - Validate against the real component (P1)
 
