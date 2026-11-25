@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Create `crates/trivia_expr` (Cargo.toml on workspace dependencies, `project.json` with build, test and lint targets), add it to the root workspace members
-- [ ] T002 Read the pinned OXC's parser, visitor and span APIs in `references/oxc` and note the names used, at the top of `src/parse.rs`
+- [x] T002 Read the pinned OXC's parser, visitor and span APIs in `references/oxc` and note the names used, at the top of `src/parse.rs`
 
 ## Phase 2: Foundational
 
