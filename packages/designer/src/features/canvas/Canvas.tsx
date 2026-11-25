@@ -22,6 +22,7 @@ export function Canvas() {
   const controllerRef = useRef<CanvasController | null>(null)
   const [view, setView] = useState<CanvasView>(EMPTY_VIEW)
   const mode = useDesigner((s) => s.mode)
+  const draft = useDesigner((s) => s.canvasPath?.startsWith('/__blueprint/') ?? false)
   const zoom = useDesigner((s) => s.zoom)
   const dragging = useDesigner((s) => s.drag !== null)
 
@@ -77,7 +78,12 @@ export function Canvas() {
           overlayRef.current?.focus({ preventScroll: true }) // its keyboard shortcuts again
         }}
       />
-      <StatusNotice status={view.status} />
+      {draft && (
+        <p role="status" className="pointer-events-none absolute top-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md border bg-popover/95 px-2.5 py-2 text-xs text-popover-foreground shadow-sm">
+          Preview of a draft page. Eject to edit it on the canvas.
+        </p>
+      )}
+      <StatusNotice status={draft && view.status === 'no-locators' ? 'ready' : view.status} />
     </div>
   )
 }

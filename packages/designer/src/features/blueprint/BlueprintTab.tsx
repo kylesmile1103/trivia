@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 
+import { canvas } from '@/shared/canvas'
 import { APP_DOC } from '@/shared/engine/blueprint-types'
 import { engine } from '@/shared/engine/client'
-import type { BlueprintDiagnostic, ManifestResource } from '@/shared/engine/types'
+import type { BlueprintDiagnostic, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
 import { useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
 
-import { problemOf } from './api'
+import { blueprintApi, problemOf } from './api'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
 import { PagesList } from './PagesList'
@@ -19,6 +20,7 @@ export function BlueprintTab() {
   const root = useRef<HTMLElement>(null)
   const editor = useRef<HTMLElement>(null)
   const [focusRequest, setFocusRequest] = useState<BlueprintDiagnostic | null>(null)
+  const [previewing, setPreviewing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
   const [manifestError, setManifestError] = useState<string | null>(null)
@@ -46,6 +48,19 @@ export function BlueprintTab() {
     )
     return () => { active = false }
   }, [refresh])
+
+  async function preview(page: BlueprintPageSummary) {
+    setPreviewing(true)
+    store.setState({ problem: null })
+    try {
+      const result = await blueprintApi.preview(page.name)
+      canvas.navigate(result.route)
+    } catch (error) {
+      store.setState({ problem: problemOf(error) })
+    } finally {
+      setPreviewing(false)
+    }
+  }
 
   const findings = [...(problem?.diagnostics ?? []), ...(summary?.diagnostics.filter((item) => path === null || item.doc === path) ?? [])]
 
@@ -75,7 +90,8 @@ export function BlueprintTab() {
       {problem && <p role="alert" className="mb-2 text-destructive">{problem.message}</p>}
       {summary && (
         <PagesList
-          summary={summary} openPath={path} busy={pending !== null}
+          summary={summary} openPath={path} busy={pending !== null || previewing}
+          onPreview={(item) => { void preview(item) }}
           onOpen={(doc) => { setAdding(false); void open(doc) }}
           onAdd={() => { void open(null); setAdding(true) }} onInitialize={initialize}
         />

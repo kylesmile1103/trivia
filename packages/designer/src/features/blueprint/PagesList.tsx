@@ -1,4 +1,4 @@
-import type { BlueprintSummary } from '@/shared/engine/types'
+import type { BlueprintPageSummary, BlueprintSummary } from '@/shared/engine/types'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 
@@ -9,9 +9,10 @@ interface PagesListProps {
   onOpen(path: string): void
   onAdd?(): void
   onInitialize(): void
+  onPreview?(page: BlueprintPageSummary): void
 }
 
-export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onInitialize }: PagesListProps) {
+export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onInitialize, onPreview }: PagesListProps) {
   if (!summary.exists) {
     return (
       <div className="space-y-2">
@@ -47,6 +48,9 @@ export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onIn
               <p className="text-xs text-muted-foreground">
                 {page.errors} {page.errors === 1 ? 'error' : 'errors'} · {page.warnings} {page.warnings === 1 ? 'warning' : 'warnings'}
               </p>
+              {page.status === 'draft' && onPreview && (
+                <Button size="xs" variant="outline" disabled={busy} aria-label={`Preview ${page.name}`} onClick={() => onPreview(page)}>Preview</Button>
+              )}
             </li>
           ))}
         </ul>

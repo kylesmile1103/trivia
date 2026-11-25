@@ -64,7 +64,9 @@ than a day, the panel ships with plain inputs and the move becomes its own task.
 **Preview.** Calls `POST /blueprint/preview`, then `canvas.navigate(route)`. Preview elements
 carry no locators, so the canvas shows a banner: "Preview of a draft page. Eject to edit it on
 the canvas." With FR-DS-09 (could), the compiler stamps `data-bp-node` in preview modules only,
-and a click selects the node in the tree.
+and a click selects the node in the tree. ⚑ The canvas derives the banner from the
+actual `/__blueprint/` path, so it follows navigation and replaces the missing-locators notice
+for these routes.
 
 **Eject.** `POST /blueprint/plan`. A 422 with `requires` shows the `shadcn add` command to
 copy. Otherwise the dialog lists the files and the route and resource changes. Confirm
