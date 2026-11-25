@@ -1,0 +1,69 @@
+﻿using System;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using global::BackOffice.Data;
+
+namespace BackOffice.Features.Customer;
+public static partial class CustomerEndpoints
+{
+    public static RouteGroupBuilder MapCustomerEndpoints(this IEndpointRouteBuilder routes)
+    {
+        RouteGroupBuilder group = routes.MapGroup("/api/v1/customers").WithTags("Customers");
+        group.MapGet("/{id}", GetAsync).WithName("getCustomerById").ProducesProblem(404);
+        group.MapPost("", CreateAsync).WithName("createCustomer").ProducesValidationProblem().ProducesProblem(409);
+        group.MapPut("/{id}", UpdateAsync).WithName("updateCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
+        group.MapDelete("/{id}", DeleteAsync).WithName("deleteCustomer").ProducesProblem(404).ProducesProblem(409);
+        return group;
+    }
+
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> GetAsync(Guid id, AppDbContext db, CancellationToken cancellationToken)
+    {
+        Customer? entity = await db.CustomerSet.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        return entity is null ? TypedResults.NotFound() : TypedResults.Ok(ToResponse(entity));
+    }
+
+    private static async Task<Created<CustomerResponse>> CreateAsync(CreateCustomerRequest input, AppDbContext db, CancellationToken cancellationToken)
+    {
+        Customer entity = new()
+        {
+            FullName = input.FullName!,
+            Email = input.Email!,
+            Status = input.Status.GetValueOrDefault(),
+            CreditLimit = input.CreditLimit,
+            Notes = input.Notes,
+            BirthDate = input.BirthDate,
+            ExternalRef = input.ExternalRef
+        };
+        db.CustomerSet.Add(entity);
+        await db.SaveChangesAsync(cancellationToken);
+        return TypedResults.Created(FormattableString.Invariant($"/api/v1/customers/{entity.Id}"), ToResponse(entity));
+    }
+
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> UpdateAsync(Guid id, UpdateCustomerRequest input, AppDbContext db, CancellationToken cancellationToken)
+    {
+        Customer? entity = await db.CustomerSet.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (entity is null)
+            return TypedResults.NotFound();
+        entity.FullName = input.FullName!;
+        entity.Email = input.Email!;
+        entity.Status = input.Status.GetValueOrDefault();
+        entity.CreditLimit = input.CreditLimit;
+        entity.Notes = input.Notes;
+        entity.BirthDate = input.BirthDate;
+        entity.ExternalRef = input.ExternalRef;
+        await db.SaveChangesAsync(cancellationToken);
+        return TypedResults.Ok(ToResponse(entity));
+    }
+
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(Guid id, AppDbContext db, CancellationToken cancellationToken)
+    {
+        Customer? entity = await db.CustomerSet.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (entity is null)
+            return TypedResults.NotFound();
+        db.CustomerSet.Remove(entity);
+        await db.SaveChangesAsync(cancellationToken);
+        return TypedResults.NoContent();
+    }
+
+    private static CustomerResponse ToResponse(Customer entity) => new(entity.Id, entity.FullName, entity.Email, entity.Status, entity.CreditLimit, entity.Notes, entity.CreatedAt, entity.BirthDate, entity.ExternalRef);
+}

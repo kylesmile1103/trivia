@@ -25,7 +25,12 @@ public static class ApiPlan
         foreach (ModelEnum values in model.Enums)
             yield return new($"{api}/Enums/{values.Name}.g.cs", FileKind.Generated, CSharp.Print(EnumEmitter.Emit(model, values)));
         foreach (ModelEntity entity in model.Entities)
-            yield return new($"{api}/Features/{entity.Name}/{entity.Name}.g.cs", FileKind.Generated, CSharp.Print(EntityEmitter.Emit(model, entity)));
+        {
+            string feature = $"{api}/Features/{entity.Name}/{entity.Name}";
+            yield return new($"{feature}.g.cs", FileKind.Generated, CSharp.Print(EntityEmitter.Emit(model, entity)));
+            yield return new($"{feature}Contracts.g.cs", FileKind.Generated, CSharp.Print(ContractsEmitter.Emit(model, entity)));
+            yield return new($"{feature}Endpoints.g.cs", FileKind.Generated, CSharp.Print(EndpointsEmitter.Emit(model, entity)));
+        }
         yield return new($"{api}/Data/AppDbContext.g.cs", FileKind.Generated, CSharp.Print(DbContextEmitter.Emit(model)));
     }
 }

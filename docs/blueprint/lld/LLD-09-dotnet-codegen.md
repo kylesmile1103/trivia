@@ -184,6 +184,10 @@ namespaces, nullable enabled, no `var` in generated code.
   names and numeric suffixes for collisions. Both converters retain exact wire values.
 ⚑ UUID keys are created with `Guid.CreateVersion7()` in the entity; integer keys use PostgreSQL
   identity columns. Explicit non-null defaults initialize the entity and the database column.
+⚑ Request properties are nullable at deserialization so validation can distinguish missing
+  values from zero or false. An omitted property with a blueprint default gets that value.
+  Route keys use `{id}` independently of the model key's JSON name. Writes normalize
+  date-time offsets to UTC and assign on-update timestamps on generated updates.
 
 - **Entity.** A partial class with the key, the fields in order, foreign keys and navigation
   properties. Required strings are `required string`.

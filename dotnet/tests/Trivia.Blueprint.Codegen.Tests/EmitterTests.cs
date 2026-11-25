@@ -29,6 +29,14 @@ public sealed class EmitterTests
     public Task FR_NC_04_DbContext()
         => Snapshot("AppDbContext", CSharp.Print(DbContextEmitter.Emit(Bank)));
 
+    [Fact]
+    public Task FR_NC_05_Contracts()
+        => Snapshot("CustomerContracts", CSharp.Print(ContractsEmitter.Emit(Bank, Bank.Entities[0])));
+
+    [Fact]
+    public Task FR_NC_06_CrudEndpoints()
+        => Snapshot("CustomerEndpoints", CSharp.Print(EndpointsEmitter.Emit(Bank, Bank.Entities[0])));
+
     private static Task Snapshot(string name, string source, [CallerFilePath] string sourceFile = "")
         => Verifier.Verify(source, sourceFile: sourceFile).UseDirectory("Snapshots").UseFileName(name).DisableDiff();
 }
