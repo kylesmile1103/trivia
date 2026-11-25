@@ -4,6 +4,7 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 import { generateContract, type ContractPageGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
 import { lowerCustom } from './lower/index.js'
+import { restyleModule } from './print/style.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
 
@@ -59,7 +60,7 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
     if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
     const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
-    emitted = { ...generated, code: content, route: page.route, requires: [] }
+    emitted = { ...generated, code: restyleModule(content, context.facts.style), route: page.route, requires: [] }
   }
   emitted.code = emitted.code.replace(/\r\n?/g, '\n')
   try {

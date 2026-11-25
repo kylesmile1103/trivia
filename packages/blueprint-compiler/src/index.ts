@@ -6,3 +6,4 @@ export {
 } from './compile.js'
 export type { ContractPageGenerator, ContractPageInput } from './contract-pages.js'
 export { refineName } from './targets/vite-refine/files.js'
+export { restyleModule } from './print/style.js'

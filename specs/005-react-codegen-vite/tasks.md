@@ -30,7 +30,7 @@
 - [x] T014 [US2] Golden fixture 4 (every action step, including `call` with its handler stub), then `lower/actions.ts`
 - [x] T015 [US2] Golden fixture 5 (`when`, `each`, slots with wrapper parts)
 - [x] T016 [US2] Gate tests: every golden page parses with the engine, `tsc` passes in `examples/blueprint-fixture`, no `@trivia/*` import, determinism over shuffled input (SC-002)
-- [ ] T017 [US2] Edge cases: identifier clashes, page name clashing with a file, quote and semicolon styles
+- [x] T017 [US2] Edge cases: identifier clashes, page name clashing with a file, quote and semicolon styles
 
 ## Phase 5: User Story 3 - Preview (P1)
 

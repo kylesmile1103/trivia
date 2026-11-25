@@ -32,7 +32,10 @@ function planEject(bp: Blueprint, pages: string[], ctx: CompileContext, lock: Lo
 ```
 
 ⚑ Project facts take the majority quote and semicolon style of static imports in the entry
-source. With no evidence or a tie, they use double quotes and semicolons.
+source. With no evidence or a tie, they use double quotes and semicolons. On Vite the
+Refine mounting file supplies the style used by both generators. For the shared scaffold's
+new TSX, the compiler edits only string tokens and statement terminators when adapting the
+style. The TypeScript parser supplies token boundaries, and the engine checks the result.
 
 ## 2. Contract pages (FR-RC-02)
 

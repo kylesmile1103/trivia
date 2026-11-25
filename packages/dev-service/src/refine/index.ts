@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { projectFacts, restyleModule } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import type { AppRoute } from '../api/service.js'
@@ -307,7 +308,11 @@ export class RefineAdapter {
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
     }
-    const ops: Plan['ops'] = files.map((f) => ({ op: 'createFile', file: f.file, content: f.content }))
+    const style = this.#host.kind === 'vite'
+      ? projectFacts({ entrySource: fs.readFileSync(path.join(root, app.file), 'utf8') }).style : null
+    const ops: Plan['ops'] = files.map((f) => ({
+      op: 'createFile', file: f.file, content: style ? restyleModule(f.content, style) : f.content,
+    }))
 
     // The resource entry: new keys on the existing one, or a new entry.
     const routes = Object.fromEntries(files.map((f) => [f.kind, f.route]))

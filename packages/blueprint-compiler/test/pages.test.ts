@@ -112,3 +112,43 @@ it('SC-002: 20 shuffled documents compile to one set of bytes', () => {
   }
   expect(hashes.size).toBe(1)
 })
+
+it('FR-RC-04: aliases a component and reserves generated locals when the page and state names clash', () => {
+  const src = new URL('../fixtures/pages/state/SearchPanel.page.json', import.meta.url)
+  const input = JSON.parse(fs.readFileSync(src, 'utf8'))
+  input.name = 'Input'
+  input.state.searchValue = input.state.prefix
+  delete input.state.prefix
+  input.bindings['n_00000000000000000000000002'].children = 'state.searchValue + ui.search.value'
+  const bp = loadBlueprint({ [pageDocPath('Input')]: JSON.stringify(input) })
+  const module = compilePage(bp, 'Input', context)
+  expect(module.file).toBe('src/pages/Input/Input.tsx')
+  expect(module.code).toContain('import { Input as Input2 }')
+  expect(module.code).toContain('export function Input()')
+  expect(module.code).toContain('const [searchValue2, setSearchValue2]')
+  expect(module.code).toContain('{searchValue + searchValue2}')
+  expect(module.code).toContain('<Input2')
+})
+
+it('FR-RC-11: contract output follows single quotes and omitted semicolons, including JSX attributes', () => {
+  const bp = loadBlueprint({ [pageDocPath('Ledger')]: JSON.stringify({
+    $schema: 'https://trivia.dev/schemas/blueprint/page.v1.json', blueprintVersion: 1,
+    id: 'pg_00000000000000000000000000', name: 'Ledger', kind: 'list', resource: 'Account', route: '/ledger',
+  }) })
+  const module = compilePage(bp, 'Ledger', {
+    ...context, facts: projectFacts({ entrySource: "import './App'\n" }),
+    generateContractPage: () => ({
+      component: 'Ledger', file: 'src/pages/ledger/list.tsx', importPath: '@/pages/ledger/list',
+      content: [
+        'import { Button } from "@/components/ui/button";', '',
+        'export function Ledger() {', '  const title = "Book\'s";',
+        '  return <Button title="Clerk\'s">{title}</Button>;', '}', '',
+      ].join('\n'),
+    }),
+  })
+  expect(module.code).toBe([
+    "import { Button } from '@/components/ui/button'", '',
+    'export function Ledger() {', "  const title = 'Book\\'s'",
+    "  return <Button title='Clerk&apos;s'>{title}</Button>", '}', '',
+  ].join('\n'))
+})
