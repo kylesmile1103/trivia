@@ -7,6 +7,7 @@ using Xunit.Abstractions;
 
 namespace Trivia.Blueprint.Codegen.Tests;
 
+[Collection(TimingCollection.Name)]
 public sealed class PerformanceTests(ITestOutputHelper testOutput)
 {
     [Fact]
