@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
 import { copyBlueprintProject, listPage } from './blueprint-fixture.js'
@@ -159,7 +159,6 @@ it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a han
 it.each([
   ['trivia_blueprint_preview', { page: 'Customers' }, '005'],
   ['trivia_blueprint_eject', { pages: ['Customers'], label: 'Eject customers' }, '005'],
-  ['trivia_blueprint_backend', { mode: 'plan' }, '009'],
 ])('FR-AG-02 reserves %s with a structured unavailable response', async (name, args, spec) => {
   const result = await tool(name, args)
   expect(result).toMatchObject({
@@ -192,8 +191,16 @@ it('NFR-14 executes the documented blueprint authoring calls', async () => {
   expect((await call('trivia_blueprint_get/components')).structuredContent).toMatchObject({ schemas: { Button: { type: 'object' } } })
   expect((await call('trivia_blueprint_patch')).structuredContent).toMatchObject({ entry: 'Agent: Add customers', summary: { pages: [{ errors: 0 }] } })
   expect((await call('trivia_blueprint_get/doc')).structuredContent).toMatchObject({ doc: { name: 'Customers' }, projection: expect.stringContaining('Customers') })
-  for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject', 'trivia_blueprint_backend']) {
+  for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject']) {
     expect(await call(toolName)).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
+  }
+  vi.stubEnv('PATH', root)
+  try {
+    expect(await call('trivia_blueprint_backend')).toMatchObject({
+      isError: true, structuredContent: { error: { code: 'unsupported', details: { hint: expect.stringContaining('.NET 10 SDK') } } },
+    })
+  } finally {
+    vi.unstubAllEnvs()
   }
 })
 

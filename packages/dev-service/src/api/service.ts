@@ -9,6 +9,7 @@ import path from 'node:path'
 
 import { revOfText } from '@trivia/blueprint'
 
+import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { summarize, type PatchResult } from '../blueprint/summary.js'
@@ -330,6 +331,11 @@ export class EngineService {
         throw new ApiError('conflict', error.message, { revs })
       }
     })
+  }
+
+  /** Keep backend generation ordered with its model edits. The CLI owns its file plan. */
+  blueprintBackend(request: BackendRequest): Promise<BackendResult> {
+    return this.#queue.run(() => runBackend(this.blueprint, request))
   }
 
   #commitDocuments(writes: readonly FileChange[], label: string): string | null {

@@ -236,8 +236,12 @@ one shared undo entry for the source files and lock. The tool currently returns
 {"name":"trivia_blueprint_eject","arguments":{"pages":["Customers"],"label":"Eject customers"}}
 ```
 
-`trivia_blueprint_backend` accepts a mode of `plan` or `write`, with optional `migration`
-and `force`. It currently returns `unsupported` pending the trivia-dotnet bridge.
+`trivia_blueprint_backend` uses the installed `trivia-dotnet` tool. Call it with
+`mode: "plan"` to inspect proposed files and diagnostics, then use `mode: "write"` to
+generate. `force: true` lets a generation write replace or remove modified generated
+files. A separate write-mode call with `migration` adds a named EF migration after
+generation. Inspect `written` and `diagnostics` in the result. An `unsupported` error
+includes installation guidance in `error.details.hint`.
 
 ```json
 {"name":"trivia_blueprint_backend","arguments":{"mode":"plan"}}

@@ -8,7 +8,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
-import { backendInput, runBackend } from '../blueprint/backend.js'
+import { backendInput } from '../blueprint/backend.js'
 import { readComponents, readDoc } from '../blueprint/index.js'
 import { ejectBlueprint, ejectInput } from '../blueprint/plan.js'
 import { previewInput, previewPage } from '../blueprint/preview.js'
@@ -721,14 +721,17 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     'trivia_blueprint_backend',
     {
       title: 'Plan or regenerate the blueprint backend',
-      description: 'Plan or write the .NET backend files for the blueprint model using trivia-dotnet.',
+      description: 'Plan or write .NET backend files for the blueprint model using trivia-dotnet. Add a migration in a separate write-mode call after generation.',
       inputSchema: backendInput,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     (request) =>
       run(async () => {
-        const result = await runBackend(service.blueprint, request)
-        return { data: { ...result }, summary: `Backend returned ${result.files.length} file(s).` }
-      }, { unsupported: 'Backend integration needs trivia-dotnet from spec 009.' }, true),
+        const result = await service.blueprintBackend(request)
+        return { data: { ...result }, summary: `Backend returned ${result.files.length} file(s) and ${result.diagnostics.length} diagnostic(s).` }
+      }, {
+        invalid_op: 'Use write mode to force generation or add a migration in a separate call.',
+        unsupported: 'Follow error.details.hint to make the .NET SDK and trivia-dotnet available.',
+      }, true),
   )
 }

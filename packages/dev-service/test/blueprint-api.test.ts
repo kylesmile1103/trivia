@@ -238,7 +238,6 @@ it.each([
   ['/preview', { page: 'Customers' }, '005'],
   ['/plan', { pages: ['Customers'] }, '005'],
   ['/ejected', { pages: ['Customers'], entry: 'Eject customers' }, '005'],
-  ['/backend', { mode: 'plan' }, '009'],
 ])('FR-AG-01 reserves %s and reports the spec that provides it', async (route, body, spec) => {
   const response = await post(route, body)
   expect(response.status).toBe(422)
@@ -273,8 +272,16 @@ it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
   expect(await send('/components')).toMatchObject({ ok: true, data: { schemas: { Button: { type: 'object' } } } })
   expect(await send('/patch')).toMatchObject({ ok: true, data: { entry: 'Add customers' } })
   expect(await send(`${pagePath}&projection=1`)).toMatchObject({ ok: true, data: { projection: expect.stringContaining('Customers') } })
-  for (const route of ['/preview', '/plan', '/ejected', '/backend']) {
+  for (const route of ['/preview', '/plan', '/ejected']) {
     expect(await send(route, 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
+  }
+  vi.stubEnv('PATH', root)
+  try {
+    expect(await send('/backend', 422)).toMatchObject({
+      ok: false, error: { code: 'unsupported', details: { hint: expect.stringContaining('.NET 10 SDK') } },
+    })
+  } finally {
+    vi.unstubAllEnvs()
   }
 })
 

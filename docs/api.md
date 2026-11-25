@@ -588,8 +588,17 @@ Content-Type: application/json
 {"pages":["Customers"],"entry":"Eject customers"}
 ```
 
-`backend` reserves the backend plan or write request. It returns 422 `unsupported` until
-the trivia-dotnet integration is available.
+`backend` runs `trivia-dotnet` for the project's blueprint and solution root. Install the
+.NET 10 SDK and put the .NET tool on `PATH`. `mode: "plan"` reports proposed files and
+diagnostics. `mode: "write"` applies the generation plan. Set `force: true` on a write to
+allow replacement or removal of modified generated files. After generation, a separate
+write-mode request with `migration` runs that named EF migration.
+
+The result is `{ files, written, diagnostics, log }`. Each file has a `path`, `kind` and
+`action`, including `delete` for retired generated files and `refused` for blocked writes.
+`written` is true when the CLI successfully changes at least one file. The log holds
+bounded stderr. The CLI owns the backend file plan. If the SDK or tool is unavailable,
+the API returns 422 `unsupported` with `error.details.hint`.
 
 ```http
 POST /@trivia/api/blueprint/backend

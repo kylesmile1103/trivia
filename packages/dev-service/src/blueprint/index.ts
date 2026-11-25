@@ -5,7 +5,7 @@ import type { z } from 'zod'
 import type { Route } from '../api/http.js'
 import type { EngineService } from '../api/service.js'
 import { ApiError } from '../engine.js'
-import { backendInput, runBackend } from './backend.js'
+import { backendInput } from './backend.js'
 import { ejectedInput, planEject, planInput, recordEjected } from './plan.js'
 import { previewInput, previewPage } from './preview.js'
 import { checkDocumentVersion, type BlueprintWorkspace } from './store.js'
@@ -43,7 +43,7 @@ export function registerBlueprintRoutes(routes: Map<string, Route>, service: Eng
   routes.set('/blueprint/preview', { POST: (_url, body) => previewPage(request(previewInput, body)) })
   routes.set('/blueprint/plan', { POST: (_url, body) => planEject(request(planInput, body)) })
   routes.set('/blueprint/ejected', { POST: (_url, body) => recordEjected(request(ejectedInput, body)) })
-  routes.set('/blueprint/backend', { POST: (_url, body) => runBackend(workspace, request(backendInput, body)) })
+  routes.set('/blueprint/backend', { POST: (_url, body) => service.blueprintBackend(request(backendInput, body)) })
 }
 
 function request<T>(schema: z.ZodType<T>, body: unknown): T {
