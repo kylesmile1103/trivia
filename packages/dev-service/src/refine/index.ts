@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { projectFacts, restyleModule, type EmittedModule } from '@trivia/blueprint-compiler'
+import { projectFacts, relativeModule, resourceOps, restyleModule, routeOps, type EjectPage, type EmittedModule, type RouteRegistration } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import type { AppRoute } from '../api/service.js'
@@ -356,35 +356,56 @@ export class RefineAdapter {
       op: 'createFile', file: f.file, content: style ? restyleModule(f.content, style) : f.content,
     }))
 
-    // The resource entry: new keys on the existing one, or a new entry.
-    const routes = Object.fromEntries(files.map((f) => [f.kind, f.route]))
-    if (entryOf(app.resources, name)) {
-      for (const kind of PAGE_KINDS.filter((k) => routes[k])) {
-        ops.push({ op: 'setProperty', path: `${app.resourcesPath}[name=${name}]`, prop: kind, value: JSON.stringify(routes[kind]) })
-      }
-    } else {
-      const keys = [`name: ${JSON.stringify(name)}`, ...PAGE_KINDS.filter((k) => routes[k]).map((k) => `${k}: ${JSON.stringify(routes[k])}`)]
-      ops.push({ op: 'insertElement', path: app.resourcesPath, value: `{\n  ${keys.join(',\n  ')},\n}` })
-    }
-
-    if (this.#host.kind === 'vite') {
-      // The routes: before the catch-all among the resource routes, else after the last of them.
-      const anchor = this.#routeAnchor(app)
-      if (!anchor) throw new ApiError('unsupported', `${app.file} has no <Route path="…"> to put the new routes next to`)
-      files.forEach((f, i) => {
-        // Before the catch-all, each insert pushes it one further; after the last route, each new
-        // one is the next anchor. Either way the i-th insert names slot index + i.
-        ops.push({
-          op: 'insert',
-          target: `${anchor.parent}.${anchor.index + i}`,
-          expectedName: 'Route',
-          placement: anchor.placement,
-          snippet: `<Route path="${f.route}" element={<${f.component} />} />`,
-          imports: [{ name: f.component, source: f.importPath }],
-        })
-      })
-    }
+    ops.push(...this.#registrationOps(app, files.map((file) => ({ ...file, resource: name }))))
     return { ops, label: `Add ${wanted.join(', ')} ${wanted.length === 1 ? 'page' : 'pages'} for ${humanize(name)}` }
+  }
+
+  async planBlueprintRegistrations(pages: readonly EjectPage[], contract: TriviaManifest | null): Promise<Plan['ops']> {
+    if (!pages.length) return []
+    const app = await this.#app()
+    if (!app) throw new ApiError('unsupported', 'The app needs a Refine resources array and React Router routes to eject pages.')
+    const files = pages.map(({ page, module }): RouteRegistration => {
+      if (page.kind === 'custom') return { ...module, importPath: relativeModule(app.file, module.file) }
+      const resource = contractResource(contract, page.resource, null)
+      if (!resource) throw new ApiError('invalid_result', 'No contract resource named ' + page.resource)
+      return { ...module, kind: page.kind, resource: refineName(resource) }
+    })
+    return this.#registrationOps(app, files)
+  }
+
+  #registrationOps(app: AppShell, files: readonly RouteRegistration[]): Plan['ops'] {
+    const byResource = new Map<string, Partial<Record<PageKind, string>>>()
+    for (const file of files) {
+      if (file.kind === undefined || file.resource === undefined) continue
+      const routes = byResource.get(file.resource) ?? {}
+      routes[file.kind] = file.route
+      byResource.set(file.resource, routes)
+    }
+    const ops: Plan['ops'] = []
+    if (byResource.size && app.resources?.kind !== 'array') {
+      throw new ApiError('unsupported', 'The Refine resources prop must hold an array literal.')
+    }
+    for (const [name, routes] of byResource) {
+      const entry = entryOf(app.resources, name)
+      if (entry?.kind === 'object') {
+        for (const kind of PAGE_KINDS) {
+          const route = routes[kind]
+          const existing = entry.properties.find(({ key }) => key === kind)
+          if (!existing || route === undefined) continue
+          if (existing.value.kind !== 'string' || existing.value.value !== route) {
+            throw new ApiError('conflict', name + ' already registers a different ' + kind + ' page.')
+          }
+          delete routes[kind]
+        }
+      }
+      ops.push(...resourceOps(app.resourcesPath, name, routes, entry !== undefined))
+    }
+    if (this.#host.kind === 'vite') {
+      const anchor = this.#routeAnchor(app)
+      if (!anchor) throw new ApiError('unsupported', app.file + ' has no React Router route to register the new pages beside.')
+      ops.push(...routeOps(files, anchor))
+    }
+    return ops
   }
 
   /** Each `<Refine resources>` action that names a path: its resource, the action and the path. */

@@ -12,3 +12,5 @@ export {
   planEject, planCompiledEject, prepareEject, routePattern,
   type EjectContext, type EjectPage, type EjectPlan, type EjectRoute, type EjectSnapshot, type SourceOp,
 } from './eject.js'
+export { relativeModule } from './targets/vite-refine/files.js'
+export { resourceOps, routeOps, type RouteRegistration } from './targets/vite-refine/routes.js'
