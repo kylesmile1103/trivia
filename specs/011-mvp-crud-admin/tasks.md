@@ -27,8 +27,7 @@
 
 ## Phase 5: User Story 4 - Agent (P1)
 
-- [ ] T011 [US4] Run the prompt in a fresh Claude Code session with only the Trivia server, twice. Save both transcripts' tool-call lists under `examples/blueprint-mvp/sessions/`
-  Deferred: the lead runs the prompt in Claude Code
+- [x] T011 [US4] Run the prompt in a fresh Claude Code session with only the Trivia server, twice. Save both transcripts' tool-call lists under `examples/blueprint-mvp/sessions/`
 - [x] T012 [US4] Fix what the agent tripped on (tool descriptions, hints, diagnostics) in specs 001 to 005. Note it in `docs/mcp.md`
 
 ## Phase 6: Close-out
@@ -59,6 +58,14 @@
 - Specs 004 and 005: the patch response did not say which operation ID contract sync
   published and did not flag a mistyped list-header refetch. Regression:
   `packages/dev-service/test/blueprint-mcp.test.ts` (synced mutation ID and implicit list query).
+
+- Spec 008, by both T011 sessions: creating an entity with a key and no plural was refused
+  as "requires a plural and key", and a `customerId` field beside the `belongsTo` relation that
+  implies it was a collision with no way out. The refusal names what is missing with examples;
+  the collision carries a guarded `removeField` fix. Regressions:
+  `packages/blueprint/src/model/apply.test.ts`, `packages/blueprint/src/model/validate.test.ts`.
+- Open, for the owner: both T011 sessions wanted a `refetch` after the Approve KYC mutation
+  in the row action. LLD-05 allows `refetch` of the list in header actions only (⚑).
 
 ## Dependencies
 

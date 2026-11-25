@@ -240,7 +240,16 @@ function checkEntityReferences(
       const member = memberNames.get(folded)
       if (member !== undefined) {
         const type = target ? ` of type ${target.key.type}` : ''
-        report('invalid_constraint', fkPath, `The implied foreign key "${relation.foreignKey}"${type} collides with "${member}" on ${entity.name}`)
+        const message = `The implied foreign key "${relation.foreignKey}"${type} collides with "${member}" on ${entity.name}`
+        // A declared field of that name: the relation already declares it, so the fix is to drop
+        // the field (both agent sessions of the MVP exercise declared it, spec 011 T012).
+        const field = entity.fields.find((entry) => entry.name === member)
+        if (field) {
+          report('invalid_constraint', fkPath, `${message}; the relation declares it, so remove the field`,
+            { ops: [{ op: 'removeField', doc: MODEL_DOC, baseRev, entity: entity.name, field: field.name }] })
+        } else {
+          report('invalid_constraint', fkPath, message)
+        }
       } else {
         checkName(relation.foreignKey, fkPath, report)
         memberNames.set(folded, relation.foreignKey)
