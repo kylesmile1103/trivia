@@ -37,7 +37,7 @@
 
 ## Phase 7: User Story 4 - Preview, eject, backend stubs (P2)
 
-- [ ] T015 [US4] Routes `preview`, `plan`, `ejected`, `backend` and tools `trivia_blueprint_preview`, `_eject`, `_backend`, answering 422 `unsupported` with a clear message until specs 005 and 009 fill them in. Types in place
+- [x] T015 [US4] Routes `preview`, `plan`, `ejected`, `backend` and tools `trivia_blueprint_preview`, `_eject`, `_backend`, answering 422 `unsupported` with a clear message until specs 005 and 009 fill them in. Types in place
 
 ## Phase 8: Polish
 

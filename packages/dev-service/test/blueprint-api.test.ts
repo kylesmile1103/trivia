@@ -222,3 +222,15 @@ it('NFR-05 refuses traversal, absolute paths and paths through symlinks', async 
     expect(await response.json()).toMatchObject({ ok: false, error: { code: 'path_outside_root' } })
   }
 })
+
+it.each([
+  ['/preview', { page: 'Customers' }, '005'],
+  ['/plan', { pages: ['Customers'] }, '005'],
+  ['/ejected', { pages: ['Customers'], entry: 'Eject customers' }, '005'],
+  ['/backend', { mode: 'plan' }, '009'],
+])('FR-AG-01 reserves %s and reports the spec that provides it', async (route, body, spec) => {
+  const response = await post(route, body)
+  expect(response.status).toBe(422)
+  expect(await response.json()).toMatchObject({ ok: false, error: { code: 'unsupported', message: expect.stringContaining(`spec ${spec}`) } })
+  expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
+})

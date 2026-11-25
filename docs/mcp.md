@@ -194,3 +194,26 @@ type for a node or parent guard. A successful patch returns its `revs`, new IDs 
 ```json
 {"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}}
 ```
+
+`trivia_blueprint_preview` accepts a page name and optional `includeCode`. After the page
+compiler lands in spec 005, use the returned route in the designer and call
+`trivia_screenshot` when it loads. The tool currently returns `unsupported`.
+
+```json
+{"name":"trivia_blueprint_preview","arguments":{"page":"Customers"}}
+```
+
+`trivia_blueprint_eject` accepts a label and optional page names. The compiler will use
+one shared undo entry for the source files and lock. The tool currently returns
+`unsupported`.
+
+```json
+{"name":"trivia_blueprint_eject","arguments":{"pages":["Customers"],"label":"Eject customers"}}
+```
+
+`trivia_blueprint_backend` accepts a mode of `plan` or `write`, with optional `migration`
+and `force`. It currently returns `unsupported` pending the trivia-dotnet bridge.
+
+```json
+{"name":"trivia_blueprint_backend","arguments":{"mode":"plan"}}
+```

@@ -68,8 +68,11 @@ describe('tools', () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       'trivia_add_pages',
       'trivia_apply',
+      'trivia_blueprint_backend',
+      'trivia_blueprint_eject',
       'trivia_blueprint_get',
       'trivia_blueprint_patch',
+      'trivia_blueprint_preview',
       'trivia_contract_drift',
       'trivia_edit_columns',
       'trivia_edit_fields',
@@ -87,6 +90,7 @@ describe('tools', () => {
     expect(apply.description).toContain('expectedName')
     expect(tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name).sort()).toEqual([
       'trivia_blueprint_get',
+      'trivia_blueprint_preview',
       'trivia_contract_drift',
       'trivia_get_page',
       'trivia_get_selection',

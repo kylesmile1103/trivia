@@ -8,7 +8,10 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
+import { backendInput, runBackend } from '../blueprint/backend.js'
 import { readComponents, readDoc } from '../blueprint/index.js'
+import { ejectBlueprint, ejectInput } from '../blueprint/plan.js'
+import { previewInput, previewPage } from '../blueprint/preview.js'
 import { readSummary } from '../blueprint/summary.js'
 import { ApiError } from '../engine.js'
 import { type ListPage, parseColumnChanges, parseFieldChanges } from '../refine/index.js'
@@ -682,5 +685,50 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
         invalid_op: 'Check the tool schema for the refused op and read the document before trying again.',
         invalid_result: 'Fix the diagnostics in the batch and resubmit it with the same revisions.',
       }, true),
+  )
+
+  server.registerTool(
+    'trivia_blueprint_preview',
+    {
+      title: 'Preview a blueprint page',
+      description: 'Compile a draft page and return its preview route. After the designer loads it, use trivia_screenshot.',
+      inputSchema: previewInput.extend({ includeCode: z.boolean().optional() }),
+      annotations: reads,
+    },
+    ({ page, includeCode }) =>
+      run(async () => {
+        const { code, ...preview } = previewPage({ page })
+        return { data: { ...preview, ...(includeCode && { code }) }, summary: `Preview ${page} at ${preview.route}` }
+      }, { unsupported: 'Preview becomes available with the page compiler in spec 005.' }, true),
+  )
+
+  server.registerTool(
+    'trivia_blueprint_eject',
+    {
+      title: 'Eject blueprint pages to source',
+      description: 'Eject draft pages to source code in a single labelled edit. Omit pages to eject every draft.',
+      inputSchema: ejectInput,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ pages, label }) =>
+      run(async () => {
+        const result = ejectBlueprint({ pages, label: AGENT_LABEL + label })
+        return { data: { ...result }, summary: `Ejected ${result.files.length} file(s).` }
+      }, { unsupported: 'Eject becomes available with the page compiler in spec 005.' }, true),
+  )
+
+  server.registerTool(
+    'trivia_blueprint_backend',
+    {
+      title: 'Plan or regenerate the blueprint backend',
+      description: 'Plan or write the .NET backend files for the blueprint model using trivia-dotnet.',
+      inputSchema: backendInput,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    (request) =>
+      run(async () => {
+        const result = await runBackend(service.blueprint, request)
+        return { data: { ...result }, summary: `Backend returned ${result.files.length} file(s).` }
+      }, { unsupported: 'Backend integration needs trivia-dotnet from spec 009.' }, true),
   )
 }

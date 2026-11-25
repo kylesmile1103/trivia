@@ -154,3 +154,18 @@ it('FR-AG-03 restores a labelled patch byte for byte and refuses undo over a han
   expect(files.map((file) => fs.readFileSync(file))).toEqual(edited)
   expect((await tool('trivia_get_selection')).structuredContent).toMatchObject({ history: { undoLabel: entry } })
 })
+
+it.each([
+  ['trivia_blueprint_preview', { page: 'Customers' }, '005'],
+  ['trivia_blueprint_eject', { pages: ['Customers'], label: 'Eject customers' }, '005'],
+  ['trivia_blueprint_backend', { mode: 'plan' }, '009'],
+])('FR-AG-02 reserves %s with a structured unavailable response', async (name, args, spec) => {
+  const result = await tool(name, args)
+  expect(result).toMatchObject({
+    isError: true, structuredContent: {
+      error: { code: 'unsupported', message: expect.stringContaining(`spec ${spec}`) },
+      next: expect.stringContaining(`spec ${spec}`),
+    },
+  })
+  expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
+})

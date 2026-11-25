@@ -24,6 +24,40 @@ exports[`FR-AG-02 lists blueprint tools and their guarded input shapes 1`] = `
       "ops",
     ],
   },
+  {
+    "arguments": [
+      "includeCode",
+      "page",
+    ],
+    "name": "trivia_blueprint_preview",
+    "readOnly": true,
+    "required": [
+      "page",
+    ],
+  },
+  {
+    "arguments": [
+      "label",
+      "pages",
+    ],
+    "name": "trivia_blueprint_eject",
+    "readOnly": false,
+    "required": [
+      "label",
+    ],
+  },
+  {
+    "arguments": [
+      "force",
+      "migration",
+      "mode",
+    ],
+    "name": "trivia_blueprint_backend",
+    "readOnly": false,
+    "required": [
+      "mode",
+    ],
+  },
 ]
 `;
 

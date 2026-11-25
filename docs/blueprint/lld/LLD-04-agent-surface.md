@@ -125,6 +125,10 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
 - The tool input schema for `ops` is generated from the zod definitions of LLD-01, so the two
   cannot disagree.
 
+⚑ The preview and eject routes and tools validate their request shape and return
+`unsupported` until spec 005. Their `requires` items carry the registry and item name
+from a component manifest.
+
 ## 4. Errors
 
 Codes come from `docs/api.md`. New in `error.details`:

@@ -1,4 +1,8 @@
 export { API_BASE, createApiMiddleware, type Middleware } from './api/http.js'
+export type { BackendResult } from './blueprint/backend.js'
+export type { EjectPlan } from './blueprint/plan.js'
+export type { PreviewResult, RegistryItem } from './blueprint/preview.js'
+export type { BlueprintSummary, PatchResult } from './blueprint/summary.js'
 export { resolveBlueprintDir } from './blueprint/paths.js'
 export { EngineService, type AppRoute } from './api/service.js'
 export { ApiError, loadEngine, unwrap, type EngineBinding, type Insertion } from './engine.js'

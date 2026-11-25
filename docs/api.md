@@ -549,3 +549,41 @@ POST /@trivia/api/blueprint/patch
 A stale revision or a file changed between planning and writing returns 409 `conflict`
 with `error.details.revs`. The map contains the current revision of each affected
 document, with `null` for a missing document. Re-read the affected documents before retrying.
+
+The page compiler from spec 005 will provide `preview`, `plan` and `ejected`.
+These routes accept their documented inputs and return 422 `unsupported` until then.
+
+`preview` takes the page name and will return its preview route, module, compiled code,
+required registry items and diagnostics.
+
+```http
+POST /@trivia/api/blueprint/preview
+
+{"page":"Customers"}
+```
+
+`plan` takes optional page names (defaults to all drafts) and will return an eject plan with
+guarded source operations, files, requirements, warnings, a lock and a label.
+
+```http
+POST /@trivia/api/blueprint/plan
+
+{"pages":["Customers"]}
+```
+
+`ejected` will record the eject lock after the source edit succeeds and return `lockRev`.
+
+```http
+POST /@trivia/api/blueprint/ejected
+
+{"pages":["Customers"],"entry":"Eject customers"}
+```
+
+`backend` reserves the backend plan or write request. It returns 422 `unsupported` until
+the trivia-dotnet integration is available.
+
+```http
+POST /@trivia/api/blueprint/backend
+
+{"mode":"plan"}
+```
