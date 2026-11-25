@@ -183,3 +183,29 @@ test('FR-MVP-03: designer edits columns, form fields and a show-page prop with b
   await expect.poll(() => read(showHeader)).toBe(show)
   await expect.poll(historyLabel).toBe(previous)
 })
+
+test('FR-RC-08, FR-MVP-03: re-eject refuses a designer-edited page and preserves its bytes', async ({ page, request }) => {
+  const root = await devRoot(request)
+  const files = [listFile, 'src/App.tsx', 'blueprint/blueprint.lock.json'].map((file) => path.join(root, file))
+  const snapshot = () => files.map((file) => readFileSync(file, 'utf8'))
+  const plan = () => request.post('/@trivia/api/blueprint/plan', { data: { pages: ['CustomerList'] } })
+  const before = snapshot()
+  expect((await plan()).status()).toBe(200)
+
+  await page.goto('/__trivia/')
+  await navigateCanvas(page, '/customers')
+  await expect(canvas(page).getByRole('columnheader', { name: 'Status' })).toBeVisible()
+  await addCreditLimit(page)
+
+  const edited = snapshot()
+  expect(edited[0]).toContain('accessorKey: "creditLimit"')
+  expect(edited.slice(1)).toEqual(before.slice(1))
+  const refused = await plan()
+  expect(refused.status()).toBe(409)
+  expect(await refused.json()).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(snapshot()).toEqual(edited)
+
+  await undo(page).click()
+  await expect.poll(snapshot).toEqual(before)
+  expect((await plan()).status()).toBe(200)
+})

@@ -18,7 +18,7 @@
 ## Phase 3: User Story 2 - Edit with Trivia (P1)
 
 - [x] T007 [US2] In the e2e spec, through the designer: add `creditLimit` with the columns tool, add `notes` with the form-fields tool, change a button variant. Assert the changed lines and byte-exact undo for each
-- [ ] T008 [US2] Assert that ejecting an edited page again is refused with `conflict`
+- [x] T008 [US2] Assert that ejecting an edited page again is refused with `conflict`
 
 ## Phase 4: User Story 3 - Model change and drift (P1)
 
