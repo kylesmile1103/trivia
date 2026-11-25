@@ -15,7 +15,7 @@ import { useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 
-import { fillRoute, matchRoute } from './route-url'
+import { fillRoute, matchRoute } from '@/shared/lib/route-url'
 
 /** Values given for params, by name, for this session: an `id` given once prefills the next. */
 const remembered = new Map<string, string>()

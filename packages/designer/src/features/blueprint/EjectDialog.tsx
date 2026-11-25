@@ -79,10 +79,11 @@ function EjectPlanDetails({ plan, route }: { plan: BlueprintEjectPlan; route: st
   )
 }
 
-export function EjectDialog({ page, onClose, onRefresh }: {
+export function EjectDialog({ page, onClose, onRefresh, onNavigate = canvas.navigate }: {
   page: BlueprintPageSummary
   onClose(): void
   onRefresh(): void
+  onNavigate?(route: string): void
 }) {
   const [state, setState] = useState<PlanState>({ kind: 'loading' })
   const [applying, setApplying] = useState(false)
@@ -114,8 +115,8 @@ export function EjectDialog({ page, onClose, onRefresh }: {
       }
       // The transaction already wrote the lock. The endpoint verifies its history entry.
       if (result.changed) await blueprintApi.ejected([name], plan.label)
-      canvas.navigate(route)
       onClose()
+      onNavigate(route)
     } catch (error) {
       setProblem('The source and lock were written, but the history entry could not be verified. ' + problemOf(error).message)
     } finally {

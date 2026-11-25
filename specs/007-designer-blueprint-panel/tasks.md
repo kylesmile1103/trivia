@@ -23,7 +23,7 @@
 
 - [x] T008 [US2] Preview: call the route, `canvas.navigate`, the draft banner
 - [x] T009 [US2] `EjectDialog.tsx`: the 422 branch with the command to copy, the plan listing, confirm through `dispatch` then `POST /blueprint/ejected`, then navigate to the real route. Tests for both branches
-- [ ] T010 [US2] Statuses `ejected` and `edited` with their actions and the "code is the truth" note
+- [x] T010 [US2] Statuses `ejected` and `edited` with their actions and the "code is the truth" note
 
 ## Phase 5: User Story 4 - Other writers (P1)
 

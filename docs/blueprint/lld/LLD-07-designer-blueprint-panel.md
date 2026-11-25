@@ -41,6 +41,8 @@ envelope, including structured refusal details for diagnostics and registry item
 counts. `draft` offers Preview and Eject. `ejected` offers Open (navigate the canvas to the
 real route) and Eject again. `edited` offers Open only, with a line saying the code has
 changed since eject and is now the truth (ADR-0003). A button adds a page.
+⚑ Open resolves the registered route by the generated file when available. Parameterized
+routes reuse the Pages tab's URL helpers and prompt for required values when the canvas has none.
 
 **Page form.** Kind decides the fields: contract kinds show the resource (from the contract
 manifest), field checklists, title, filters and actions; `custom` shows the node tree. Each
