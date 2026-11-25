@@ -18,6 +18,16 @@ async function post<T>(page: Page, endpoint: string, data: unknown): Promise<T> 
   return body.data as T
 }
 
+/** The file's bytes, or null when it is absent (also when it goes away while being read). */
+function readOrNull(file: string): Buffer | null {
+  try {
+    return fs.readFileSync(file)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
 async function navigateCanvas(page: Page, route: string) {
   await page.locator('iframe[title="App canvas"]').evaluate((frame, url) =>
     (frame as HTMLIFrameElement).contentWindow!.location.assign(url), route)
@@ -80,15 +90,17 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
     const undo = page.getByRole('button', { name: 'Undo', exact: true })
     await undo.click()
     await expect.poll(() => fs.readFileSync(source, 'utf8')).toBe(preview.code)
+    // An undo or redo of the eject writes its files one after another, the lock last. Wait for
+    // all of them: a check (or this test's cleanup) between two writes sees a half-applied
+    // entry, and the rest of the entry then lands after the cleanup.
+    const files = () => [app, lock, source].map(readOrNull)
+    const restored = [before, priorLock, null]
     await undo.click()
-    await expect.poll(() => fs.existsSync(source)).toBe(false)
-    expect(fs.readFileSync(app)).toEqual(before)
-    expect(fs.existsSync(lock) ? fs.readFileSync(lock) : null).toEqual(priorLock)
+    await expect.poll(files, { timeout: 15_000 }).toEqual(restored)
     await page.getByRole('button', { name: 'Redo', exact: true }).click()
-    await expect.poll(() => fs.existsSync(source)).toBe(true)
-    expect([app, lock, source].map((file) => fs.readFileSync(file))).toEqual(ejected)
+    await expect.poll(files, { timeout: 15_000 }).toEqual(ejected)
     await undo.click()
-    await expect.poll(() => fs.existsSync(source)).toBe(false)
+    await expect.poll(files, { timeout: 15_000 }).toEqual(restored)
   } finally {
     if (!fs.readFileSync(app).equals(before)) fs.writeFileSync(app, before)
     if (priorLock) fs.writeFileSync(lock, priorLock)
