@@ -46,6 +46,9 @@ code, so the compiler does not import either host or service. The adapter passes
 it to the compiler. Both the existing Vite and Next hosts use the same Refine adapter.
 Spec 012 owns the Next blueprint target.
 
+⚑ Explicit fields keep the blueprint's order, with exclusions taking precedence. Omitting
+fields keeps the existing generator's default selection.
+
 `filters`, `rowActions` and `headerActions` are new generator inputs:
 
 - `filters` chooses which fields get a filter. The filter component still comes from the

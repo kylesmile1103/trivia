@@ -1,6 +1,7 @@
 import { hasErrors, pageDocPath, validate, type Blueprint, type ComponentManifest, type Diagnostic, type ValidationContext } from '@trivia/blueprint'
-import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
+import type { TriviaManifest } from '@trivia/contract-sync'
 
+import { generateContract, type ContractPageGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
@@ -12,19 +13,6 @@ export interface EmittedModule {
   component: string
   importPath: string
   route: string
-}
-
-export interface ContractPageInput {
-  resource: ManifestResource
-  kind: 'list' | 'create' | 'edit' | 'show'
-  facts: ProjectFacts
-}
-
-export type ContractPageGenerator = (input: ContractPageInput) => {
-  file: string
-  content: string
-  component: string
-  importPath: string
 }
 
 export interface CompileContext {
@@ -64,7 +52,7 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
   if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
   if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
-  const { content, ...generated } = context.generateContractPage({ resource, kind: page.kind, facts: context.facts })
+  const { content, ...generated } = generateContract(page, resource, context.facts, context.generateContractPage)
   try {
     context.engine.annotate(content, generated.file)
   } catch (error) {

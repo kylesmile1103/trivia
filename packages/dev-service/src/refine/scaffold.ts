@@ -3,6 +3,7 @@
 // the panels can keep working on them afterwards. Columns and fields come from columns.ts and
 // fields.ts, the same code that adds one to an existing page.
 
+import type { ContractOptions } from '@trivia/blueprint'
 import type { ManifestField, ManifestResource } from '@trivia/contract-sync'
 
 import { type ImportSpec, columnFor, fieldShape, humanize } from './columns.js'
@@ -31,17 +32,13 @@ export interface ScaffoldContext {
   style?: FormStyle
 }
 
-type RenderContext = ScaffoldContext & { title?: string }
+type RenderContext = ScaffoldContext & NonNullable<ScaffoldRequest['options']>
 
 export interface ScaffoldRequest {
   resource: ManifestResource
   kind: PageKind
   project: ScaffoldContext
-  options?: {
-    hideFields?: readonly string[]
-    /** The view header's title; defaults to the resource or Refine's own title. */
-    title?: string
-  }
+  options?: Pick<ContractOptions, 'fields' | 'hideFields' | 'title'>
 }
 
 export type RefinePageGenerator = (request: ScaffoldRequest) => PageFile
@@ -57,6 +54,13 @@ function withoutFields(resource: ManifestResource, hide: readonly string[]): Man
     entity: resource.entity ? { ...resource.entity, fields: keep(resource.entity.fields) } : null,
     operations: { ...resource.operations, create: body(resource.operations.create), update: body(resource.operations.update) },
   }
+}
+
+/** Keep the blueprint's explicit field order, without duplicating a column or control. */
+function selectedFields(fields: readonly ManifestField[], selection?: readonly string[]): ManifestField[] {
+  if (selection === undefined) return [...fields]
+  const byName = new Map(fields.map((field) => [field.name, field]))
+  return [...new Set(selection)].flatMap((name) => byName.get(name) ?? [])
 }
 
 export interface PageFile {
@@ -148,7 +152,7 @@ export const generateRefinePage: RefinePageGenerator = ({ resource: contract, ki
     throw new Error(`${contract.name} has no ${kind === 'edit' ? 'update' : kind === 'show' ? 'get' : kind} operation in the contract`)
   }
   const resource = withoutFields(contract, options?.hideFields ?? [])
-  const context: RenderContext = { ...project, ...(options?.title !== undefined && { title: options.title }) }
+  const context: RenderContext = { ...project, ...options }
   const component = `${resource.name}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
   const route = routeOf(name, kind)
   const file = context.appRouter
@@ -191,8 +195,11 @@ function listPage(
   imports.add({ name: 'ListView', source: `${refineUi}/views/list-view` })
   imports.add({ name: 'ListViewHeader', source: `${refineUi}/views/list-view` })
 
-  const fields = (resource.entity?.fields ?? []).filter((f) => f.name !== resource.primaryKey && SCALAR.has(fieldShape(f)))
-  const columns = fields.slice(0, MAX_LIST_COLUMNS).map((f) => {
+  const fields = resource.entity?.fields ?? []
+  const visible = context.fields === undefined
+    ? fields.filter((f) => f.name !== resource.primaryKey && SCALAR.has(fieldShape(f))).slice(0, MAX_LIST_COLUMNS)
+    : selectedFields(fields, context.fields)
+  const columns = visible.map((f) => {
     const column = columnFor(f, { badge: `${context.ui}/badge`, dataTable: context.refineUi ? `${context.refineUi}/data-table` : null })
     for (const spec of column.imports) imports.add(spec)
     return column.value
@@ -259,7 +266,7 @@ function formPage(
   context: RenderContext,
 ): string {
   const imports = new Imports()
-  const body = (bodyFields(resource, kind === 'create' ? 'create' : 'update') ?? []).filter((f) => !f.readOnly)
+  const body = selectedFields(bodyFields(resource, kind === 'create' ? 'create' : 'update') ?? [], context.fields).filter((f) => !f.readOnly)
   const editable = body.filter((f) => SCALAR.has(fieldShape(f)))
   const skipped = body.filter((f) => !SCALAR.has(fieldShape(f)))
   const schema = `${camel(resource.name)}Schema`
@@ -352,7 +359,7 @@ function showPage(resource: ManifestResource, name: string, component: string, t
   if (typeName) imports.type(typeName, context.typesImport)
   imports.add({ name: 'ShowView', source: `${refineUi}/views/show-view` })
   imports.add({ name: 'ShowViewHeader', source: `${refineUi}/views/show-view` })
-  const fields = resource.entity?.fields ?? []
+  const fields = selectedFields(resource.entity?.fields ?? [], context.fields)
   const rows = fields.map((f) => {
     const shape = fieldShape(f)
     const value = `record?.${f.name}`

@@ -1,12 +1,28 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { loadBlueprint, SCHEMA_URL } from '@trivia/blueprint'
+import { loadBlueprint, SCHEMA_URL, type ContractOptions } from '@trivia/blueprint'
 import { compilePage, projectFacts, type CompileContext } from '@trivia/blueprint-compiler'
 import { generateRefinePage, loadEngine } from '@trivia/dev-service'
 import { expect, it } from 'vitest'
 
-import { copyRefineAdmin, post, startServer } from './helpers.js'
+import { REFINE_ADMIN, copyRefineAdmin, post, startServer } from './helpers.js'
+
+async function contextFor(root: string): Promise<CompileContext> {
+  const contract: NonNullable<CompileContext['contract']> = JSON.parse(fs.readFileSync(path.join(root, 'trivia.manifest.json'), 'utf8'))
+  const typesImport = contract.modules.types?.importPath
+  if (!typesImport) throw new Error('Fixture contract must have generated types')
+  return {
+    contract, engine: await loadEngine(), facts: projectFacts(),
+    generateContractPage: (input) => generateRefinePage({
+      ...input,
+      project: {
+        ui: '@/components/ui', refineUi: '@/components/refine-ui', textarea: true,
+        pagesDir: 'src/pages', pagesImport: '@/pages', typesImport,
+      },
+    }),
+  }
+}
 
 it('FR-RC-02: compiles all four default pages byte for byte as refine/pages/plan', async () => {
   const root = copyRefineAdmin()
@@ -18,19 +34,7 @@ it('FR-RC-02: compiles all four default pages byte for byte as refine/pages/plan
     fs.rmSync(path.join(root, 'src/pages/accounts/list.tsx'))
     const server = await startServer(root)
     try {
-      const contract: NonNullable<CompileContext['contract']> = JSON.parse(fs.readFileSync(path.join(root, 'trivia.manifest.json'), 'utf8'))
-      const typesImport = contract.modules.types?.importPath
-      if (!typesImport) throw new Error('Fixture contract must have generated types')
-      const context: CompileContext = {
-        contract, engine: await loadEngine(), facts: projectFacts(),
-        generateContractPage: (input) => generateRefinePage({
-          ...input,
-          project: {
-            ui: '@/components/ui', refineUi: '@/components/refine-ui', textarea: true,
-            pagesDir: 'src/pages', pagesImport: '@/pages', typesImport,
-          },
-        }),
-      }
+      const context = await contextFor(root)
       const kinds = ['list', 'create', 'edit', 'show'] as const
       const plan = await post(server.socket, '/refine/pages/plan', { resource: 'Account', pages: kinds })
       expect(plan.status, JSON.stringify(plan.body)).toBe(200)
@@ -54,3 +58,30 @@ it('FR-RC-02: compiles all four default pages byte for byte as refine/pages/plan
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+function accountPage(kind: 'list' | 'create' | 'edit' | 'show', options: ContractOptions) {
+  return loadBlueprint({ 'pages/Account.page.json': JSON.stringify({
+    $schema: SCHEMA_URL.page, blueprintVersion: 1, id: 'pg_00000000000000000000000000',
+    name: 'Account', route: '/accounts', kind, resource: 'Account', options,
+  }) })
+}
+
+it('FR-RC-02: sends the blueprint field selection, exclusions and title to the shared generator', async () => {
+  const context = await contextFor(REFINE_ADMIN)
+  const list = compilePage(accountPage('list', {
+    fields: ['currency', 'status', 'type'], hideFields: ['status'], title: 'Ledger',
+  }), 'Account', context).code
+  expect([...list.matchAll(/accessorKey: "([^"]+)"/g)].map((match) => match[1])).toEqual(['currency', 'type'])
+  expect(list).toContain('<ListViewHeader title="Ledger"')
+
+  const create = compilePage(accountPage('create', {
+    fields: ['type', 'currency'], hideFields: ['currency'],
+  }), 'Account', context).code
+  expect(create).toContain('name="type"')
+  expect(create).not.toContain('name="customerId"')
+  expect(create).not.toContain('name="currency"')
+
+  const show = compilePage(accountPage('show', { fields: ['id'] }), 'Account', context).code
+  expect(show).toContain('record?.id')
+  expect(show).not.toContain('record?.currency')
+})

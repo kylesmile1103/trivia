@@ -2,5 +2,6 @@ export { projectFacts, type FactInputs, type PrintStyle, type ProjectFacts } fro
 export type { AttributeIR, HandlerIR, HookIR, ImportIR, JsxIR, PageIR, QueryIR, StateIR, StepIR } from './ir.js'
 export {
   compilePage, CompileError, pageDiagnostics,
-  type CompileContext, type ContractPageGenerator, type ContractPageInput, type EmittedModule, type RegistryItem,
+  type CompileContext, type EmittedModule, type RegistryItem,
 } from './compile.js'
+export type { ContractPageGenerator, ContractPageInput } from './contract-pages.js'
