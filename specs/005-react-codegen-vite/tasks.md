@@ -56,7 +56,7 @@
 
 - [x] T029 `e2e/blueprint.spec.ts`: preview in the canvas, eject, select and edit an ejected element (SC-004), undo. Extend `e2e/blueprint-mcp.spec.ts` with preview, screenshot, eject
 - [x] T030 [P] `docs/api.md` and `docs/mcp.md`: complete the preview, plan and eject entries
-- [ ] T031 Update LLD-05 where the implementation refined it. Decide its open point on `nav` and theme
+- [x] T031 Update LLD-05 where the implementation refined it. Decide its open point on `nav` and theme
 - [ ] T032 Run `pnpm check` and `pnpm e2e`
 
 ## Dependencies
@@ -64,3 +64,12 @@
 T004 and T005 are independent of each other and block Phases 3 and 6. Phase 4's fixtures build
 on each other in order. Preview (Phase 5) needs Phase 4's first fixture. Eject (Phase 6) needs
 T004. The CLI needs eject.
+
+## Deferred integrations
+
+- [ ] Full component kit and its registry command
+  Deferred: needs spec 006 (defines the component kit and manifest set).
+- [ ] App-specific backend and data provider orchestration
+  Deferred: needs spec 010 (wires the generated contract and frontend to the backend).
+- [ ] Next.js compilation, preview and eject
+  Deferred: needs spec 012 (defines the Next.js target and App Router registration).

@@ -10,7 +10,7 @@
 
 ```
 blueprint (valid) + manifests + contract manifest + project facts
-  └─ lower ─► PageIR ─► print (target) ─► EmittedModule { file, code, requires }
+  └─ lower ─► PageIR ─► print (target) ─► EmittedModule { file, code, requires, … }
                                              ├─ preview: served as a module
                                              └─ eject: Plan { ops, files, lock }
 ```
@@ -28,7 +28,7 @@ interface ProjectFacts {
   installed: Set<string>                   // registry items present in the project
 }
 function compilePage(bp: Blueprint, page: string, ctx: CompileContext): EmittedModule
-function planEject(bp: Blueprint, pages: string[], ctx: CompileContext, lock: Lock): EjectPlan
+function planEject(bp: Blueprint, pages: readonly string[] | undefined, ctx: EjectContext, lock: Lock): EjectPlan
 ```
 
 ⚑ Project facts take the majority quote and semicolon style of static imports in the entry
@@ -80,9 +80,10 @@ interface PageIR {
   route: string
   client: boolean                // any client-tier expression, event or exposed value
   imports: ImportIR[]            // derived from references (FR-RC-04)
-  state: StateIR[]               // { name, setter, type, initial }
+  state: StateIR[]               // { name?, setter?, type, initial }
   queries: QueryIR[]             // { name, hook, args, fields: Record<bpField, tsPath> }
-  mutations: MutationIR[]
+  mutations: HookIR[]
+  hooks: HookIR[]                // router params, identity, notifications and navigation
   handlers: HandlerIR[]          // { name, params, body: StepIR[] }
   jsx: JsxIR                     // element | text | expr | cond | repeat
 }
@@ -203,9 +204,10 @@ variables with the same JSX transaction and leave the project's stylesheet intac
 Refusals: 422 with `requires` when a component is not installed; 409 when a page's file
 differs from its lock hash; 409 when a route or file already exists and is not in the lock.
 
-⚑ Existing call handlers are kept, including one created after the plan was read.
-File creation and history accept TypeScript handler files. JSX locators still require
-JSX or TSX. Contract pages derive their registry requirements from their emitted imports.
+⚑ Existing call handlers are kept, including one created after the plan was read. The lock
+covers generated page modules. Handler stubs become project-owned on creation. File creation
+and history accept TypeScript handler files. JSX locators require JSX or TSX. Contract pages
+derive their registry requirements from their emitted imports.
 
 ⚑ The lock records the route and component as well as the hash. These distinguish a
 deleted generated file from a route that someone has taken over. Re-eject refuses a moved
@@ -218,8 +220,9 @@ file or route until the existing registration is resolved. Older hashes remain r
   "lockVersion": 1,
   "compiler": "0.3.0",
   "pages": {
-    "CustomerOverview": { "file": "src/pages/customers/overview.tsx",
-                          "hash": "sha256:…", "blueprintRev": "sha256:…" }
+    "CustomerOverview": { "file": "src/pages/CustomerOverview/CustomerOverview.tsx",
+                          "hash": "sha256:…", "blueprintRev": "sha256:…",
+                          "route": "/customer-overview", "component": "CustomerOverview" }
   }
 }
 ```
@@ -229,7 +232,8 @@ No timestamps (NFR-02).
 ⚑ The adapter appends the guarded lock write as the final op of the source batch. The native
 transaction can roll back the sources and lock together. The dev service checks the page
 revisions under the edit queue, and `/ejected` confirms the resulting history entry.
-Only the managed lock basename is allowed as a JSON source-batch target.
+The entry retains the submitted lock bytes even when restoring a missing file leaves the
+lock unchanged. Only the managed lock basename is allowed as a JSON source-batch target.
 
 ### `replaceFile`
 
@@ -253,10 +257,13 @@ source so a batch rollback or undo can restore it through the ordinary guarded w
 
 | Command | Does |
 | --- | --- |
-| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for the kit |
+| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for Refine UI |
 | `validate [--json]` | Loads, validates, prints diagnostics. Exit 1 on errors |
 | `compile <Page> [--out file]` | Prints or writes one compiled page |
 | `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards |
+
+Run `validate`, `compile` and `eject` from the project root. Commands exit with 0 for success,
+1 for operation errors and validation errors, or 2 for incorrect arguments.
 
 `templates/vite-refine/` is a minimal app of `examples/refine-admin`'s shape: Vite, React,
 Refine core with the React Router binding, Tailwind v4, `components.json`, the Trivia plugin,
@@ -279,12 +286,14 @@ the workspace. It prints commands for Refine UI's layout and views registry item
 - Lock rules: eject twice (the second is `replaceFile`), then edit the file by one byte (409).
 - `replaceFile`: engine unit tests, round trips, CRLF, each refusal.
 - Determinism: compile the fixture 20 times in shuffled document order, one hash.
-- `e2e/blueprint.spec.ts`: preview in the canvas, eject, and select and edit an ejected
-  element with the inspector.
+- `e2e/blueprint.spec.ts`: reload a draft in the canvas, eject, edit with the inspector,
+  then undo and redo with byte-exact source and lock snapshots.
+- `e2e/blueprint-mcp.spec.ts`: preview and screenshot through the designer proxy, eject,
+  and undo by the returned agent label.
 
-## 9. Open points
+## 9. Follow-ups
 
-- Whether `nav` and theme edits belong to eject or to the `new` template only. They are
-  best-effort for now, and that is their weakest point.
-- A page-level error boundary and loading skeleton, which the generator's pages have and
-  custom pages do not yet.
+- Deferred: needs spec 006 (full component kit and registry command).
+- Deferred: needs spec 010 (app-specific backend and data provider orchestration).
+- Deferred: needs spec 012 (Next.js preview and eject target).
+- A page-level error boundary and loading skeleton for custom pages remain open.
