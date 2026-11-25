@@ -169,6 +169,9 @@ is generic over the resource name.
   manifest's resources, operations and pagination come out without overrides. A test asserts
   it: the fixture model's OpenAPI document, through contract-sync, gives a manifest with one
   resource per entity, the five CRUD slots, `listItemsPath: "items"` and page pagination.
+  ⚑ The Vite template pins pnpm to the workspace version, adds contract-sync as a development
+  dependency and includes zod for the generated schemas. `trivia-blueprint new` links the
+  checkout's built contract-sync package when available, as it does for the Vite plugin.
   ⚑ Assert the populated slots against each fixture entity's enabled operations. The bank
   exposes all five on Customer, and list and get on Account and Transaction. Contract-sync
   consumes the Verify snapshot unchanged by accepting a leading UTF-8 BOM on JSON inputs.

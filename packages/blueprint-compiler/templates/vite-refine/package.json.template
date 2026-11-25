@@ -3,9 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@12.9.1",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build"
+    "build": "tsc --noEmit && vite build",
+    "sync": "trivia-contract-sync --input openapi/api.openapi.json --zod"
   },
   "dependencies": {
     "@refinedev/core": "5.0.12",
@@ -16,10 +18,12 @@
     "@tanstack/react-table": "8.21.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "7.18.4"
+    "react-router": "7.18.4",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@trivia/contract-sync": "0.2.0",
     "@trivia/vite-plugin-ast-locator": "0.2.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

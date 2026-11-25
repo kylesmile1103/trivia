@@ -21,6 +21,7 @@ const options = {
   eject: { 'dry-run': { type: 'boolean' } },
 } as const
 
+const contractSync = '@trivia/contract-sync'
 const plugin = '@trivia/vite-plugin-ast-locator'
 const service = '@trivia/dev-service'
 
@@ -64,6 +65,8 @@ function createProject(root: string, dest: string, version: string): void {
   const manifest = JSON.parse(fs.readFileSync(path.join(template, 'package.json.template'), 'utf8'))
   const localPlugin = resolveManifest(root, plugin) ?? checkoutManifest('vite-plugin-ast-locator')
   manifest.devDependencies[plugin] = localPlugin ? 'link:' + path.dirname(localPlugin) : version
+  const localSync = resolveManifest(root, contractSync) ?? checkoutManifest('contract-sync')
+  manifest.devDependencies[contractSync] = localSync ? 'link:' + path.dirname(localSync) : version
   const candidate = path.basename(dir).replace(/(?:^|[^A-Za-z0-9]+)([A-Za-z0-9])/g, (_, char: string) => char.toUpperCase())
   const fields = { $schema: SCHEMA_URL.app, blueprintVersion: BLUEPRINT_VERSION, targets: { web: 'vite-refine' }, name: candidate }
   const named = appSchema.safeParse(fields)
@@ -75,7 +78,7 @@ function createProject(root: string, dest: string, version: string): void {
   fs.mkdirSync(path.join(dir, 'blueprint'))
   fs.writeFileSync(path.join(dir, 'blueprint', APP_DOC), serialize(app), { flag: 'wx' })
   console.log(`Created ${dir}`)
-  if (!localPlugin) console.log('Point the Trivia Vite plugin dependency at your Trivia distribution before installing.')
+  if (!localPlugin) console.log('Point the Trivia Vite plugin and contract-sync dependencies at your Trivia distribution before installing.')
   console.log('Run in the new directory:\n  pnpm install\n  pnpm exec shadcn add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json')
 }
 

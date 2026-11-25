@@ -33,6 +33,14 @@ it('copies a template and writes a canonical empty blueprint, without fetching c
   expect(cli('compile', '--out').status).toBe(2)
 })
 
+it('wires pnpm sync to the emitted API contract and includes its dependencies', () => {
+  expect(cli('new', 'bank-admin').status).toBe(0)
+  const app = JSON.parse(fs.readFileSync(path.join(root, 'bank-admin/package.json'), 'utf8'))
+  expect(app.scripts.sync).toBe('trivia-contract-sync --input openapi/api.openapi.json --zod')
+  expect(app.devDependencies['@trivia/contract-sync']).toBe('link:' + path.resolve(import.meta.dirname, '../../contract-sync'))
+  expect(app.dependencies.zod).toBe('4.6.6')
+})
+
 it('validates, compiles, plans and ejects offline using the shared project adapter', () => {
   fs.cpSync(path.join(fixture, 'src'), path.join(root, 'src'), { recursive: true })
   for (const file of ['components.json', 'trivia.manifest.json']) fs.copyFileSync(path.join(fixture, file), path.join(root, file))
