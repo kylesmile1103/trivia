@@ -103,3 +103,20 @@ export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots
   }
   return props
 }
+
+
+const tabItemsSchema = z.array(z.strictObject({ name: slotName, label: text }))
+  .refine((items) => new Set(items.map(({ name }) => name)).size === items.length)
+
+/** Static tab descriptors also name the node slots on a kit Tabs instance. */
+export function configuredTabs(manifest: Pick<ComponentManifest, 'type' | 'source' | 'configuration'>, value: unknown) {
+  if (manifest.type !== 'Tabs' || manifest.source.registry !== 'shadcn' ||
+    !manifest.configuration?.some(({ name }) => name === 'tabs')) return undefined
+  return tabItemsSchema.safeParse(value === undefined ? [] : value).data
+}
+
+export function manifestSlots(manifest: ComponentManifest, props: Readonly<Record<string, unknown>> | undefined): ManifestSlot[] {
+  const tabs = configuredTabs(manifest, props?.['tabs'])
+  const wrapper = manifest.source.parts?.['content']
+  return tabs ? tabs.map(({ name }) => ({ name, kind: 'nodes', ...(wrapper && { wrapper }) })) : manifest.slots
+}

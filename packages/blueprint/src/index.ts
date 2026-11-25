@@ -47,7 +47,7 @@ export {
 export { jsonSchemas } from './schemas.js'
 
 export {
-  componentManifestSchema, manifestJsonSchema,
+  componentManifestSchema, configuredTabs, manifestJsonSchema, manifestSlots,
   type ComponentManifest, type ComponentSchema, type ExposedValue, type ManifestEvent, type ManifestSlot, type PropSchema,
 } from './manifest/types.js'
 export {

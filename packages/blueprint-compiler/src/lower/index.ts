@@ -1,4 +1,4 @@
-import { exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
+import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
@@ -103,7 +103,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       const setter = names.take('set' + capitalize(name))
       const props = page.props[id]
       rename['ui.' + node.name + '.' + key] = name
-      const seed = props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp] : initial
+      const seed = props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp]
+        : configuredTabs(manifest, props?.['tabs'])?.[0]?.name ?? initial
       let seedCode = literal(seed, facts.style)
       if (manifest.type === 'DatePicker' && manifest.source.registry === 'shadcn') {
         if (seed !== null && (typeof seed !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(seed) ||

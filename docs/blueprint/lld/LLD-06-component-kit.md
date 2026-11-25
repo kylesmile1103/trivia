@@ -51,6 +51,11 @@ item selection. DatePicker uses a single-selection Calendar inside a Popover. It
 state is undefined, and a static `selected` is an ISO calendar date. Checkbox maps Radix's
 indeterminate change value to false for its boolean exposure.
 
+⚑ Tabs takes static `tabs: [{ "name": "summary", "label": "Summary" }]`. Names are unique
+slot identifiers and each generated trigger and panel shares that value. The first tab is
+selected unless the author provides a value. Dialog and Sheet accept the library's title
+and description parts in their content slot.
+
 ## 3. `DataTable` (FR-KT-02, FR-KT-04, FR-KT-05)
 
 A node of type `DataTable` in a custom page:

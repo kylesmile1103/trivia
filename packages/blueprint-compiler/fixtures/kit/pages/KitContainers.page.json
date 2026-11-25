@@ -1,0 +1,335 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000003",
+  "name": "KitContainers",
+  "route": "/kit/containers",
+  "kind": "custom",
+  "root": "n_00000000000000000000000001",
+  "nodes": {
+    "n_00000000000000000000000001": {
+      "type": "main",
+      "name": "page",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_00000000000000000000000002": {
+      "type": "h1",
+      "name": "heading",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a1"
+    },
+    "n_00000000000000000000000003": {
+      "type": "Card",
+      "name": "card",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a2"
+    },
+    "n_00000000000000000000000004": {
+      "type": "p",
+      "name": "cardheader",
+      "parent": "n_00000000000000000000000003",
+      "slot": "header",
+      "order": "a0"
+    },
+    "n_00000000000000000000000005": {
+      "type": "p",
+      "name": "cardcontent",
+      "parent": "n_00000000000000000000000003",
+      "slot": "content",
+      "order": "a0"
+    },
+    "n_00000000000000000000000006": {
+      "type": "p",
+      "name": "cardfooter",
+      "parent": "n_00000000000000000000000003",
+      "slot": "footer",
+      "order": "a0"
+    },
+    "n_00000000000000000000000007": {
+      "type": "Tabs",
+      "name": "tabs",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a3"
+    },
+    "n_00000000000000000000000008": {
+      "type": "p",
+      "name": "summary",
+      "parent": "n_00000000000000000000000007",
+      "slot": "summary",
+      "order": "a0"
+    },
+    "n_00000000000000000000000009": {
+      "type": "p",
+      "name": "details",
+      "parent": "n_00000000000000000000000007",
+      "slot": "details",
+      "order": "a0"
+    },
+    "n_00000000000000000000000010": {
+      "type": "p",
+      "name": "currentTab",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a4"
+    },
+    "n_00000000000000000000000011": {
+      "type": "Dialog",
+      "name": "dialog",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a5"
+    },
+    "n_00000000000000000000000012": {
+      "type": "span",
+      "name": "dialogTrigger",
+      "parent": "n_00000000000000000000000011",
+      "slot": "trigger",
+      "order": "a0"
+    },
+    "n_00000000000000000000000013": {
+      "type": "DialogTitle",
+      "name": "dialogTitle",
+      "parent": "n_00000000000000000000000011",
+      "slot": "content",
+      "order": "a0"
+    },
+    "n_00000000000000000000000014": {
+      "type": "span",
+      "name": "dialogTitleText",
+      "parent": "n_00000000000000000000000013",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_00000000000000000000000015": {
+      "type": "DialogDescription",
+      "name": "dialogDescription",
+      "parent": "n_00000000000000000000000011",
+      "slot": "content",
+      "order": "a1"
+    },
+    "n_00000000000000000000000016": {
+      "type": "span",
+      "name": "dialogDescriptionText",
+      "parent": "n_00000000000000000000000015",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_00000000000000000000000017": {
+      "type": "p",
+      "name": "dialogOutput",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a6"
+    },
+    "n_00000000000000000000000018": {
+      "type": "Sheet",
+      "name": "sheet",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a7"
+    },
+    "n_00000000000000000000000019": {
+      "type": "span",
+      "name": "sheetTrigger",
+      "parent": "n_00000000000000000000000018",
+      "slot": "trigger",
+      "order": "a0"
+    },
+    "n_00000000000000000000000020": {
+      "type": "SheetTitle",
+      "name": "sheetTitle",
+      "parent": "n_00000000000000000000000018",
+      "slot": "content",
+      "order": "a0"
+    },
+    "n_00000000000000000000000021": {
+      "type": "span",
+      "name": "sheetTitleText",
+      "parent": "n_00000000000000000000000020",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_00000000000000000000000022": {
+      "type": "SheetDescription",
+      "name": "sheetDescription",
+      "parent": "n_00000000000000000000000018",
+      "slot": "content",
+      "order": "a1"
+    },
+    "n_00000000000000000000000023": {
+      "type": "span",
+      "name": "sheetDescriptionText",
+      "parent": "n_00000000000000000000000022",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_00000000000000000000000024": {
+      "type": "p",
+      "name": "sheetOutput",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a8"
+    },
+    "n_00000000000000000000000025": {
+      "type": "Popover",
+      "name": "help",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a9"
+    },
+    "n_00000000000000000000000026": {
+      "type": "span",
+      "name": "helpTrigger",
+      "parent": "n_00000000000000000000000025",
+      "slot": "trigger",
+      "order": "a0"
+    },
+    "n_00000000000000000000000027": {
+      "type": "p",
+      "name": "helpContent",
+      "parent": "n_00000000000000000000000025",
+      "slot": "content",
+      "order": "a0"
+    },
+    "n_00000000000000000000000028": {
+      "type": "p",
+      "name": "helpOutput",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "aA"
+    },
+    "n_00000000000000000000000029": {
+      "type": "Separator",
+      "name": "separator",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "aB"
+    },
+    "n_00000000000000000000000030": {
+      "type": "p",
+      "name": "statusText",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "aC"
+    }
+  },
+  "props": {
+    "n_00000000000000000000000002": {
+      "children": "Containers"
+    },
+    "n_00000000000000000000000004": {
+      "children": "Card title"
+    },
+    "n_00000000000000000000000005": {
+      "children": "Card content"
+    },
+    "n_00000000000000000000000006": {
+      "children": "Card footer"
+    },
+    "n_00000000000000000000000007": {
+      "tabs": [
+        {
+          "name": "summary",
+          "label": "Summary"
+        },
+        {
+          "name": "details",
+          "label": "Details"
+        }
+      ]
+    },
+    "n_00000000000000000000000008": {
+      "children": "Account summary"
+    },
+    "n_00000000000000000000000009": {
+      "children": "Account details"
+    },
+    "n_00000000000000000000000012": {
+      "children": "Open dialog"
+    },
+    "n_00000000000000000000000014": {
+      "children": "Account dialog"
+    },
+    "n_00000000000000000000000016": {
+      "children": "Examples of the dialog."
+    },
+    "n_00000000000000000000000019": {
+      "children": "Open sheet"
+    },
+    "n_00000000000000000000000021": {
+      "children": "Account sheet"
+    },
+    "n_00000000000000000000000023": {
+      "children": "Examples of the sheet."
+    },
+    "n_00000000000000000000000026": {
+      "children": "Open help"
+    },
+    "n_00000000000000000000000027": {
+      "children": "Help details"
+    }
+  },
+  "bindings": {
+    "n_00000000000000000000000010": {
+      "children": "ui.tabs.value"
+    },
+    "n_00000000000000000000000017": {
+      "children": "ui.dialog.open ? \"dialog open\" : \"dialog closed\""
+    },
+    "n_00000000000000000000000024": {
+      "children": "ui.sheet.open ? \"sheet open\" : \"sheet closed\""
+    },
+    "n_00000000000000000000000028": {
+      "children": "ui.help.open ? \"help open\" : \"help closed\""
+    },
+    "n_00000000000000000000000030": {
+      "children": "state.status"
+    }
+  },
+  "styles": {
+    "n_00000000000000000000000001": {
+      "className": "grid max-w-4xl gap-5 p-6"
+    }
+  },
+  "state": {
+    "status": {
+      "type": "string",
+      "initial": "Ready"
+    }
+  },
+  "actions": {
+    "n_00000000000000000000000007.onValueChange": [
+      {
+        "do": "setState",
+        "name": "status",
+        "value": "String(value)"
+      }
+    ],
+    "n_00000000000000000000000011.onOpenChange": [
+      {
+        "do": "setState",
+        "name": "status",
+        "value": "String(value)"
+      }
+    ],
+    "n_00000000000000000000000018.onOpenChange": [
+      {
+        "do": "setState",
+        "name": "status",
+        "value": "String(value)"
+      }
+    ],
+    "n_00000000000000000000000025.onOpenChange": [
+      {
+        "do": "setState",
+        "name": "status",
+        "value": "String(value)"
+      }
+    ]
+  }
+}

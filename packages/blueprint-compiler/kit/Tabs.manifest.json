@@ -1,0 +1,60 @@
+{
+  "type": "Tabs",
+  "source": {
+    "registry": "shadcn",
+    "item": "tabs",
+    "import": {
+      "name": "Tabs",
+      "from": "ui"
+    },
+    "parts": {
+      "list": "TabsList",
+      "trigger": "TabsTrigger",
+      "content": "TabsContent"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onValueChange",
+      "prop": "onValueChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onValueChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {
+    "props": {
+      "tabs": [
+        {
+          "name": "summary",
+          "label": "Summary"
+        },
+        {
+          "name": "details",
+          "label": "Details"
+        }
+      ]
+    }
+  },
+  "configuration": [
+    {
+      "name": "tabs",
+      "kind": "unknown",
+      "optional": true,
+      "source": "declared",
+      "typeText": "Array<{ name: string; label: string }>"
+    }
+  ]
+}

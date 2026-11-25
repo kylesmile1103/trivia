@@ -1,9 +1,9 @@
-import { toPointer, type BlueprintNode, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
+import { configuredTabs, manifestSlots, toPointer, type BlueprintNode, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
 import type { AttributeIR, JsxIR } from '../ir.js'
-import { kitInput } from './kit-inputs.js'
+import { kitElement } from './kit-elements.js'
 import { compareBytes } from '../print/style.js'
 
 export interface RepeatLocal { alias: string; item: string; index?: string }
@@ -47,22 +47,25 @@ export function lowerJsx(
     const children: JsxIR[] = []
     if (content?.kind === 'expr') children.push({ kind: 'expr', code: content.code })
     if (content?.kind === 'static' && typeof content.value === 'string') children.push({ kind: 'text', value: content.value })
+    const slots = manifestSlots(manifest, page.props[id])
+    const tabs = configuredTabs(manifest, page.props[id]?.['tabs'])
     for (const [, model] of nodes) {
-      if (!manifest.slots.some((slot) => slot.name === model.slot && slot.kind === 'nodes')) {
+      if (!slots.some((slot) => slot.name === model.slot && slot.kind === 'nodes')) {
         throw new CompileError('invalid_result', manifest.type + ' has no node slot ' + model.slot)
       }
     }
-    for (const slot of manifest.slots) {
+    for (const slot of slots) {
       const contents = nodes.filter(([, model]) => model.slot === slot.name)
         .map(([child]) => lower(child, repeated))
       const wrapper = slot.wrapper ?? manifest.source.parts?.[slot.name]
-      if (contents.length) {
-        if (wrapper) children.push({ kind: 'element', tag: component(manifest, wrapper), props: [], children: contents })
+      if (contents.length || tabs) {
+        const props: AttributeIR[] = tabs ? [{ name: 'value', value: { kind: 'static', value: slot.name } }] : []
+        if (wrapper) children.push({ kind: 'element', tag: component(manifest, wrapper), props, children: contents })
         else children.push(...contents)
       }
     }
     const element: Extract<JsxIR, { kind: 'element' }> = { kind: 'element', tag, props, children }
-    let tree: JsxIR = kitInput(manifest, element, (part) => component(manifest, part),
+    let tree: JsxIR = kitElement(manifest, element, tabs, (part) => component(manifest, part),
       (part) => component(manifestOf('Popover'), part), style)
     if (page.control[id]?.when !== undefined) {
       tree = { kind: 'cond', test: expression(toPointer(['control', id, 'when'])), child: tree }

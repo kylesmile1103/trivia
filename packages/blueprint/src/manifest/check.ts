@@ -4,7 +4,7 @@ import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import type { CustomPage, PageDoc } from '../types/page.js'
 import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
-import { manifestProps, type ComponentManifest, type PropSchema } from './types.js'
+import { configuredTabs, manifestProps, manifestSlots, type ComponentManifest, type PropSchema } from './types.js'
 
 const deferredTypes = new Set([
   'Tree', 'TreeSelect', 'Cascader', 'Transfer', 'Upload', 'TimePicker', 'DateRangePicker', 'Steps', 'Rate', 'Tour', 'Chart',
@@ -61,10 +61,11 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
       const parent = page.nodes[node.parent]
       const parentManifest = parent && lookup(manifests, parent.type)
       if (parent && parentManifest?.installed) {
-        const slot = parentManifest.slots.find(({ name }) => name === node.slot)
+        const slots = manifestSlots(parentManifest, page.props[node.parent])
+        const slot = slots.find(({ name }) => name === node.slot)
         const path = ['nodes', id, 'slot']
         if (!slot) {
-          report('unknown_slot', path, `${parent.type} has no slot "${node.slot}". Available slots: ${describe(parentManifest.slots.map(({ name }) => name))}`)
+          report('unknown_slot', path, `${parent.type} has no slot "${node.slot}". Available slots: ${describe(slots.map(({ name }) => name))}`)
         } else if (slot.kind === 'text') {
           report('invalid_slot_content', path, `${parent.type}.${slot.name} accepts text`)
         } else if (slot.accepts && !slot.accepts.includes(node.type)) {
@@ -94,6 +95,10 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
         } else if (map === 'props') {
           const expected = invalidValue(prop, value)
           if (expected) report('invalid_prop_value', path, `${node.type}.${name} expects ${expected}`)
+          else if (node.type === 'Tabs' && name === 'tabs' && manifest.configuration?.some((prop) => prop.name === name) &&
+            !configuredTabs(manifest, value)) {
+            report('invalid_prop_value', path, 'Tabs.tabs expects { name, label } entries with unique slot names.')
+          }
         }
       }
     }

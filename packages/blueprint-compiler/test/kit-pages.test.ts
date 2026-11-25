@@ -32,3 +32,19 @@ it('FR-KT-01 compiles all input values and keeps their controls connected to bin
   expect(code).toContain('setConfirmedChecked(_event === true)')
   await expect(code).toMatchFileSnapshot(fileURLToPath(new URL('golden/KitInputs.tsx', fixtureDir)))
 })
+
+it('FR-KT-01 emits container slots and connects open and tab value bindings', async () => {
+  expect(kitManifests().map(({ type }) => type)).toEqual(expect.arrayContaining([
+    'Card', 'Tabs', 'Dialog', 'Sheet', 'Popover', 'Separator',
+  ]))
+  const { code, requires } = compileKitPage('KitContainers')
+  expect(requires).toEqual([])
+  for (const part of ['CardHeader', 'CardContent', 'CardFooter', 'DialogTrigger', 'DialogContent', 'SheetTrigger', 'SheetContent', 'PopoverTrigger', 'PopoverContent']) {
+    expect(code).toContain('<' + part + '>')
+  }
+  expect(code).toContain('<TabsTrigger value="summary">Summary</TabsTrigger>')
+  expect(code).toContain('<TabsContent value="summary">')
+  expect(code).toContain('useState<string>("summary")')
+  expect(code).toContain('open={helpOpen}')
+  await expect(code).toMatchFileSnapshot(fileURLToPath(new URL('golden/KitContainers.tsx', fixtureDir)))
+})

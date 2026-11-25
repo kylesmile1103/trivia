@@ -1,4 +1,4 @@
-import type { ResolvedManifest } from '@trivia/blueprint'
+import type { ResolvedManifest, configuredTabs } from '@trivia/blueprint'
 
 import { CompileError } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
@@ -14,8 +14,9 @@ const expr = (code: string): JsxIR => ({ kind: 'expr', code })
 const attr = (name: string, value: unknown): AttributeIR => ({ name, value: { kind: 'static', value } })
 const bound = (name: string, code: string): AttributeIR => ({ name, value: { kind: 'expr', code } })
 
-export function kitInput(
-  manifest: ResolvedManifest, root: Element, part: (name: string) => string,
+export function kitElement(
+  manifest: ResolvedManifest, root: Element, tabs: ReturnType<typeof configuredTabs>,
+  part: (name: string) => string,
   popover: (name: string) => string, style: PrintStyle,
 ): Element {
   if (manifest.source.registry !== 'shadcn') return root
@@ -35,6 +36,11 @@ export function kitInput(
     const placeholder = config('placeholder') ?? fallback
     if (typeof placeholder !== 'string') throw new CompileError('invalid_result', manifest.type + '.placeholder expects text.')
     return placeholder
+  }
+  if (tabs) {
+    config('tabs')
+    const list = tabs.map(({ name, label }) => element(part('TabsTrigger'), [text(label)], [attr('value', name)]))
+    root.children.unshift(element(part('TabsList'), list))
   }
   if (manifest.type === 'Select') {
     const placeholder = label('Choose an option')
