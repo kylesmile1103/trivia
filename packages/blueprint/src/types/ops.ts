@@ -1,9 +1,10 @@
 // BlueprintOps (LLD-01 section 4, FR-BP-07): the only way a blueprint changes. Every op names
 // its document and the rev its author read (`null`: the document must not exist yet). Node ops
 // also name the type they expect the node they address to have: for `addNode` that node is the
-// parent. Model ops are spec 008.
+// parent.
 import { z } from 'zod'
 
+import { modelOpSchema } from '../model/apply.js'
 import { API_TARGETS, AUTH_MODES, WEB_TARGETS, navEntrySchema } from './app.js'
 import { EVENT, NODE_TYPE, PAGE_NAME, PROP, ROUTE, SLOT, TOKEN, contractName, expression, json, name, nodeId, pageName } from './common.js'
 import { CONTRACT_KINDS, PAGE_KINDS, actionStepSchema, contractOptionsSchema, controlSchema, querySchema, stateSchema } from './page.js'
@@ -97,6 +98,7 @@ export const blueprintOpSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('removeQuery'), ...pageOp, name }),
   /** The steps of one event; an empty list removes the entry. */
   z.strictObject({ op: z.literal('setActions'), ...nodeOp, event: z.string().regex(EVENT), steps: z.array(actionStepSchema) }),
+  ...modelOpSchema.options,
 ])
 
 export type BlueprintOp = z.output<typeof blueprintOpSchema>
@@ -107,4 +109,5 @@ export type OpOf<N extends OpName> = Extract<BlueprintOp, { op: N }>
 export const OP_NAMES: readonly OpName[] = [
   'setApp', 'setNav', 'createPage', 'deletePage', 'setPageMeta', 'addNode', 'removeNode', 'moveNode', 'renameNode',
   'setProp', 'setBinding', 'setStyle', 'setControl', 'setState', 'removeState', 'setQuery', 'removeQuery', 'setActions',
+  ...modelOpSchema.options.map((schema) => schema.shape.op.value),
 ]

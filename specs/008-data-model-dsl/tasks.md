@@ -24,8 +24,9 @@
 ## Phase 5: User Story 3 - Ops (P1)
 
 - [x] T007 [US3] Op fixtures, then `src/model/apply.ts`: `setModel`, `setEnum`, `removeEnum`, `setEntity`, `removeEntity`, `renameEntity`, `setField`, `removeField`, `renameField`, `moveField`, `setRelation`, `removeRelation`, `setIndexes`, `setEntityApi`
-- [ ] T008 [US3] Add the model ops to the op union and the batch reducer of spec 001. Refusal tests
+- [x] T008 [US3] Add the model ops to the op union and the batch reducer of spec 001. Refusal tests
 - [ ] T009 [US3] The plugin's summary and MCP input schema pick the new ops up (snapshot updates in spec 004's tests)
+  Deferred: done on the spec 004 branch
 
 ## Phase 6: User Story 4 - API options (P2)
 
@@ -34,6 +35,7 @@
 ## Phase 7: User Story 5 - Breaking changes (P3)
 
 - [ ] T011 [US5] Record the last generated model revision and a field summary in the lock (written by spec 010's orchestration). `breaking_change` warnings against it
+  Deferred: done on the spec 010 branch
 
 ## Phase 8: Polish
 

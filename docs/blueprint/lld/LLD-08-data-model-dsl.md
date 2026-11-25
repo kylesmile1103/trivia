@@ -146,6 +146,11 @@ and clears the marker if the name returns to that original.
 references before the removal op in the same batch. Self-references disappear with their
 entity, and custom operation inputs and returns count as references.
 
+⚑ The public model API exposes the full schema and `validateModel(value, baseRev)`. The
+shared loader still reads the model envelope. The batch reducer checks full model shape and
+references alongside shared structural diagnostics, and only newly introduced errors block
+a batch. Fixing ops in successful results carry the model's resulting revision.
+
 ## 5. Validation (FR-DM-03)
 
 Model diagnostics, on top of the schema layer:

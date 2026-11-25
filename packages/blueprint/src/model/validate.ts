@@ -6,15 +6,10 @@ import { MODEL_DOC } from '../types/ops.js'
 import csharp from './reserved/csharp.json' with { type: 'json' }
 import generator from './reserved/generator.json' with { type: 'json' }
 import postgres from './reserved/postgres.json' with { type: 'json' }
-import type { ModelOp } from './apply.js'
-import type { ModelDoc, ModelEntity, ModelField, ModelFieldType } from './types.js'
+import { modelSchema, type ModelEntity, type ModelField, type ModelFieldType } from './types.js'
 
 type Path = readonly PropertyKey[]
-type SetRelationFix = Extract<ModelOp, { op: 'setRelation' }> & { baseRev: string }
-export interface ModelDiagnostic extends Omit<Diagnostic, 'hint'> {
-  hint?: { ops?: SetRelationFix[]; text?: string }
-}
-type Report = (code: string, path: Path, message: string, hint?: ModelDiagnostic['hint']) => void
+type Report = (code: string, path: Path, message: string, hint?: Diagnostic['hint']) => void
 
 const csharpKeywords = new Set(csharp.words)
 const postgresKeywords = new Set(postgres.words)
@@ -150,7 +145,7 @@ export function modelFieldTypes(entity: ModelEntity, entities: ReadonlyMap<strin
   return fields
 }
 
-function inverseHint(entity: ModelEntity, target: ModelEntity, foreignKey: string, baseRev: string): ModelDiagnostic['hint'] {
+function inverseHint(entity: ModelEntity, target: ModelEntity, foreignKey: string, baseRev: string): Diagnostic['hint'] {
   const taken = new Set([
     target.key.name, ...target.fields.map((field) => field.name),
     ...target.relations.flatMap((relation) => relation.kind === 'belongsTo' ? [relation.name, relation.foreignKey] : [relation.name]),
@@ -232,8 +227,22 @@ function checkEntityReferences(
   })
 }
 
-export function validateModel(model: ModelDoc, baseRev: string): ModelDiagnostic[] {
-  const diagnostics: ModelDiagnostic[] = []
+/** Check a model's schema and references, using its on-disk revision for fixing ops. */
+export function validateModel(value: unknown, baseRev: string): Diagnostic[] {
+  const parsed = modelSchema.safeParse(value)
+  if (!parsed.success) {
+    return parsed.error.issues.flatMap(({ code, path, message, ...issue }) => {
+      if (code === 'unrecognized_keys' && 'keys' in issue) {
+        return issue.keys.map((key) => ({
+          code: 'schema_violation', severity: 'error', doc: MODEL_DOC,
+          pointer: toPointer([...path, key]), message: `Unknown property "${key}"`,
+        }))
+      }
+      return [{ code: 'schema_violation', severity: 'error', doc: MODEL_DOC, pointer: toPointer(path), message }]
+    })
+  }
+  const model = parsed.data
+  const diagnostics: Diagnostic[] = []
   const report: Report = (code, path, message, hint) => {
     diagnostics.push({ code, severity: 'error', doc: MODEL_DOC, pointer: toPointer(path), message, ...(hint ? { hint } : {}) })
   }

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { DIAGNOSTIC_CODES, ERROR_STATUS, toPointer } from './diagnostics.js'
-import { OP_NAMES, blueprintOpSchema } from './ops.js'
+import { MODEL_DOC, OP_NAMES, blueprintOpSchema } from './ops.js'
 
 const page = 'pages/CustomerOverview.page.json'
 const rev = 'sha256:' + '0'.repeat(64)
 const node = 'n_01JDK3M8A00000000000000004'
+const model = { doc: MODEL_DOC, baseRev: rev }
 
 describe('BlueprintOp schema (FR-BP-07)', () => {
   const valid = [
@@ -27,6 +28,20 @@ describe('BlueprintOp schema (FR-BP-07)', () => {
     { op: 'setQuery', doc: page, baseRev: rev, name: 'orders', query: { kind: 'list', resource: 'Order' } },
     { op: 'removeQuery', doc: page, baseRev: rev, name: 'orders' },
     { op: 'setActions', doc: page, baseRev: rev, node, expectedType: 'Button', event: 'onClick', steps: [{ do: 'refetch', query: 'orders' }] },
+    { ...model, op: 'setModel', baseRev: null, namespace: 'Bank' },
+    { ...model, op: 'setEnum', enum: { name: 'CustomerStatus', values: ['active'] } },
+    { ...model, op: 'removeEnum', name: 'CustomerStatus' },
+    { ...model, op: 'setEntity', entity: { name: 'Customer', plural: 'customers', key: { name: 'id', type: 'uuid' } } },
+    { ...model, op: 'removeEntity', entity: 'Customer' },
+    { ...model, op: 'renameEntity', entity: 'Customer', name: 'Client' },
+    { ...model, op: 'setField', entity: 'Customer', field: { name: 'fullName', type: 'string', required: true } },
+    { ...model, op: 'removeField', entity: 'Customer', field: 'fullName' },
+    { ...model, op: 'renameField', entity: 'Customer', field: 'fullName', name: 'legalName' },
+    { ...model, op: 'moveField', entity: 'Customer', field: 'fullName', index: 0 },
+    { ...model, op: 'setRelation', entity: 'Account', relation: { name: 'customer', kind: 'belongsTo', to: 'Customer', foreignKey: 'customerId' } },
+    { ...model, op: 'removeRelation', entity: 'Account', relation: 'customer' },
+    { ...model, op: 'setIndexes', entity: 'Customer', indexes: [{ fields: ['fullName'] }] },
+    { ...model, op: 'setEntityApi', entity: 'Customer', api: { operations: ['list'] } },
   ]
 
   it('accepts one example of every op', () => {
@@ -45,7 +60,8 @@ describe('BlueprintOp schema (FR-BP-07)', () => {
     }
   })
 
-  it('refuses an unknown op, two positions, and a document path outside the blueprint', () => {
+  it('refuses unknown or incomplete ops, two positions, and a document path outside the blueprint', () => {
+    expect(blueprintOpSchema.safeParse({ op: 'unknown', ...model }).success).toBe(false)
     expect(blueprintOpSchema.safeParse({ op: 'setEntity', doc: 'model.blueprint.json', baseRev: rev }).success).toBe(false)
     expect(blueprintOpSchema.safeParse({ ...valid[7], before: node }).success).toBe(false)
     expect(blueprintOpSchema.safeParse({ ...valid[3], doc: '../app.blueprint.json' }).success).toBe(false)

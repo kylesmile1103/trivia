@@ -7,7 +7,13 @@ export {
   type ActionStep, type BlueprintNode, type ContractOptions, type ContractPage, type Control, type CustomPage, type PageDoc,
   type PageKind, type Query, type StateEntry,
 } from './types/page.js'
-export { modelSchema, type ModelDoc } from './types/model.js'
+export {
+  customOperationSchema, entityApiSchema, entitySchema, enumSchema, fieldSchema, keySchema, modelIndexSchema, modelSchema, relationSchema,
+  type ModelDoc, type ModelEntity, type ModelField, type ModelFieldType, type ModelKey, type ModelRelation,
+} from './model/types.js'
+export { modelOpSchema, type ModelOp } from './model/apply.js'
+export { MODEL_MAPPING, modelMappingJson } from './model/mapping.js'
+export { modelFieldTypes, validateModel } from './model/validate.js'
 export {
   APP_DOC, MODEL_DOC, OP_NAMES, blueprintOpSchema, pageDocPath,
   type BlueprintOp, type BlueprintOpInput, type OpName, type OpOf,
