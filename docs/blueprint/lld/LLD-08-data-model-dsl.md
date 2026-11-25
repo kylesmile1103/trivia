@@ -122,7 +122,10 @@ Model diagnostics, on top of the schema layer:
 | `invalid_api` | A sortable or filterable `json` field, a custom operation path that collides with a CRUD route |
 | `breaking_change` (warning) | Against the lock's last generated model: a removed field, a narrowed type, a new required field without a default |
 
-The reserved word lists are data files, with their sources named in a header comment.
+⚑ The reserved word lists have a `source` and `date` header in each JSON object, followed by
+`words`. JSON has no comment syntax. The lists cover C# reserved keywords, the reserved
+entries in PostgreSQL 19's own keyword column, and the generator's key and paging member
+names (`Id`, `Items`, `Total`, `Page`, `PageSize`).
 
 ## 6. Pages and the model
 

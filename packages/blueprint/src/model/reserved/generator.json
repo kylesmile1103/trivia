@@ -1,0 +1,11 @@
+{
+  "source": "LLD-08 \u00a75 and LLD-09 \u00a74 (generated key and list response members)",
+  "date": "2026-11-25",
+  "words": [
+    "id",
+    "items",
+    "page",
+    "pagesize",
+    "total"
+  ]
+}
