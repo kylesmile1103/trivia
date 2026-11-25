@@ -10,7 +10,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T003 `features/blueprint/store.ts` and `api.ts`: summary, open document with its revs, patch with conflict handling. Unit tests with a fake client
+- [x] T003 `features/blueprint/store.ts` and `api.ts`: summary, open document with its revs, patch with conflict handling. Unit tests with a fake client
 - [ ] T004 The tab in `app/LeftPanel.tsx` with icons and tooltips, and `features/blueprint/index.ts`
 
 ## Phase 3: User Story 1 - Pages (P1)
