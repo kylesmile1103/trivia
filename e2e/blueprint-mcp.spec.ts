@@ -83,3 +83,58 @@ for (const { host, folder, url } of [
     }
   })
 }
+
+test('FR-AG-06 previews, screenshots and ejects a draft through the Vite MCP endpoint', async ({ page }) => {
+  const root = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
+  const app = path.join(root, 'src/App.tsx')
+  const name = 'McpCanvasDraft'
+  const doc = `pages/${name}.page.json`
+  const draft = path.join(root, 'blueprint', doc)
+  const lock = path.join(root, 'blueprint/blueprint.lock.json')
+  const source = path.join(root, `src/pages/${name}/${name}.tsx`)
+  const original = fs.readFileSync(app)
+  const priorLock = fs.existsSync(lock) ? fs.readFileSync(lock) : null
+  expect(fs.existsSync(draft)).toBe(false)
+  expect(fs.existsSync(source)).toBe(false)
+  const dirs = [path.dirname(source), path.dirname(draft), path.dirname(lock)].filter((dir) => !fs.existsSync(dir))
+  try {
+    await page.goto(`http://localhost:${process.env.TRIVIA_REFINE_PORT ?? 4401}/__trivia/`)
+    const canvas = page.frameLocator('iframe[title="App canvas"]')
+    await expect(canvas.getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 30_000 })
+    await rpc(page, 'initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'blueprint-mcp-e2e', version: '0' },
+    })
+    await rpc(page, 'notifications/initialized', undefined, true)
+    const initial = await tool<{ revs: Record<string, string>; created: Record<string, string> }>(page, 'trivia_blueprint_patch', {
+      label: 'Create MCP draft', ops: [{ op: 'createPage', doc, baseRev: null, name, route: '/mcp-canvas-draft', kind: 'custom' }],
+    })
+    await tool(page, 'trivia_blueprint_patch', {
+      label: 'Set preview text', ops: [{
+        op: 'setProp', doc, baseRev: initial.revs[doc], node: initial.created[name + '/page'], expectedType: 'div', prop: 'children', value: 'MCP preview content',
+      }],
+    })
+    const preview = await tool<{ route: string; code: string }>(page, 'trivia_blueprint_preview', { page: name, includeCode: true })
+    await page.locator('iframe[title="App canvas"]').evaluate((frame, url) =>
+      (frame as HTMLIFrameElement).contentWindow!.location.assign(url), preview.route)
+    await expect(canvas.getByText('MCP preview content')).toBeVisible({ timeout: 30_000 })
+    const shot = await rpc<{ isError?: boolean; content: Array<{ type: string; data?: string; mimeType?: string }> }>(page, 'tools/call', {
+      name: 'trivia_screenshot', arguments: {},
+    })
+    expect(shot.isError, JSON.stringify(shot.content)).not.toBe(true)
+    expect(shot.content[0]).toMatchObject({ type: 'image', mimeType: 'image/png', data: expect.stringMatching(/^iVBORw0KGgo/) })
+    const ejected = await tool<{ entry: string }>(page, 'trivia_blueprint_eject', { pages: [name], label: 'Eject MCP draft' })
+    expect(ejected.entry).toBe('Agent: Eject MCP draft')
+    expect(fs.readFileSync(source, 'utf8')).toBe(preview.code)
+    await tool(page, 'trivia_undo', { label: ejected.entry })
+    expect(fs.readFileSync(app)).toEqual(original)
+    expect(fs.existsSync(source)).toBe(false)
+    expect(fs.existsSync(lock) ? fs.readFileSync(lock) : null).toEqual(priorLock)
+  } finally {
+    if (!fs.readFileSync(app).equals(original)) fs.writeFileSync(app, original)
+    if (priorLock) fs.writeFileSync(lock, priorLock)
+    else fs.rmSync(lock, { force: true })
+    fs.rmSync(source, { force: true })
+    fs.rmSync(draft, { force: true })
+    for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+  }
+})
