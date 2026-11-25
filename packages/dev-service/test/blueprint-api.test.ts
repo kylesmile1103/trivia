@@ -49,13 +49,13 @@ it('FR-AG-01 reports an absent blueprint as an empty starting point', async () =
 
 it('FR-AG-01 reads a document and its opt-in projection with the disk revision', async () => {
   const text = seedPage()
-  const doc = await (await get(pagePath)).json()
+  const doc = await (await get(pagePath)).json() as { data: Record<string, unknown> }
   expect(doc).toMatchObject({
     ok: true,
     data: { path: 'pages/Customers.page.json', rev: revOfText(text), doc: { name: 'Customers', resource: 'Customer' } },
   })
   expect(doc.data).not.toHaveProperty('projection')
-  const projected = await (await get(`${pagePath}&projection=1`)).json()
+  const projected = await (await get(`${pagePath}&projection=1`)).json() as { data: Record<string, unknown> }
   expect(projected.data).toMatchObject({ ...doc.data, projection: expect.stringContaining('Customers') })
 })
 
@@ -64,7 +64,10 @@ it('FR-AG-01 distinguishes draft, ejected and edited pages using the lock and di
   const file = 'src/App.tsx'
   const abs = path.join(root, file)
   const original = fs.readFileSync(abs, 'utf8')
-  const page = async () => (await (await get()).json()).data.pages[0]
+  const page = async () => {
+    const summary = await (await get()).json() as { data: { pages: unknown[] } }
+    return summary.data.pages[0]
+  }
   expect(await page()).toEqual({
     name: 'Customers', path: listPage().doc, rev: revOfText(text), kind: 'list', route: '/customers',
     status: 'draft', errors: 0, warnings: 0,

@@ -84,6 +84,9 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
                           written: boolean; diagnostics: Diagnostic[]; log: string }
 ```
 
+- ⚑ A malformed lock yields an `invalid_lock` warning and draft statuses. An unreadable or
+  unsafe lock target counts as edited. A missing document read returns 404 `node_not_found`;
+  a malformed document returns 422 `invalid_result` with its diagnostics.
 - `status`: `draft` when the lock has no entry; `ejected` when the file's hash matches the
   lock; `edited` when it differs or the file is gone.
 - A blueprint that does not exist is not an error: `exists: false`, and `createPage` or

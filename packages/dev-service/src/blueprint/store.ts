@@ -13,18 +13,22 @@ import type { DevHost } from '../host.js'
 import { validationContext } from './context.js'
 import { checkedPath } from './paths.js'
 
-function readText(root: string, file: string): string | null {
-  const absolute = checkedPath(root, file)
+export function readBytes(root: string, file: string): Buffer | null {
   try {
+    const absolute = checkedPath(root, file)
     const stat = fs.lstatSync(absolute, { throwIfNoEntry: false })
     if (!stat) return null
     if (!stat.isFile()) throw new ApiError('io_error', `${file} is not a regular file`)
-    return fs.readFileSync(absolute, 'utf8')
+    return fs.readFileSync(absolute)
   } catch (error) {
     if (error instanceof ApiError) throw error
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw new ApiError('io_error', `Cannot read ${file}: ${(error as Error).message}`)
   }
+}
+
+function readText(root: string, file: string): string | null {
+  return readBytes(root, file)?.toString('utf8') ?? null
 }
 
 function listFiles(root: string, dir: string): string[] {

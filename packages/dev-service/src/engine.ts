@@ -74,7 +74,7 @@ export async function loadEngine(): Promise<EngineBinding> {
 export class ApiError extends Error {
   readonly code: ErrorCode
 
-  constructor(code: ErrorCode, message: string) {
+  constructor(code: ErrorCode, message: string, readonly details?: Record<string, unknown>) {
     super(message)
     this.name = 'ApiError'
     this.code = code
@@ -89,6 +89,6 @@ export function unwrap<T>(json: string): T {
   } catch {
     throw new ApiError('internal', `the engine returned non-JSON: ${json.slice(0, 200)}`)
   }
-  if (!envelope.ok) throw new ApiError(envelope.error.code, envelope.error.message)
+  if (!envelope.ok) throw new ApiError(envelope.error.code, envelope.error.message, envelope.error.details)
   return envelope.data
 }

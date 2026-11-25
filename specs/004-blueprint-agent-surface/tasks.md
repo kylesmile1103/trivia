@@ -17,7 +17,7 @@
 ## Phase 3: User Story 1 - Authoring (P1)
 
 - [x] T006 [US1] Tests for `GET /blueprint`, `/blueprint/doc`, `/blueprint/components` on the example copy, including `exists: false`
-- [ ] T007 [US1] `src/blueprint/summary.ts` and the three read routes in `index.ts`, registered from `src/api/http.ts`
+- [x] T007 [US1] `src/blueprint/summary.ts` and the three read routes in `index.ts`, registered from `src/api/http.ts`
 - [ ] T008 [US1] Tests for `POST /blueprint/patch`: create a page, diagnostics in the result, directory created on first patch
 - [ ] T009 [US1] The patch route: store apply, `writeDocuments`, `PatchResult` with the fresh summary and `next`
 - [ ] T010 [US1] MCP `trivia_blueprint_get` and `trivia_blueprint_patch` in `src/mcp/tools.ts`, input schema generated from the zod ops, per-tool error advice

@@ -4,6 +4,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { registerBlueprintRoutes } from '../blueprint/index.js'
 import { ApiError } from '../engine.js'
 import { parseColumnChanges, parseFieldChanges, parsePreviewRequest } from '../refine/index.js'
 import type { ErrorCode, Health, HistoryState } from '../types.js'
@@ -44,7 +45,7 @@ export type Middleware = (req: IncomingMessage, res: ServerResponse, next: (erro
 
 type Method = 'GET' | 'POST'
 /** `signal` aborts when the caller hangs up before the answer is sent. */
-type Route = Partial<Record<Method, (url: URL, body: Json, signal: AbortSignal) => unknown>>
+export type Route = Partial<Record<Method, (url: URL, body: Json, signal: AbortSignal) => unknown>>
 
 export function createApiMiddleware(options: ApiOptions): Middleware {
   const { service } = options
@@ -195,6 +196,8 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ['/redo', { POST: () => service.redo() }],
   ])
 
+  registerBlueprintRoutes(routes, service.blueprint)
+
   const dispatch = async (req: IncomingMessage, url: URL, signal: AbortSignal): Promise<unknown> => {
     checkCaller(req, options)
     const name = url.pathname.slice(API_BASE.length)
@@ -229,7 +232,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         options.logger?.error(`[trivia] ${req.method} ${url.pathname} failed: ${error instanceof Error ? (error.stack ?? detail) : detail}`)
         failure = new ApiError('internal', `unexpected failure: ${detail}`)
       }
-      send(res, STATUS[failure.code] ?? 500, { ok: false, error: { code: failure.code, message: failure.message } })
+      send(res, STATUS[failure.code] ?? 500, { ok: false, error: { code: failure.code, message: failure.message, ...(failure.details && { details: failure.details }) } })
     }
   }
 

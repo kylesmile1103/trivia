@@ -497,3 +497,36 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
   ancestor whose locator file is outside `uiDir` (component boundary).
 - Nodes rendered inside `{…}` expressions (`isDirect: false`) and component roots (`isRoot`)
   cannot be moved/removed/used as before/after anchors; the engine answers 422 with a message.
+
+## Blueprint
+
+Vite and Next.js serve the same blueprint API. Paths in blueprint requests and results are
+relative to the blueprint directory, which defaults to `blueprint` and is configurable on Vite.
+`dir` in the summary is relative to the project root.
+
+`GET /@trivia/api/blueprint` returns `{ dir, exists, app, model, pages, diagnostics, next }`.
+A missing directory still returns 200 with `exists: false` and a suggested first op. Each
+page has `name, path, rev, route, kind, status, errors, warnings`. A page in the lock also
+has a project-relative `file`. Its status is `ejected` when that file's bytes match the lock
+and `edited` when they differ or the file is missing. Pages absent from the lock are `draft`.
+
+```http
+GET /@trivia/api/blueprint
+```
+
+`GET /@trivia/api/blueprint/doc` returns `{ path, rev, doc, projection? }`. Pass
+`projection=1` to include the lossy TSX projection of a page. A missing document returns
+404 `node_not_found`, and an unsupported version returns 422 `unsupported` with
+`error.details.found` and `error.details.supported`.
+
+```http
+GET /@trivia/api/blueprint/doc?path=pages%2FCustomers.page.json&projection=1
+```
+
+`GET /@trivia/api/blueprint/components` returns `{ components, schemas }`. Each index entry
+has its type, slots, events, exposed values and installation status. `schemas` maps the same
+type names to JSON Schemas for their props.
+
+```http
+GET /@trivia/api/blueprint/components
+```
