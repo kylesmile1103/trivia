@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { loadBlueprint } from '../store.js'
 import { SCHEMA_URL } from '../types/common.js'
 import { checkManifests, exposedScope } from './check.js'
-import type { ResolvedManifest, ResolvedManifests } from './resolve.js'
+import { resolveManifests, type ResolvedManifest, type ResolvedManifests } from './resolve.js'
 
 const doc = 'pages/Example.page.json'
 const root = 'n_01JDK3M8A00000000000000001'
@@ -162,4 +162,25 @@ it('builds a client ui root with declared member names and their TypeScript type
   expect(exposedScope(entry.doc, { ...formManifests, Input: { ...input, installed: false } })).toEqual({
     tier: 'client', members: {}, types: {},
   })
+})
+
+it('FR-MF-06: validates HTML nodes through the same prop, slot and event checks', () => {
+  const { manifests } = resolveManifests({ kit: [], components: [] })
+  const div = { type: 'div', name: 'page', parent: null, slot: null, order: 'a0' }
+  const link = { ...childNode, type: 'a', slot: 'children' }
+  expect(checkManifests(page({
+    nodes: { [root]: div, [child]: link },
+    props: { [root]: { className: 'grid' }, [child]: { href: '/customers', children: 'Customers' } },
+    actions: { [`${child}.onClick`]: toast },
+  }), manifests)).toEqual([])
+  expect(checkManifests(page({
+    nodes: { [root]: { ...div, type: 'img' }, [child]: link },
+    props: { [root]: { href: '/customers' } },
+  }), manifests)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ code: 'unknown_prop', pointer: `/props/${root}/href` }),
+    expect.objectContaining({ code: 'unknown_slot', pointer: `/nodes/${child}/slot` }),
+  ]))
+  expect(checkManifests(page({ nodes: { [root]: { ...div, type: 'constructor' } } }), manifests)).toMatchObject([
+    { code: 'unknown_component', pointer: `/nodes/${root}/type` },
+  ])
 })

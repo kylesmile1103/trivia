@@ -130,3 +130,14 @@ it('FR-MF-05: uses the project override file and reports stale prop annotations'
     message: expect.stringContaining('retired'),
   }])
 })
+
+it('FR-MF-06: reserves lowercase types for the curated intrinsics', () => {
+  const misleading = { ...button, type: 'div' }
+  const result = resolveManifests({ kit: [], overrides: [misleading], components })
+  expect(result.manifests.div).toMatchObject({
+    installed: true,
+    source: { import: { name: 'div', from: '' } },
+    slots: [{ name: 'children', kind: 'nodes' }],
+  })
+  expect(result.diagnostics).toEqual([])
+})

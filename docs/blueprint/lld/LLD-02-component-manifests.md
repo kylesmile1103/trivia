@@ -98,6 +98,7 @@ For each type:
    `label`) with a curated prop list each. ⚑ Non-void tags accept node children and a string
    `children` prop. The void tag `img` has neither. Intrinsics have no module import and
    default to `client: false`. A compiler determines whether a particular node uses events.
+   ⚑ Lowercase names are reserved for the curated HTML entries and cannot be overridden.
 
 Nothing is installed during resolution (FR-MF-03).
 

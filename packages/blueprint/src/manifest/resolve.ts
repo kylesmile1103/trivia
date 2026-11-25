@@ -1,7 +1,7 @@
 import { compareBytes } from '../serialize.js'
 import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import { PAGE_NAME } from '../types/common.js'
-import { INTRINSIC_EVENT_NAMES } from './intrinsics.js'
+import { INTRINSIC_EVENT_NAMES, intrinsicManifests } from './intrinsics.js'
 import type { ComponentManifest, ComponentSchema } from './types.js'
 
 export type ResolvedManifest = Omit<ComponentManifest, 'variants'> & {
@@ -64,10 +64,12 @@ function inspectOverride(
 export function resolveManifests({ kit, overrides = [], components, aliases }: ManifestInputs): ManifestResolution {
   const selected = new Map([...kit, ...overrides].map((manifest) => [manifest.type, manifest]))
   const overrideTypes = new Set(overrides.map(({ type }) => type))
-  const manifests: Array<[string, ResolvedManifest]> = []
+  const manifests: Array<[string, ResolvedManifest]> = structuredClone(intrinsicManifests)
+    .map((manifest) => [manifest.type, { ...manifest, installed: true }])
   const diagnostics: Diagnostic[] = []
   const ui = aliases?.ui?.replace(/\/+$/, '')
   for (const type of [...selected.keys()].sort(compareBytes)) {
+    if (!PAGE_NAME.test(type)) continue
     const { variants: _, ...manifest } = selected.get(type)!
     const { source } = manifest
     const component = components.find(({ name }) => name === source.import.name)

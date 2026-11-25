@@ -33,7 +33,7 @@
 
 - [x] T012 [US4] Derived manifests for analyzer-only components
 - [x] T013 [US4] Overrides from `blueprint/manifests/`, with the "annotates a missing prop" diagnostic
-- [ ] T014 [US4] Intrinsic types in the resolver and the checks
+- [x] T014 [US4] Intrinsic types in the resolver and the checks
 
 ## Phase 7: User Story 5 - JSON Schema (P3)
 
