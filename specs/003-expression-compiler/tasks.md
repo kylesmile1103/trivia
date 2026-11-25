@@ -47,7 +47,7 @@
 
 - [x] T020 [P] `fuzz/fuzz_targets/analyze.rs`, run for SC-003
 - [x] T021 [P] `benches/analyze.rs` and a CI check for NFR-04
-- [ ] T022 `cargo clippy -D warnings`, then `pnpm check`
+- [x] T022 `cargo clippy -D warnings`, then `pnpm check`
 
 ## Dependencies
 

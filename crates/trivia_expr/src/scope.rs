@@ -64,10 +64,10 @@ impl ScopeCheck<'_> {
             }
             return if allow::is_global(name) { Shape::Global(name) } else { Shape::Missing };
         }
-        if let Some(member) = allow::as_member(expr) {
-            if let Some((_, name)) = member.static_property_info() {
-                return self.shape(bindings, member.object()).member(name);
-            }
+        if let Some(member) = allow::as_member(expr)
+            && let Some((_, name)) = member.static_property_info()
+        {
+            return self.shape(bindings, member.object()).member(name);
         }
         Shape::Open
     }
