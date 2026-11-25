@@ -127,6 +127,10 @@ Aspire passes the API's address to the web app as service discovery variables
 variables (the web app started alone) it falls back to `API_URL`, then to a clear error on the
 first request.
 
+⚑ The Vite config accepts `API_URL` from the process or the mode's `.env` files. When
+Aspire supplies `PORT`, Vite binds that exact port. The unconfigured proxy returns a 503
+problem response for `/api` requests, leaving routes such as `/apiary` to the app.
+
 ### Data provider (FR-AS-06)
 
 `web/src/providers/data-provider.ts`, a scaffold file of about 150 lines with no dependency

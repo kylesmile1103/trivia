@@ -84,7 +84,8 @@ it('FR-AS-08 reports a fix on every ejected page that used a removed model field
     const drift = async () => {
       const response = await fetch(server.url + '/@trivia/api/refine/drift')
       expect(response.status).toBe(200)
-      return (await response.json()).data.pages
+      const result = await response.json() as { data: { pages: unknown[] } }
+      return result.data.pages
     }
     expect(await drift()).toEqual([])
 
