@@ -15,7 +15,7 @@
 - [x] T005 [P] `Mapping/TypeMap` with a test against `model-mapping.json`
 - [x] T006 Tests for ownership in `PlanWriterTests`: create, update, unchanged, hand-edited generated file refused (exit 2), `--force`, scaffold never rewritten, removed entity, path escape refused, refusal writes nothing
 - [x] T007 `Plan/`: `FilePlan`, `Hashing` (header and body hash), `PlanWriter` (atomic, all-or-nothing)
-- [ ] T008 `Commands/`: `plan` (JSON on stdout, `--content`), `write`, `check`, with exit codes
+- [x] T008 `Commands/`: `plan` (JSON on stdout, `--content`), `write`, `check`, with exit codes
 
 ## Phase 3: User Story 1 - A working API (P1)
 

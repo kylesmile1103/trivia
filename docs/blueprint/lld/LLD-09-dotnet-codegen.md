@@ -66,6 +66,10 @@ first model namespace segment becomes the app name and authentication defaults t
   "todo": [], "diagnostics": [] }
 ```
 
+⚑ All three generation commands report the same JSON envelope on stdout, including
+  diagnostics on failure. `--content` includes proposed bytes as UTF-8 text for each
+  output that has content.
+
 ## 2. Ownership (FR-NC-02, FR-NC-03)
 
 **Generated** files end in `.g.cs` and start with:
