@@ -70,6 +70,11 @@ shadow roots, with a warning.
   The same representation can describe both `ui` and each query's result fields.
 - ⚑ Page-wide and per-expression `locals` accept a name array (all `client`) or a name-to-tier
   object. Per-expression locals take precedence, so one batch can include nested repeat scopes.
+- ⚑ `expr_shadowed_root` is a warning on the parameter name, including names in destructuring
+  patterns. Value references resolve to arrow bindings first, then site and page locals, then
+  roots and built-ins. Known-member checks diagnose the first missing property in a chain.
+- ⚑ Direct built-in member reads are limited to the allowlist and the Math and Number constants.
+  Type syntax is left to TypeScript and does not contribute value reads.
 
 ## 3. Analysis
 

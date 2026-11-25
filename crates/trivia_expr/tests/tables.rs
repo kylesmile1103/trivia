@@ -94,3 +94,49 @@ fn fr_ex_07_checks_call_targets_and_reports_the_callee_span() {
             [("expr_impure_call", start, end)], "{source}");
     }
 }
+
+#[test]
+fn fr_ex_02_checks_free_roots_known_members_and_arrow_scopes() {
+    use trivia_expr::{analyze, AnalyzeRequest, ExpressionInput, Scope, Severity};
+
+    let scope: Scope = serde_json::from_str(r#"{"roots":{
+        "state":{"tier":"client","members":["count"]},
+        "search":{"tier":"server","members":null},
+        "ui":{"tier":"client","members":{"search":["value"]}}
+    },"locals":["item"]}"#).unwrap();
+    let accepted = [
+        "ui.search.value + state.count + search.term + item.title",
+        "{ literalKey: true, [search.key]: 1 } satisfies UnknownType",
+        "[1].map(({x}, index) => x + index + state.count)",
+        "[1].map(x => [x].map(x => x))",
+        "Math.PI + Number('3')",
+    ];
+    let diagnosed = [
+        ("'😀' + stat.count", "expr_unknown_root", Severity::Error, 7, 11),
+        ("state['missing']", "expr_unknown_member", Severity::Error, 6, 15),
+        ("ui.search.wrong.name", "expr_unknown_member", Severity::Error, 10, 15),
+        ("[1].map(x => x) + x", "expr_unknown_root", Severity::Error, 18, 19),
+        ("[1].map(state => state.x)", "expr_shadowed_root", Severity::Warning, 8, 13),
+        ("[1].map(({state}) => state.x)", "expr_shadowed_root", Severity::Warning, 10, 15),
+        ("[1].map(Number => Number(1))", "expr_impure_call", Severity::Error, 18, 24),
+        ("[1].map(Math.random)", "expr_unknown_member", Severity::Error, 13, 19),
+    ];
+    let expressions = accepted.into_iter().chain(diagnosed.map(|case| case.0)).map(|source| ExpressionInput {
+        id: source.into(), source: source.into(), defines: None, locals: Default::default(),
+    }).chain([
+        serde_json::from_str(r#"{"id":"local", "source":"state.unknown", "locals":{"state":"server"}}"#).unwrap(),
+        serde_json::from_str(r#"{"id":"bare-arrow", "source":"state => state.x"}"#).unwrap(),
+    ]).collect();
+    let results = analyze(AnalyzeRequest { scope, expressions }).results;
+    for (source, result) in accepted.iter().zip(&results) {
+        assert!(result.ok && result.diagnostics.is_empty(), "{source}: {:?}", result.diagnostics);
+    }
+    for ((source, code, severity, start, end), result) in diagnosed.into_iter().zip(&results[accepted.len()..]) {
+        assert_eq!(result.ok, severity == Severity::Warning, "{source}");
+        assert_eq!(result.diagnostics.iter().map(|d| (d.code, d.severity, d.start, d.end)).collect::<Vec<_>>(),
+            [(code, severity, start, end)], "{source}");
+    }
+    assert!(results[results.len() - 2].ok);
+    assert_eq!(results.last().unwrap().diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+        ["expr_shadowed_root", "expr_unsupported_syntax"]);
+}

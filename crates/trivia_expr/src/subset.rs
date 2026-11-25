@@ -3,28 +3,33 @@ use oxc_ast::ast::*;
 use oxc_ast_visit::{Visit, walk};
 use oxc_span::{GetSpan, Span};
 
-use crate::{Diagnostic, Severity, allow};
+use crate::{Diagnostic, Severity, allow, scope::{ArrowBindings, ScopeCheck}};
 
-pub(crate) fn check(source: &str, expression: &Expression<'_>) -> Vec<Diagnostic> {
-    let mut subset = Subset { source, diagnostics: Vec::new(), arrow_argument: None, format_factory: None };
+pub(crate) fn check<'a>(source: &str, expression: &Expression<'a>, scope: ScopeCheck<'_>) -> Vec<Diagnostic> {
+    let mut subset = Subset {
+        source, scope, diagnostics: Vec::new(), arrow_argument: None, format_factory: None,
+        bindings: ArrowBindings::default(),
+    };
     subset.visit_expression(expression);
     subset.diagnostics
 }
 
-struct Subset<'s> {
+struct Subset<'s, 'a> {
     source: &'s str,
+    scope: ScopeCheck<'s>,
     diagnostics: Vec<Diagnostic>,
     arrow_argument: Option<Span>,
     format_factory: Option<Span>,
+    bindings: ArrowBindings<'a>,
 }
 
-impl Subset<'_> {
+impl Subset<'_, '_> {
     fn unsupported(&mut self, span: Span, message: &'static str) {
         self.diagnostics.push(Diagnostic::at(self.source, "expr_unsupported_syntax", Severity::Error, span, message));
     }
 }
 
-impl<'a> Visit<'a> for Subset<'_> {
+impl<'a> Visit<'a> for Subset<'_, 'a> {
     fn visit_expression(&mut self, node: &Expression<'a>) {
         use Expression::*;
         let message = match node {
@@ -69,7 +74,7 @@ impl<'a> Visit<'a> for Subset<'_> {
         let factory = if self.format_factory == Some(call.span) {
             None
         } else {
-            match allow::classify(&call.callee, |_| false) {
+            match allow::classify(&call.callee, |name| self.scope.shadowed(&self.bindings, name)) {
                 allow::Call::Allowed => None,
                 allow::Call::Format(factory) => Some(factory),
                 allow::Call::Refused => {
@@ -96,6 +101,12 @@ impl<'a> Visit<'a> for Subset<'_> {
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ArrowFunctionExpression<'a>) {
+        let outer = self.bindings.enter(arrow, |binding| {
+            if self.scope.scope.roots.contains_key(binding.name.as_str()) {
+                self.diagnostics.push(Diagnostic::at(self.source, "expr_shadowed_root", Severity::Warning,
+                    binding.span, format!("Arrow parameter shadows the root `{}`", binding.name)));
+            }
+        });
         if self.arrow_argument != Some(arrow.span) {
             self.unsupported(arrow.span, "Arrow functions are allowed only as call arguments");
         } else if arrow.r#async {
@@ -105,6 +116,25 @@ impl<'a> Visit<'a> for Subset<'_> {
         } else {
             walk::walk_arrow_function_expression(self, arrow);
         }
+        self.bindings.leave(outer);
+    }
+
+    fn visit_identifier_reference(&mut self, identifier: &IdentifierReference<'a>) {
+        let name = identifier.name.as_str();
+        if !self.scope.known(&self.bindings, name) {
+            self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_root", Severity::Error,
+                identifier.span, format!("Unknown root `{name}`")));
+        }
+    }
+
+    fn visit_member_expression(&mut self, member: &MemberExpression<'a>) {
+        if let Some((span, name)) = member.static_property_info()
+            && self.scope.has_unknown_member(&self.bindings, member)
+        {
+            self.diagnostics.push(Diagnostic::at(self.source, "expr_unknown_member", Severity::Error,
+                span, format!("Unknown member `{name}`")));
+        }
+        walk::walk_member_expression(self, member);
     }
 
     fn visit_object_property(&mut self, property: &ObjectProperty<'a>) {

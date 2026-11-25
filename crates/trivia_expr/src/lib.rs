@@ -7,6 +7,7 @@ pub mod parse;
 mod utf16;
 mod subset;
 mod allow;
+mod scope;
 
 use std::collections::BTreeMap;
 
@@ -182,7 +183,9 @@ pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
         let diagnostics = if index >= MAX_EXPRESSIONS {
             vec![Diagnostic::batch_limit()]
         } else {
-            parse::parse(source, |expression| subset::check(source, expression))
+            parse::parse(source, |expression| subset::check(source, expression, scope::ScopeCheck {
+                scope: &request.scope, locals: &input.locals,
+            }))
                 .unwrap_or_else(|error| vec![Diagnostic::from_parse(source, error)])
         };
         let ok = diagnostics.iter().all(|diagnostic| diagnostic.severity != Severity::Error);

@@ -77,3 +77,21 @@ fn as_call<'n, 'a>(expr: &'n Expression<'a>) -> Option<&'n CallExpression<'a>> {
         _ => None,
     }
 }
+
+pub(crate) fn is_global(name: &str) -> bool {
+    name == "undefined" || GLOBAL_FUNCTIONS.contains(&name) || GLOBAL_METHODS.iter().any(|(global, _)| *global == name)
+}
+
+pub(crate) fn is_global_member(global: &str, name: &str) -> bool {
+    const MATH_CONSTANTS: &[&str] = &["E", "LN10", "LN2", "LOG10E", "LOG2E", "PI", "SQRT1_2", "SQRT2"];
+    const NUMBER_CONSTANTS: &[&str] = &[
+        "EPSILON", "MAX_SAFE_INTEGER", "MIN_SAFE_INTEGER", "MAX_VALUE", "MIN_VALUE", "NaN",
+        "NEGATIVE_INFINITY", "POSITIVE_INFINITY",
+    ];
+    match global {
+        "Math" if MATH_CONSTANTS.contains(&name) => true,
+        "Number" => NUMBER_CONSTANTS.contains(&name),
+        "Intl" => FORMAT_FACTORIES.contains(&name),
+        _ => GLOBAL_METHODS.iter().any(|(root, methods)| *root == global && methods.contains(&name)),
+    }
+}
