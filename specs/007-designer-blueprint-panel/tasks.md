@@ -27,7 +27,7 @@
 
 ## Phase 5: User Story 4 - Other writers (P1)
 
-- [ ] T011 [US4] Conflict flow: reload, report, no retry. Re-read on window focus and after history changes. Tests
+- [x] T011 [US4] Conflict flow: reload, report, no retry. Re-read on window focus and after history changes. Tests
 
 ## Phase 6: User Story 3 - Custom pages (P2)
 

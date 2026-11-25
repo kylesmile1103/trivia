@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { canvas } from '@/shared/canvas'
 import { engine } from '@/shared/engine/client'
 import type { BlueprintSummary } from '@/shared/engine/types'
+import { designer } from '@/shared/state/store'
 import { find, mount } from '@/shared/lib/test-utils'
 
 import { BlueprintTab } from './BlueprintTab'
@@ -17,7 +18,10 @@ const customers: BlueprintSummary = {
   }],
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  designer.setState(designer.getInitialState(), true)
+})
 
 it('FR-DS-04 navigates to the compiled preview returned by the host', async () => {
   vi.spyOn(engine.blueprint, 'summary').mockResolvedValue(customers)
@@ -61,6 +65,36 @@ it('FR-DS-01 opens the real route and only offers re-eject while source matches 
     find<HTMLInputElement>(form, 'input[name="id"]').value = 'A B'
     await act(async () => form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })))
     expect(navigate).toHaveBeenCalledExactlyOnceWith('/accounts/A%20B')
+  } finally {
+    await ui.unmount()
+  }
+})
+
+it('FR-DS-07 reloads the open document after focus and after history changes', async () => {
+  const current = customers.pages[0]!
+  let rev = 'initial'
+  let route = '/customers'
+  vi.spyOn(engine.blueprint, 'summary').mockImplementation(async () => ({ ...customers, pages: [{ ...current, rev, route }] }))
+  vi.spyOn(engine, 'manifest').mockResolvedValue({ manifest: null, drift: null })
+  vi.spyOn(engine.blueprint, 'doc').mockImplementation(async (path) => ({
+    path, rev, doc: {
+      $schema: 'page', blueprintVersion: 1, id: 'page', kind: 'list', name: 'Customers',
+      route, resource: 'Customer', options: {}, public: false,
+    },
+  }))
+  const ui = await mount(<BlueprintTab />)
+  try {
+    await act(async () => find<HTMLButtonElement>(ui.host, 'button[aria-label="Edit Customers"]').click())
+    const routeInput = () => find<HTMLInputElement>(ui.host, 'input[data-pointer="/route"]')
+    expect(routeInput().value).toBe('/customers')
+    rev = 'newer'
+    route = '/agent-route'
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(routeInput().value).toBe('/agent-route')
+    rev = 'initial'
+    route = '/customers'
+    await act(async () => designer.getState().setHistory({ canUndo: false, canRedo: true, undoLabel: null, redoLabel: 'Agent route' }))
+    expect(routeInput().value).toBe('/customers')
   } finally {
     await ui.unmount()
   }

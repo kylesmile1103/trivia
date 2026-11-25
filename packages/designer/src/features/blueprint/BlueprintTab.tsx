@@ -4,7 +4,8 @@ import { useStore } from 'zustand'
 import { canvas } from '@/shared/canvas'
 import { APP_DOC } from '@/shared/engine/blueprint-types'
 import { engine } from '@/shared/engine/client'
-import type { BlueprintDiagnostic, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
+import { syncHistory } from '@/shared/engine/session'
+import type { BlueprintDiagnostic, BlueprintOp, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
 import { fillRoute, matchRoute } from '@/shared/lib/route-url'
 import { designer, useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
@@ -31,8 +32,13 @@ export function BlueprintTab() {
   const [resources, setResources] = useState<ManifestResource[]>([])
   const [manifestError, setManifestError] = useState<string | null>(null)
   const page = document && 'kind' in document.doc ? { ...document, doc: document.doc } : undefined
+  const commit = async (ops: BlueprintOp[], label: string) => {
+    const result = await patch(ops, label)
+    if (result?.entry) void syncHistory()
+    return result
+  }
   const save: SaveBlueprintOp = async (op, label) => {
-    const result = await patch([op], label)
+    const result = await commit([op], label)
     if (result && op.op === 'createPage') {
       setAdding(false)
       await open(op.doc)
@@ -40,19 +46,35 @@ export function BlueprintTab() {
     return result !== null
   }
   const host = useDesigner((state) => state.health?.host)
-  const initialize = () => void patch([{
+  const initialize = () => void commit([{
     op: 'setApp', doc: APP_DOC, baseRev: null, name: 'App',
     targets: { web: host === 'next' ? 'next-refine' : 'vite-refine' },
   }], 'Blueprint: create app')
 
   useEffect(() => {
-    let active = true
-    void refresh()
-    void engine.manifest().then(
-      ({ manifest }) => { if (active) setResources(manifest?.resources ?? []) },
-      (error: unknown) => { if (active) setManifestError(problemOf(error).message) },
-    )
-    return () => { active = false }
+    let manifestRequest = 0
+    function reload() {
+      const request = ++manifestRequest
+      void refresh()
+      void engine.manifest().then(
+        ({ manifest }) => {
+          if (manifestRequest !== request) return
+          setResources(manifest?.resources ?? [])
+          setManifestError(null)
+        },
+        (error: unknown) => { if (manifestRequest === request) setManifestError(problemOf(error).message) },
+      )
+    }
+    reload()
+    window.addEventListener('focus', reload)
+    const unsubscribe = designer.subscribe((state, previous) => {
+      if (state.history !== previous.history) void refresh()
+    })
+    return () => {
+      manifestRequest++
+      window.removeEventListener('focus', reload)
+      unsubscribe()
+    }
   }, [refresh])
 
   async function preview(page: BlueprintPageSummary) {

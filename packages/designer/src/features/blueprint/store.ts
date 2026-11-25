@@ -26,6 +26,7 @@ function revisionOf(summary: BlueprintSummary, path: string): string | undefined
 export function createBlueprintStore(client: BlueprintClient = blueprintApi) {
   let summaryRequest = 0
   let docRequest = 0
+  let refreshDeferred = false
 
   return createStore<BlueprintState>()((set, get) => {
     async function readDocument(path: string): Promise<void> {
@@ -51,7 +52,8 @@ export function createBlueprintStore(client: BlueprintClient = blueprintApi) {
       }
     }
 
-    async function refresh(): Promise<void> {
+    async function refreshNow(): Promise<void> {
+      refreshDeferred = false
       const request = ++summaryRequest
       try {
         const summary = await client.summary()
@@ -68,7 +70,13 @@ export function createBlueprintStore(client: BlueprintClient = blueprintApi) {
       pending: null,
       problem: null,
       loadError: null,
-      refresh,
+      async refresh() {
+        if (get().pending !== null) {
+          refreshDeferred = true
+          return
+        }
+        await refreshNow()
+      },
       async open(path) {
         ++docRequest
         set({ path, document: null, problem: null, loadError: null })
@@ -89,14 +97,15 @@ export function createBlueprintStore(client: BlueprintClient = blueprintApi) {
           return result
         } catch (error) {
           if (isConflict(error)) {
-            set({ problem: { message: 'Your change was not applied because the blueprint changed. Reloading the latest version.', diagnostics: [] } })
-            await refresh()
+            set({ problem: { message: 'Your change was not applied because the blueprint changed.', diagnostics: [] } })
+            await refreshNow()
           } else {
             set({ problem: problemOf(error) })
           }
           return null
         } finally {
           set({ pending: null })
+          if (refreshDeferred) await refreshNow()
         }
       },
     }

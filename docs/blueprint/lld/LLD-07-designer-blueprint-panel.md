@@ -90,7 +90,8 @@ writes are outside the undo history, and the dialog says so. The solution's git 
 safety net.
 
 **Undo and redo.** Patches are entries of the shared history, so the toolbar's undo works. The
-panel re-reads the summary after every history change.
+panel re-reads the summary after every history change. ⚑ A successful patch asks the
+shared engine session to sync history immediately so the toolbar takes up its entry.
 
 **Empty states.** No blueprint: one button creates `app.blueprint.json` with the detected
 target. No contract: contract kinds are disabled, with a pointer to the Data tab's sync. ⚑ Initialization uses
@@ -107,8 +108,9 @@ those revs. On 409 `conflict` (an agent or a hand edit got there first) it re-re
 re-renders, and tells the user their change was not applied. It never retries a write on its
 own.
 
-It polls `GET /blueprint` on window focus and after each history change. The plugin has no
-push channel, and one is not added for this.
+It refreshes `GET /blueprint` on window focus and after each history change. The dev service
+has no push channel. ⚑ A refresh waits for an in-flight patch, and only newer reads replace
+the open snapshot. On focus the editor also reloads the contract manifest.
 
 ## 4. Tests
 
