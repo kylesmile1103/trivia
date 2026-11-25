@@ -367,6 +367,7 @@ export class EngineService {
       .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
     if (changes.length === 0) return null
     this.#history.record({ label, changes, documents: true })
+    this.#options.host.preview.invalidateBlueprints?.()
     return label
   }
 
@@ -443,6 +444,7 @@ export class EngineService {
       throw error
     }
     finish?.()
+    if (entry.documents) this.#options.host.preview.invalidateBlueprints?.()
     if (direction === 'undo') history.undone()
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }

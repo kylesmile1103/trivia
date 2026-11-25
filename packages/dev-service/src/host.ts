@@ -7,6 +7,7 @@ export type RouteSource = Pick<RoutesHost, 'outline' | 'inspect' | 'describeValu
 export interface PreviewHost {
   /** This app host can inject the Vite blueprint route. */
   blueprints?: true
+  invalidateBlueprints?(): void
   /** Make the compiled preview available to the app and return its URL. */
   publish(id: string, page: Pick<InferredPage, 'code' | 'component'>): string | Promise<string>
   /** Release resources owned by this host. */

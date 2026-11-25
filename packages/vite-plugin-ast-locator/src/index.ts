@@ -12,7 +12,7 @@ import {
 } from '@trivia/dev-service'
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
-import { createViteHost } from './host.js'
+import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
 
@@ -189,16 +189,8 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       server.watcher.on('all', (event, file) => {
         if (!['add', 'change', 'unlink'].includes(event)) return
         const changed = path.resolve(file)
-        if (changed !== manifestFile && !changed.startsWith(blueprintDir)) return
-        const graph = server.environments.client.moduleGraph
-        let stale = false
-        for (const mod of graph.idToModuleMap.values()) {
-          if (mod.id !== null && isPreview(mod.id)) {
-            graph.invalidateModule(mod)
-            stale = true
-          }
-        }
-        if (stale) server.environments.client.hot.send({ type: 'full-reload' })
+        if (changed === manifestFile) invalidatePreviews(server, false)
+        else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
     },
   }

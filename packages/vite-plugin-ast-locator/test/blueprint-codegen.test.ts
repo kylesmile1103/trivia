@@ -144,3 +144,49 @@ it('FR-RC-06: provides a Vite preview route without writing any app source', asy
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+it('FR-RC-06: Vite transforms fresh preview code and reports invalid drafts with diagnostics', async () => {
+  const root = copyRefineAdmin()
+  const server = await startServer(root)
+  try {
+    const doc = 'pages/PreviewChanges.page.json'
+    const page = 'PreviewChanges'
+    const patch = (ops: unknown[]) => post(server.socket, '/blueprint/patch', { label: 'Change draft', ops })
+    const initial = await patch([{ op: 'createPage', doc, baseRev: null, name: page, route: '/changes', kind: 'custom' }])
+    expect(initial.status).toBe(200)
+    const node = initial.body.data.created[page + '/page']
+    const after = await patch([
+      { op: 'setProp', doc, baseRev: initial.body.data.revs[doc], node, expectedType: 'div', prop: 'children', value: 'Before draft' },
+      { op: 'setStyle', doc, baseRev: initial.body.data.revs[doc], node, expectedType: 'div', className: 'text-violet-700' },
+    ])
+    expect(after.status, JSON.stringify(after.body)).toBe(200)
+    const preview = await post(server.socket, '/blueprint/preview', { page })
+    expect(preview.status).toBe(200)
+    const url = preview.body.data.module as string
+    const before = await server.vite.transformRequest(url)
+    expect(before?.code).toContain('Before draft')
+    expect(before?.code).toContain('export default PreviewChanges')
+    expect(before?.code).toContain('.css')
+
+    const changed = await patch([
+      { op: 'setProp', doc, baseRev: after.body.data.revs[doc], node, expectedType: 'div', prop: 'children', value: 'After draft' },
+    ])
+    expect(changed.status).toBe(200)
+    expect((await server.vite.transformRequest(url))?.code).toContain('After draft')
+
+    const invalid = await patch([
+      { op: 'setBinding', doc, baseRev: changed.body.data.revs[doc], node, expectedType: 'div', prop: 'children', expr: 'state.unknown' },
+    ])
+    expect(invalid.status, JSON.stringify(invalid.body)).toBe(200)
+    const refused = await post(server.socket, '/blueprint/preview', { page })
+    expect(refused.status).toBe(422)
+    expect(refused.body.error).toMatchObject({
+      code: 'invalid_result', details: { diagnostics: [expect.objectContaining({
+        doc, pointer: '/bindings/' + node + '/children', severity: 'error',
+      })] },
+    })
+  } finally {
+    await server.close()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)
