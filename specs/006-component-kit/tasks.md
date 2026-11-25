@@ -16,7 +16,7 @@
 ## Phase 3: User Story 1 - The 25 components (P1)
 
 - [x] T005 [P] [US1] Actions and display: `Button`, `DropdownMenu`, `Badge`, `Avatar`, `Alert`, `Tooltip`, `Skeleton`, `Breadcrumb`, `Empty`. Manifests, fixture page, golden
-- [ ] T006 [P] [US1] Inputs: `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `RadioGroup`, `Combobox`, `DatePicker`, `Label`, `Field`. Each exposed value bound in the fixture page
+- [x] T006 [P] [US1] Inputs: `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `RadioGroup`, `Combobox`, `DatePicker`, `Label`, `Field`. Each exposed value bound in the fixture page
 - [ ] T007 [P] [US1] Containers: `Card`, `Tabs`, `Dialog`, `Sheet`, `Popover`, `Separator`, with slot parts and `open` exposure
 - [ ] T008 [US1] `tsc` over the golden pages in `examples/blueprint-kit`, and the manifest check (T002) in the package's test target
 

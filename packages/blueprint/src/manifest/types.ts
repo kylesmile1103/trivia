@@ -54,7 +54,7 @@ const exposedValueSchema = z.strictObject({
   via: z.strictObject({
     valueProp: propName,
     changeProp: eventName,
-    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked']),
+    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked', 'value === true']),
   }),
 })
 
@@ -66,6 +66,7 @@ const manifestFields = z.strictObject({
     parts: z.record(slotName, exportName).optional(),
   }),
   props: z.array(propSchema),
+  configuration: z.array(propSchema).optional(),
   slots: z.array(slotSchema),
   events: z.array(eventSchema),
   exposes: z.array(exposedValueSchema),
@@ -89,8 +90,8 @@ export function manifestJsonSchema(): object {
 }
 
 /** Static prop contracts include structural text and controlled values described by the manifest. */
-export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes'>): Map<string, PropSchema> {
-  const props = new Map(manifest.props.map((prop) => [prop.name, prop]))
+export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes' | 'configuration'>): Map<string, PropSchema> {
+  const props = new Map([...manifest.props, ...(manifest.configuration ?? [])].map((prop) => [prop.name, prop]))
   if (!props.has('children') && manifest.slots.some(({ kind }) => kind === 'text')) {
     props.set('children', { name: 'children', kind: 'string', optional: true, source: 'declared' })
   }

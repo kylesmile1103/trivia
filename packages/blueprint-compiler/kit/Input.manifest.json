@@ -1,0 +1,33 @@
+{
+  "type": "Input",
+  "source": {
+    "registry": "shadcn",
+    "item": "input",
+    "import": {
+      "name": "Input",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onChange",
+      "prop": "onChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onChange",
+        "changeArg": "event.target.value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

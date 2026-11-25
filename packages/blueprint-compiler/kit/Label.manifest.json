@@ -1,0 +1,22 @@
+{
+  "type": "Label",
+  "source": {
+    "registry": "shadcn",
+    "item": "label",
+    "import": {
+      "name": "Label",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "children",
+      "kind": "text"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

@@ -1,0 +1,33 @@
+{
+  "type": "Textarea",
+  "source": {
+    "registry": "shadcn",
+    "item": "textarea",
+    "import": {
+      "name": "Textarea",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onChange",
+      "prop": "onChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onChange",
+        "changeArg": "event.target.value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

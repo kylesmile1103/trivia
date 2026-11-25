@@ -5,7 +5,7 @@ import { componentManifestSchema, exposedScope, expressionCheck, loadBlueprint, 
 
 import * as engine from '@trivia/engine'
 
-import { compilePage, projectFacts, type CompileContext } from '../src/index.js'
+import { compilePage, pageDiagnostics, projectFacts, type CompileContext } from '../src/index.js'
 
 const kit = new URL('../kit/', import.meta.url)
 export const fixtureDir = new URL('../fixtures/kit/', import.meta.url)
@@ -58,5 +58,8 @@ export function kitContext(app = kitApp): CompileContext {
 }
 
 export function compileKitPage(name: string, context = kitContext()) {
-  return compilePage(loadBlueprint(fixture()), name, context)
+  const blueprint = loadBlueprint(fixture())
+  const errors = pageDiagnostics(blueprint, name, context).filter(({ severity }) => severity === 'error')
+  if (errors.length) throw new Error(JSON.stringify(errors, null, 2))
+  return compilePage(blueprint, name, context)
 }

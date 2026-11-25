@@ -29,6 +29,12 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
 
   const manifestOf = (type: string): ResolvedManifest => {
     const manifest = context.manifests?.[type] ?? intrinsic[type]
+    if ((!manifest || manifest.type !== type) && type === 'Popover') {
+      return {
+        type, installed: false, client: true, props: [], slots: [], events: [], exposes: [], template: {},
+        source: { registry: 'shadcn', item: 'popover', import: { name: type, from: 'ui' } },
+      }
+    }
     if (!manifest || manifest.type !== type) throw new CompileError('invalid_result', 'No component manifest for ' + type)
     if (manifest.composite) throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
     return manifest
@@ -97,9 +103,16 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       const setter = names.take('set' + capitalize(name))
       const props = page.props[id]
       rename['ui.' + node.name + '.' + key] = name
-      state.push({
-        name, setter, type, initial: literal(props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp] : initial, facts.style),
-      })
+      const seed = props && Object.hasOwn(props, via.valueProp) ? props[via.valueProp] : initial
+      let seedCode = literal(seed, facts.style)
+      if (manifest.type === 'DatePicker' && manifest.source.registry === 'shadcn') {
+        if (seed !== null && (typeof seed !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(seed) ||
+          !Number.isFinite(Date.parse(seed)) || new Date(seed).toISOString().slice(0, 10) !== seed)) {
+          throw new CompileError('invalid_result', node.name + '.' + via.valueProp + ' expects an ISO calendar date.')
+        }
+        seedCode = seed === null ? 'undefined' : 'new Date(' + literal(seed + 'T00:00:00', facts.style) + ')'
+      }
+      state.push({ name, setter, type, initial: seedCode })
       return { valueProp: via.valueProp, changeProp: via.changeProp, name, update: setter, arg: via.changeArg }
     })
     exposed.set(id, values)
@@ -146,7 +159,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       if (attributes.get(value.valueProp)?.kind !== 'expr') {
         attributes.set(value.valueProp, { kind: 'expr', code: value.name })
       }
-      const change = changes.get(value.changeProp) ?? { arg: value.arg === 'value' ? 'value' : 'event', updates: [] }
+      const change = changes.get(value.changeProp) ?? { arg: value.arg.startsWith('value') ? 'value' : 'event', updates: [] }
       change.updates.push({ setter: value.update, value: value.arg })
       changes.set(value.changeProp, change)
     }
@@ -180,7 +193,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats)
+  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))

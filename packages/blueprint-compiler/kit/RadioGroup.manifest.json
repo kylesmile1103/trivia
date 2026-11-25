@@ -1,0 +1,38 @@
+{
+  "type": "RadioGroup",
+  "source": {
+    "registry": "shadcn",
+    "item": "radio-group",
+    "import": {
+      "name": "RadioGroup",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "children",
+      "kind": "nodes"
+    }
+  ],
+  "events": [
+    {
+      "name": "onValueChange",
+      "prop": "onValueChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onValueChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

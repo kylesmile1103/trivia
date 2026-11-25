@@ -1,0 +1,33 @@
+{
+  "type": "Switch",
+  "source": {
+    "registry": "shadcn",
+    "item": "switch",
+    "import": {
+      "name": "Switch",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onCheckedChange",
+      "prop": "onCheckedChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "checked",
+      "type": "boolean",
+      "initial": false,
+      "via": {
+        "valueProp": "checked",
+        "changeProp": "onCheckedChange",
+        "changeArg": "value === true"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

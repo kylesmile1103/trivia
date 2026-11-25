@@ -1,7 +1,9 @@
 import { toPointer, type BlueprintNode, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError } from '../compile.js'
+import type { PrintStyle } from '../facts.js'
 import type { AttributeIR, JsxIR } from '../ir.js'
+import { kitInput } from './kit-inputs.js'
 import { compareBytes } from '../print/style.js'
 
 export interface RepeatLocal { alias: string; item: string; index?: string }
@@ -13,6 +15,7 @@ export function lowerJsx(
   expression: (pointer: string) => string,
   wire: (id: string, tag: string, props: Map<string, AttributeIR['value']>, repeated: boolean) => void,
   repeats: ReadonlyMap<string, RepeatLocal>,
+  style: PrintStyle,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -58,7 +61,9 @@ export function lowerJsx(
         else children.push(...contents)
       }
     }
-    let tree: JsxIR = { kind: 'element', tag, props, children }
+    const element: Extract<JsxIR, { kind: 'element' }> = { kind: 'element', tag, props, children }
+    let tree: JsxIR = kitInput(manifest, element, (part) => component(manifest, part),
+      (part) => component(manifestOf('Popover'), part), style)
     if (page.control[id]?.when !== undefined) {
       tree = { kind: 'cond', test: expression(toPointer(['control', id, 'when'])), child: tree }
     }

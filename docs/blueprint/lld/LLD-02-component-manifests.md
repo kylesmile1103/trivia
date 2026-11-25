@@ -43,6 +43,11 @@ A variant replaces whole fields of the base manifest and cannot change the type.
 the `on<Event>` names supported by the page document. Initial and template values are JSON,
 and props may carry an optional description.
 
+⚑ Kit manifests can declare static-only `configuration` alongside the native props.
+The compiler consumes these values when building JSX, and they appear in the agent prop
+schemas. The `value === true` change argument normalizes a primitive's event value to
+a boolean (LLD-06).
+
 `componentManifestSchema` parses manifest files. `manifestJsonSchema()` generates the
 equivalent draft 2020-12 schema for the files, including style variants.
 

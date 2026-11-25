@@ -44,6 +44,13 @@ section 6). Radix and Base UI are covered first.
 keeps a project's installed filename for a uniquely resolved shadcn export, so a renamed
 component continues compiling with its project alias.
 
+⚑ `configuration` describes compiler-consumed static props without changing the analyzer's
+native prop list. Select generates its trigger and value around the author-supplied item
+nodes. Radix Combobox uses a searchable Command inside a Popover and commits its value on
+item selection. DatePicker uses a single-selection Calendar inside a Popover. Its empty
+state is undefined, and a static `selected` is an ISO calendar date. Checkbox maps Radix's
+indeterminate change value to false for its boolean exposure.
+
 ## 3. `DataTable` (FR-KT-02, FR-KT-04, FR-KT-05)
 
 A node of type `DataTable` in a custom page:

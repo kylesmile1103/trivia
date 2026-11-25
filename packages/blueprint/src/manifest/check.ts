@@ -83,6 +83,10 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
           report('controlled_change_binding', path, `The compiler owns ${node.type}.${name} for its exposed value`, hint)
           continue
         }
+        if (map === 'bindings' && manifest.configuration?.some((prop) => prop.name === name)) {
+          report('invalid_prop_value', path, `${node.type}.${name} is compile-time configuration and requires a static value`)
+          continue
+        }
         const prop = props.get(name)
         if (!prop) {
           report('unknown_prop', path, `${node.type} has no prop "${name}"`,

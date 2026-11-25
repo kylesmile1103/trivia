@@ -1,0 +1,52 @@
+{
+  "type": "Select",
+  "source": {
+    "registry": "shadcn",
+    "item": "select",
+    "import": {
+      "name": "Select",
+      "from": "ui"
+    },
+    "parts": {
+      "content": "SelectContent",
+      "trigger": "SelectTrigger",
+      "value": "SelectValue"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "SelectContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onValueChange",
+      "prop": "onValueChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onValueChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {},
+  "configuration": [
+    {
+      "name": "placeholder",
+      "kind": "string",
+      "optional": true,
+      "source": "declared"
+    }
+  ]
+}
