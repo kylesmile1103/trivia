@@ -37,6 +37,18 @@ public sealed class EmitterTests
     public Task FR_NC_06_CrudEndpoints()
         => Snapshot("CustomerEndpoints", CSharp.Print(EndpointsEmitter.Emit(Bank, Bank.Entities[0])));
 
+    [Fact]
+    public Task FR_NC_07_SharedListParser()
+        => Snapshot("ListQuery", CSharp.Print(ListQueryEmitter.Emit(Bank)));
+
+    [Fact]
+    public Task FR_NC_10_ProblemDetailsHandler()
+        => Snapshot("ApiProblem", CSharp.Print(ApiProblemEmitter.Emit(Bank)));
+
+    [Fact]
+    public Task FR_NC_09_ApiRegistration()
+        => Snapshot("ApiRegistration", CSharp.Print(ApiRegistrationEmitter.Emit(ModelLoader.Load(FixtureTests.Bank))));
+
     private static Task Snapshot(string name, string source, [CallerFilePath] string sourceFile = "")
         => Verifier.Verify(source, sourceFile: sourceFile).UseDirectory("Snapshots").UseFileName(name).DisableDiff();
 }

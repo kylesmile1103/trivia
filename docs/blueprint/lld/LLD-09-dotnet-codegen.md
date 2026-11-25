@@ -10,22 +10,31 @@
   shared framework. [Validation in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/validation?view=aspnetcore-10.0)
 - `TypedResults` with a `Results<T1, T2>` return type contributes response metadata. Use
   `ProducesValidationProblem()` for 400 validation responses from the filter.
+  `AddProblemDetails`, `AddExceptionHandler<T>`, and `UseStatusCodePages` provide
+  problem details for errors outside request validation.
   [Minimal API responses](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/responses?view=aspnetcore-10.0)
 - Runtime generation uses `AddOpenApi` with `OpenApiSpecVersion.OpenApi3_1` and `MapOpenApi`.
   MSBuild uses `Microsoft.Extensions.ApiDescription.Server`, `OpenApiGenerateDocumentsOnBuild`
   and `OpenApiGenerateDocumentsOptions` with `--openapi-version OpenApi3_1`.
+  The document and operation use `AddDocumentTransformer` and `AddOperationTransformer`
+  for generated metadata. `AddSchemaTransformer` supplies the enum wire values.
   [OpenAPI document generation](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0)
 - Npgsql's `UseNpgsql(..., options => options.MapEnum<T>(...))` is for native PostgreSQL enum
   types. LLD-08 instead specifies text with a check constraint, so configure an EF Core
-  `HasConversion` to the literal string. A `uint` property with `IsRowVersion()` maps to
-  PostgreSQL's built-in `xmin`.
+  `HasConversion` to the literal string. `UseIdentityByDefaultColumn()` creates integer
+  keys. A `uint` property with `IsRowVersion()` maps to PostgreSQL's built-in `xmin`.
   [Npgsql enum mapping](https://www.npgsql.org/efcore/mapping/enum.html),
   [Npgsql concurrency](https://www.npgsql.org/efcore/modeling/concurrency.html)
+- OIDC registration uses `AddAuthentication(JwtBearerDefaults.AuthenticationScheme)` and
+  `AddJwtBearer`. `RequireAuthorization()` adds policy metadata to each group and the
+  OpenAPI route. The generated document's `OpenApiSecurityRequirement` references its
+  bearer scheme by ID. [JWT bearer authentication](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)
 
 The build probe used SDK 10.0.100, OpenAPI and EF Core 10.0.12, and Npgsql EF Core 10.0.3.
 It built with warnings as errors, generated a 3.1 document with typed and validation
 statuses, and verified the provider's create script uses a text column and omits the
-system-managed version column.
+system-managed version column. The tool and scaffold use exact direct NuGet version ranges
+from `dotnet/Directory.Packages.props`.
 
 ## 1. The tool
 
@@ -58,6 +67,8 @@ already validated the model, and a diagnostic here uses the same shape as LLD-01
 The app document is optional for model-only input, like the bank fixture. Without it the
 first model namespace segment becomes the app name and authentication defaults to none.
 `modelRev` hashes the input file bytes, matching the blueprint store's disk revision.
+Evaluation of each embedded schema is serialized because JsonSchema.Net populates a
+shared cache for recursive references.
 
 ```json
 { "generator": "0.3.0", "modelRev": "sha256:…",
@@ -98,7 +109,7 @@ write, so a refusal writes nothing (NFR-12).
   temporary files with rollback copies for a failed batch.
 ⚑ Discover obsolete files under the API's generated directories via the tool's header marker.
   Scan Data at its top level so EF migrations stay outside ownership. The reported scaffold
-  hash is for the proposed scaffold template; existing scaffold contents are never read.
+  hash is for the proposed scaffold template. Existing scaffold bytes stay on disk.
 
 ## 3. Output
 
@@ -195,7 +206,7 @@ namespaces, nullable enabled, no `var` in generated code.
   same foreign key, the first is mapped and the rest expose the same collection.
 ⚑ Enum member names derive from ASCII words in the literal, with a prefix for empty or numeric
   names and numeric suffixes for collisions. Both converters retain exact wire values.
-⚑ UUID keys are created with `Guid.CreateVersion7()` in the entity; integer keys use PostgreSQL
+⚑ UUID keys are created with `Guid.CreateVersion7()` in the entity. Integer keys use PostgreSQL
   identity columns. Explicit non-null defaults initialize the entity and the database column.
 ⚑ Request properties are nullable at deserialization so validation can distinguish missing
   values from zero or false. An omitted property with a blueprint default gets that value.
@@ -300,13 +311,18 @@ is added.
   `unchanged`.
 - Ownership: an edited `.g.cs` is refused, `--force` overwrites it, a scaffold file with user
   code survives, a removed entity's generated files are deleted and its scaffold files stay.
-- The emitted solution builds with `-warnaserror` (one slow test, run in CI and before a
-  release).
+- The emitted solutions build with `-warnaserror`. Build tests carry `Category=Build`
+  and the PostgreSQL suites carry `Category=Integration`.
 - Integration: the emitted API against PostgreSQL in a container. CRUD, every list operator,
   every problem status, a custom operation before (501) and after implementation, a hook that
   rejects.
 - The mapping fixture from LLD-08 matches the C# table.
 - `model.v1.json` fixtures from the Node package deserialize without loss.
+- The migration test runs the installed `dotnet ef` CLI. The integration tests use
+  Testcontainers with PostgreSQL and start the emitted API on loopback.
+
+⚑ The Nx `dotnet` build and test targets run without caching. The test target depends on
+  the build and runs all traits against the current local toolchain and Docker runtime.
 
 ## 9. Open points
 
