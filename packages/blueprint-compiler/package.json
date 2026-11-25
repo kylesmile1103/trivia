@@ -37,6 +37,12 @@
     "vitest": "^5.0.3"
   },
   "nx": {
-    "name": "blueprint-compiler"
+    "name": "blueprint-compiler",
+    "targets": {
+      "test": {
+        "dependsOn": ["^build", { "projects": ["plugin"], "target": "build" }],
+        "inputs": ["default", "^production", "fixtures", "{workspaceRoot}/packages/dev-service/src/**/*"]
+      }
+    }
   }
 }

@@ -264,6 +264,12 @@ a layout from refine-ui, an empty `<Refine resources>` with a catch-all route. I
 component source: those arrive through the shadcn CLI, which needs the network and is
 therefore a printed command, not something `new` runs silently.
 
+⚑ The offline CLI loads the installed Vite adapter's dev service (or the sibling build in
+the repo) and constructs a standalone engine service without a server. This shares the
+project facts, validation, route plan and native writes without a package dependency cycle.
+`new` links the local Vite plugin when available because Trivia packages are built from
+the workspace. It prints commands for Refine UI's layout and views registry items.
+
 ## 8. Tests
 
 - Golden pages for a fixture blueprint covering every IR feature, checked byte for byte, then
