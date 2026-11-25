@@ -1,0 +1,47 @@
+name: Set up the workspace
+description: >-
+  pnpm (the version package.json's packageManager names), Node (.node-version), Rust
+  (rust-toolchain.toml) with its build cache, the Nx task cache, and the dependencies.
+  Caches are written only by runs on main (docs/ci.md, "Caches").
+
+inputs:
+  rust-workspaces:
+    description: Cargo workspaces whose target directory to cache, in Swatinem/rust-cache's format.
+    default: '. -> target'
+  nx-cache:
+    description: Restore the Nx task cache this job saved on main. Empty means do not.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .node-version
+        cache: pnpm
+
+    - name: Rust toolchain from rust-toolchain.toml
+      shell: bash
+      run: |
+        rustup toolchain install
+        rustc --version
+        cargo clippy --version
+
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        workspaces: ${{ inputs.rust-workspaces }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Restore the Nx task cache
+      if: inputs.nx-cache != ''
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .nx/cache
+        key: nx-${{ runner.os }}-${{ runner.arch }}-${{ inputs.nx-cache }}-${{ github.sha }}
+        restore-keys: nx-${{ runner.os }}-${{ runner.arch }}-${{ inputs.nx-cache }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

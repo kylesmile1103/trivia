@@ -1,0 +1,70 @@
+# Continuous delivery (docs/ci.md, docs/releases.md): cut a release from the browser.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'x.y.z, or major, minor or patch'
+        required: true
+        type: string
+      dry-run:
+        description: Show what would happen and change nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: CI on this commit
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: release
+    needs: gate
+    # The desktop app is bundled for Apple silicon, as `pnpm release` does locally.
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Check the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?|major|minor|patch)$ ]]; then
+            echo "::error::version must be x.y.z (optionally -pre.N), major, minor or patch"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags and history for the changelog; credentials kept, since this job pushes the
+          # release commit and tag.
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: ./.github/actions/setup
+        with:
+          rust-workspaces: |
+            . -> target
+            crates/trivia_shell -> target
+      - name: Commit as github-actions[bot]
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: pnpm release
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=("$VERSION")
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          pnpm release "${args[@]}"

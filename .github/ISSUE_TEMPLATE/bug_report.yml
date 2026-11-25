@@ -1,0 +1,49 @@
+name: Bug report
+description: Something did not work, or an edit changed code it should not have.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through private reporting instead (SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Trivia did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source before and after
+      description: >-
+        For an edit that went wrong, the smallest piece of the file before the edit and after it.
+        Byte-level details (whitespace, comments, line endings) matter here.
+      render: tsx
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. pnpm dev
+        2. Select …
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: Trivia version or commit
+      placeholder: v0.2.0, or the commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 15, Node 22.16, Chrome 141, Vite 7
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors or logs
+      description: The designer's console, the dev server's output, or the API response.
+      render: text
