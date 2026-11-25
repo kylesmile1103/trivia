@@ -9,6 +9,7 @@ import type { AppDoc } from '../types/app.js'
 import { applyError, type ApplyError, type ErrorCode } from '../types/diagnostics.js'
 import type { BlueprintNode, CustomPage, PageDoc } from '../types/page.js'
 import type { ValidationContext } from '../validate/context.js'
+import type { ExpressionBinding } from '../validate/expressions.js'
 
 export class Refusal extends Error {
   constructor(readonly error: ApplyError) {
@@ -22,8 +23,10 @@ export function refuse(code: ErrorCode, message: string, details?: Record<string
 
 /** What this package needs from the expression compiler (LLD-03), injected. */
 export interface ExpressionTools {
-  /** `expr` with every `ui.<from>` reference renamed to `ui.<to>`, by span. */
-  renameNodeReference(expr: string, from: string, to: string): string
+  /** Batch binding from LLD-03, called once with the page's expression sites. */
+  renameReferences?: ExpressionBinding
+  /** Earlier single-source adapter, used by callers that have not switched to the batch binding. */
+  renameNodeReference?(expr: string, from: string, to: string): string
 }
 
 export interface ApplyOptions {

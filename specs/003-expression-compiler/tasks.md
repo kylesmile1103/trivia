@@ -41,7 +41,7 @@
 - [x] T016 `crates/trivia_napi/src/expr.rs`: `analyzeExpressions`, `emitExpressions`, `renameReferences`, with panics caught as `internal`. Update `index.d.ts`
 - [x] T017 Add the three functions to the napi crash suite with the RSS bound
 - [x] T018 In `@trivia/blueprint`: build the scope for a page (state, queries, `ui` from spec 002 T011, locals) and call the analyzer through the validation context. Fixtures per `expr_*` code
-- [ ] T019 Wire `renameNode` (spec 001 T014) to `renameReferences`
+- [x] T019 Wire `renameNode` (spec 001 T014) to `renameReferences`
 
 ## Phase 8: Polish
 

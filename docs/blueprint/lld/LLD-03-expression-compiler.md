@@ -157,6 +157,10 @@ for the `renameNode` op (LLD-01).
   syntax is outside the binding subset. An ambiguous scope or parse error with a possible
   `ui` reference returns a diagnostic so the guarded op can refuse the rename atomically.
   `from` and `to` must have the blueprint node-name character shape.
+- ⚑ Pass `{ expressions: { renameReferences } }` to the store or reducer. A rename sends
+  one batch with the page's site locals and checks every response before editing the draft.
+  A refusal includes the affected JSON pointers and any compiler diagnostics. The earlier
+  single-expression adapter remains accepted for callers built against spec 001.
 
 - ⚑ Emit accepts a batch-wide `arrowBody` flag. `renameReferences` accepts `{ expressions, from, to }`
   with unqualified node names. Both responses label spans with `unit: "utf16"` and return either

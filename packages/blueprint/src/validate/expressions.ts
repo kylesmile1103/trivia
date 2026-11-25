@@ -89,7 +89,7 @@ export function expressionRequest(page: PageDoc, ui: UiExpressionScope = { tier:
   }
 }
 
-type NativeDiagnostic = Pick<Diagnostic, 'code' | 'message' | 'severity'> & { start: number; end: number }
+export type NativeDiagnostic = Pick<Diagnostic, 'code' | 'message' | 'severity'> & { start: number; end: number }
 
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 export function readExpressionEnvelope<T extends { unit: 'utf16' }>(json: string): T {
