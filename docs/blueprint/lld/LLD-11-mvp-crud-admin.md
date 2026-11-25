@@ -32,3 +32,6 @@
 - ⚑ The form test changes one outbound payload to bypass the matching client rule. ASP.NET
   returns the real validation response and the test checks that Refine displays it on the
   field and allows the corrected submission.
+- ⚑ The inspector edits the show header's Back button in the installed Refine view, which
+  owns that JSX. Column and form tests allow just the inserted field or column and its
+  required import, then verify that one undo restores the original file bytes.
