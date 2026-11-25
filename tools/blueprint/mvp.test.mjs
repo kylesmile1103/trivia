@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 
-import { blueprint, missingMvpPrerequisite, prepareMvp, run, startMvpApi } from './mvp-project.mjs'
+import {
+  applyRefineChange, blueprint, missingMvpPrerequisite, prepareMvp, reviseCustomerModel,
+  run, startMvpApi, startMvpDevService, triviaRequest,
+} from './mvp-project.mjs'
 
 test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
   skip: missingMvpPrerequisite(),
@@ -12,18 +15,19 @@ test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
 }, async (t) => {
   const root = mkdtempSync(path.join(tmpdir(), 'trivia-mvp-'))
   let api
+  let dev
   t.after(async () => {
     try {
-      await api?.close()
+      await Promise.all([api?.close(), dev?.close()])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
-  const web = prepareMvp(root)
-  const backend = blueprint(root, 'backend', '--migration', 'Initial')
+  const web = await prepareMvp(root)
+  const backend = await blueprint(root, 'backend', '--migration', 'Initial')
   assert.match(backend, /No contract drift\./)
-  assert.deepEqual(JSON.parse(blueprint(root, 'validate', '--json')), [])
-  const eject = JSON.parse(blueprint(root, 'eject'))
+  assert.deepEqual(JSON.parse(await blueprint(root, 'validate', '--json')), [])
+  const eject = JSON.parse(await blueprint(root, 'eject'))
   assert.deepEqual(eject.files.filter((file) => file.startsWith('src/pages/')).sort(), [
     'src/pages/accounts/list.tsx',
     'src/pages/customers/create.tsx',
@@ -32,8 +36,8 @@ test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
     'src/pages/customers/show.tsx',
   ])
   assert.ok(existsSync(path.join(web, 'trivia.manifest.json')))
-  run(root, 'dotnet', ['build', 'BankAdmin.slnx', '-warnaserror', '--disable-build-servers'])
-  run(web, 'pnpm', ['exec', 'tsc', '--noEmit'])
+  await run(root, 'dotnet', ['build', 'BankAdmin.slnx', '-warnaserror', '--disable-build-servers'])
+  await run(web, 'pnpm', ['exec', 'tsc', '--noEmit'])
 
   api = await startMvpApi(root)
   const customers = new URL('/api/v1/customers', api.url)
@@ -51,4 +55,64 @@ test('FR-MVP-01, FR-MVP-02: generate, type-check and run BankAdmin on Aspire', {
   assert.equal(total, 1)
   assert.deepEqual(items, [item])
   assert.deepEqual({ fullName: item.fullName, email: item.email, status: item.status }, record)
+  await api.close()
+  api = undefined
+
+  dev = await startMvpDevService(web)
+  const edit = 'src/pages/customers/edit.tsx'
+  const editSource = () => readFileSync(path.join(web, edit), 'utf8')
+  await applyRefineChange(dev.url, 'fields', edit, [{ action: 'add', field: 'notes' }])
+  assert.match(editSource(), /name="notes"/)
+
+  assert.deepEqual((await triviaRequest(dev.url, '/refine/drift')).pages, [])
+  const before = backendFiles(root)
+  await reviseCustomerModel(dev.url)
+  const migration = await blueprint(root, 'backend', '--migration', 'Segment')
+  assert.match(migration, /src\/pages\/customers\/edit\.tsx +Field Notes sends .notes./)
+  const after = backendFiles(root)
+  assertMigration(before, after)
+
+  const { pages } = await triviaRequest(dev.url, '/refine/drift')
+  assert.equal(pages.length, 1)
+  assert.equal(pages[0].file, edit)
+  assert.equal(pages[0].issues.length, 1)
+  const [issue] = pages[0].issues
+  assert.equal(issue.code, 'missing_field')
+  assert.equal(issue.name, 'notes')
+  assert.deepEqual(issue.fix?.changes, [{ action: 'remove', field: 'notes' }])
 })
+
+
+function backendFiles(root) {
+  const files = new Map()
+  function read(dir) {
+    for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const file = path.posix.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (!['web', 'bin', 'obj', '.mvp-host'].includes(entry.name)) read(file)
+      } else if (entry.isFile()) {
+        files.set(file, readFileSync(path.join(root, file), 'utf8'))
+      }
+    }
+  }
+  read('')
+  return files
+}
+
+function assertMigration(before, after) {
+  const changed = [...new Set([...before.keys(), ...after.keys()])]
+    .filter((file) => before.get(file) !== after.get(file)).sort()
+  const migrationDir = 'src/BankAdmin.Api/Data/Migrations/'
+  const migrations = changed.filter((file) => file.startsWith(migrationDir))
+  const main = migrations.find((file) => /\/\d{14}_Segment\.cs$/.test(file))
+  assert.ok(main, 'Expected the new Segment migration')
+  assert.equal(before.has(main), false)
+  const designer = main.replace(/\.cs$/, '.Designer.cs')
+  assert.equal(before.has(designer), false)
+  assert.deepEqual(migrations, [main, designer, migrationDir + 'AppDbContextModelSnapshot.cs'].sort())
+  assert.match(after.get(main), /DropColumn\(\s*name: "notes",\s*table: "customers"/)
+  assert.match(after.get(main), /AddColumn<string>\(\s*name: "segment",\s*table: "customers"/)
+  const backend = changed.filter((file) => !migrations.includes(file))
+  assert.ok(backend.some((file) => file.endsWith('/Customer.g.cs')), backend.join('\n'))
+  assert.ok(backend.every((file) => file.endsWith('.g.cs')), backend.join('\n'))
+}

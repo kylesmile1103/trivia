@@ -19,9 +19,9 @@ process.once('SIGTERM', stop)
 process.once('SIGINT', stop)
 
 try {
-  const web = prepareMvp(root)
-  blueprint(root, 'backend', '--migration', 'Initial')
-  blueprint(root, 'eject')
+  const web = await prepareMvp(root)
+  await blueprint(root, 'backend', '--migration', 'Initial')
+  await blueprint(root, 'eject')
   if (!stopping) api = await startMvpApi(root)
   if (!stopping) {
     vite = spawn(process.execPath, [path.join(web, 'node_modules/vite/bin/vite.js'), '--port', port, '--strictPort'], {

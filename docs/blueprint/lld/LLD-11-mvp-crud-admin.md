@@ -35,3 +35,11 @@
 - ⚑ The inspector edits the show header's Back button in the installed Refine view, which
   owns that JSX. Column and form tests allow just the inserted field or column and its
   required import, then verify that one undo restores the original file bytes.
+
+## Drift scenario
+
+- ⚑ The script uses the Refine tool to add `notes` to the ejected form. It defines
+  `CustomerSegment` and removes `notes` in one model patch, then adds `segment` in a
+  separate guarded patch so the one-field diff can be measured on its own.
+- ⚑ One EF migration includes the new migration and designer files and an update to EF's
+  existing model snapshot. The test compares every other backend source file by content.

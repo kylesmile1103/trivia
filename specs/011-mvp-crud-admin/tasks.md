@@ -22,7 +22,7 @@
 
 ## Phase 4: User Story 3 - Model change and drift (P1)
 
-- [ ] T009 [US3] In the script: patch the model (add `segment`, remove `notes`), run `backend --migration Segment`, assert the backend diff is `.g.cs` files plus one migration, assert the drift list
+- [x] T009 [US3] In the script: patch the model (add `segment`, remove `notes`), run `backend --migration Segment`, assert the backend diff is `.g.cs` files plus one migration, assert the drift list
 - [ ] T010 [US3] Apply the fix and add the column through the plugin API. `tsc` passes
 
 ## Phase 5: User Story 4 - Agent (P1)

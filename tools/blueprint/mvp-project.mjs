@@ -1,9 +1,10 @@
 // Shared setup for the scripted and browser acceptance tests.
-import { spawn, spawnSync } from 'node:child_process'
+import { execFile, spawn, spawnSync } from 'node:child_process'
 import { cpSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { setTimeout as delay } from 'node:timers/promises'
+import { promisify } from 'node:util'
 
 export const repo = path.resolve(import.meta.dirname, '../..')
 const kit = path.join(repo, 'examples/blueprint-kit')
@@ -19,32 +20,35 @@ export function missingMvpPrerequisite() {
   return undefined
 }
 
-export function run(cwd, command, args) {
-  const result = spawnSync(command, args, {
-    cwd,
-    env: {
-      ...process.env,
-      PATH: [path.join(repo, 'e2e/bin'), process.env.PATH ?? ''].join(path.delimiter),
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1',
-      DOTNET_NOLOGO: '1',
-    },
-    encoding: 'utf8',
-    maxBuffer: 16 * 1024 * 1024,
-    timeout: 300_000,
-  })
-  if (result.status !== 0 || result.error) {
-    throw new Error(`${command} ${args.join(' ')} failed (${result.error?.message ?? result.signal ?? result.status})\n${result.stdout ?? ''}${result.stderr ?? ''}`)
+const execute = promisify(execFile)
+
+export async function run(cwd, command, args) {
+  try {
+    const { stdout } = await execute(command, args, {
+      cwd,
+      env: {
+        ...process.env,
+        PATH: [path.join(repo, 'e2e/bin'), process.env.PATH ?? ''].join(path.delimiter),
+        DOTNET_CLI_TELEMETRY_OPTOUT: '1',
+        DOTNET_NOLOGO: '1',
+      },
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: 300_000,
+    })
+    return stdout
+  } catch (error) {
+    throw new Error(error.message + '\n' + (error.stdout ?? ''), { cause: error })
   }
-  return result.stdout
 }
 
 export function blueprint(root, ...args) {
   return run(root, process.execPath, [cli, ...args])
 }
 
-export function prepareMvp(directory) {
+export async function prepareMvp(directory) {
   const root = realpathSync(directory)
-  blueprint(repo, 'new', root, '--api', 'dotnet-minimal')
+  await blueprint(repo, 'new', root, '--api', 'dotnet-minimal')
   const web = path.join(root, 'web')
   cpSync(path.join(repo, 'examples/blueprint-mvp/blueprint'), path.join(web, 'blueprint'), { recursive: true })
   for (const item of ['components', 'hooks', 'lib', 'index.css']) {
@@ -55,7 +59,7 @@ export function prepareMvp(directory) {
   const { dependencies } = JSON.parse(readFileSync(path.join(kit, 'package.json'), 'utf8'))
   manifest.dependencies = { ...dependencies, ...manifest.dependencies }
   writeFileSync(packagePath, JSON.stringify(manifest, null, 2) + '\n')
-  run(web, 'pnpm', ['install', '--prefer-offline'])
+  await run(web, 'pnpm', ['install', '--prefer-offline'])
   return web
 }
 
@@ -64,7 +68,7 @@ export async function startMvpApi(root) {
   const project = 'Trivia.Blueprint.Mvp.Host'
   const harness = path.join(repo, 'dotnet/tests', project, project + '.csproj')
   const artifacts = path.join(root, '.mvp-host')
-  run(root, 'dotnet', ['build', harness, '--artifacts-path', artifacts, '--disable-build-servers'])
+  await run(root, 'dotnet', ['build', harness, '--artifacts-path', artifacts, '--disable-build-servers'])
   const dll = path.join(artifacts, 'bin', project, 'debug', project + '.dll')
   const appHost = path.join('src/BankAdmin.AppHost/bin/Debug/net10.0/BankAdmin.AppHost.dll')
   const child = spawn('dotnet', [dll, appHost], {
@@ -102,4 +106,46 @@ export async function startMvpApi(root) {
     await close().catch(() => {})
     throw error
   }
+}
+
+export async function startMvpDevService(web) {
+  const { createStandaloneHost, startDevService } = await import('../../packages/dev-service/dist/index.js')
+  return startDevService(createStandaloneHost(web))
+}
+
+export async function triviaRequest(origin, endpoint, data) {
+  const response = await fetch(origin + '/@trivia/api' + endpoint, {
+    signal: AbortSignal.timeout(30_000),
+    ...(data !== undefined && {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data),
+    }),
+  })
+  const result = await response.json()
+  if (!response.ok || !result.ok) throw new Error(endpoint + ' failed: ' + JSON.stringify(result))
+  return result.data
+}
+
+export async function applyRefineChange(origin, tool, file, changes) {
+  const { ops, label } = await triviaRequest(origin, '/refine/' + tool + '/plan', { file, changes })
+  return triviaRequest(origin, '/batch', { ops, label })
+}
+
+export async function reviseCustomerModel(origin) {
+  const doc = 'model.blueprint.json'
+  const entity = 'Customer'
+  const { rev: baseRev } = await triviaRequest(origin, '/blueprint/doc?path=' + doc)
+  const { revs } = await triviaRequest(origin, '/blueprint/patch', {
+    label: 'Define customer segments and remove notes',
+    ops: [
+      { op: 'setEnum', doc, baseRev, enum: { name: 'CustomerSegment', values: ['retail', 'business'] } },
+      { op: 'removeField', doc, baseRev, entity, field: 'notes' },
+    ],
+  })
+  await triviaRequest(origin, '/blueprint/patch', {
+    label: 'Add customer segment',
+    ops: [{
+      op: 'setField', doc, baseRev: revs[doc], entity,
+      field: { name: 'segment', type: 'enum', enum: 'CustomerSegment' },
+    }],
+  })
 }
