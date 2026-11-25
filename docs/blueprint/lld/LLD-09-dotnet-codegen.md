@@ -138,8 +138,15 @@ src/<App>.AppHost/, .ServiceDefaults/, .MigrationService/     scaffold (LLD-10)
 
 ⚑ The standalone `Program.cs` calls `AddGeneratedServices` and `MapGeneratedEndpoints`.
   LLD-10 will add `AddServiceDefaults` and `MapDefaultEndpoints` when it supplies their project.
-  The PostgreSQL connection comes from `ConnectionStrings:AppDb`, with a local development
-  default. The emitted package versions are selected from the generator's central pins.
+  The PostgreSQL connection comes from `ConnectionStrings:AppDb`. The emitted package versions
+  are selected from the generator's central pins.
+⚑ (decided 2026-11-26) Only the Development environment falls back to
+  `Host=localhost;Database=<app>;Username=postgres` when `ConnectionStrings:AppDb` is missing
+  or blank. Elsewhere `MapGeneratedEndpoints` throws at startup with a message naming
+  `ConnectionStrings:AppDb`, except under build-time OpenAPI generation, which runs the entry
+  point as `GetDocument.Insider` in Production with no database. EF's design-time tools default
+  to Development, so `migrate` keeps working without a database. Why: a production API that
+  silently pointed at localhost failed late and far from its cause.
   Model-dependent setup, including auth, stays behind the generated methods.
 
 ## 4. API conventions (FR-NC-06, FR-NC-07, FR-NC-10)

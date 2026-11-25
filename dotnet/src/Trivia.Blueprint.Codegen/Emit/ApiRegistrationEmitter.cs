@@ -35,7 +35,7 @@ public static class ApiRegistrationEmitter
                 return Task.CompletedTask;
             });
             """;
-        return Unit($"{space}.Generated", ["System.Text.Json", "System.Text.Json.Nodes",
+        return Unit($"{space}.Generated", ["System.Reflection", "System.Text.Json", "System.Text.Json.Nodes",
             "System.Text.Json.Serialization", "Microsoft.AspNetCore.OpenApi", "Microsoft.AspNetCore.Routing",
             "Microsoft.EntityFrameworkCore", "Microsoft.OpenApi", $"global::{space}.Data",
             .. (oidc ? new[] { "Microsoft.AspNetCore.Authentication.JwtBearer" } : []),
@@ -45,8 +45,8 @@ public static class ApiRegistrationEmitter
             {
                 public static void AddGeneratedServices(this IServiceCollection services, IConfiguration configuration)
                 {
-                    services.AddDbContext<AppDbContext>(options =>
-                        options.UseNpgsql(configuration.GetConnectionString("AppDb") ?? {{fallback}}));
+                    services.AddDbContext<AppDbContext>((provider, options) =>
+                        options.UseNpgsql(AppDbConnection(configuration, provider.GetRequiredService<IHostEnvironment>())));
                     {{authServices}}
                     services.AddValidation();
                     services.AddProblemDetails();
@@ -69,11 +69,27 @@ public static class ApiRegistrationEmitter
 
                 public static void MapGeneratedEndpoints(this WebApplication app)
                 {
+                    // Fail at startup rather than on the first request. Build-time OpenAPI generation
+                    // runs this entry point in Production with no database, so it is exempt.
+                    if (Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
+                        _ = AppDbConnection(app.Configuration, app.Environment);
                     app.UseExceptionHandler();
                     app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
                     {{authMiddleware}}
                     app.MapOpenApi(){{require}};
                     {{maps}}
+                }
+
+                // The local database is a development convenience; elsewhere the setting is required.
+                private static string AppDbConnection(IConfiguration configuration, IHostEnvironment environment)
+                {
+                    string? connection = configuration.GetConnectionString("AppDb");
+                    if (!string.IsNullOrWhiteSpace(connection))
+                        return connection;
+                    if (environment.IsDevelopment())
+                        return {{fallback}};
+                    throw new InvalidOperationException(
+                        "ConnectionStrings:AppDb is not set. Outside Development the API needs it, for example as the ConnectionStrings__AppDb environment variable.");
                 }
 
                 {{SchemaTransformer(model)}}
