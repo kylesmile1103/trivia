@@ -186,6 +186,19 @@ gains cases for all three, with the existing RSS bound.
 An expression is at most 4 096 bytes and 64 levels deep. A batch is at most 10 000
 expressions. Past a limit the answer is `expr_too_large` for that expression, never a crash.
 
+⚑ Before OXC runs, a raw count bounds what the parser can be made to retry on
+(`parse.rs`, `speculation_load`): at most 64 opening brackets (`(`, `[`, `{`, `<`) and at most
+12 `<` that are not part of `<=` or `<<`, counted over the whole text, strings and comments
+included, closers ignored. Past either, `expr_too_large`. Why: the fuzz target (SC-003) found
+two inputs under 260 bytes that took OXC 0.153 past 2 GB. In TypeScript mode the parser tries
+type arguments after an expression followed by `<` and arrow parameters after `(`, rewinds a
+failed attempt, and its arena keeps what the attempt allocated, so nested attempts multiply:
+the second input cost about 5x per added `<` (0.25 ms at 12, 6.25 ms at 14, out of memory at
+21). The AST depth check runs only after parsing, too late. A first guard that skipped strings
+was fooled by a backslash-quote OXC did not read as a string, so the count skips nothing:
+counting too much only refuses expressions nobody writes. A real fix belongs in OXC (or in
+running the parser out of process); this bound is what the pinned version allows.
+
 - ⚑ OXC 0.153.0's `Parser::parse_expression` consumes through EOF and already gives
   source-relative spans. This replaces the parenthesis wrapper and offset correction in the plan.
 - ⚑ The depth walk counts expressions, statement and type nodes, patterns, and nested JSX.

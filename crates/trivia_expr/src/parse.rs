@@ -11,6 +11,9 @@ use oxc_span::{SourceType, Span};
 
 pub const MAX_BYTES: usize = 4096;
 pub const MAX_DEPTH: usize = 64;
+/// ⚑ At most 12 `<` per expression (see `speculation_load`): far more comparisons and type
+/// arguments than a binding needs, and under it the costliest fuzzed input parses in 0.25 ms.
+pub const MAX_ANGLES: usize = 12;
 
 #[derive(Debug)]
 pub struct ParseError {
@@ -22,6 +25,13 @@ pub struct ParseError {
 pub fn parse<T: Send>(source: &str, use_expression: impl FnOnce(&Expression<'_>) -> T + Send) -> Result<T, ParseError> {
     if source.len() > MAX_BYTES {
         return Err(too_large(source, "Expression exceeds 4096 bytes"));
+    }
+    let (openers, angles) = speculation_load(source);
+    if openers > MAX_DEPTH {
+        return Err(too_large(source, "Expression has more than 64 opening brackets"));
+    }
+    if angles > MAX_ANGLES {
+        return Err(too_large(source, "Expression has more than 12 `<`"));
     }
     let run = || parse_expression(&Allocator::default(), source).map(|expression| use_expression(&expression));
     if source.len() <= 128 {
@@ -39,6 +49,32 @@ pub fn parse<T: Send>(source: &str, use_expression: impl FnOnce(&Expression<'_>)
             })?;
         worker.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     })
+}
+
+/// What OXC can be made to retry on, counted over the raw text: every `(`, `[`, `{`, and every
+/// `<` that is not part of `<=` or `<<`, in strings and comments too, closers ignored.
+///
+/// It runs before OXC because the AST depth walk can only run after parsing, which is too late.
+/// In TypeScript mode the parser tries type arguments after an expression followed by `<` and
+/// arrow parameters after `(`, rewinds a failed attempt, and its arena keeps what the attempt
+/// allocated, so nested attempts multiply. The fuzz target (SC-003) found two inputs under 260
+/// bytes that took more than 2 GB; the second multiplied the cost about 5x per `<`. A count
+/// that skipped strings was fooled by a quote OXC did not read as a string, so nothing is
+/// skipped: counting too much only refuses expressions nobody writes.
+pub(crate) fn speculation_load(source: &str) -> (usize, usize) {
+    let bytes = source.as_bytes();
+    let (mut openers, mut angles) = (0, 0);
+    for (i, &c) in bytes.iter().enumerate() {
+        match c {
+            b'(' | b'[' | b'{' => openers += 1,
+            b'<' if !matches!(bytes.get(i + 1), Some(b'=' | b'<')) && (i == 0 || bytes[i - 1] != b'<') => {
+                openers += 1;
+                angles += 1;
+            }
+            _ => {}
+        }
+    }
+    (openers, angles)
 }
 
 fn too_large(source: &str, message: &str) -> ParseError {
@@ -103,4 +139,26 @@ impl<'a> Visit<'a> for Depth {
     measure_depth!(visit_assignment_target, AssignmentTarget, walk_assignment_target);
     measure_depth!(visit_jsx_element, JSXElement, walk_jsx_element);
     measure_depth!(visit_jsx_fragment, JSXFragment, walk_jsx_fragment);
+}
+
+#[cfg(test)]
+mod speculation_load_tests {
+    use super::speculation_load;
+
+    #[test]
+    fn counts_every_opener_and_every_lone_angle() {
+        assert_eq!(speculation_load("f(a[0], {b: (c)})"), (4, 0));
+        assert_eq!(speculation_load("x as Array<Record<string, number>>"), (2, 2));
+        assert_eq!(speculation_load("a < b && c<d"), (2, 2));
+        assert_eq!(speculation_load("`<b>${x}</b>`"), (3, 2));
+    }
+
+    #[test]
+    fn leaves_out_less_or_equal_and_shifts_but_not_strings_or_comments() {
+        assert_eq!(speculation_load("a <= b && c << 1 && d <<= 2"), (0, 0));
+        // Nothing is skipped and closers never count down, so no quote, escape or comment can
+        // hide an opener the parser sees.
+        assert_eq!(speculation_load("'((' + \"<<x\" /* ( */"), (3, 0));
+        assert_eq!(speculation_load("\\'))))(("), (2, 0));
+    }
 }
