@@ -24,7 +24,7 @@ internal sealed class GeneratedProject : IDisposable
         string name = appName + ".Api";
         ApiDirectory = Path.Combine(Root, "src", name);
         ApiAssembly = Path.Combine(ApiDirectory, "bin", "Debug", "net10.0", name + ".dll");
-        DocumentPath = Path.Combine(ApiDirectory, "obj", "openapi.json");
+        DocumentPath = Path.Combine(Root, "web", "openapi", "api.openapi.json");
         SolutionPath = Path.Combine(Root, appName + ".slnx");
     }
 

@@ -20,7 +20,7 @@
 
 ## Phase 4: User Story 3 - The contract flows (P1)
 
-- [ ] T007 [US3] API csproj properties so the build writes `web/openapi/api.openapi.json`. Test in the build test
+- [x] T007 [US3] API csproj properties so the build writes `web/openapi/api.openapi.json`. Test in the build test
 - [ ] T008 [US3] `test/contract-loop.test.ts`: the bank fixture's OpenAPI snapshot through contract-sync gives a manifest with one resource per entity, five operations, `listItemsPath: "items"`, page pagination, and no overrides
 - [ ] T009 [US3] The `sync` script in the template's `package.json`
 - [ ] T010 [US3] Drift test: remove a field from the model fixture, rerun generation and sync on a copy, assert `refine/drift` lists the pages with fixes

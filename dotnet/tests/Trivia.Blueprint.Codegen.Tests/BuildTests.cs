@@ -23,6 +23,20 @@ public sealed class BuildTests
 
     [Fact]
     [Trait("Category", "Build")]
+    public async Task FR_AS_04_BuildWritesAndRestoresTheWebContract()
+    {
+        using GeneratedProject project = await GeneratedProject.WriteAsync(FixtureTests.Bank);
+        string document = Path.Combine(project.Root, "web", "openapi", "api.openapi.json");
+        _ = await project.BuildAsync();
+        Assert.True(File.Exists(document), "The API build did not write the contract in the web app.");
+        byte[] expected = File.ReadAllBytes(document);
+        File.Delete(document);
+        _ = await project.BuildAsync();
+        Assert.Equal(expected, File.ReadAllBytes(document));
+    }
+
+    [Fact]
+    [Trait("Category", "Build")]
     public async Task FR_NC_06_BuildTimeDocumentIncludesGeneratedRoutesAndProblemStatuses()
     {
         using GeneratedProject project = new(ModelLoader.Load(FixtureTests.Bank));

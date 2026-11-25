@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+    <TriviaOpenApiFile>$(MSBuildProjectDirectory)/../../web/openapi/api.openapi.json</TriviaOpenApiFile>
     <OpenApiGenerateDocumentsOptions>--openapi-version OpenApi3_1 --file-name openapi</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
   <ItemGroup>
@@ -15,6 +16,14 @@
     <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
+  <Target Name="RestoreMissingOpenApiOutput" BeforeTargets="GenerateOpenApiDocuments"
+          Condition="!Exists('$(OpenApiDocumentsDirectory)/openapi.json')">
+    <Delete Files="$(_OpenApiDocumentsCache)" />
+  </Target>
+  <Target Name="CopyTriviaOpenApi" AfterTargets="GenerateOpenApiDocuments">
+    <Copy SourceFiles="$(OpenApiDocumentsDirectory)/openapi.json"
+          DestinationFiles="$(TriviaOpenApiFile)" SkipUnchangedFiles="true" />
+  </Target>
   <Target Name="ExcludeRetiredTriviaScaffolds" BeforeTargets="CoreCompile">
     <ItemGroup>
       <TriviaScaffold Include="Features/*/*.cs" Exclude="Features/*/*.g.cs" />
