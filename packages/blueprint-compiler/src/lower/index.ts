@@ -1,12 +1,12 @@
-import { exposedScope, resolveManifests, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
+import { exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
-import { printModule } from '../print/module.js'
+import { printHandler, printModule } from '../print/module.js'
 import { compareBytes, literal, property, quote, statement } from '../print/style.js'
 import { refineName, relativeModule } from '../targets/vite-refine/files.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
-import { lowerJsx } from './jsx.js'
+import { lowerJsx, type RepeatLocal } from './jsx.js'
 import { Names } from './names.js'
 import { prepareQueries } from './queries.js'
 import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope.js'
@@ -14,9 +14,6 @@ import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope
 const intrinsic = resolveManifests({ kit: [], components: [] }).manifests
 
 export function lowerCustom(page: CustomPage, context: CompileContext): EmittedModule {
-  if (Object.keys(page.control).length) {
-    throw new CompileError('unsupported', 'This custom page needs control-flow lowering.')
-  }
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
   const dir = resource ? refineName(resource) : page.resource ?? page.name
@@ -36,10 +33,11 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     if (manifest.composite) throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
     return manifest
   }
-  const component = (manifest: ResolvedManifest): string => {
+  const component = (manifest: ResolvedManifest, part?: string): string => {
     const { source, installed } = manifest
     const { registry, item } = source
-    const { name, from } = source.import
+    const { from } = source.import
+    const name = part ?? source.import.name
     if (!from) return name
     if (!installed) missing.set(registry + '/' + item, { registry, item })
     const module = from === 'ui' ? facts.aliases['ui'] + '/' + item : from
@@ -109,9 +107,26 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   if (state.length) imports.push({ name: 'useState', source: 'react' })
   const route = routeScope(deps, names)
   const query = prepareQueries(page, context, names, analysis)
+  const repeats = new Map<string, RepeatLocal>()
+  const byExpression = new Map<string, RepeatLocal>()
+  for (const [id, control] of Object.entries(page.control).sort(([a], [b]) => compareBytes(a, b))) {
+    if (!('each' in control)) continue
+    const repeat: RepeatLocal = {
+      alias: control.as,
+      item: names.take('_' + control.as),
+      ...(control.as !== 'index' && { index: names.take('_index') }),
+    }
+    repeats.set(id, repeat)
+    byExpression.set(toPointer(['control', id, 'each']), repeat)
+  }
   const localAliases = actions.length ? { event: '_event', value: '_value' } : {}
   const expression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename, ...localAliases },
-    ui, new Set(actions.length ? ['event', 'value'] : []))
+    ui, new Set(actions.length ? ['event', 'value'] : []), ({ locals }) => Object.fromEntries(
+      Object.entries(locals ?? {}).flatMap(([local, tier]) => {
+        const repeat = typeof tier === 'object' ? byExpression.get(tier.from) : undefined
+        return repeat ? [[local, local === repeat.alias ? repeat.item : repeat.index!]] : []
+      }),
+    ))
   const queries = query.lower(expression)
   imports.push(...route.imports, ...query.imports)
   const handlers: HandlerIR[] = []
@@ -125,7 +140,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     setters: renderObject(setterObject),
   })
 
-  const wire = (id: string, tag: string, attributes: Map<string, AttributeIR['value']>): void => {
+  const wire = (id: string, tag: string, attributes: Map<string, AttributeIR['value']>, repeated: boolean): void => {
     const changes = new Map<string, { arg: string; updates: Array<{ setter: string; value: string }> }>()
     for (const value of exposed.get(id) ?? []) {
       if (attributes.get(value.valueProp)?.kind !== 'expr') {
@@ -149,11 +164,13 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
         'Parameters<NonNullable<' + react + '.ComponentProps<' + componentType + '>[' + quote(event.prop, facts.style) + ']>>[0]'
       const change = changes.get(event.prop)
       const value = (change?.updates[0]?.value ?? 'event').replace(/^(event|value)/, '_event')
-      handlers.push({
+      const handler: HandlerIR = {
         name, params: ['_event: ' + type, '_value = ' + value],
         body: [...changeSteps(event.prop, '_event'), ...action.steps(binding.steps, ['actions', binding.key])],
-      })
-      attributes.set(event.prop, { kind: 'expr', code: '(event) => void ' + name + '(event).catch(console.error)' })
+      }
+      const callee = repeated ? '(' + printHandler(handler, facts.style) + ')' : name
+      if (!repeated) handlers.push(handler)
+      attributes.set(event.prop, { kind: 'expr', code: '(event) => void ' + callee + '(event).catch(console.error)' })
       changes.delete(event.prop)
     }
     for (const [prop, { arg }] of changes) {
@@ -163,14 +180,14 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const jsx = lowerJsx(page, manifestOf, component, expression, wire)
+  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))
   imports.push(...action.imports)
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
-    name: page.name, file, route: page.route, client: client || state.length > 0 || analysis.some(({ tier }) => tier === 'client'),
+    name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
     imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers,
   }
   return {

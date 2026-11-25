@@ -135,6 +135,10 @@ Lowering:
    `parts`. Static props print as attributes by the rules `updateProp` uses (strings as
    `"…"`, the rest in braces). `className` prints verbatim (ADR-0016).
 
+   ⚑ Wrapper parts follow manifest slot order. Repeat callbacks use allocated underscore-prefixed
+   parameters so unused aliases typecheck and nested repeats cannot capture outer bindings.
+   Handlers inside repeats close over the item and index in the callback.
+
 ## 4. The printer (FR-RC-01, FR-RC-11)
 
 `printModule(ir, facts): string`. Fixed section order: imports (packages, then aliases, then

@@ -56,3 +56,7 @@ it('FR-RC-03: runs all action steps in order and produces one typed call handler
     code: fs.readFileSync(new URL('../fixtures/pages/actions/AccountActions.handler.ts', import.meta.url), 'utf8'),
   })
 })
+
+it('FR-RC-03: emits keyed repeats, scoped conditions and the component slot wrappers', () => {
+  golden('control', 'AccountCard')
+})

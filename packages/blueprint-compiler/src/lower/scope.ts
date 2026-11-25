@@ -1,4 +1,4 @@
-import { expressionRequest, pageDocPath, type Diagnostic, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
+import { expressionRequest, pageDocPath, type Diagnostic, type ExpressionInput, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext } from '../compile.js'
 import { compareBytes } from '../print/style.js'
@@ -56,17 +56,33 @@ export function emitPageExpressions(
   rename: Readonly<Record<string, string>>,
   ui?: UiExpressionScope,
   renameLocals: ReadonlySet<string> = new Set(),
+  scoped?: (input: ExpressionInput) => Record<string, string>,
 ): (pointer: string) => string {
   const { expressions } = expressionRequest(page, ui)
   if (!expressions.length) return missing
   // The expression compiler keeps local names intact except for the aliases this emitter assigns
   // to a handler's parameters. It still tracks nested arrow bindings on those names.
-  const inputs = expressions.map(({ locals, ...input }) => ({
-    ...input,
-    ...(locals && { locals: Object.fromEntries(Object.entries(locals).filter(([name]) => !renameLocals.has(name))) }),
-  })).sort((a, b) => compareBytes(a.id, b.id))
-  const results = readResults<EmittedExpression>(engine.emitExpressions(JSON.stringify({ expressions: inputs, rename })), page)
-  const codes = new Map(results.map(({ id, ts }) => [id, ts]))
+  const groups = new Map<string, { rename: Record<string, string>; expressions: ExpressionInput[] }>()
+  for (const input of expressions.sort((a, b) => compareBytes(a.id, b.id))) {
+    const locals = Object.entries(input.locals ?? {})
+    const scopedNames = scoped?.(input) ?? {}
+    const aliases = Object.fromEntries([
+      ...locals.filter(([name, tier]) => typeof tier === 'string' && renameLocals.has(name)).map(([name]) => [name, rename[name]!]),
+      ...Object.entries(scopedNames),
+    ])
+    const key = JSON.stringify(aliases)
+    let group = groups.get(key)
+    if (!group) {
+      group = { rename: { ...rename, ...aliases }, expressions: [] }
+      groups.set(key, group)
+    }
+    group.expressions.push({ ...input, locals: Object.fromEntries(locals.filter(([name]) => !Object.hasOwn(aliases, name))) })
+  }
+  const codes = new Map<string, string | undefined>()
+  for (const request of groups.values()) {
+    const results = readResults<EmittedExpression>(engine.emitExpressions(JSON.stringify(request)), page)
+    for (const { id, ts } of results) codes.set(id, ts)
+  }
   return (id) => codes.get(id) ?? missing(id)
 }
 

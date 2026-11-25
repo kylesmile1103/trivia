@@ -28,7 +28,7 @@
 - [x] T012 [US2] Golden fixture 2 (state and exposed values), then `lower/names.ts` and the value and change wiring
 - [x] T013 [US2] Golden fixture 3 (queries, bindings on query fields), then `lower/scope.ts`, `lower/queries.ts`, `targets/vite-refine/refine-hooks.ts`
 - [x] T014 [US2] Golden fixture 4 (every action step, including `call` with its handler stub), then `lower/actions.ts`
-- [ ] T015 [US2] Golden fixture 5 (`when`, `each`, slots with wrapper parts)
+- [x] T015 [US2] Golden fixture 5 (`when`, `each`, slots with wrapper parts)
 - [ ] T016 [US2] Gate tests: every golden page parses with the engine, `tsc` passes in `examples/blueprint-fixture`, no `@trivia/*` import, determinism over shuffled input (SC-002)
 - [ ] T017 [US2] Edge cases: identifier clashes, page name clashing with a file, quote and semicolon styles
 

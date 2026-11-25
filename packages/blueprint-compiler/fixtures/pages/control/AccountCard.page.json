@@ -1,0 +1,32 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000004",
+  "name": "AccountCard",
+  "kind": "custom",
+  "route": "/account-card",
+  "root": "n_00000000000000000000000000",
+  "nodes": {
+    "n_00000000000000000000000000": { "type": "Card", "name": "page", "parent": null, "slot": null, "order": "a0" },
+    "n_00000000000000000000000001": { "type": "h2", "name": "heading", "parent": "n_00000000000000000000000000", "slot": "header", "order": "a1" },
+    "n_00000000000000000000000002": { "type": "p", "name": "notice", "parent": "n_00000000000000000000000000", "slot": "content", "order": "a0" },
+    "n_00000000000000000000000003": { "type": "ul", "name": "list", "parent": "n_00000000000000000000000000", "slot": "content", "order": "a1" },
+    "n_00000000000000000000000004": { "type": "li", "name": "labelLine", "parent": "n_00000000000000000000000003", "slot": "children", "order": "a0" }
+  },
+  "props": {
+    "n_00000000000000000000000000": { "size": "sm" },
+    "n_00000000000000000000000001": { "children": "Accounts" },
+    "n_00000000000000000000000002": { "children": "Active accounts" }
+  },
+  "control": {
+    "n_00000000000000000000000002": { "when": "state.visible" },
+    "n_00000000000000000000000004": { "each": "state.labels", "as": "label", "key": "label", "when": "label !== \"\""}
+  },
+  "bindings": {
+    "n_00000000000000000000000004": { "children": "label + \" #\" + index" }
+  },
+  "state": {
+    "labels": { "type": "string[]", "initial": ["Savings", "Credit"] },
+    "visible": { "type": "boolean", "initial": true }
+  }
+}

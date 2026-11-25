@@ -4,12 +4,15 @@ import { CompileError } from '../compile.js'
 import type { AttributeIR, JsxIR } from '../ir.js'
 import { compareBytes } from '../print/style.js'
 
+export interface RepeatLocal { alias: string; item: string; index?: string }
+
 export function lowerJsx(
   page: CustomPage,
   manifestOf: (type: string) => ResolvedManifest,
-  component: (manifest: ResolvedManifest) => string,
+  component: (manifest: ResolvedManifest, part?: string) => string,
   expression: (pointer: string) => string,
-  wire: (id: string, tag: string, props: Map<string, AttributeIR['value']>) => void,
+  wire: (id: string, tag: string, props: Map<string, AttributeIR['value']>, repeated: boolean) => void,
+  repeats: ReadonlyMap<string, RepeatLocal>,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -19,7 +22,9 @@ export function lowerJsx(
     childrenByParent.set(node.parent, children)
   }
 
-  function lower(id: string): JsxIR {
+  function lower(id: string, outerRepeat = false): JsxIR {
+    const repeat = repeats.get(id)
+    const repeated = outerRepeat || repeat !== undefined
     const node = page.nodes[id]!
     const manifest = manifestOf(node.type)
     const tag = component(manifest)
@@ -28,7 +33,8 @@ export function lowerJsx(
     for (const name of Object.keys(page.bindings[id] ?? {})) {
       attributes.set(name, { kind: 'expr', code: expression(toPointer(['bindings', id, name])) })
     }
-    wire(id, tag, attributes)
+    wire(id, tag, attributes, repeated)
+    if (repeat) attributes.set('key', { kind: 'expr', code: expression(toPointer(['control', id, 'key'])) })
     const content = attributes.get('children')
     const asChild = content?.kind === 'expr' || (content?.kind === 'static' && typeof content.value === 'string')
     if (asChild) attributes.delete('children')
@@ -38,13 +44,31 @@ export function lowerJsx(
     const children: JsxIR[] = []
     if (content?.kind === 'expr') children.push({ kind: 'expr', code: content.code })
     if (content?.kind === 'static' && typeof content.value === 'string') children.push({ kind: 'text', value: content.value })
-    for (const [child, model] of nodes) {
+    for (const [, model] of nodes) {
       if (!manifest.slots.some((slot) => slot.name === model.slot && slot.kind === 'nodes')) {
         throw new CompileError('invalid_result', manifest.type + ' has no node slot ' + model.slot)
       }
-      children.push(lower(child))
     }
-    return { kind: 'element', tag, props, children }
+    for (const slot of manifest.slots) {
+      const contents = nodes.filter(([, model]) => model.slot === slot.name)
+        .map(([child]) => lower(child, repeated))
+      const wrapper = slot.wrapper ?? manifest.source.parts?.[slot.name]
+      if (contents.length) {
+        if (wrapper) children.push({ kind: 'element', tag: component(manifest, wrapper), props: [], children: contents })
+        else children.push(...contents)
+      }
+    }
+    let tree: JsxIR = { kind: 'element', tag, props, children }
+    if (page.control[id]?.when !== undefined) {
+      tree = { kind: 'cond', test: expression(toPointer(['control', id, 'when'])), child: tree }
+    }
+    if (repeat) {
+      tree = {
+        kind: 'repeat', list: expression(toPointer(['control', id, 'each'])),
+        item: repeat.item, ...(repeat.index && { index: repeat.index }), child: tree,
+      }
+    }
+    return tree
   }
 
   return lower(page.root)
