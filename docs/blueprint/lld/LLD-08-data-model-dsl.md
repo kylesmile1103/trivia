@@ -167,6 +167,14 @@ Model diagnostics, on top of the schema layer:
 | `invalid_api` | An unsupported API field type, a conflicting custom route, or a reused entity plural |
 | `breaking_change` (warning) | Against the lock's last generated model: a removed field, a narrowed type, a new required field without a default |
 
+⚑ The development service supplies the last generated model revision and field summary from
+the lock. Compare it with the structurally valid model on reads and edits. Warn once per
+removed entity and report tighter bounds, smaller decimal ranges or scale, and removed enum
+values as narrowing. `int` to `long` and `string` to `text` are widening conversions when
+the constraints also allow the existing values. Adding a required field, making a field
+required, or removing its default triggers a warning when existing rows need a value. New
+entities can establish their own required fields. The warnings allow the edit to proceed.
+
 ⚑ The reserved word lists have a `source` and `date` header in each JSON object, followed by
 `words`. JSON has no comment syntax. The lists cover C# reserved keywords, the reserved
 entries in PostgreSQL 19's own keyword column, and the generator's key and paging member

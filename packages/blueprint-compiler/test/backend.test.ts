@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { MODEL_DOC, revOfText } from '@trivia/blueprint'
+import { MODEL_DOC, modelSchema, revOfText, serialize } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { run } from '../src/cli.js'
@@ -144,4 +144,18 @@ it('uses a frontend nested elsewhere inside the solution', async () => {
 it('refuses a frontend path that escapes the solution before running commands', async () => {
   expect(await run(['backend', '--web-dir', '../outside'], 'test', executables())).toBe(2)
   expect(fs.existsSync(log)).toBe(false)
+})
+
+it('validate reports breaking changes against the lock written by backend', async () => {
+  expect(await run(['backend'], 'test', executables())).toBe(0)
+  const changed = modelSchema.parse(JSON.parse(model))
+  const customer = changed.entities.find(({ name }) => name === 'Customer')!
+  customer.fields.push({ name: 'membershipNumber', type: 'string', required: true })
+  fs.writeFileSync(path.join(web, 'blueprint', MODEL_DOC), serialize(changed))
+  expect(await run(['validate', '--json'], 'test')).toBe(0)
+  const output = vi.mocked(console.log).mock.calls.at(-1)?.[0]
+  expect(JSON.parse(output)).toEqual([expect.objectContaining({
+    code: 'breaking_change', severity: 'warning', doc: MODEL_DOC,
+    message: expect.stringContaining('Customer.membershipNumber'),
+  })])
 })

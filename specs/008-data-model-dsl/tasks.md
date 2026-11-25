@@ -33,8 +33,7 @@
 
 ## Phase 7: User Story 5 - Breaking changes (P3)
 
-- [ ] T011 [US5] Record the last generated model revision and a field summary in the lock (written by spec 010's orchestration). `breaking_change` warnings against it
-  Deferred: done on the spec 010 branch
+- [x] T011 [US5] Record the last generated model revision and a field summary in the lock (written by spec 010's orchestration). `breaking_change` warnings against it
 
 ## Phase 8: Polish
 
