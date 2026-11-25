@@ -73,3 +73,36 @@ it('FR-MF-03: retains missing kit entries and their registry metadata', () => {
     source: { registry: 'shadcn', item: 'select', import: { name: 'Select', from: '~design/select' } },
   })
 })
+
+it('FR-MF-04: derives a manifest for the real Refine Admin data table', () => {
+  const analyzed = components.find(({ name }) => name === 'DataTable')
+  expect(analyzed).toBeDefined()
+  const { manifests } = resolveManifests({ kit, components })
+  expect(manifests.DataTable).toMatchObject({
+    type: 'DataTable', installed: true,
+    source: { registry: 'local', import: { name: 'DataTable', from: analyzed?.importSource } },
+    props: analyzed?.props, events: [], exposes: [], client: false,
+  })
+})
+
+it('FR-MF-04: derives slots and recognized DOM events for a local component', () => {
+  const statCard: ComponentSchema = {
+    name: 'StatCard', file: 'src/cards/stat-card.tsx', importSource: '~cards/stat-card',
+    baseElement: 'section', acceptsChildren: true,
+    props: [
+      { name: 'title', kind: 'string', source: 'declared', optional: false },
+      { name: 'onClick', kind: 'unknown', typeText: 'React.MouseEventHandler<HTMLElement>', source: 'declared', optional: true },
+      { name: 'onCustom', kind: 'unknown', typeText: '() => void', source: 'declared', optional: true },
+    ],
+  }
+  const { manifests } = resolveManifests({ kit: [], components: [statCard] })
+  expect(manifests.StatCard).toMatchObject({
+    type: 'StatCard', installed: true, props: statCard.props,
+    source: { registry: 'local', import: { name: 'StatCard', from: '~cards/stat-card' } },
+    slots: [{ name: 'children', kind: 'nodes' }],
+    events: [{ name: 'onClick', prop: 'onClick' }],
+    exposes: [], client: true, template: {},
+  })
+  const voidCard = resolveManifests({ kit: [], components: [{ ...statCard, acceptsChildren: false, props: [] }] })
+  expect(voidCard.manifests.StatCard).toMatchObject({ slots: [], events: [], client: false })
+})

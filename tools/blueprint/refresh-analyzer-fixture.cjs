@@ -8,12 +8,19 @@ async function main() {
   const root = join(repo, 'examples/refine-admin')
   const { aliases } = JSON.parse(readFileSync(join(root, 'components.json'), 'utf8'))
   const { components } = await import(pathToFileURL(join(repo, 'crates/trivia_napi/index.js')).href)
-  const result = JSON.parse(components(root, 'src/components/ui', aliases.ui))
-  if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+  const libraries = [
+    ['src/components/ui', aliases.ui],
+    ['src/components/refine-ui/data-table', `${aliases.components}/refine-ui/data-table`],
+  ]
+  const schemas = libraries.flatMap(([directory, importBase]) => {
+    const result = JSON.parse(components(root, directory, importBase))
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.data
+  })
 
   const file = join(repo, 'packages/blueprint/fixtures/manifests/analyzer/refine-admin.components.json')
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, JSON.stringify(result.data, null, 2) + '\n')
+  writeFileSync(file, JSON.stringify(schemas, null, 2) + '\n')
 }
 
 main().catch((error) => {

@@ -31,7 +31,7 @@
 
 ## Phase 6: User Story 4 - Local components and HTML (P2)
 
-- [ ] T012 [US4] Derived manifests for analyzer-only components
+- [x] T012 [US4] Derived manifests for analyzer-only components
 - [ ] T013 [US4] Overrides from `blueprint/manifests/`, with the "annotates a missing prop" diagnostic
 - [ ] T014 [US4] Intrinsic types in the resolver and the checks
 

@@ -3118,5 +3118,468 @@
         "source": "intrinsic"
       }
     ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdown",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "string",
+        "name": "contentClassName",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "triggerClassName",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdownActions",
+    "props": [
+      {
+        "kind": "boolean",
+        "name": "isClearDisabled",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "boolean",
+        "name": "isApplyDisabled",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "onClear",
+        "optional": false,
+        "source": "declared",
+        "typeText": "() => void"
+      },
+      {
+        "kind": "unknown",
+        "name": "onApply",
+        "optional": false,
+        "source": "declared",
+        "typeText": "() => void"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdownText",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "table",
+        "optional": false,
+        "source": "declared",
+        "typeText": "ReactTable<TData>"
+      },
+      {
+        "default": "eq",
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "operators",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators[]"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdownNumeric",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "table",
+        "optional": false,
+        "source": "declared",
+        "typeText": "ReactTable<TData>"
+      },
+      {
+        "default": "eq",
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "operators",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators[]"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterCombobox",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "table",
+        "optional": true,
+        "source": "declared",
+        "typeText": "ReactTable<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "options",
+        "optional": false,
+        "source": "declared",
+        "typeText": "{ label: string; value: string }[]"
+      },
+      {
+        "default": "eq",
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "operators",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators[]"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "noResultsText",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "default": false,
+        "kind": "boolean",
+        "name": "multiple",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdownDateSinglePicker",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "default": "eq",
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "formatDate",
+        "optional": true,
+        "source": "declared",
+        "typeText": "(date: Date | undefined) => string | undefined"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterDropdownDateRangePicker",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "default": "between",
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "formatDateRange",
+        "optional": true,
+        "source": "declared",
+        "typeText": "(dateRange: DateRange | undefined) => string[] | undefined"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterInput",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "table",
+        "optional": true,
+        "source": "declared",
+        "typeText": "ReactTable<TData>"
+      },
+      {
+        "kind": "unknown",
+        "name": "defaultOperator",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "operators",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators[]"
+      },
+      {
+        "kind": "unknown",
+        "name": "renderInput",
+        "optional": false,
+        "source": "declared",
+        "typeText": "(props: {\n    value: string | string[];\n    onChange: (value: string | string[]) => void;\n  }) => React.ReactNode"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-filter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-filter",
+    "name": "DataTableFilterOperatorSelect",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "value",
+        "optional": false,
+        "source": "declared",
+        "typeText": "CrudOperators"
+      },
+      {
+        "kind": "unknown",
+        "name": "onValueChange",
+        "optional": false,
+        "source": "declared",
+        "typeText": "(value: CrudOperators) => void"
+      },
+      {
+        "kind": "unknown",
+        "name": "operators",
+        "optional": true,
+        "source": "declared",
+        "typeText": "CrudOperators[]"
+      },
+      {
+        "kind": "string",
+        "name": "placeholder",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "triggerClassName",
+        "optional": true,
+        "source": "declared"
+      },
+      {
+        "kind": "string",
+        "name": "contentClassName",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table-pagination.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-pagination",
+    "name": "DataTablePagination",
+    "props": [
+      {
+        "kind": "number",
+        "name": "currentPage",
+        "optional": false,
+        "source": "declared"
+      },
+      {
+        "kind": "number",
+        "name": "pageCount",
+        "optional": false,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "setCurrentPage",
+        "optional": false,
+        "source": "declared",
+        "typeText": "(page: number) => void"
+      },
+      {
+        "kind": "number",
+        "name": "pageSize",
+        "optional": false,
+        "source": "declared"
+      },
+      {
+        "kind": "unknown",
+        "name": "setPageSize",
+        "optional": false,
+        "source": "declared",
+        "typeText": "(size: number) => void"
+      },
+      {
+        "kind": "number",
+        "name": "total",
+        "optional": true,
+        "source": "declared"
+      }
+    ]
+  },
+  {
+    "acceptsChildren": true,
+    "baseElement": "Button",
+    "file": "src/components/refine-ui/data-table/data-table-sorter.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table-sorter",
+    "name": "DataTableSorter",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "column",
+        "optional": false,
+        "source": "declared",
+        "typeText": "Column<TData>"
+      },
+      {
+        "kind": "className",
+        "name": "className",
+        "optional": true,
+        "source": "intrinsic"
+      }
+    ],
+    "unresolvedTypes": [
+      "React.ComponentProps<typeof Button>"
+    ]
+  },
+  {
+    "acceptsChildren": false,
+    "baseElement": null,
+    "file": "src/components/refine-ui/data-table/data-table.tsx",
+    "importSource": "@/components/refine-ui/data-table/data-table",
+    "name": "DataTable",
+    "props": [
+      {
+        "kind": "unknown",
+        "name": "table",
+        "optional": false,
+        "source": "declared",
+        "typeText": "UseTableReturnType<TData, HttpError>"
+      }
+    ]
   }
 ]

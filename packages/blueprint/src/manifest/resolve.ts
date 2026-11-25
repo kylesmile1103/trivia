@@ -1,5 +1,7 @@
 import { compareBytes } from '../serialize.js'
 import type { Diagnostic } from '../types/diagnostics.js'
+import { PAGE_NAME } from '../types/common.js'
+import { INTRINSIC_EVENT_NAMES } from './intrinsics.js'
 import type { ComponentManifest, ComponentSchema } from './types.js'
 
 export type ResolvedManifest = Omit<ComponentManifest, 'variants'> & { installed: boolean }
@@ -15,6 +17,22 @@ export interface ManifestInputs {
 export interface ManifestResolution {
   manifests: ResolvedManifests
   diagnostics: Diagnostic[]
+}
+
+function derive({ name, importSource, props, acceptsChildren }: ComponentSchema): ResolvedManifest {
+  const events = props.filter(({ name }) => INTRINSIC_EVENT_NAMES.has(name))
+    .map(({ name }) => ({ name, prop: name }))
+  return {
+    type: name,
+    source: { registry: 'local', item: name, import: { name, from: importSource } },
+    props,
+    slots: acceptsChildren ? [{ name: 'children', kind: 'nodes' }] : [],
+    events,
+    exposes: [],
+    client: events.length > 0,
+    template: {},
+    installed: true,
+  }
 }
 
 export function resolveManifests({ kit, overrides = [], components, aliases }: ManifestInputs): ManifestResolution {
@@ -35,5 +53,10 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
       installed: component !== undefined,
     }])
   }
-  return { manifests: Object.fromEntries(manifests), diagnostics: [] }
+  for (const component of components) {
+    if (PAGE_NAME.test(component.name) && !selected.has(component.name)) {
+      manifests.push([component.name, derive(component)])
+    }
+  }
+  return { manifests: Object.fromEntries(manifests.sort(([a], [b]) => compareBytes(a, b))), diagnostics: [] }
 }
