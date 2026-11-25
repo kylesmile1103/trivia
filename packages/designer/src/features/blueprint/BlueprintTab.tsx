@@ -5,7 +5,7 @@ import { canvas } from '@/shared/canvas'
 import { APP_DOC } from '@/shared/engine/blueprint-types'
 import { engine } from '@/shared/engine/client'
 import { syncHistory } from '@/shared/engine/session'
-import type { BlueprintDiagnostic, BlueprintOp, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
+import type { BlueprintComponents, BlueprintDiagnostic, BlueprintOp, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
 import { fillRoute, matchRoute } from '@/shared/lib/route-url'
 import { designer, useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { blueprintApi, problemOf } from './api'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { EjectDialog } from './EjectDialog'
+import { NodeTree } from './NodeTree'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
 import { PagesList } from './PagesList'
 import { RouteDialog } from './RouteDialog'
@@ -30,8 +31,15 @@ export function BlueprintTab() {
   const [previewing, setPreviewing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
+  const [catalog, setCatalog] = useState<BlueprintComponents | null>(null)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [nodeSelection, setNodeSelection] = useState<{ page: string; node: string } | null>(null)
   const [manifestError, setManifestError] = useState<string | null>(null)
   const page = document && 'kind' in document.doc ? { ...document, doc: document.doc } : undefined
+  const custom = page?.doc.kind === 'custom' ? { ...page, doc: page.doc } : null
+  const customId = custom?.doc.id
+  const selectedNode = custom && nodeSelection && nodeSelection.page === custom.doc.id && custom.doc.nodes[nodeSelection.node]
+    ? nodeSelection.node : custom?.doc.root
   const commit = async (ops: BlueprintOp[], label: string) => {
     const result = await patch(ops, label)
     if (result?.entry) void syncHistory()
@@ -76,6 +84,21 @@ export function BlueprintTab() {
       unsubscribe()
     }
   }, [refresh])
+
+  useEffect(() => {
+    if (customId === undefined) return
+    let request = 0
+    function reload() {
+      const id = ++request
+      void blueprintApi.components().then(
+        (components) => { if (id === request) { setCatalog(components); setCatalogError(null) } },
+        (error: unknown) => { if (id === request) setCatalogError(problemOf(error).message) },
+      )
+    }
+    reload()
+    window.addEventListener('focus', reload)
+    return () => { request++; window.removeEventListener('focus', reload) }
+  }, [customId])
 
   async function preview(page: BlueprintPageSummary) {
     setPreviewing(true)
@@ -159,6 +182,12 @@ export function BlueprintTab() {
           {adding || page
             ? <PageForm key={page?.rev ?? 'new'} document={page} resources={resources} busy={pending !== null || loadError !== null} save={save} />
             : !loadError && <p role="status">Loading page…</p>}
+          {custom && (catalogError ? <p role="alert" className="text-destructive">{catalogError}</p> : catalog && selectedNode ? (
+            <NodeTree
+              key={custom.doc.id} document={custom} catalog={catalog} selected={selectedNode} busy={pending !== null || loadError !== null}
+              onSelect={(node) => setNodeSelection({ page: custom.doc.id, node })} save={save}
+            />
+          ) : <p role="status">Loading component manifests…</p>)}
         </section>
       )}
       {eject && <EjectDialog page={eject} onClose={() => setEject(null)} onRefresh={() => { void refresh() }} onNavigate={navigate} />}

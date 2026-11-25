@@ -155,7 +155,11 @@ type Revision = { baseRev: string | null }
 type AppOp = { doc: typeof APP_DOC } & Revision
 type PageOp = { doc: string } & Revision
 type NodeOp = PageOp & { node: string; expectedType: string }
-type Position = { before: string } | { after: string } | { index: number } | { before?: never; after?: never; index?: never }
+export type BlueprintNodePosition =
+  | { before: string; after?: never; index?: never }
+  | { before?: never; after: string; index?: never }
+  | { before?: never; after?: never; index: number }
+  | { before?: never; after?: never; index?: never }
 type ModelOp = { doc: typeof MODEL_DOC } & Revision
 type EntityOp = ModelOp & { entity: string }
 
@@ -165,8 +169,8 @@ export type BlueprintOp =
   | (PageOp & { op: 'createPage'; name: string; route: string; kind: BlueprintPageKind; resource?: string; public?: boolean; options?: ContractOptions; rootType?: string })
   | (PageOp & { op: 'deletePage' })
   | (PageOp & { op: 'setPageMeta'; name?: string; route?: string; kind?: ContractKind; resource?: string | null; public?: boolean; options?: ContractOptions })
-  | (PageOp & Position & { op: 'addNode'; parent: string; expectedType: string; type: string; name: string; slot: string })
-  | (NodeOp & Position & { op: 'moveNode'; parent: string; slot: string })
+  | (PageOp & BlueprintNodePosition & { op: 'addNode'; parent: string; expectedType: string; type: string; name: string; slot: string })
+  | (NodeOp & BlueprintNodePosition & { op: 'moveNode'; parent: string; slot: string })
   | (NodeOp & { op: 'removeNode' })
   | (NodeOp & { op: 'renameNode'; name: string })
   | (NodeOp & { op: 'setProp'; prop: string; value: JsonValue })

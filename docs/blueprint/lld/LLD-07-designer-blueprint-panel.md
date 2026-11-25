@@ -54,7 +54,10 @@ a JSON array editor with an explicit save, so every LLD-01 step can be represent
 
 **Node tree and props.** The tree is built from the flat maps and reuses the drop rules of the
 Layers tab (before, after, inside), which move into `shared/lib/` since a second feature needs
-them. Adding a node opens the list of manifests, with not-installed types marked. `NodeProps`
+them. Adding a node opens the list of manifests, with not-installed types marked. ⚑ Manifest slots determine which parents
+can accept a child, including empty containers. The explicit Move control exposes the same
+placements to the keyboard and lets the user choose a named destination slot. New nodes
+suggest a unique identifier derived from their type. `NodeProps`
 renders one editor per manifest prop. A toggle switches a prop between a static value and a
 binding. Exposed values and events are listed with the names expressions should use
 (`ui.search.value`).
