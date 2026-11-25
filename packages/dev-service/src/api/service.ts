@@ -366,7 +366,10 @@ export class EngineService {
     const { engine, host } = this.#options
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
-    if (result.changed) finish?.()
+    if (result.changed) {
+      finish?.()
+      host.filesChanged?.(result.changes.map((change) => change.file))
+    }
     if (result.changes.length > 0) this.#history.record({ label, changes: result.changes })
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
@@ -420,6 +423,7 @@ export class EngineService {
       throw error
     }
     finish?.()
+    this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }
