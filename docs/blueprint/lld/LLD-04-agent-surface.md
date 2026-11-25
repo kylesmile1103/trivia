@@ -118,6 +118,8 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
 - Tool descriptions state the loop: get, patch until `errors` is 0, preview, eject. What
   `docs/mcp.md` learned holds: hints are data fields (Claude Code shows the model
   `structuredContent`), and error advice is per tool.
+- ⚑ Blueprint tool refusals carry `structuredContent.error` and tool-specific `next` advice
+  alongside the MCP error text so agents can recover using the machine-readable revisions.
 - The tool input schema for `ops` is generated from the zod definitions of LLD-01, so the two
   cannot disagree.
 

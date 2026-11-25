@@ -172,3 +172,23 @@ narrower fix for `enum_changed`, updating only the options, would keep customisa
 Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
 `packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
 loop in a browser, and a screenshot taken by the real designer).
+
+## Blueprint authoring
+
+The shared dev service supports blueprint reads and guarded patches on Vite and Next.js.
+Call `trivia_blueprint_get` with no arguments for the summary, with `what: "doc"` and a
+summary path for a document, or with `what: "components"` for the component catalog. Set
+`projection: true` on a page read to include its TSX projection.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"summary"}}
+```
+
+Call `trivia_blueprint_patch` with one or more operations and a label. Use `baseRev: null`
+when creating a document. Use the read's revision for an existing document and the current
+type for a node or parent guard. A successful patch returns its `revs`, new IDs under
+`created`, `diagnostics`, `entry` and `summary`.
+
+```json
+{"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}}
+```

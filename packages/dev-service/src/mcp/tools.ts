@@ -2,11 +2,14 @@
 // tells an agent what to change; the agent reads the selection and applies guarded ops. Every
 // tool calls EngineService, so agent edits share the designer's queue and undo history.
 
+import { blueprintOpSchema } from '@trivia/blueprint'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
+import { readComponents, readDoc } from '../blueprint/index.js'
+import { readSummary } from '../blueprint/summary.js'
 import { ApiError } from '../engine.js'
 import { type ListPage, parseColumnChanges, parseFieldChanges } from '../refine/index.js'
 import type { ErrorCode } from '../types.js'
@@ -182,6 +185,7 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
   const run = async (
     body: () => Promise<{ data: Record<string, unknown>; summary: string }>,
     next: Partial<Record<ErrorCode, string>> = {},
+    structuredErrors = false,
   ): Promise<CallToolResult> => {
     try {
       const { data, summary } = await body()
@@ -189,7 +193,16 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
     } catch (error) {
       if (error instanceof ApiError) {
         const advice = next[error.code] ?? NEXT[error.code]
-        return { isError: true, content: [{ type: 'text', text: `${error.code}: ${error.message}${advice ? `\n${advice}` : ''}` }] }
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `${error.code}: ${error.message}${advice ? `\n${advice}` : ''}` }],
+          ...(structuredErrors && {
+            structuredContent: {
+              error: { code: error.code, message: error.message, ...(error.details && { details: error.details }) },
+              ...(advice && { next: advice }),
+            },
+          }),
+        }
       }
       const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
       log(`[trivia] MCP tool failed: ${detail}`)
@@ -587,6 +600,60 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       }, {
         conflict: 'Ask the user to commit those files first, or whether to replace their changes (force: true).',
       }),
+  )
+
+  server.registerTool(
+    'trivia_blueprint_get',
+    {
+      title: 'Read the blueprint',
+      description:
+        'Read the project blueprint summary, one document, or the component catalog. Begin with the summary. ' +
+        'Before editing a document, read its revision and pass it as baseRev to trivia_blueprint_patch. ' +
+        'Use the catalog for installed types, props, slots, events and exposed values.',
+      inputSchema: {
+        what: z.enum(['summary', 'doc', 'components']).optional().describe('Default: summary'),
+        path: z.string().min(1).optional().describe('For what: doc. Use the summary path, e.g. pages/Customers.page.json'),
+        projection: z.boolean().optional().describe('For a page document, include its lossy, read-only TSX projection'),
+      },
+      annotations: reads,
+    },
+    ({ what, path, projection }) =>
+      run(async () => {
+        const data = what === 'components' ? readComponents(service.blueprint)
+          : what === 'doc' ? readDoc(service.blueprint, path ?? null, projection ?? false)
+          : await readSummary(service.blueprint)
+        return { data: { ...data }, summary: 'Blueprint read.' }
+      }, {
+        invalid_op: 'For what: doc, pass path from the blueprint summary.',
+        node_not_found: 'Read the blueprint summary for existing document paths.',
+        path_outside_root: 'Use a relative path inside the blueprint directory, as returned by the summary.',
+        unsupported: 'Use a Trivia version that supports this document version.',
+      }, true),
+  )
+
+  server.registerTool(
+    'trivia_blueprint_patch',
+    {
+      title: 'Patch blueprint documents',
+      description:
+        'Apply one guarded batch to the blueprint and record it in shared undo history. ' +
+        'Every op names doc and baseRev from a read, or baseRev: null for a new document. ' +
+        'Use created to find new page and node IDs. Read diagnostics and summary.next, then patch until errors reach zero.',
+      inputSchema: {
+        ops: z.array(blueprintOpSchema).min(1),
+        label: z.string().trim().min(1).describe('Short undo label, e.g. Add customers page. Trivia adds the Agent: prefix.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ ops, label }) =>
+      run(async () => {
+        const result = await service.patchBlueprint(ops, AGENT_LABEL + label)
+        return { data: { ...result }, summary: result.summary.next }
+      }, {
+        conflict: 'Read the changed documents with trivia_blueprint_get and retry with their current baseRev and expectedType.',
+        invalid_op: 'Check the tool schema for the refused op and read the document before trying again.',
+        invalid_result: 'Fix the diagnostics in the batch and resubmit it with the same revisions.',
+      }, true),
   )
 
   server.registerTool(
