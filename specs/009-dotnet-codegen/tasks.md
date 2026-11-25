@@ -33,7 +33,7 @@
 
 ## Phase 5: User Story 3 and 4 - Regeneration and review (P1)
 
-- [ ] T017 [US3] End-to-end test: write, implement a hook in a scaffold file, change the model, write again. Hook file untouched, second identical run all `unchanged`
+- [x] T017 [US3] End-to-end test: write, implement a hook in a scaffold file, change the model, write again. Hook file untouched, second identical run all `unchanged`
 - [ ] T018 [US4] `check` test on a stale tree, and a determinism test (two runs, identical bytes)
 
 ## Phase 6: User Story 5 - Extension points (P1)

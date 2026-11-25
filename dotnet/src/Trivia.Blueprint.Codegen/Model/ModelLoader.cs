@@ -59,7 +59,10 @@ public static class ModelLoader
                 throw Failure("unsupported_version", file, "/blueprintVersion",
                     $"Blueprint version {number} is unsupported; expected 1.");
 
-            EvaluationResults result = schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            EvaluationResults result;
+            // JsonSchema.Net populates recursive reference constraints on the shared schema.
+            lock (schema)
+                result = schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!result.IsValid)
             {
                 Diagnostic[] findings = result.Details

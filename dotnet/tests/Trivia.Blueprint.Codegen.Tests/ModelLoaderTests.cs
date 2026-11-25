@@ -8,6 +8,19 @@ namespace Trivia.Blueprint.Codegen.Tests;
 public sealed class ModelLoaderTests
 {
     [Fact]
+    public async Task LoadsTheRecursiveSchemaConcurrently()
+    {
+        using ManualResetEventSlim start = new();
+        Task<LoadedBlueprint>[] loads = Enumerable.Range(0, 24).Select(_ => Task.Run(() =>
+        {
+            start.Wait();
+            return ModelLoader.Load(FixtureTests.Bank);
+        })).ToArray();
+        start.Set();
+        Assert.All(await Task.WhenAll(loads), blueprint => Assert.Equal("BackOffice", blueprint.AppName));
+    }
+
+    [Fact]
     public void BankModelRoundTripsWithoutLoss()
     {
         LoadedBlueprint loaded = ModelLoader.Load(FixtureTests.Bank);
