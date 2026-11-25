@@ -11,20 +11,24 @@ import { fileURLToPath } from 'node:url'
 // while the file is empty and the second is dropped, Vite keeps serving a module with no exports
 // to every later test ("does not provide an export named 'Dashboard'"). The plugin now replays a
 // dropped change (packages/vite-plugin-ast-locator/src/watch.ts). The tests write like the
-// engine: they wait out the throttle window of the change before (often the test's own last edit
-// or undo), rename a whole temporary sibling over the target, then check what is served.
+// engine, a whole temporary sibling renamed over the target, then check what is served.
 //
 // The check: for a TypeScript or JSX module of a Vite example, GET it from the app's dev server
 // and compare the source in the module's inline source map (`sourcesContent`) with the bytes
 // written. That is exactly the text Vite transformed, so no distinctive string has to be picked,
 // and it also catches a file that is right on disk while Vite serves an older one. Until it
 // matches, poll; after TRY_MS, rewrite the file whole (a fresh change event) and poll again; after
-// TRIES, fail naming the file.
+// TRIES, fail naming the file. No wait comes before a checked write: one that lands in the 50 ms
+// window of the change before it (often the test's own last edit or undo) is replayed by the
+// plugin, and the check waits for that. Measured on macOS, the playground and refine projects,
+// 102 checks with a 60 ms wait and 102 without: both times 22 checks polled (50 to 170 ms, the
+// watcher's latency) and none needed a rewrite, so the wait only added time.
 //
-// Where nothing can be checked, the wait and the rename are all there is: on the Next.js example
-// (its dev server keeps no per-file module to ask for, and its watcher is not chokidar), and for
-// files that are not modules (blueprint documents, the OpenAPI spec, the manifest), which the dev
-// service reads from disk and Vite serves no transform of.
+// Where nothing can be checked, a CHANGE_THROTTLE_MS wait (out of that window) and the rename are
+// all there is: on the Next.js example (its dev server keeps no per-file module to ask for, and
+// its watcher is not chokidar), and for files that are not modules (blueprint documents, the
+// OpenAPI spec, the manifest), which the dev service reads from disk and Vite serves no
+// transform of.
 const CHANGE_THROTTLE_MS = 60
 const TRY_MS = 1_000
 const TRIES = 5
@@ -121,7 +125,7 @@ async function converge(file: string, data: Buffer, rewrite: boolean): Promise<v
 /** Write `data` to `file` as one complete change, then wait until the dev server serves it. */
 export async function writeWhole(file: string, data: string | Uint8Array): Promise<void> {
   const want = bytes(data)
-  await sleep(CHANGE_THROTTLE_MS)
+  if (moduleUrl(file) === null) await sleep(CHANGE_THROTTLE_MS)
   renameOver(file, want)
   await converge(file, want, true)
 }
@@ -141,7 +145,7 @@ export async function restore(file: string, original: string | Uint8Array): Prom
 export async function restoreAll(files: Iterable<readonly [file: string, original: string | Uint8Array]>): Promise<void> {
   const wanted = [...files].map(([file, original]) => [file, bytes(original)] as const)
   const stale = wanted.filter(([file, want]) => !(fs.existsSync(file) && fs.readFileSync(file).equals(want)))
-  if (stale.length > 0) await sleep(CHANGE_THROTTLE_MS)
+  if (stale.some(([file]) => moduleUrl(file) === null)) await sleep(CHANGE_THROTTLE_MS)
   for (const [file, want] of stale) renameOver(file, want)
   const failures: string[] = []
   for (const [file, want] of wanted) {
