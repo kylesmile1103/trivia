@@ -11,6 +11,7 @@ import { designer, useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
 
 import { blueprintApi, problemOf } from './api'
+import { BackendDialog } from './BackendDialog'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { EjectDialog } from './EjectDialog'
 import { ModelEditor } from './ModelEditor'
@@ -35,6 +36,7 @@ export function BlueprintTab() {
   const [openingRoute, setOpeningRoute] = useState(false)
   const [eject, setEject] = useState<BlueprintPageSummary | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [backend, setBackend] = useState<{ modelRev: string; appRev: string | null } | null>(null)
   const [modelOpen, setModelOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
@@ -265,12 +267,18 @@ export function BlueprintTab() {
       )}
       {modelOpen && (
         <div className="space-y-3">
-          <Button type="button" size="xs" variant="ghost" disabled={pending !== null} onClick={() => {
-            focusName.current = false
-            focusModelButton.current = true
-            setModelOpen(false)
-            void open(null)
-          }}>Back to pages</Button>
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <Button type="button" size="xs" variant="ghost" disabled={pending !== null} onClick={() => {
+              focusName.current = false
+              focusModelButton.current = true
+              setModelOpen(false)
+              void open(null)
+            }}>Back to pages</Button>
+            {model && <Button
+              type="button" size="xs" variant="outline" disabled={pending !== null || loadError !== null}
+              onClick={() => setBackend({ modelRev: model.rev, appRev: summary?.app?.rev ?? null })}
+            >Generate backend</Button>}
+          </div>
           {modelRev && !model
             ? !loadError && <p role="status">Loading model…</p>
             : <ModelEditor
@@ -280,6 +288,7 @@ export function BlueprintTab() {
               />}
         </div>
       )}
+      {backend && <BackendDialog {...backend} onClose={() => setBackend(null)} />}
       {eject && <EjectDialog page={eject} onClose={() => setEject(null)} onRefresh={() => { void refresh() }} onNavigate={navigate} />}
       {routeDialog && <RouteDialog {...routeDialog} onClose={() => setRouteDialog(null)} />}
       {!modelOpen && <Diagnostics diagnostics={findings} onActivate={activateDiagnostic} showPath={path === null && !adding} />}

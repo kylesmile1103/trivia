@@ -97,10 +97,13 @@ Findings on a saved model use their supplied guarded fixes. Constraints, default
 custom API operations use JSON fields. The entity form defaults to a UUID key named
 `id` and derives a plural route segment when the user leaves it blank.
 
-**Generate backend (Phase 2).** `mode: "plan"` first: a table of files with create, update,
-unchanged or refused, and an optional migration name. Confirm runs `mode: "write"`. Backend
-writes are outside the undo history, and the dialog says so. The solution's git status is the
-safety net.
+**Generate backend (Phase 2).** `mode: "plan"` first shows a table of files and the
+optional migration name. Confirm runs `mode: "write"`. Backend writes are outside the
+undo history, and the dialog says so. The solution's git status is the safety net.
+⚑ The table includes the DevHost's delete action. Confirmation checks the app and model
+revisions before calling the generator. It writes the API before requesting a named
+migration, because DevHost runs migration as a separate CLI command. The dialog reports
+generation and migration outcomes and points to sync and drift in the Data tab.
 
 **Undo and redo.** Patches are entries of the shared history, so the toolbar's undo works. The
 panel re-reads the summary after every history change. ⚑ A successful patch asks the
