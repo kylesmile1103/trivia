@@ -31,7 +31,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 
 - Streamable HTTP, **stateless**: every POST gets a fresh server, and responses are JSON (no
   SSE stream; GET answers 405). Built on the official SDK (`@modelcontextprotocol/sdk`
-  1.30.1, pinned).
+  1.32.2, pinned).
 - The same caller guard as the engine API (`docs/api.md`, Envelope): loopback clients only
   (unless `allowRemote`), a Host that names this machine, no foreign Origin. A refused caller
   gets 403 before any MCP message is read. The designer's proxy applies the same checks to

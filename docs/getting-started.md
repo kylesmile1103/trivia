@@ -132,7 +132,7 @@ and refuse a leftover `app/(blueprint-preview)/` folder. See [Engine API](api.md
 ## Working with AI agents (MCP)
 
 The dev service serves a Model Context Protocol endpoint at `/@trivia/mcp` (stateless Streamable
-HTTP, official SDK 1.30.1). For Vite, use the app's dev-server URL. For Next.js, use the MCP URL
+HTTP, official SDK 1.32.2). For Vite, use the app's dev-server URL. For Next.js, use the MCP URL
 printed by `trivia-next dev`.
 
 ```sh
