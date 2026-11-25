@@ -23,3 +23,12 @@
 - ⚑ The generated AppHost is started through Aspire.Hosting.Testing with its web resource
   and persistent volume disabled. Aspire allocates the backend ports. The test host reports
   the healthy API endpoint and shuts down when its Node parent's input pipe closes.
+
+## Browser checks
+
+- ⚑ Playwright uses a separate Vite process for the generated app and the existing designer
+  proxy. Ports come from `TRIVIA_MVP_APP_PORT` and `TRIVIA_MVP_PORT`, defaulting to 5476 and
+  4576. The runtime's unavailability skips the browser checks with the prerequisite message.
+- ⚑ The form test changes one outbound payload to bypass the matching client rule. ASP.NET
+  returns the real validation response and the test checks that Refine displays it on the
+  field and allows the corrected submission.

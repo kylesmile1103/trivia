@@ -68,7 +68,9 @@ fields keeps the existing generator's default selection.
 The generator puts header actions just below the Refine header, whose implementation may
 ignore children. An explicit filter list controls filter widgets while preserving sorters.
 Refine's notification hook supports success, error and progress. Blueprint error uses error,
-and the other blueprint variants use success.
+and the other blueprint variants use success. ⚑ Custom row buttons wrap with the stock
+buttons inside the fixed-width actions cell. Generated forms catch the submission promise
+after Refine has put API field errors into the form.
 
 ⚑ The compiler and the Refine adapter share the resource key derived from the collection
 path, so hooks and registered Refine routes name the same resource.
@@ -283,6 +285,12 @@ project facts, validation, route plan and native writes without a package depend
 `new` links the local Vite plugin when available because Trivia packages are built from
 the workspace. It prints commands for Refine UI's layout and views registry items.
 
+⚑ The Vite template uses the application's `Plugin` type for the Trivia plugin at the
+config boundary. A checkout link can resolve a separate compatible Vite 8 installation.
+⚑ The Vite scaffold wires Refine's notification provider to Sonner 2.0.8, the version used
+by the Refine example. The provider displays mutation errors and Blueprint toast actions.
+
+
 ## 8. Tests
 
 - Golden pages for a fixture blueprint covering every IR feature, checked byte for byte, then
@@ -303,6 +311,3 @@ the workspace. It prints commands for Refine UI's layout and views registry item
 - Deferred: needs spec 010 (app-specific backend and data provider orchestration).
 - Deferred: needs spec 012 (Next.js preview and eject target).
 - A page-level error boundary and loading skeleton for custom pages remain open.
-
-⚑ The Vite template uses the application's `Plugin` type for the Trivia plugin at the
-config boundary. A checkout link can resolve a separate compatible Vite 8 installation.

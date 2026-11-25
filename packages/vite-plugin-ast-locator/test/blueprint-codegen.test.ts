@@ -297,3 +297,20 @@ it('FR-RC-02: a list header action can refetch the current table query', async (
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+it('FR-MVP-02: form submits leave handled server errors with Refine', async () => {
+  const context = await contextFor(REFINE_ADMIN)
+  const emitted = compilePage(accountPage('create', {}), 'Account', context)
+  expect(emitted.code).toMatch(/onSubmit=\{form\.handleSubmit\(\(values\) => onFinish\(values\)\.catch\(console\.error\)\)\}/)
+})
+
+it('FR-MVP-02: a custom row action can wrap alongside the stock row buttons', async () => {
+  const context = await contextFor(REFINE_ADMIN)
+  const emitted = compilePage(accountPage('list', {
+    rowActions: [{ name: 'details', label: 'Details', steps: [{ do: 'toast', message: '"Details"' }] }],
+  }), 'Account', context)
+  expect(emitted.code).toContain('<div className="flex flex-wrap justify-end gap-1">')
+  expect(emitted.code).toContain('>Details</Button>')
+  expect(emitted.code).toContain('<EditButton')
+  expect(emitted.code).toContain('<ShowButton')
+})

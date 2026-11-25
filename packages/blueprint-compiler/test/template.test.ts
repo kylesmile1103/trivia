@@ -30,3 +30,12 @@ it('documents the commands to create, generate, eject and run an Aspire solution
     'aspire run',
   ])
 })
+
+it('FR-MVP-02: the generated app mounts a Refine notification provider and its toaster', () => {
+  const root = new URL('../templates/vite-refine/', import.meta.url)
+  const app = readFileSync(new URL('src/App.tsx', root), 'utf8')
+  const manifest = JSON.parse(readFileSync(new URL('package.json.template', root), 'utf8'))
+  expect(manifest.dependencies.sonner).toBe('2.0.8')
+  expect(app).toContain('notificationProvider={notificationProvider}')
+  expect(app).toContain('<Toaster richColors />')
+})
