@@ -30,6 +30,9 @@ public sealed class PerformanceTests(ITestOutputHelper testOutput)
         using TempDirectory root = new();
         File.WriteAllText(Path.Combine(blueprint.Path, ModelLoader.ModelFile),
             JsonSerializer.Serialize(bank.Model with { Entities = entities }, ModelLoader.Json));
+        // SC-004 is a steady-state budget: one untimed run first, so JIT and Roslyn's first load
+        // (several seconds on a busy CI runner, against 1 s for a warm plan) are not counted.
+        await Program.RunAsync(["plan", "--blueprint", blueprint.Path, "--root", root.Path], new StringWriter(), new StringWriter());
         using StringWriter output = new();
         using StringWriter errors = new();
         Stopwatch elapsed = Stopwatch.StartNew();
