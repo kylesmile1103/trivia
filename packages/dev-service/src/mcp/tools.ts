@@ -697,7 +697,7 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     },
     ({ page, includeCode }) =>
       run(async () => {
-        const { code, ...preview } = previewPage({ page })
+        const { code, ...preview } = await previewPage({ page })
         return { data: { ...preview, ...(includeCode && { code }) }, summary: `Preview ${page} at ${preview.route}` }
       }, { unsupported: 'Preview becomes available with the page compiler in spec 005.' }, true),
   )

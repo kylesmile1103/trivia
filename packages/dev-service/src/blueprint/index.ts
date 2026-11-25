@@ -40,7 +40,7 @@ export function registerBlueprintRoutes(routes: Map<string, Route>, service: Eng
     }
     return service.patchBlueprint(ops, label.trim())
   } })
-  routes.set('/blueprint/preview', { POST: (_url, body) => previewPage(request(previewInput, body)) })
+  routes.set('/blueprint/preview', { POST: (_url, body) => previewPage(request(previewInput, body), service) })
   routes.set('/blueprint/plan', { POST: (_url, body) => planEject(request(planInput, body)) })
   routes.set('/blueprint/ejected', { POST: (_url, body) => recordEjected(request(ejectedInput, body)) })
   routes.set('/blueprint/backend', { POST: (_url, body) => service.blueprintBackend(request(backendInput, body)) })

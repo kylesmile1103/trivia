@@ -172,6 +172,15 @@ A preview route, `/__blueprint/<Name>`, is registered in dev by a small client e
 plugin injects, so the canvas can navigate to it without touching the app's router file. The
 store's change events invalidate previews, and the page reloads.
 
+⚑ Vite injects the development route beside the Refine app's existing routes. Its lazy
+client entry asks the loopback preview API for the module. The shared inferencer loader
+adds a default export and the preview stylesheet. Relative imports resolve as if the
+module were at its ejected path. A missing call stub can also be served virtually.
+Vite invalidates the modules on draft document and contract file changes.
+
+⚑ The dev service resolves the three spec 002 sample manifests from the blueprint
+package's original fixture assets. Spec 006 supplies the full kit.
+
 ## 6. Eject (FR-RC-07 to FR-RC-10)
 
 `planEject` returns, per page:

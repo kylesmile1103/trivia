@@ -20,7 +20,7 @@ export function createViteHost(server: ViteDevServer, paths: ProjectPaths): DevH
     importBase: paths.importBase,
     resolveModule,
     readRoutes: (source) => discoverRoutes({ ...source, root, resolve: resolveModule }),
-    preview: { publish: (id) => `${PREVIEW_PREFIX}${id}.tsx` },
+    preview: { blueprints: true, publish: (id) => `${PREVIEW_PREFIX}${id}.tsx` },
     allowedHosts: server.config.server.allowedHosts,
   }
 }

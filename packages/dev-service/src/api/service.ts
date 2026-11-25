@@ -7,13 +7,15 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { revOfText } from '@trivia/blueprint'
+import { APP_DOC, revOfText } from '@trivia/blueprint'
+import { projectFacts, type CompileContext } from '@trivia/blueprint-compiler'
 
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
+import { generateRefinePage } from '../refine/scaffold.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
 import type { ApplyResult, Drift, FileChange, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
@@ -105,6 +107,27 @@ export class EngineService {
       describeValue: (path) => this.describeValue(path),
       mentions: (file, name) => this.mentions(file, name),
     })
+  }
+
+  async blueprintInputs() {
+    const blueprint = await this.blueprint.read()
+    const resolution = this.blueprint.manifests()
+    const contract = this.blueprint.contract()
+    const app = blueprint.docs[APP_DOC]
+    const { project, entrySource } = await this.refine.compileProject()
+    const facts = projectFacts({
+      target: this.blueprint.hostKind === 'next' ? 'next-refine'
+        : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine',
+      aliases: { ...this.blueprint.aliases(), ui: project.ui },
+      pagesDir: project.pagesDir, entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
+      installed: Object.values(resolution.manifests).flatMap((manifest) => manifest?.installed ? [manifest.source.item] : []),
+    })
+    const context: CompileContext = {
+      facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
+      validation: this.blueprint.context(resolution, contract),
+      generateContractPage: (input) => generateRefinePage({ ...input, project }),
+    }
+    return { blueprint, context }
   }
 
   health(): Health {

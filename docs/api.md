@@ -564,11 +564,9 @@ A stale revision or a file changed between planning and writing returns 409 `con
 with `error.details.revs`. The map contains the current revision of each affected
 document, with `null` for a missing document. Re-read the affected documents before retrying.
 
-The page compiler from spec 005 will provide `preview`, `plan` and `ejected`.
-These routes accept their documented inputs and return 422 `unsupported` until then.
-
-`preview` takes the page name and will return its preview route, module, compiled code,
-required registry items and diagnostics.
+`preview` takes the page name and returns its development route, module, compiled code,
+required registry items and diagnostics. A running Vite Refine host mounts the route in the
+app. An invalid page returns 422 `invalid_result` with diagnostic details.
 
 ```http
 POST /@trivia/api/blueprint/preview

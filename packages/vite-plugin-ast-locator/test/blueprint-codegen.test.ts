@@ -116,3 +116,31 @@ it('FR-RC-02: filters selected columns and puts typed action buttons in rows and
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+it('FR-RC-06: provides a Vite preview route without writing any app source', async () => {
+  const root = copyRefineAdmin()
+  const server = await startServer(root)
+  try {
+    const file = path.join(root, 'src/App.tsx')
+    const before = fs.readFileSync(file)
+    const name = 'DraftPage'
+    const patched = await post(server.socket, '/blueprint/patch', {
+      label: 'Draft preview',
+      ops: [{ op: 'createPage', doc: 'pages/DraftPage.page.json', baseRev: null, name, route: '/draft', kind: 'custom' }],
+    })
+    expect(patched.status).toBe(200)
+    const preview = await post(server.socket, '/blueprint/preview', { page: name })
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200)
+    expect(preview.body.data).toMatchObject({
+      page: name, route: '/__blueprint/DraftPage',
+      module: expect.stringMatching(/^\/@trivia\/preview\/.+\.tsx$/),
+      code: expect.stringContaining('export function DraftPage()'),
+    })
+    const app = await server.vite.transformRequest('/src/App.tsx')
+    expect(app?.code).toContain('/__blueprint/:triviaPage')
+    expect(fs.readFileSync(file)).toEqual(before)
+  } finally {
+    await server.close()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)

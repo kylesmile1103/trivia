@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { projectFacts, restyleModule } from '@trivia/blueprint-compiler'
+import { projectFacts, restyleModule, type EmittedModule } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import type { AppRoute } from '../api/service.js'
@@ -234,7 +234,32 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'build'])
 export class RefineAdapter {
   readonly #host: RefineHost
   /** The pages the inferencer asked to preview, by module id. */
-  readonly #previews = new Map<string, PreviewRequest>()
+  readonly #previews = new Map<string, () => Promise<{ code: string; blueprint?: EmittedModule }>>()
+
+  async compileProject() {
+    const app = await this.#app()
+    const project = await this.#scaffoldContext('')
+    const entrySource = app ? fs.readFileSync(path.join(this.#host.root, app.file), 'utf8') : ''
+    return { project, entrySource }
+  }
+
+  async blueprintRouteAnchor(file?: string): Promise<{ file: string; target: string } | null> {
+    const app = await this.#app()
+    if (!app || (file !== undefined && file !== app.file)) return null
+    const anchor = this.#routeAnchor(app)
+    return anchor ? { file: app.file, target: anchor.parent + '.' + anchor.index } : null
+  }
+
+  blueprintPreview(id: string, build: () => Promise<EmittedModule>): void {
+    this.#previews.set(id, async () => {
+      const blueprint = await build()
+      return { code: blueprint.code + '\nexport default ' + blueprint.component + '\n', blueprint }
+    })
+  }
+
+  async previewSource(id: string): Promise<EmittedModule | undefined> {
+    return id.startsWith('blueprint-') ? (await this.#previews.get(id)?.())?.blueprint : undefined
+  }
 
   constructor(host: RefineHost) {
     this.#host = host
@@ -414,7 +439,7 @@ export class RefineAdapter {
     }
     walk(outline)
     const resourceRoutes = routes.filter((r) => r.path.startsWith('/'))
-    const last = resourceRoutes.at(-1)
+    const last = resourceRoutes.at(-1) ?? routes.find((route) => route.path === '*')
     if (!last) return null
     const parent = last.locator.slice(0, last.locator.lastIndexOf('.'))
     const slot = (loc: string) => Number(loc.slice(loc.lastIndexOf('.') + 1))
@@ -735,7 +760,7 @@ export class RefineAdapter {
     const key = normalized({ ...request, resource: page.resource })
     const id = createHash('sha256').update(JSON.stringify(key)).digest('hex').slice(0, 16)
     const module = await this.#host.preview.publish(id, page)
-    this.#previews.set(id, key)
+    this.#previews.set(id, () => this.#inferred(key))
     return { ...page, module }
   }
 
@@ -749,7 +774,7 @@ export class RefineAdapter {
     if (!request) return null
     let code: string
     try {
-      code = (await this.#inferred(request)).code
+      code = (await request()).code
     } catch (error) {
       return `throw new Error(${JSON.stringify(error instanceof Error ? error.message : String(error))});\n`
     }
@@ -769,11 +794,11 @@ export class RefineAdapter {
     if (!request || entry === null) return null
     let code = ''
     try {
-      code = (await this.#inferred(request)).code
+      code = (await request()).code
     } catch {
       // The module says why; no classes to add.
     }
-    const classes = [...new Set([...code.matchAll(/className="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)).filter((c) => c !== '' && !/["\\]/.test(c)))]
+    const classes = [...new Set([...code.matchAll(/className=(["'])(.*?)\1/g)].flatMap((m) => m[2]!.split(/\s+/)).filter((c) => c !== '' && !/["\\]/.test(c)))]
     const reference = path.join(this.#host.root, entry).split(path.sep).join('/')
     return `@reference "${reference}";\n@import "tailwindcss/utilities.css" layer(utilities) source(none);\n@source inline("${classes.join(' ')}");\n`
   }
