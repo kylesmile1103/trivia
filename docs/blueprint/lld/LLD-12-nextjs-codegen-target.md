@@ -41,21 +41,22 @@ release.
 
 ## 1. What a target is
 
-The compiler's stages before printing (lowering to `PageIR`, LLD-05) are shared. A target
-supplies:
+The compiler's stages before printing are shared. Custom pages lower to `PageIR` (LLD-05).
+Contract pages use the shared Refine scaffolder. A target supplies:
 
 ```ts
 interface Target {
   name: 'vite-refine' | 'next-refine'
-  files(ir: PageIR, facts: ProjectFacts): EmittedModule[]      // one or more modules per page
-  routeOps(page: PageIR, facts: ProjectFacts): Op[]            // how a route is registered
+  files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...EmittedModule[]]
+  routeOps(files: readonly RouteRegistration[], anchor: RouteAnchor): Op[]
   hooks: RefineHookMap                                         // router binding differences
-  preview(page: PageIR): PreviewPlan
+  preview(page: string): PreviewPlan
 }
 ```
 
-The Vite target is refactored onto this interface first, with its golden files unchanged.
-That refactor is the first task of this feature.
+⚑ The target consumes a discriminated input for custom IR and shared contract source. The
+Vite target continues to expose one primary module with its original shape. The shared
+lowerer receives the target's Refine hook map for client route and query bindings.
 
 ## 2. File layout
 

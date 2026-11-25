@@ -10,7 +10,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T003 `src/targets/target.ts`, and move the Vite target onto it. Every existing golden file byte-identical (SC-004)
+- [x] T003 `src/targets/target.ts`, and move the Vite target onto it. Every existing golden file byte-identical (SC-004)
 - [ ] T004 `validate` gains target-only checks behind `app.targets.web`
 
 ## Phase 3: User Story 1 - Emit for Next.js (P1)

@@ -90,7 +90,10 @@ function missing(pointer: string): never {
   throw new CompileError('internal', 'Missing emitted expression at ' + pointer)
 }
 
-export function routeScope(deps: ReadonlySet<string>, names: import('./names.js').Names) {
+export function routeScope(
+  deps: ReadonlySet<string>, names: import('./names.js').Names,
+  router: import('../targets/target.js').RefineHookMap['router'],
+) {
   const rename: Record<string, string> = {}
   const imports: import('../ir.js').ImportIR[] = []
   const hooks: import('../ir.js').HookIR[] = []
@@ -99,15 +102,15 @@ export function routeScope(deps: ReadonlySet<string>, names: import('./names.js'
   if (has('params')) {
     const name = names.take('params')
     rename['params'] = name
-    imports.push({ name: 'useParams', source: 'react-router' })
+    imports.push({ name: 'useParams', source: router.source })
     hooks.push({ name, hook: 'useParams' })
     locals.push(name)
   }
   if (has('search')) {
     const name = names.take('searchParams')
     rename['search'] = 'Object.fromEntries(' + name + ')'
-    imports.push({ name: 'useSearchParams', source: 'react-router' })
-    hooks.push({ name: '[' + name + ']', hook: 'useSearchParams' })
+    imports.push({ name: 'useSearchParams', source: router.source })
+    hooks.push({ name: router.searchTuple ? '[' + name + ']' : name, hook: 'useSearchParams' })
     locals.push(name)
   }
   if (has('user')) {

@@ -4,7 +4,7 @@ import type { ManifestField, TriviaManifest } from '@trivia/contract-sync'
 import { CompileError } from '../compile.js'
 import type { JsxIR, StateIR } from '../ir.js'
 import { quote, statement } from '../print/style.js'
-import { refineName } from '../targets/vite-refine/files.js'
+import { refineName } from '../targets/paths.js'
 import { indent, resourceRowType, snippet, withNodeAttributes, type CompositeScope } from './source.js'
 import { lowerVirtualTable } from './virtual-table.js'
 

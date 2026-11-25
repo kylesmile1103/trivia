@@ -9,6 +9,7 @@ import { Names } from './lower/names.js'
 import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower/scope.js'
 import { printHook } from './print/module.js'
 import { quote, statement } from './print/style.js'
+import type { RefineHookMap } from './targets/target.js'
 
 export interface ContractPageInput {
   resource: ManifestResource
@@ -53,6 +54,7 @@ export function generateContract(
   resource: ManifestResource,
   context: CompileContext,
   generator: ContractPageGenerator,
+  hooks: RefineHookMap,
 ): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> {
   const { facts } = context
   const { rowActions = [], headerActions = [] } = page.options
@@ -68,7 +70,7 @@ export function generateContract(
   const names = new Names(['columns', 'table', 'form', 'record', 'onFinish', 'formLoading', '_event', '_row'])
   const name = (preferred: string) => names.take(preferred)
   const depsOfExpressions = new Set(analyzePageExpressions(page, context.engine).flatMap(({ deps }) => deps))
-  const route = routeScope(depsOfExpressions, names)
+  const route = routeScope(depsOfExpressions, names, hooks.router)
   const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
   const lower = actionLowerer({
@@ -88,8 +90,8 @@ export function generateContract(
   })
   const row = definitions('rowActions', rowActions)
   const header = definitions('headerActions', headerActions)
-  const hooks = [...lower.hooks.values()]
-  const deps = [...route.locals, ...hooks.map(({ name, hook }) => hook === 'useGo' ? name
+  const actionHooks = [...lower.hooks.values()]
+  const deps = [...route.locals, ...actionHooks.map(({ name, hook }) => hook === 'useGo' ? name
     : hook === 'useNotification' ? name + '.open' : name + '.mutateAsync')]
   const nodeType = 'MouseEvent<HTMLButtonElement>'
   const rowType = resource.entity?.typeName ?? 'Record<string, unknown>'
@@ -114,7 +116,7 @@ export function generateContract(
         ...(row.length ? [{ source: 'react', name: 'useCallback' }] : []),
       ],
       setup: [
-        ...[...route.hooks, ...hooks].map((hook) => printHook(hook, style)),
+        ...[...route.hooks, ...actionHooks].map((hook) => printHook(hook, style)),
         ...row.map((action) => print(action, true)),
         ...header.map((action) => print(action, false)),
       ].join('\n\n'),

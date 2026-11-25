@@ -1,7 +1,5 @@
-import { createHash } from 'node:crypto'
-
 import type { ComponentManifest, Diagnostic } from '@trivia/blueprint'
-import { CompileError, compilePage, pageDiagnostics } from '@trivia/blueprint-compiler'
+import { CompileError, compilePage, pageDiagnostics, targetFor } from '@trivia/blueprint-compiler'
 import { z } from 'zod'
 
 import type { EngineService } from '../api/service.js'
@@ -34,7 +32,7 @@ export async function previewPage({ page }: z.infer<typeof previewInput>, servic
   const { blueprint, context } = await service.blueprintInputs()
   try {
     const out = compilePage(blueprint, page, context)
-    const id = 'blueprint-' + createHash('sha256').update(page).digest('hex').slice(0, 16)
+    const { id, route } = targetFor(context.facts.target).preview(page)
     service.refine.blueprintPreview(id, async () => {
       const next = await service.blueprintInputs()
       // Keep code returned to callers canonical for eject. Only the virtual module gets
@@ -42,7 +40,7 @@ export async function previewPage({ page }: z.infer<typeof previewInput>, servic
       return compilePage(next.blueprint, page, { ...next.context, previewNodeIds: true })
     })
     return {
-      page, route: '/__blueprint/' + page, module: PREVIEW_PREFIX + id + '.tsx', code: out.code, requires: out.requires,
+      page, route, module: PREVIEW_PREFIX + id + '.tsx', code: out.code, requires: out.requires,
       diagnostics: pageDiagnostics(blueprint, page, context),
     }
   } catch (error) {

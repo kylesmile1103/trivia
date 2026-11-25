@@ -5,8 +5,8 @@ import { CompileError, type CompileContext } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
 import type { ImportIR, QueryIR } from '../ir.js'
 import { compareBytes, property, quote } from '../print/style.js'
-import { refineName } from '../targets/vite-refine/files.js'
-import { queryHooks, queryStatus } from '../targets/vite-refine/refine-hooks.js'
+import { refineName } from '../targets/paths.js'
+import type { RefineHookMap } from '../targets/target.js'
 import { operationUrl } from './actions.js'
 import type { Names } from './names.js'
 import type { ExpressionAnalysis } from './scope.js'
@@ -26,6 +26,7 @@ export function prepareQueries(
   context: CompileContext,
   names: Names,
   analysis: readonly ExpressionAnalysis[],
+  { queries: queryHooks, queryStatus }: RefineHookMap,
 ) {
   const { style } = context.facts
   const rename: Record<string, string> = {}

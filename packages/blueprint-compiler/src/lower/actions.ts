@@ -5,7 +5,7 @@ import { CompileError } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
 import type { HookIR, ImportIR, StepIR } from '../ir.js'
 import { compareBytes, property, quote, statement } from '../print/style.js'
-import { handlerFile, refineName, relativeModule } from '../targets/vite-refine/files.js'
+import { handlerFile, refineName, relativeModule } from '../targets/paths.js'
 import { queryStatus } from '../targets/vite-refine/refine-hooks.js'
 
 interface ActionContext {

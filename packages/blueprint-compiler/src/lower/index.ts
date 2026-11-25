@@ -1,13 +1,14 @@
 import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
-import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
+import { CompileError, type CompileContext, type RegistryItem } from '../compile.js'
 import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
 import { lowerForm } from '../composites/form.js'
 import type { CompositeScope } from '../composites/source.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
-import { printHandler, printModule } from '../print/module.js'
-import { compareBytes, literal, property, quote, restyleModule, statement } from '../print/style.js'
-import { refineName, relativeModule } from '../targets/vite-refine/files.js'
+import { printHandler } from '../print/module.js'
+import { compareBytes, literal, property, quote, statement } from '../print/style.js'
+import { refineName } from '../targets/paths.js'
+import type { LoweredPage, RefineHookMap } from '../targets/target.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
 import { Names } from './names.js'
@@ -16,7 +17,7 @@ import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope
 
 const intrinsic = resolveManifests({ kit: [], components: [] }).manifests
 
-export function lowerCustom(page: CustomPage, context: CompileContext): EmittedModule {
+export function lowerCustom(page: CustomPage, context: CompileContext, targetHooks: RefineHookMap): LoweredPage {
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
   const dir = resource ? refineName(resource) : page.resource ?? page.name
@@ -133,8 +134,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     exposed.set(id, values)
   }
   if (state.length) imports.push({ name: 'useState', source: 'react' })
-  const route = routeScope(deps, names)
-  const query = prepareQueries(page, context, names, analysis)
+  const route = routeScope(deps, names, targetHooks.router)
+  const query = prepareQueries(page, context, names, analysis, targetHooks)
   const repeats = new Map<string, RepeatLocal>()
   const byExpression = new Map<string, RepeatLocal>()
   for (const [id, control] of Object.entries(page.control).sort(([a], [b]) => compareBytes(a, b))) {
@@ -225,8 +226,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations, afterState,
   }
   return {
-    code: declarations.length ? restyleModule(printModule(ir, facts), facts.style) : printModule(ir, facts), file, route: page.route, component: page.name,
-    importPath: relativeModule('src/App.tsx', file),
+    kind: 'custom', ir,
     ...(handler && { handler }),
     requires: [...missing.entries()].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item),
   }

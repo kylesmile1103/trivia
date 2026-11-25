@@ -7,13 +7,16 @@ export {
 export type { ContractPageGenerator, ContractPageInput, RefineSnippetGenerator, RefineSnippetImport } from './contract-pages.js'
 export { checkDataTable } from './composites/data-table.js'
 export { checkForm } from './composites/form.js'
-export { refineName } from './targets/vite-refine/files.js'
+export { refineName } from './targets/paths.js'
 export { restyleModule } from './print/style.js'
 export { emptyLock, readLock, serializeLock, LOCK_FILE, type Lock, type LockedPage } from './lock.js'
 export {
   planEject, planCompiledEject, prepareEject, routePattern,
   type EjectContext, type EjectPage, type EjectPlan, type EjectRoute, type EjectSnapshot, type SourceOp,
 } from './eject.js'
-export { relativeModule } from './targets/vite-refine/files.js'
-export { resourceOps, routeOps, type RouteRegistration } from './targets/vite-refine/routes.js'
+export { relativeModule } from './targets/paths.js'
+export { resourceOps, type RouteRegistration } from './targets/vite-refine/routes.js'
+export { targetFor, type Target, type RefineHookMap } from './targets/target.js'
+import { viteRefine } from './targets/vite-refine/index.js'
+export const routeOps = viteRefine.routeOps
 export { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
