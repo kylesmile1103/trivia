@@ -40,7 +40,7 @@
 
 ## Phase 6: User Story 4 - Eject and the lock (P1)
 
-- [ ] T021 [US4] `src/lock.ts` and `src/eject.ts` with unit tests for each rule: new file, unchanged file (`replaceFile`), edited file (409), missing component (422), foreign route or file (409)
+- [x] T021 [US4] `src/lock.ts` and `src/eject.ts` with unit tests for each rule: new file, unchanged file (`replaceFile`), edited file (409), missing component (422), foreign route or file (409)
 - [ ] T022 [US4] Route and resource registration through the shared helpers of the new-resource tool
 - [ ] T023 [US4] `src/blueprint/plan.ts`, `POST /blueprint/plan` and `/blueprint/ejected` (lock written in the same history entry)
 - [ ] T024 [US4] Plugin test on a copy of the example: plan, batch, undo restores every byte and the lock, redo

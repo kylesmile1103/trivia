@@ -198,6 +198,14 @@ package's original fixture assets. Spec 006 supplies the full kit.
 Refusals: 422 with `requires` when a component is not installed; 409 when a page's file
 differs from its lock hash; 409 when a route or file already exists and is not in the lock.
 
+⚑ Existing call handlers are kept, including one created after the plan was read.
+File creation and history accept TypeScript handler files. JSX locators still require
+JSX or TSX. Contract pages derive their registry requirements from their emitted imports.
+
+⚑ The lock records the route and component as well as the hash. These distinguish a
+deleted generated file from a route that someone has taken over. Re-eject refuses a moved
+file or route until the existing registration is resolved. Older hashes remain readable.
+
 ### The lock
 
 ```json

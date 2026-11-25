@@ -137,3 +137,15 @@ it('FR-RC-09 applies replaceFile as an atomic HTTP batch with byte-exact undo', 
   expect((await post('/redo', {})).status).toBe(200)
   expect(await fs.readFile(file)).toEqual(Buffer.from(content))
 })
+
+it('FR-RC-07 creates and restores a TypeScript handler through ordinary history', async () => {
+  const file = 'src/handlers/Action.ts'
+  const content = 'export function act(_event: unknown): void {}\n'
+  const result = await post('/batch', { ops: [{ op: 'createFile', file, content, ifMissing: true }] })
+  expect(result.status, await result.clone().text()).toBe(200)
+  expect(await fs.readFile(path.join(root, file), 'utf8')).toBe(content)
+  expect((await post('/undo', {})).status).toBe(200)
+  await expect(fs.stat(path.join(root, file))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect((await post('/redo', {})).status).toBe(200)
+  expect(await fs.readFile(path.join(root, file), 'utf8')).toBe(content)
+})

@@ -4,7 +4,7 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 import { generateContract, type ContractPageGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
 import { lowerCustom } from './lower/index.js'
-import { restyleModule } from './print/style.js'
+import { compareBytes, moduleImports, restyleModule } from './print/style.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
 
@@ -29,7 +29,7 @@ export interface CompileContext {
 
 export class CompileError extends Error {
   constructor(
-    readonly code: 'node_not_found' | 'invalid_result' | 'unsupported' | 'internal',
+    readonly code: 'node_not_found' | 'invalid_result' | 'unsupported' | 'internal' | 'invalid_op' | 'conflict' | 'unresolved_component',
     message: string,
     readonly details?: Record<string, unknown>,
   ) {
@@ -62,6 +62,11 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
     emitted = { ...generated, code: restyleModule(content, context.facts.style), route: page.route, requires: [] }
   }
+  const sources = moduleImports(emitted.code)
+  if (sources.some((source) => source.startsWith('@trivia/'))) {
+    throw new CompileError('unsupported', 'Generated modules cannot import from @trivia.')
+  }
+  if (page.kind !== 'custom') emitted.requires = requiredRegistryItems(sources, context.facts)
   emitted.code = emitted.code.replace(/\r\n?/g, '\n')
   try {
     context.engine.annotate(emitted.code, emitted.file)
@@ -70,4 +75,18 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)
   }
   return emitted
+}
+
+function requiredRegistryItems(sources: string[], facts: ProjectFacts): RegistryItem[] {
+  const ui = (facts.aliases['ui'] ?? '@/components/ui') + '/'
+  const refine = ui.slice(0, ui.lastIndexOf('/', ui.length - 2)) + '/refine-ui/'
+  const items = new Map<string, RegistryItem>()
+  for (const source of sources) {
+    const registry = source.startsWith(ui) ? 'shadcn' : source.startsWith(refine) ? 'refine' : null
+    if (registry === null || facts.installed.has(source)) continue
+    const relative = source.slice(registry === 'shadcn' ? ui.length : refine.length)
+    const item = relative.startsWith('data-table/') ? 'data-table' : relative.split('/').at(-1)!
+    if (!facts.installed.has(item)) items.set(registry + '/' + item, { registry, item })
+  }
+  return [...items].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item)
 }

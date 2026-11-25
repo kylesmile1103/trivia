@@ -240,7 +240,24 @@ export class RefineAdapter {
     const app = await this.#app()
     const project = await this.#scaffoldContext('')
     const entrySource = app ? fs.readFileSync(path.join(this.#host.root, app.file), 'utf8') : ''
-    return { project, entrySource }
+    const { root, uiDir } = this.#host
+    const modules = (dir: string, prefix: string | null): string[] => {
+      if (!prefix || dir.startsWith('..')) return []
+      const base = path.join(root, dir)
+      try {
+        return fs.readdirSync(base, { withFileTypes: true, recursive: true })
+          .filter((entry) => entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name))
+          .map((entry) => prefix + '/' + path.relative(base, path.join(entry.parentPath, entry.name))
+            .split(path.sep).join('/').replace(/\.(?:tsx?|jsx?)$/, ''))
+      } catch {
+        return []
+      }
+    }
+    const installed = [
+      ...modules(uiDir, project.ui),
+      ...modules(path.posix.join(path.posix.dirname(uiDir), 'refine-ui'), project.refineUi),
+    ]
+    return { project, entrySource, installed }
   }
 
   async blueprintRouteAnchor(file?: string): Promise<{ file: string; target: string } | null> {

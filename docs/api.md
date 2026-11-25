@@ -359,13 +359,13 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `unsupported`: elements, `{…}` expressions, comments), void HTML elements (422), a line
   break in `text`, and text that would render differently where it goes, such as spaces next
   to a line break (400 `invalid_op`). The text it already has is a no-op (`changed: false`).
-- `createFile` writes a new `.tsx`/`.jsx` file inside the root, making its directories. It
+- `createFile` writes a new `.tsx`, `.jsx` or `.ts` file inside the root, making its directories. It
   is refused when the file exists (409 `conflict`; it never overwrites; with `"ifMissing": true`
   an existing file is kept as it is and the op is a no-op) and when `content`
   doesn't parse (422 `invalid_result`). In a history entry the file's `before` is `null`, so
   undo deletes it (only if it still holds what was written) and redo writes it again. The
   binding's `restoreFiles` takes `expected: null` (must not exist) and `content: null` (delete).
-- `replaceFile` writes the full source of a previously generated `.tsx` or `.jsx` file.
+- `replaceFile` writes the full source of a previously generated `.tsx`, `.jsx` or `.ts` file.
   The expected hash is lowercase SHA-256 of the original bytes, prefixed with `sha256:`.
   The op returns 404 `file_not_found` if the target is missing, 409 `conflict` if the hash
   differs, or 400 `parse_error` if either version fails to parse. Undo can restore the

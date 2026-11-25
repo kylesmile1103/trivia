@@ -114,13 +114,13 @@ export class EngineService {
     const resolution = this.blueprint.manifests()
     const contract = this.blueprint.contract()
     const app = blueprint.docs[APP_DOC]
-    const { project, entrySource } = await this.refine.compileProject()
+    const { project, entrySource, installed } = await this.refine.compileProject()
     const facts = projectFacts({
       target: this.blueprint.hostKind === 'next' ? 'next-refine'
         : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine',
       aliases: { ...this.blueprint.aliases(), ui: project.ui },
       pagesDir: project.pagesDir, entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
-      installed: Object.values(resolution.manifests).flatMap((manifest) => manifest?.installed ? [manifest.source.item] : []),
+      installed,
     })
     const context: CompileContext = {
       facts, contract, manifests: resolution.manifests, engine: this.#options.engine,

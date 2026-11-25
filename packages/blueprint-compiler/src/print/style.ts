@@ -59,3 +59,9 @@ export function restyleModule(code: string, style: PrintStyle): string {
   }
   return result + code.slice(cursor)
 }
+
+export function moduleImports(code: string): string[] {
+  const ast = ts.createSourceFile('page.tsx', code, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX)
+  return ast.statements.flatMap((node) => ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)
+    ? [node.moduleSpecifier.text] : [])
+}
