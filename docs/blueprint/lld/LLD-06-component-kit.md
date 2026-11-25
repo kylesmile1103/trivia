@@ -2,7 +2,7 @@
 
 - Spec: `specs/006-component-kit` · Requirements: FR-KT-01 to FR-KT-07 · ADR-0009, ADR-0016
 - Code: `packages/blueprint-compiler/kit/` (manifest JSON, one file per type) and
-  `packages/blueprint-compiler/src/composites/` (`data-table.ts`, `form.ts`).
+  `packages/blueprint-compiler/src/composites/` (`data-table.ts`, `form.ts`, `virtual-table.ts`).
 
 ## 1. What the kit is
 
@@ -10,17 +10,18 @@ The kit is data: a manifest (LLD-02) for each component a blueprint may use by n
 no component source. The user's project gets the components from the shadcn registry and from
 Refine's shadcn registry (refine-ui), and the manifests describe how to use what is there.
 
-## 2. The 25 components (FR-KT-01)
+## 2. Published manifests (FR-KT-01)
 
-| Group | Types | Registry |
+| Fixture | Types | Registry |
 | --- | --- | --- |
-| Actions | `Button`, `DropdownMenu` | shadcn |
-| Inputs | `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `RadioGroup`, `Combobox`, `DatePicker`, `Label`, `Field` | shadcn (`Combobox` is `popover` + `command`; `DatePicker` is `popover` + `calendar`) |
-| Containers | `Card`, `Tabs`, `Dialog`, `Sheet`, `Popover`, `Separator` | shadcn |
-| Display | `Badge`, `Avatar`, `Alert`, `Tooltip`, `Skeleton`, `Breadcrumb`, `Empty` | shadcn |
+| `KitDisplay` | `Button`, `DropdownMenu`, `Badge`, `Avatar`, `Alert`, `Tooltip`, `Skeleton`, `Breadcrumb`, `Empty` | shadcn |
+| `KitInputs` | `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `RadioGroup`, `Combobox`, `DatePicker`, `Label`, `Field` | shadcn. `Combobox` uses `popover` and `command`, and `DatePicker` uses `popover` and `calendar` |
+| `KitContainers` | `Card`, `Tabs`, `Dialog`, `Sheet`, `Popover`, `Separator` | shadcn |
+| `KitTable`, `KitVirtualTable` | `DataTable` | refine-ui |
+| `KitForm` | `Form` | shadcn `Field` or legacy `FormField`, with Refine and Zod |
 
-Plus two composites, `DataTable` and `Form`, and the HTML elements of LLD-02. Toasts are an
-action step, not a node.
+The kit contains 25 shadcn manifests and two composite manifests. LLD-02 defines the
+intrinsic HTML elements. A toast is an action step.
 
 Per type the manifest fixes: slots and their wrapper parts (`Card`: `header`, `content`,
 `footer`; `Tabs`: one slot per tab, from a `tabs` prop; `Dialog` and `Sheet`: `trigger`,
@@ -35,9 +36,8 @@ Per type the manifest fixes: slots and their wrapper parts (`Card`: `header`, `c
 | `Tabs` | `value: string` | `value`, `onValueChange`, `value` |
 | `Dialog`, `Sheet`, `Popover` | `open: boolean` | `open`, `onOpenChange`, `value` |
 
-Prop names differ by shadcn base. Each manifest carries variants keyed by the project's
-`components.json` style, checked against the real component source in a fixture (LLD-02
-section 6). Radix and Base UI are covered first.
+The kit checks prop names for both Radix and Base UI against installed sources. Manifests
+use style variants where the installed libraries expose different contracts (LLD-02 section 6).
 
 ⚑ Exact style variants take precedence over a library-family variant such as `base`.
 Base UI switches and checkboxes return a boolean. Base UI selects, radios and tabs normalize
@@ -83,9 +83,9 @@ Expansion, in `composites/data-table.ts`:
 - A `useTable` call (`@refinedev/react-table`) for the resource, with server-side paging,
   sorting and filtering through Refine.
 - A `columns` array built by the same snippet builders the columns tool uses
-  (`src/refine/columns.ts`): a sorter header per field, the filter by field type, the cell by
-  field type (a `Badge` for enums, a formatted date, Yes/No). Those builders move behind the
-  generator interface of LLD-05 so both callers share them.
+  (`packages/dev-service/src/refine/columns.ts`). The builder supplies sorters, filters by
+  field type and formatted cells for enums, dates and booleans. LLD-05 exposes the generator
+  interface to both callers.
 
   ⚑ LLD-13 puts these builders in `packages/dev-service/src/refine/`. The service injects
   the existing snippets and their imports through `CompileContext.refineSnippets` so the
@@ -104,18 +104,17 @@ Expansion, in `composites/data-table.ts`:
 
 ⚑ The table requires an explicit nonempty column list. It preserves the first occurrence of
 each field, defaults to ten rows per server page, and allows filters on visible columns.
+The `refine-ui` source marker resolves the installed table beside the project's UI library.
 
 ⚑ Selection uses a labelled radio or checkbox column and the contract primary key.
 Single selection exposes `selectedRow`, and multiple selection also exposes `selectedRows`.
 Before a selection, the row is an empty partial record so a direct field binding such as
 `ui.customers.selectedRow.id` can render safely.
-The `refine-ui` source marker resolves the installed table beside the project's UI library.
 
 After eject the table is ordinary Refine code, and the columns tool adds, removes and reorders
-its columns. That is the reason to emit this shape and no other.
+its columns. The adapter recognizes the same `useTable` and column definitions after eject.
 
-Not in the first version: fixed columns, column resize, tree rows, editable cells. They are in
-the manifest's `deferred` list, so validation can say so.
+The DataTable manifest defers `fixedColumns`, `columnResize`, `treeRows` and `editableCells`.
 
 ## 4. `Form` (FR-KT-03)
 
@@ -136,8 +135,9 @@ Expansion, in `composites/form.ts`:
   `format: password`.
 - `layout` chooses the wrapper classes. `redirect` chooses where a successful save goes.
 
-Rule, default and control come from the builders in `src/refine/fields.ts` and `rules.ts`, so
-the form-fields tool and the drift tool read back what the compiler wrote.
+The compiler uses the builders in `packages/dev-service/src/refine/fields.ts` for rules,
+defaults and controls. The form-fields tool reads the same shape and `rules.ts` aligns a
+changed rule in place.
 
 ⚑ The existing Refine adapter chooses the prevailing form style and uses Field on a tie
 when both installs exist. Kit date fields use the shared Calendar and Popover renderer
@@ -152,7 +152,7 @@ Custom widgets per field are out: after eject they are a code edit.
 ## 5. Deferred (FR-KT-07)
 
 `Tree`, `TreeSelect`, `Cascader`, `Transfer`, `Upload`, `TimePicker`, `DateRangePicker` as a
-standalone input, `Steps`, `Rate`, `Tour`, charts. `kit/deferred.json` lists them with a
+standalone input, `Steps`, `Rate`, `Tour` and `Chart`. `kit/deferred.json` lists them with a
 one-line reason and the suggested route (a local component with its own manifest). A node of
 such a type is `unknown_component`, with that text as the hint.
 
@@ -162,10 +162,12 @@ provides a reason for each deferred table option at its `unknown_prop` diagnosti
 
 ## 6. The kit fixture (FR-KT-06)
 
-`packages/blueprint-compiler/fixtures/kit/` is a blueprint with one custom page per group,
-using every type, every exposed value in a binding, and every event in an action, plus a
-`DataTable` and a `Form` page. `examples/blueprint-kit/` is the app it compiles into: the
-template of LLD-05 with the kit installed, on a mock contract.
+`packages/blueprint-compiler/fixtures/kit/` uses every type in the inventory, each exposed
+value in a binding and each event in an action. The app under `examples/blueprint-kit/`
+starts from the LLD-05 template with the registries and a mock contract.
+
+⚑ Actions and display share one fixture page. A separate unpaged table fixture exercises
+virtualization and multiple selection with 5,000 rows.
 
 ⚑ The Radix example uses shadcn CLI 4.21.3 with the `radix-nova` preset and a self-contained
 snapshot of the banking OpenAPI contract, provider, and mock. The Refine registry filter
@@ -183,6 +185,7 @@ The engine's editor schema deliberately omits some inherited props needed by the
 - e2e (`e2e/blueprint-kit.spec.ts`): eject all pages, load each route, check it renders
   without console errors, type into an input and see a bound text change, sort and filter the
   table against the mock API, submit the form.
+- Coverage checks that every published manifest has a fixture page and is listed in the design.
 
 ⚑ The kit example registers the customer resource's list and create paths so Refine can
 redirect a successful create to the ejected table. The Playwright project exercises the
@@ -194,9 +197,26 @@ Tables provide labelled regions and native row selection controls. The installed
 table identifies the primary sort in its header and names the filter and page-size controls.
 Chromium exercises Tab, Enter, Space and Escape through those controls. The accessibility
 pass draws on the [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md).
-- A check that fails when a kit type has no page in the fixture.
 
-## 7. Open points
+## 7. Registry installation
+
+In a Vite Refine project, install the sources into the project's chosen shadcn configuration.
+The fixture uses the following registry commands.
+
+```sh
+pnpm dlx shadcn@4.21.3 add button dropdown-menu badge avatar alert tooltip skeleton breadcrumb empty \
+  input textarea select checkbox switch radio-group command calendar label field card tabs dialog sheet popover separator
+pnpm dlx shadcn@4.21.3 add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json \
+  https://ui.refine.dev/r/data-table.json
+```
+
+For a fresh configuration, the same CLI's `init --template vite --base radix --preset nova`
+sets up the Radix base. Select `--base base` for Base UI. The Refine registry can use its own
+Radix component imports in a Base UI project, as the second fixture does. Forms require
+`react-hook-form`, `@hookform/resolvers` and `zod`. Calendar-backed date fields use
+`date-fns` for the contract's date format. Virtual tables require `@tanstack/react-virtual`.
+
+## 8. Open points
 
 - React Aria as a third base once the first two are stable.
 - A `DateRangePicker` input, which refine-ui has only as a table filter today.

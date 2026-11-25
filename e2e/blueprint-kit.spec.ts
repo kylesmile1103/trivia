@@ -76,9 +76,13 @@ test('FR-KT-05 renders a window of 5,000 unpaged rows and follows scrolling', as
   await expect(table).toHaveAttribute('aria-rowcount', '5001', { timeout: 30_000 })
   await expect(table.getByRole('cell', { name: 'Customer 0001' })).toBeVisible()
   expect(await rows.count()).toBeLessThan(30)
+  await rows.nth(0).getByRole('checkbox').check()
+  await rows.nth(1).getByRole('checkbox').check()
+  await expect(page.getByText('Selected rows: 2, first 1', { exact: true })).toBeVisible()
   await viewport.evaluate((element) => { element.scrollTop = element.scrollHeight })
   await expect(table.getByRole('cell', { name: 'Customer 5000' })).toBeVisible()
   await expect(table.getByRole('cell', { name: 'Customer 0001' })).toHaveCount(0)
+  await expect(page.getByText('Selected rows: 2, first 1', { exact: true })).toBeVisible()
   expect(await rows.count()).toBeLessThan(30)
 })
 

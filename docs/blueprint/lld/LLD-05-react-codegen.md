@@ -297,7 +297,7 @@ the workspace. It prints commands for Refine UI's layout and views registry item
 
 ## 9. Follow-ups
 
-- Deferred: needs spec 006 (full component kit and registry command).
+- Kit registry installation and fixture coverage are in [LLD-06](LLD-06-component-kit.md).
 - Deferred: needs spec 010 (app-specific backend and data provider orchestration).
 - Deferred: needs spec 012 (Next.js preview and eject target).
 - A page-level error boundary and loading skeleton for custom pages remain open.

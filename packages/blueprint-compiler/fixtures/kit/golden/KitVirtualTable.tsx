@@ -2,14 +2,29 @@ import { useTable } from "@refinedev/react-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { flexRender } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useMemo, useRef } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import type { CustomerDto } from "@/api/generated/types.gen"
 import { DataTableSorter } from "@/components/refine-ui/data-table/data-table-sorter"
 import { Badge } from "@/components/ui/badge"
 
 export function KitVirtualTable() {
+  const [customersSelectedRows, setCustomersSelectedRows] = useState<CustomerDto[]>([])
+  const customersSelectedRow: Partial<CustomerDto> = customersSelectedRows[0] ?? {}
   const columns = useMemo<ColumnDef<CustomerDto>[]>(() => [
+    {
+      id: "selection",
+      header: "Select",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          aria-label={"Select row " + row.id}
+          checked={row.getIsSelected()}
+          onChange={(event) => setCustomersSelectedRows((current) => event.target.checked ? [...current, row.original] : current.filter((record) => record["id"] !== row.original["id"]))}
+        />
+      ),
+    },
     {
       id: "fullName",
       accessorKey: "fullName",
@@ -44,6 +59,8 @@ export function KitVirtualTable() {
   ], [])
   const table = useTable<CustomerDto>({
     columns,
+    getRowId: (row) => String(row["id"]),
+    state: { rowSelection: Object.fromEntries(customersSelectedRows.map((row) => [String(row["id"]), true])) },
     refineCoreProps: {
       resource: "customers",
       pagination: { mode: "off", pageSize: 10 },
@@ -112,6 +129,9 @@ export function KitVirtualTable() {
           </tbody>
         </table>
       </div>
+      <p>
+        {`Selected rows: ${customersSelectedRows.length}${customersSelectedRow.id ? ", first " + customersSelectedRow.id : ""}`}
+      </p>
     </main>
   )
 }
