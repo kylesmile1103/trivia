@@ -81,6 +81,8 @@ target.
 ⚑ The Refine adapter resolves the array and checks occupied actions before either target
 plans operations. The target receives those guarded registrations and Vite's optional JSX
 anchor. Next emits the shared resource value operations for the discovered provider file.
+The template keeps the literal inline in the prop because the engine's JSX value path
+addresses that expression directly.
 
 ## 3. Splitting server and client (FR-NX-02)
 
@@ -113,6 +115,12 @@ Each sibling passes the same parser and import checks as the entry. The MVP gold
 are the five spec 011 pages and model from commit `a460060`; the fixture changes only the
 app target in its temporary test copy. Its list Refresh action uses Refine's existing
 table query, matching the change in the sibling spec.
+
+⚑ Eject writes and locks every sibling in the same transaction as the entry and registration.
+A hand edit in any of those modules makes the page edited. Removing a generated module
+from an existing page is refused like moving its route until the transaction supports
+retiring guarded files. Older Vite locks keep their original layout. The CLI opens the same
+Next host for offline eject and uses the discovered App Router directory.
 
 A page that is entirely client still gets a server `page.tsx` that renders its view. One
 shape for every page is easier to read and to edit later.

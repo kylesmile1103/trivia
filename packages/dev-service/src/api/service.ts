@@ -125,10 +125,11 @@ export class EngineService {
       entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
       installed,
     })
+    const { appRouter: _appRouter, ...scaffold } = project
     const context: CompileContext = {
       facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
       validation: this.blueprint.context(resolution, contract),
-      generateContractPage: (input) => generateRefinePage({ ...input, project }),
+      generateContractPage: (input) => generateRefinePage({ ...input, project: scaffold }),
       refineSnippets: generateRefineSnippets(project, {
         datePicker: ['calendar', 'popover'].every((item) => installed.includes(project.ui + '/' + item)),
         describeErrors: true,

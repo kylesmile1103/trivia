@@ -11,7 +11,7 @@ export { refineName } from './targets/paths.js'
 export { restyleModule } from './print/style.js'
 export { emptyLock, readLock, serializeLock, LOCK_FILE, type Lock, type LockedPage } from './lock.js'
 export {
-  planEject, planCompiledEject, prepareEject, routePattern,
+  planEject, planCompiledEject, prepareEject, routePattern, lockedSources,
   type EjectContext, type EjectPage, type EjectPlan, type EjectRoute, type EjectSnapshot, type SourceOp,
 } from './eject.js'
 export { relativeModule } from './targets/paths.js'

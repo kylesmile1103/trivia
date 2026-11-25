@@ -22,6 +22,8 @@ export function prepareMvp(root: string, template = new URL('../templates/next-r
   for (const dir of ['components', 'hooks', 'lib']) {
     fs.cpSync(new URL('src/' + dir, nextExample), path.join(web, 'src', dir), { recursive: true })
   }
+  const show = 'src/components/refine-ui/buttons/show.tsx'
+  fs.copyFileSync(new URL('../../../examples/blueprint-kit/' + show, import.meta.url), path.join(web, show))
   return web
 }
 

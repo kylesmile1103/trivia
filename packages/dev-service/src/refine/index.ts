@@ -239,7 +239,8 @@ export class RefineAdapter {
 
   async compileProject() {
     const app = await this.#app()
-    const project = await this.#scaffoldContext('')
+    const routes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
+    const project = await this.#scaffoldContext('', routes)
     const entrySource = app ? fs.readFileSync(path.join(this.#host.root, app.file), 'utf8') : ''
     const { root, uiDir } = this.#host
     const modules = (dir: string, prefix: string | null): string[] => {
@@ -1185,6 +1186,7 @@ function nextPagesDir(root: string, name: string, routes: AppRoute[]): string {
   if (!app) throw new ApiError('unsupported', 'A Next App Router directory is required to add pages')
   const example = routes.find((route) => route.resource?.name === name)?.file ??
     routes.find((route) => route.resource !== null)?.file
+  if (!example && fs.existsSync(path.join(root, app, '(app)', 'layout.tsx'))) return app + '/(app)'
   const dirs = [app]
   for (const segment of example?.slice(app.length + 1).split('/') ?? []) {
     if (!/^\(.*\)$/.test(segment)) break

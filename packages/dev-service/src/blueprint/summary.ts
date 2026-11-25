@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { APP_DOC, MODEL_DOC, modelSchema, validate, type AppDoc, type ApplyResult, type Blueprint, type Diagnostic, type PageKind } from '@trivia/blueprint'
-import { LOCK_FILE, readLock, type LockedPage } from '@trivia/blueprint-compiler'
+import { LOCK_FILE, lockedSources, readLock, type LockedPage } from '@trivia/blueprint-compiler'
 
 import { ApiError } from '../engine.js'
 import { type BlueprintWorkspace, readBytes } from './store.js'
@@ -75,7 +75,8 @@ export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, f
     if (entry.kind !== 'page' || !entry.doc) continue
     const { name, route, kind } = entry.doc
     const lock = Object.hasOwn(locks, name) ? locks[name] : undefined
-    const status = lock ? (fileHash(workspace.root, lock.file) === lock.hash ? 'ejected' : 'edited') : 'draft'
+    const unchanged = lock && Object.entries(lockedSources(lock)).every(([file, hash]) => fileHash(workspace.root, file) === hash)
+    const status = lock ? (unchanged ? 'ejected' : 'edited') : 'draft'
     pages.push({
       name, path: entry.path, rev: entry.rev, route, kind, status, ...(lock && { file: lock.file }),
       ...(counts.get(entry.path) ?? { errors: 0, warnings: 0 }),
