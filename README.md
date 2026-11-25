@@ -12,7 +12,7 @@ down to the whitespace and comments.
 
 | | |
 | --- | --- |
-| **Status** | Pre-1.0 (packages at `0.1.0`). Used against the two example apps in this repo; not yet proven on a third-party codebase. |
+| **Status** | Pre-1.0. Exercised end to end on this repository's Vite and Next.js examples. |
 | **Target user** | Developers who maintain internal tools and admin consoles built with Refine + shadcn/ui on OpenAPI backends ("day 2": the code already exists). See [`docs/product.md`](docs/product.md). |
 | **License** | MIT (declared in the Cargo manifests). |
 | **Runs where** | Entirely on your machine. No cloud service, no telemetry, no account. |
@@ -55,7 +55,7 @@ around the opposite rule.
   probe of OXC's code generator showed it adds semicolons, converts indentation to tabs and drops the
   parentheses in `return ( ... )`, so it is not used for writes.
 - **Your source stays the source of truth.** Edit in the designer, in your IDE, or through an agent.
-  All three act on the same files, and Vite HMR keeps the canvas in sync.
+  All three act on the same files, and Vite HMR or Next.js Fast Refresh keeps the canvas in sync.
 - **Guarded, reviewable operations.** Every change is one serializable `Op` with a stale-locator guard.
   Each is atomic, lands in an undo history as one entry, and is refused (never guessed) when the
   source no longer matches what the caller expected.
@@ -74,7 +74,7 @@ around the opposite rule.
 | **Visual canvas** | Your running app in a same-origin iframe with a hit-testing overlay, hover and selection boxes, drag to move, drop zones, zoom to fit, and a right-click menu for structure edits. |
 | **Inspector** | Prop editors built from your own `src/components/ui/*` (variants from `cva(...)`, defaults, enum options), a Tailwind class manager and a style panel with two-phase editing (live CSS preview during a gesture, Tailwind classes written on commit). |
 | **Palette and Layers** | Insert any component from your library; a Layers tree of the rendered app, rearranged by dragging rows (before, after, inside) or with Alt+↑/↓; move elements across files with imports carried along. |
-| **Pages** | The app's routes, read from its source (React Router, TanStack Router, Refine labels), each with its page file: click one to load it in the canvas (params asked for, prefilled from the URL), or type any path. |
+| **Pages** | The app's routes, read from its source (React Router, TanStack Router, or Next.js App Router), with Refine labels and page files. Click a route to load it in the canvas or type a path. |
 | **Engine ops** | `insert`, `insertChild`, `updateProp`, `setText`, `remove`, `move`, `moveNode`, `bindQuery`, `createFile`, plus value ops (`insertElement`, `removeElement`, `moveElement`, `setProperty`, `removeProperty`) for object and array literals. |
 | **Undo / redo** | Guarded before/after snapshots. Byte-exact; refuses with `409 conflict` if a file changed elsewhere. |
 | **Data tab** | Bound tables and create forms from an OpenAPI contract (TanStack Query, react-hook-form, zod, shadcn `Field`). |
@@ -87,10 +87,9 @@ around the opposite rule.
 ## How it works
 
 ```
-your Vite app (real files on disk)
-  └─ vite-plugin-ast-locator (dev only)
-       stamps every JSX opening tag with data-ast-node="<locator>"
-       serves the engine HTTP API at /@trivia/api and MCP at /@trivia/mcp
+your React app (real files on disk)
+  ├─ Vite plugin or Next.js loader stamps JSX with data-ast-node="<locator>" in development
+  └─ Trivia dev service serves /@trivia/api and /@trivia/mcp
 
 designer (React)  ── <iframe src=your dev server> + transparent overlay
   hover / click  → elementsFromPoint → nearest [data-ast-node] → box on overlay
@@ -100,18 +99,18 @@ designer (React)  ── <iframe src=your dev server> + transparent overlay
 engine (Rust / OXC)
   parse fresh from disk → resolve locator → compute byte-range edits
   → re-parse the result, refuse on diagnostics → atomic write (temp file + rename)
-  → Vite HMR → canvas re-renders → designer re-resolves the selection
+  → Vite HMR or Next.js Fast Refresh → canvas re-renders → designer re-resolves the selection
 ```
 
 Key mechanics:
 
 - **Locators** have the form `<relative_path>#<component_or_export>#<index_path>`, for example
   `src/pages/Dashboard.tsx#Dashboard#0.1.3`. A single Rust algorithm produces them, used both by the
-  plugin when it stamps the DOM and by the engine when it resolves an edit.
+  development hosts when they stamp JSX and by the engine when it resolves an edit.
 - **Locators are positions, not identities.** Every op carries the expected element name; if the
   locator now resolves to something else, the engine fails loudly instead of editing the wrong node.
-- **Same origin.** The designer lives under `/__trivia/` and proxies everything else (HTTP and
-  WebSocket) to your dev server, so the canvas can read `iframe.contentDocument`.
+- **Same origin.** The designer lives under `/__trivia/` and proxies the canvas and its WebSocket
+  to the app's dev server. With Next.js, it sends Trivia API and MCP requests to the standalone service.
 - **Imports are derived**, and only for the names an op touched. Trivia never prunes unrelated unused
   imports, because that would be an unrequested edit to your code.
 
@@ -127,13 +126,16 @@ crates/
   trivia_napi/                napi-rs binding, npm package @trivia/engine (JSON envelope API)
   trivia_shell/               Tauri desktop shell (its own Cargo workspace)
 packages/
-  vite-plugin-ast-locator/    dev-only Vite plugin: locators, /@trivia/api, /@trivia/mcp, Refine adapter
+  vite-plugin-ast-locator/    dev-only Vite host and locator transform
+  dev-service/                shared stamping, engine HTTP API, MCP and Refine adapter
+  next/                       Next.js App Router host, loader, config wrapper and launcher
   designer/                   React designer, @trivia/designer, served at :4400/__trivia/
   contract-sync/              OpenAPI -> hey-api TanStack Query code + trivia.manifest.json
   trivia-inferencer/          @trivia/openapi-inferencer, Refine's inferencer from the contract
 examples/
   playground/                 stock create-vite + shadcn app used as the "user app"
   refine-admin/               Refine + shadcn back office on an OpenAPI mock
+  next-admin/                 the Refine bank example ported to Next.js App Router
 e2e/                          Playwright across all of the above
 tools/                        @trivia/tools: the package generator and the release helpers
 docs/                         contracts, architecture, product, hand-off notes
@@ -142,11 +144,10 @@ nx.json                       Nx task runner: caching, task order, dev servers, 
 
 Nx runs every task. Each package keeps its own `package.json` scripts; `nx.json` adds caching, the
 order tasks run in (a package's dependencies build first) and the long-running `dev` servers. Projects
-have short names: `engine`, `oxc-engine`, `plugin`, `contract-sync`, `inferencer`, `designer`,
-`playground`, `refine-admin`, `shell`, `e2e` and `tools`. `pnpm graph` shows how they depend on each
-other.
+have short names such as `engine`, `plugin`, `dev-service`, `next` and `designer`. `pnpm graph` shows
+how they depend on each other.
 
-Dependencies run one way: designer -> (HTTP) -> plugin -> (napi) -> engine. `contract-sync` writes files
+The designer calls the dev service over HTTP, and the dev service calls the engine through napi. `contract-sync` writes files
 (`trivia.manifest.json`, generated client code) that the engine's `bindQuery` and the designer read;
 nothing imports it at runtime.
 
@@ -182,8 +183,9 @@ Stop everything with Ctrl-C.
 | `pnpm dev:playground` | the plain shadcn playground and the designer |
 | `pnpm dev:desktop` | the Refine example, the designer and the desktop window |
 
-Both examples use port 5173, so run one at a time. The engine has no server of its own: it is a napi
-addon loaded by the app's Vite dev server, which serves the engine API at `/@trivia/api`.
+Both Vite examples default to port 5173. The Vite plugin loads the native engine through the dev
+service and mounts `/@trivia/api` on the app's dev server. For the Next.js example, use the launcher
+in [the Next.js setup](#using-trivia-in-your-own-nextjs-app).
 
 To run the pieces by hand instead: `pnpm build:plugin`, then `pnpm --filter refine-admin dev` and
 `TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev` in two terminals.
@@ -428,9 +430,8 @@ Where code goes:
 
 - **Engine:** pure Rust. Each write op is one module under `crates/trivia_oxc_engine/src/ops/`. A new op
   is a new module, an `Op` variant and a `docs/api.md` example (`tests/errors.rs` pins one per variant).
-- **Plugin:** `transform.ts` (locators), `api/` (routes, edit queue, undo history, caller guard), `mcp/`
-  (tools), `refine/` (the Refine adapter). Anything that edits code goes through `EngineService`, so
-  every client shares one queue and one history.
+- **Dev service:** `api/` (routes, edit queue, undo history, caller guard), `mcp/` (tools) and
+  `refine/` (the Refine adapter). Both the Vite and Next.js hosts use `EngineService` for edits.
 - **Designer:** `app/` -> `features/<name>/` (public API in `index.ts`) -> `shared/`. A feature never
   imports another feature.
 - **OXC:** every OXC crate is pinned to one exact version (`=0.153.0`). The API moves quickly, so check
@@ -450,13 +451,13 @@ the project are in [`docs/HANDOFF.md`](docs/HANDOFF.md).
 | Engine | `nx test oxc-engine` | Acceptance, round-trip, formatting, guards, imports, locators, scope checks, outline, error codes, stack budget. |
 | Binding | `nx test engine` | Its Rust tests, then the napi crash suite (deep files, bounded memory). |
 | Lint | `pnpm lint` | Clippy with `-D warnings` on every crate, oxlint on the designer and the examples. |
-| Plugin | `nx test plugin` | HTTP API, MCP tools, Refine adapter (including `tsc` on generated pages). |
+| Dev hosts | `nx run-many -t test -p dev-service plugin next` | HTTP API, MCP, Refine adapter, App Router routes and loader parity. |
 | Designer | `nx test designer` | Unit tests plus architecture rules. |
 | Contract sync | `nx test contract-sync` | The whole pipeline and the CLI. |
 | Inferencer | `nx test inferencer` | The package's hooks and eject requests. |
 | Types | `pnpm typecheck` | All TypeScript packages. |
 | Builds | `pnpm build` | Every package, plus production builds of the designer and the examples. |
-| End to end | `pnpm e2e` | Playwright: two projects, `playground` and `refine`, which start their own servers. |
+| End to end | `pnpm e2e` | Playwright projects `playground`, `refine` and `next`, each with its own servers. |
 | Desktop shell | `nx test shell` | The shell's own Cargo workspace. |
 | Tooling | `nx test tools` | The generator, the release version actions and changelog rules. |
 
@@ -465,10 +466,11 @@ Playwright ports come from the environment so you can run beside a live session:
 ```sh
 TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 \
 TRIVIA_REFINE_APP_PORT=5312 TRIVIA_REFINE_PORT=4412 \
-  pnpm exec playwright test
+TRIVIA_NEXT_APP_PORT=5313 TRIVIA_NEXT_PORT=4413 TRIVIA_NEXT_API_PORT=4513 \
+  pnpm e2e
 ```
 
-`pnpm e2e` builds the plugin first; the examples run its built output. There is no hosted CI
+`pnpm e2e` builds the Vite and Next.js packages first. There is no hosted CI
 configuration in this repository yet, so run the gate locally before pushing.
 
 ### Releases
@@ -513,10 +515,10 @@ comes from `GH_TOKEN`, `GITHUB_TOKEN` or git's credential helper.
 
 Stated plainly so you can judge fit before investing time.
 
-- **Not yet validated on third-party code.** The two examples are the only apps exercised end to end.
+- **Not yet validated on third-party code.** The three examples are the only apps exercised end to end.
   What breaks on a real codebase is the next input to the roadmap.
-- **Vite and React only.** Next.js and other bundlers are not supported. Refine knowledge lives in the
-  plugin, so other UI kits (Ant Design, MUI) would be new adapters, not engine changes.
+- **React dev hosts.** Supported hosts are Vite and Next.js App Router. The Refine adapter is built
+  around shadcn/ui.
 - **No type checker.** OXC has none, so prop schemas come from syntactic analysis of your
   `src/components/ui` (variants from `cva(...)`, curated props for intrinsic tags). Unusual component
   patterns may yield partial schemas.
@@ -538,7 +540,7 @@ Stated plainly so you can judge fit before investing time.
 In priority order (see [`docs/HANDOFF.md`](docs/HANDOFF.md) section 7 for the live list):
 
 1. Use Trivia on a real internal tool and fix what breaks: pages whose shape the adapter does not read,
-   other UI kits, Next.js, selection that follows JSX renumbered by a value op.
+   other UI kits, selection that follows JSX renumbered by a value op.
 2. Narrower drift fixes for changed enum options (update in place instead of rebuilding).
 3. Edit forms and nested-object fields in generated forms.
 
