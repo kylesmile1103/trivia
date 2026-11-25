@@ -31,6 +31,8 @@ internal static class ScaffoldEmitter
             Render("ServiceDefaults/Extensions.cs", space, app));
         yield return new($"src/{app}.MigrationService/Program.cs", FileKind.Scaffold,
             Render("MigrationService/Program.cs", space, app));
+        yield return new($"src/{app}.MigrationService/Worker.cs", FileKind.Scaffold,
+            Render("MigrationService/Worker.cs", space, app));
         foreach (ModelEntity entity in input.Model.Entities)
         {
             string feature = $"{api}/Features/{entity.Name}/{entity.Name}";

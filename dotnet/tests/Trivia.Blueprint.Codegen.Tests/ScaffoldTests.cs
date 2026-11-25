@@ -35,6 +35,24 @@ public sealed class ScaffoldTests
     }
 
     [Fact]
+    public void FR_AS_01_RunsMigrationsToCompletionBeforeStartingTheApi()
+    {
+        using TempDirectory root = new();
+        PlanWriter.Write(root.Path, ApiPlan.Create(root.Path, ModelLoader.Load(FixtureTests.Bank)));
+        string Read(string project, string file) => File.ReadAllText(Path.Combine(root.Path, "src", $"BackOffice.{project}", file));
+
+        string host = Read("AppHost", "Program.cs");
+        Assert.Contains("AddProject<Projects.BackOffice_MigrationService>", host);
+        Assert.Contains(".WaitFor(db)", host);
+        Assert.Contains(".WaitForCompletion(migrations)", host);
+        Assert.Contains("AddHostedService<Worker>()", Read("MigrationService", "Program.cs"));
+        string worker = Read("MigrationService", "Worker.cs");
+        Assert.Contains("db.Database.CreateExecutionStrategy().ExecuteAsync(db.Database.MigrateAsync", worker);
+        Assert.Contains("StopApplication()", worker);
+        Assert.DoesNotContain("Migrate", Read("Api", "Program.cs"));
+    }
+
+    [Fact]
     public void FR_NC_02_EmitsAStandaloneSolutionAndPartialFiles()
     {
         using TempDirectory root = new();
