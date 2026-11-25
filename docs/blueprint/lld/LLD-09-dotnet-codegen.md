@@ -192,10 +192,14 @@ List parameters:
 - `q`: a case-insensitive match over the `searchable` fields.
 
 ⚑ Always order by the key as the final sort term for stable page boundaries.
-  Ordered comparisons apply to numeric and temporal fields. Text matching uses
-  case-sensitive `contains` and `startswith`, and `q` uses PostgreSQL ILIKE with
-  wildcard characters escaped. The `null` operator applies to nullable fields.
-  Non-null comparisons, including `ne`, exclude null values.
+  Ordered comparisons apply to numeric and temporal fields. The `null` operator applies to
+  nullable fields. Non-null comparisons, including `ne`, exclude null values.
+
+⚑ (decided 2026-11-26) `contains`, `startswith` and `q` all match text without regard to case,
+  through PostgreSQL ILIKE with `\` escaping `%`, `_` and itself, so a wildcard in the value
+  matches only itself. Why: in the pinned `@refinedev/core` 5.0.12 `contains` and `startswith`
+  are the case-insensitive operators and `containss` and `startswiths` the sensitive ones,
+  and the data provider passes Refine's operators through unchanged.
 
 The response's `items`, `total`, `page` and `pageSize` are what contract-sync's pagination
 heuristics already recognize (`docs/data-provider.md`).

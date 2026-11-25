@@ -31,6 +31,8 @@ const cases = [
   ['creditLimit', 'gte', 20, [1, 2]],
   ['email', 'contains', '@example.test', [0, 1]],
   ['email', 'startswith', 'blake', [1]],
+  ['email', 'startswith', 'BLAKE', [1]],
+  ['email', 'contains', '@EXAMPLE.TEST', [0, 1]],
   ['email', 'in', ['blake@example.test', 'casey@elsewhere.test'], [1, 2]],
   ['birthDate', 'null', true, [0, 2]],
   ['birthDate', 'null', false, [1]],

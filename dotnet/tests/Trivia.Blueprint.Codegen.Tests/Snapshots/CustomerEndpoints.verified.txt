@@ -95,8 +95,8 @@ public static partial class CustomerEndpoints
         {
             "eq" => query.Where(row => row.Email == value),
             "ne" => query.Where(row => row.Email != value),
-            "contains" => query.Where(row => row.Email.Contains(value)),
-            "startswith" => query.Where(row => row.Email.StartsWith(value)),
+            "contains" => query.Where(row => EF.Functions.ILike(row.Email!, ListQuery.SearchPattern(value), "\\")),
+            "startswith" => query.Where(row => EF.Functions.ILike(row.Email!, ListQuery.PrefixPattern(value), "\\")),
             _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
     }
 
