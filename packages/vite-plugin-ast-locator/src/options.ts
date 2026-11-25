@@ -6,8 +6,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { Alias } from 'vite'
+import { resolveBlueprintDir } from '@trivia/dev-service'
 
 export interface PathOptions {
+  blueprintDir?: string | undefined
   uiDir?: string | undefined
   importBase?: string | undefined
 }
@@ -18,6 +20,7 @@ export interface ProjectPaths {
   /** Module prefix of library imports (`<importBase>/button`). */
   importBase: string
   /** Problems found while resolving, for the dev-server log. */
+  blueprintDir: string
   warnings: string[]
 }
 
@@ -46,7 +49,7 @@ export function resolveProjectPaths(root: string, aliases: readonly Alias[], opt
   } else if (!fs.existsSync(path.join(root, uiDir))) {
     warnings.push(`component library directory ${uiDir} does not exist; /@trivia/api/components will fail until it does`)
   }
-  return { uiDir, importBase, warnings }
+  return { uiDir, importBase, blueprintDir: resolveBlueprintDir(root, options.blueprintDir), warnings }
 }
 
 /** `aliases.ui` from components.json; shadcn derives it from `aliases.components` when absent. */

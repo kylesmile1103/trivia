@@ -1,0 +1,449 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FR-AG-02 lists blueprint tools and their guarded input shapes 1`] = `
+[
+  {
+    "arguments": [
+      "path",
+      "projection",
+      "what",
+    ],
+    "name": "trivia_blueprint_get",
+    "readOnly": true,
+    "required": [],
+  },
+  {
+    "arguments": [
+      "label",
+      "ops",
+    ],
+    "name": "trivia_blueprint_patch",
+    "readOnly": false,
+    "required": [
+      "label",
+      "ops",
+    ],
+  },
+  {
+    "arguments": [
+      "includeCode",
+      "page",
+    ],
+    "name": "trivia_blueprint_preview",
+    "readOnly": true,
+    "required": [
+      "page",
+    ],
+  },
+  {
+    "arguments": [
+      "label",
+      "pages",
+    ],
+    "name": "trivia_blueprint_eject",
+    "readOnly": false,
+    "required": [
+      "label",
+    ],
+  },
+  {
+    "arguments": [
+      "force",
+      "migration",
+      "mode",
+    ],
+    "name": "trivia_blueprint_backend",
+    "readOnly": false,
+    "required": [
+      "mode",
+    ],
+  },
+]
+`;
+
+exports[`FR-AG-02 lists blueprint tools and their guarded input shapes 2`] = `
+[
+  {
+    "op": "setApp",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+    ],
+  },
+  {
+    "op": "setNav",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "nav",
+    ],
+  },
+  {
+    "op": "createPage",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+      "route",
+      "kind",
+    ],
+  },
+  {
+    "op": "deletePage",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+    ],
+  },
+  {
+    "op": "setPageMeta",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+    ],
+  },
+  {
+    "op": "addNode",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "parent",
+      "expectedType",
+      "type",
+      "name",
+      "slot",
+    ],
+  },
+  {
+    "op": "removeNode",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+    ],
+  },
+  {
+    "op": "moveNode",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "parent",
+      "slot",
+    ],
+  },
+  {
+    "op": "renameNode",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "name",
+    ],
+  },
+  {
+    "op": "setProp",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "prop",
+      "value",
+    ],
+  },
+  {
+    "op": "setBinding",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "prop",
+      "expr",
+    ],
+  },
+  {
+    "op": "setStyle",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "className",
+    ],
+  },
+  {
+    "op": "setControl",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "control",
+    ],
+  },
+  {
+    "op": "setState",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+      "type",
+      "initial",
+    ],
+  },
+  {
+    "op": "removeState",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+    ],
+  },
+  {
+    "op": "setQuery",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+      "query",
+    ],
+  },
+  {
+    "op": "removeQuery",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+    ],
+  },
+  {
+    "op": "setActions",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "node",
+      "expectedType",
+      "event",
+      "steps",
+    ],
+  },
+  {
+    "op": "setModel",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "namespace",
+    ],
+  },
+  {
+    "op": "setEnum",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "enum",
+    ],
+  },
+  {
+    "op": "removeEnum",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "name",
+    ],
+  },
+  {
+    "op": "setEntity",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+    ],
+  },
+  {
+    "op": "removeEntity",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+    ],
+  },
+  {
+    "op": "renameEntity",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "name",
+    ],
+  },
+  {
+    "op": "setField",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "field",
+    ],
+  },
+  {
+    "op": "removeField",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "field",
+    ],
+  },
+  {
+    "op": "renameField",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "field",
+      "name",
+    ],
+  },
+  {
+    "op": "moveField",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "field",
+      "index",
+    ],
+  },
+  {
+    "op": "setRelation",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "relation",
+    ],
+  },
+  {
+    "op": "removeRelation",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "relation",
+    ],
+  },
+  {
+    "op": "setIndexes",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "indexes",
+    ],
+  },
+  {
+    "op": "setEntityApi",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "entity",
+      "api",
+    ],
+  },
+]
+`;
+
+exports[`FR-DM-07 advertises model payloads and summarizes a patched model with its disk revision 1`] = `
+{
+  "moveField": [
+    "entity",
+    "field",
+    "index",
+  ],
+  "removeEntity": [
+    "entity",
+  ],
+  "removeEnum": [
+    "name",
+  ],
+  "removeField": [
+    "entity",
+    "field",
+  ],
+  "removeRelation": [
+    "entity",
+    "relation",
+  ],
+  "renameEntity": [
+    "entity",
+    "name",
+  ],
+  "renameField": [
+    "entity",
+    "field",
+    "name",
+  ],
+  "setEntity": [
+    "entity",
+  ],
+  "setEntityApi": [
+    "api",
+    "entity",
+  ],
+  "setEnum": [
+    "enum",
+  ],
+  "setField": [
+    "entity",
+    "field",
+  ],
+  "setIndexes": [
+    "entity",
+    "indexes",
+  ],
+  "setModel": [
+    "namespace",
+  ],
+  "setRelation": [
+    "entity",
+    "relation",
+  ],
+}
+`;

@@ -3,12 +3,20 @@
 // interleave their read-modify-write of a file, and land in one undo history, whoever sent
 // them.
 
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { revOfText } from '@trivia/blueprint'
+
+import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
+import { resolveBlueprintDir } from '../blueprint/paths.js'
+import { BlueprintWorkspace } from '../blueprint/store.js'
+import { summarize, type PatchResult } from '../blueprint/summary.js'
+import { commitDocuments } from '../blueprint/writes.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
-import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
+import type { ApplyResult, Drift, FileChange, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
 import { type Mention, RefineAdapter } from '../refine/index.js'
 import type { RouteEntry } from '../routes/index.js'
 import { normalizePath } from '../routes/paths.js'
@@ -24,6 +32,8 @@ export interface ServiceOptions {
   host: DevHost
   version: string
   engine: EngineBinding
+  /** Directory under the project root. Default: blueprint. */
+  blueprintDir?: string
   /** Undo entries kept (docs/api.md: 100). */
   historyLimit?: number
   /** Project-relative path of contract-sync's manifest. Default "trivia.manifest.json". */
@@ -67,6 +77,7 @@ export interface EditSource {
 export class EngineService {
   readonly #options: ServiceOptions
   readonly #history: History
+  readonly blueprint: BlueprintWorkspace
   readonly #queue = new SerialQueue()
   readonly #selection = new SelectionStore()
   readonly #screenshots = new ScreenshotRelay()
@@ -75,6 +86,10 @@ export class EngineService {
 
   constructor(options: ServiceOptions) {
     this.#options = options
+    this.blueprint = new BlueprintWorkspace(
+      options.host, resolveBlueprintDir(options.host.root, options.blueprintDir), options.engine,
+      () => this.components(), options.manifestPath,
+    )
     this.#history = new History(options.historyLimit ?? 100)
     this.refine = new RefineAdapter({
       root: options.host.root,
@@ -286,8 +301,60 @@ export class EngineService {
     return this.#queue.run(() => this.#transact(ops, label ?? `${ops.length} edits`, source))
   }
 
-  undo(): Promise<HistoryResult> {
-    return this.#queue.run(() => this.#travel('undo'))
+  /** Commit guarded writes relative to the blueprint directory in the shared edit queue. */
+  writeDocuments(writes: readonly FileChange[], label: string): Promise<string | null> {
+    return this.#queue.run(() => this.#commitDocuments(writes, label))
+  }
+
+  /** Plan and commit a blueprint patch while holding the edit queue. */
+  patchBlueprint(ops: readonly unknown[], label: string): Promise<PatchResult> {
+    return this.#queue.run(async () => {
+      const applied = await this.blueprint.apply(ops)
+      if (!applied.ok) {
+        const { code, message, op, details } = applied.error
+        throw new ApiError(code, message, op === undefined ? details : { ...details, op })
+      }
+      const summary = summarize(this.blueprint, applied.blueprint, applied.result.diagnostics)
+      try {
+        const entry = this.#commitDocuments(applied.writes, label)
+        return { ...applied.result, entry, summary }
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== 'conflict') throw error
+        const documents = new Set(applied.writes.map(({ file }) => file))
+        for (const op of ops) {
+          if (isObject(op) && typeof op.doc === 'string') documents.add(op.doc)
+        }
+        const revs = Object.fromEntries([...documents].map((file) => {
+          const text = this.blueprint.readDocumentText(file)
+          return [file, text === null ? null : revOfText(text)]
+        }))
+        throw new ApiError('conflict', error.message, { revs })
+      }
+    })
+  }
+
+  /** Keep backend generation ordered with its model edits. The CLI owns its file plan. */
+  blueprintBackend(request: BackendRequest): Promise<BackendResult> {
+    return this.#queue.run(() => runBackend(this.blueprint, request))
+  }
+
+  #commitDocuments(writes: readonly FileChange[], label: string): string | null {
+    commitDocuments(fs.realpathSync(this.#options.host.root), this.blueprint.dir, writes)
+    const changes = writes.filter(({ before, after }) => before !== after)
+      .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
+    if (changes.length === 0) return null
+    this.#history.record({ label, changes, documents: true })
+    return label
+  }
+
+  undo(expectedLabel?: string): Promise<HistoryResult> {
+    return this.#queue.run(() => {
+      const next = this.#history.nextUndo?.label ?? null
+      if (expectedLabel !== undefined && next !== expectedLabel) {
+        throw new ApiError('conflict', `the next undo is ${next === null ? 'nothing' : `"${next}"`}, not "${expectedLabel}"; nothing was undone`)
+      }
+      return this.#travel('undo')
+    })
   }
 
   redo(): Promise<HistoryResult> {
@@ -338,12 +405,19 @@ export class EngineService {
       direction === 'undo'
         ? entry.changes.toReversed().map((c) => ({ file: c.file, expected: c.after, content: c.before }))
         : entry.changes.map((c) => ({ file: c.file, expected: c.before, content: c.after }))
-    const finish = this.#options.host.trackFileWrites?.(
+    const finish = entry.documents ? undefined : this.#options.host.trackFileWrites?.(
       writes.filter((write) => write.expected === null).map((write) => write.file),
       writes.filter((write) => write.content === null).map((write) => write.file),
     )
     try {
-      unwrap<null>(this.#options.engine.restoreFiles(this.#options.host.root, JSON.stringify(writes)))
+      const { engine, host } = this.#options
+      if (entry.documents) {
+        commitDocuments(fs.realpathSync(host.root), this.blueprint.dir, writes.map(({ file, expected, content }) => ({
+          file: file.slice(this.blueprint.dir.length + 1), before: expected, after: content,
+        })))
+      } else {
+        unwrap<null>(engine.restoreFiles(host.root, JSON.stringify(writes)))
+      }
     } catch (error) {
       if (error instanceof ApiError) throw new ApiError(error.code, `${direction} "${entry.label}" failed: ${error.message}`)
       throw error

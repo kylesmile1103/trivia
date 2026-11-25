@@ -20,6 +20,7 @@ export type ErrorCode =
 export interface ApiErrorPayload {
   code: ErrorCode
   message: string
+  details?: Record<string, unknown>
 }
 
 export type Envelope<T> = { ok: true; data: T } | { ok: false; error: ApiErrorPayload }

@@ -172,3 +172,92 @@ narrower fix for `enum_changed`, updating only the options, would keep customisa
 Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
 `packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
 loop in a browser, and a screenshot taken by the real designer).
+
+## Blueprint authoring
+
+The shared dev service supports blueprint reads and guarded patches on Vite and Next.js.
+Blueprint tools are available on loopback connections, including when Vite allows remote
+source editing.
+Call `trivia_blueprint_get` with no arguments for the summary, with `what: "doc"` and a
+summary path for a document, or with `what: "components"` for the component catalog. Set
+`projection: true` on a page read to include its TSX projection.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"summary"}}
+```
+
+Read the catalog before choosing node types or props. It includes JSON Schemas, availability,
+slots, events and exposed values.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"components"}}
+```
+
+After the customers page exists, read it for its current revision and node IDs.
+
+```json
+{"name":"trivia_blueprint_get","arguments":{"what":"doc","path":"pages/Customers.page.json","projection":true}}
+```
+
+Call `trivia_blueprint_patch` with one or more operations and a label. Use `baseRev: null`
+when creating a document. Use the read's revision for an existing document and the current
+type for a node or parent guard. A successful patch returns its `revs`, new IDs under
+`created`, `diagnostics`, `entry` and `summary`.
+
+```json
+{"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}}
+```
+
+After each patch, inspect `summary.pages[].errors`, `diagnostics` and `summary.next`. A draft
+can be saved with an invalid resource. The `unknown_resource` diagnostic names the resources
+available in the contract, so you can correct it with `setPageMeta` and the new revision.
+Fix each reported error and re-read the summary to verify the draft. If a patch returns
+`conflict`, read the documents named by `error.details.revs` before retrying.
+
+The patch schema includes the guarded model ops, such as `setModel` and `setEntity`. Read
+`model.blueprint.json` before editing it. The summary gives its revision and entity names.
+
+To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agent: ` prefix.
+`trivia_get_selection` also returns the next undo label in `history.undoLabel`.
+
+`trivia_blueprint_preview` accepts a page name and optional `includeCode`. After the page
+compiler lands in spec 005, use the returned route in the designer and call
+`trivia_screenshot` when it loads. The tool currently returns `unsupported`.
+
+```json
+{"name":"trivia_blueprint_preview","arguments":{"page":"Customers"}}
+```
+
+`trivia_blueprint_eject` accepts a label and optional page names. The compiler will use
+one shared undo entry for the source files and lock. The tool currently returns
+`unsupported`.
+
+```json
+{"name":"trivia_blueprint_eject","arguments":{"pages":["Customers"],"label":"Eject customers"}}
+```
+
+`trivia_blueprint_backend` uses the installed `trivia-dotnet` tool. Call it with
+`mode: "plan"` to inspect proposed files and diagnostics, then use `mode: "write"` to
+generate. `force: true` lets a generation write replace or remove modified generated
+files. A separate write-mode call with `migration` adds a named EF migration after
+generation. Inspect `written` and `diagnostics` in the result. An `unsupported` error
+includes installation guidance in `error.details.hint`.
+
+```json
+{"name":"trivia_blueprint_backend","arguments":{"mode":"plan"}}
+```
+
+### Blueprint authoring with Claude Code (2026-11-25)
+
+Claude Code 2.1.332 (Sonnet 5.5) connected to the standalone dev service on a fresh copy
+of the Refine example. Strict MCP config exposed only Trivia, and the built-in tools were
+disabled. The prompt asked for BackOffice with customer and account lists, using `Client`
+for the customer resource on the first patch to exercise diagnostic recovery.
+
+The first run omitted `targets.web` on `setApp` and retried with `vite-refine` after
+`invalid_op`. The empty summary and the published op schema now call out
+`targets.web` as required when creating the app. On a fresh copy, Claude Code used one
+summary read and two patches with zero refused calls. The draft's
+`unknown_resource` hint listed Account, Customer and Transaction. Claude Code used the
+returned revision to change `Client` to `Customer`. An independent HTTP read verified
+two draft pages with zero errors and zero warnings.

@@ -10,7 +10,8 @@
     },
     "test": {
       "command": "cargo test -p trivia_expr && cargo bench -p trivia_expr --bench analyze",
-      "inputs": ["default", "rust"]
+      "inputs": ["default", "rust"],
+      "parallelism": false
     },
     "lint": {
       "command": "cargo clippy -p trivia_expr --all-targets -- -D warnings",

@@ -77,8 +77,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   fails, files already changed by earlier ops in the batch are restored and the error returned).
   Unchanged results (`changed: false`) create no entry. A new entry clears the redo stack.
 - History entries store `{ file, before, after }` per changed file. Undo writes `before` only if
-  the file still equals `after` (else 409 `conflict`, history untouched); redo is symmetric. All
-  writes go through the engine's atomic, parse-validated write. History lives in the dev-service
+  the file still equals `after` (else 409 `conflict`, history untouched). Redo uses the opposite
+  guard. Source restores go through the engine's atomic, parse-validated write. Blueprint
+  restores use guarded JSON snapshots in the same history. History lives in the dev-service
   process (lost on restart) and is capped at 100 entries.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
@@ -497,3 +498,111 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
   ancestor whose locator file is outside `uiDir` (component boundary).
 - Nodes rendered inside `{…}` expressions (`isDirect: false`) and component roots (`isRoot`)
   cannot be moved/removed/used as before/after anchors; the engine answers 422 with a message.
+
+## Blueprint
+
+Vite and Next.js serve the same blueprint API. Paths in blueprint requests and results are
+relative to the blueprint directory, which defaults to `blueprint` and is configurable on Vite.
+`dir` in the summary is relative to the project root. Blueprint endpoints require loopback even with Vite's
+`allowRemote: true`. Paths that traverse outside the blueprint directory or contain
+symlinks return 422 `path_outside_root`.
+
+`GET /@trivia/api/blueprint` returns `{ dir, exists, app, model, pages, diagnostics, next }`.
+`model` contains the model revision and entity names when a valid model exists.
+A missing directory still returns 200 with `exists: false` and a suggested first op. Each
+page has `name, path, rev, route, kind, status, errors, warnings`. A page in the lock also
+has a project-relative `file`. Its status is `ejected` when that file's bytes match the lock
+and `edited` when they differ or the file is missing. Pages absent from the lock are `draft`.
+
+```http
+GET /@trivia/api/blueprint
+```
+
+`GET /@trivia/api/blueprint/doc` returns `{ path, rev, doc, projection? }`. Pass
+`projection=1` to include the lossy TSX projection of a page. A missing document returns
+404 `node_not_found`, and an unsupported version returns 422 `unsupported` with
+`error.details.found` and `error.details.supported`.
+
+```http
+GET /@trivia/api/blueprint/doc?path=pages%2FCustomers.page.json&projection=1
+```
+
+`GET /@trivia/api/blueprint/components` returns `{ components, schemas }`. Each index entry
+has its type, slots, events, exposed values and installation status. `schemas` maps the same
+type names to JSON Schemas for their props.
+
+```http
+GET /@trivia/api/blueprint/components
+```
+
+`POST /@trivia/api/blueprint/patch` accepts `{ ops, label }`. Each op names a `doc` and its
+`baseRev` from a read, or `null` when the document must be absent. A successful response
+contains `{ changed, revs, created, diagnostics, entry, summary }`. `entry` is the undo label,
+or `null` when the patch changes no bytes. Use `summary.next` with the diagnostics.
+Manifest, contract and expression errors can be saved in a draft. A patch that introduces a
+schema or reference error returns 422 `invalid_result` without writing.
+
+```http
+POST /@trivia/api/blueprint/patch
+Content-Type: application/json
+
+{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
+```
+
+A document from an unsupported version gives the same 422 error on a patch against
+its current revision as on a document read.
+
+A stale revision or a file changed between planning and writing returns 409 `conflict`
+with `error.details.revs`. The map contains the current revision of each affected
+document, with `null` for a missing document. Re-read the affected documents before retrying.
+
+The page compiler from spec 005 will provide `preview`, `plan` and `ejected`.
+These routes accept their documented inputs and return 422 `unsupported` until then.
+
+`preview` takes the page name and will return its preview route, module, compiled code,
+required registry items and diagnostics.
+
+```http
+POST /@trivia/api/blueprint/preview
+Content-Type: application/json
+
+{"page":"Customers"}
+```
+
+`plan` takes optional page names (defaults to all drafts) and will return an eject plan with
+guarded source operations, files, requirements, warnings, a lock and a label.
+
+```http
+POST /@trivia/api/blueprint/plan
+Content-Type: application/json
+
+{"pages":["Customers"]}
+```
+
+`ejected` will record the eject lock after the source edit succeeds and return `lockRev`.
+
+```http
+POST /@trivia/api/blueprint/ejected
+Content-Type: application/json
+
+{"pages":["Customers"],"entry":"Eject customers"}
+```
+
+`backend` runs `trivia-dotnet` for the project's blueprint and solution root. Install the
+.NET 10 SDK and put the .NET tool on `PATH`. `mode: "plan"` reports proposed files and
+diagnostics. `mode: "write"` applies the generation plan. Set `force: true` on a write to
+allow replacement or removal of modified generated files. After generation, a separate
+write-mode request with `migration` runs that named EF migration.
+
+The result is `{ files, written, diagnostics, log }`. Each file has a `path`, `kind` and
+`action`, including `delete` for retired generated files and `refused` for blocked writes.
+`written` is true when the CLI successfully changes at least one file. The log holds
+bounded stderr. The CLI owns the backend file plan. If the SDK or tool is unavailable,
+the API returns 422 `unsupported` with `error.details.hint`.
+
+```http
+POST /@trivia/api/blueprint/backend
+Content-Type: application/json
+
+{"mode":"plan"}
+```

@@ -62,7 +62,7 @@ export function checkCaller(req: IncomingMessage, { allowRemote = false, allowed
 }
 
 /** 127.0.0.0/8 or ::1, also IPv4-mapped. Unknown (a Unix socket, a closed connection) is not. */
-function isLoopback(address: string | undefined): boolean {
+export function isLoopback(address: string | undefined): boolean {
   if (address === undefined) return false
   const family = net.isIP(address)
   return family !== 0 && LOOPBACK.check(address, family === 4 ? 'ipv4' : 'ipv6')

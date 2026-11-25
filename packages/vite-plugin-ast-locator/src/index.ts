@@ -28,6 +28,8 @@ export interface AstLocatorOptions {
   uiDir?: string
   /** Import prefix of library components. Default: components.json `aliases.ui`, else `@/components/ui`. */
   importBase?: string
+  /** Directory under the project root for blueprint documents. Default: blueprint. */
+  blueprintDir?: string
   /** Serve the engine HTTP API at /@trivia/api, and the MCP endpoint at /@trivia/mcp. Default: true. */
   api?: boolean
   /** Serve the MCP endpoint for agents at /@trivia/mcp (docs/mcp.md). Default: true (with `api`). */
@@ -127,6 +129,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       const host = createViteHost(server, paths)
       service = new EngineService({
         host,
+        blueprintDir: paths.blueprintDir,
         version: pkg.version,
         engine,
         ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),

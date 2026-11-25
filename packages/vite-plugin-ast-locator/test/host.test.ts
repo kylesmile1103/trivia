@@ -28,7 +28,7 @@ function fakeServer(modules: Record<string, string[]>, reloadModule = vi.fn(asyn
 
 it('reloads the modules of every file the engine wrote, without waiting for the watcher', () => {
   const { server, reloadModule } = fakeServer({ 'src/App.tsx': ['/project/src/App.tsx'], 'src/pages/Home.tsx': ['/project/src/pages/Home.tsx'] })
-  const host = createViteHost(server, { uiDir: 'src/components/ui', importBase: '@/components/ui', warnings: [] })
+  const host = createViteHost(server, { uiDir: 'src/components/ui', importBase: '@/components/ui', blueprintDir: 'blueprint', warnings: [] })
   host.filesChanged?.(['src/App.tsx', 'src/pages/Home.tsx', 'trivia.manifest.json'])
   expect(reloadModule.mock.calls.map(([mod]) => mod.id)).toEqual([
     '/project/src/App.tsx', '/project/src/pages/Home.tsx',
@@ -37,6 +37,6 @@ it('reloads the modules of every file the engine wrote, without waiting for the 
 
 it('logs a failed reload instead of leaving an unhandled rejection', async () => {
   const { server, warn } = fakeServer({ 'src/App.tsx': ['/project/src/App.tsx'] }, vi.fn(async (_mod: { id: string }) => { throw new Error('boom') }))
-  createViteHost(server, { uiDir: 'src/components/ui', importBase: '@/components/ui', warnings: [] }).filesChanged?.(['src/App.tsx'])
+  createViteHost(server, { uiDir: 'src/components/ui', importBase: '@/components/ui', blueprintDir: 'blueprint', warnings: [] }).filesChanged?.(['src/App.tsx'])
   await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom')))
 })

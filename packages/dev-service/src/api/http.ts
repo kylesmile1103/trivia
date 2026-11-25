@@ -4,10 +4,11 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { registerBlueprintRoutes } from '../blueprint/index.js'
 import { ApiError } from '../engine.js'
 import { parseColumnChanges, parseFieldChanges, parsePreviewRequest } from '../refine/index.js'
 import type { ErrorCode, Health, HistoryState } from '../types.js'
-import { type CallerRules, checkCaller } from './guard.js'
+import { type CallerRules, checkCaller, isLoopback } from './guard.js'
 import { type EngineService, type Json, isObject } from './service.js'
 
 export const API_BASE = '/@trivia/api'
@@ -44,7 +45,7 @@ export type Middleware = (req: IncomingMessage, res: ServerResponse, next: (erro
 
 type Method = 'GET' | 'POST'
 /** `signal` aborts when the caller hangs up before the answer is sent. */
-type Route = Partial<Record<Method, (url: URL, body: Json, signal: AbortSignal) => unknown>>
+export type Route = Partial<Record<Method, (url: URL, body: Json, signal: AbortSignal) => unknown>>
 
 export function createApiMiddleware(options: ApiOptions): Middleware {
   const { service } = options
@@ -195,9 +196,14 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ['/redo', { POST: () => service.redo() }],
   ])
 
+  registerBlueprintRoutes(routes, service)
+
   const dispatch = async (req: IncomingMessage, url: URL, signal: AbortSignal): Promise<unknown> => {
-    checkCaller(req, options)
     const name = url.pathname.slice(API_BASE.length)
+    if ((name === '/blueprint' || name.startsWith('/blueprint/')) && !isLoopback(req.socket.remoteAddress)) {
+      throw new ApiError('forbidden', 'The blueprint API only answers loopback clients on this machine.')
+    }
+    checkCaller(req, options)
     const route = routes.get(name)
     if (!route) throw new ApiError('invalid_op', `unknown endpoint ${url.pathname} (see docs/api.md)`)
     const method = req.method === 'GET' || req.method === 'POST' ? req.method : null
@@ -229,7 +235,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         options.logger?.error(`[trivia] ${req.method} ${url.pathname} failed: ${error instanceof Error ? (error.stack ?? detail) : detail}`)
         failure = new ApiError('internal', `unexpected failure: ${detail}`)
       }
-      send(res, STATUS[failure.code] ?? 500, { ok: false, error: { code: failure.code, message: failure.message } })
+      send(res, STATUS[failure.code] ?? 500, { ok: false, error: { code: failure.code, message: failure.message, ...(failure.details && { details: failure.details }) } })
     }
   }
 

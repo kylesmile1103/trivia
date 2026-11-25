@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 
-import { type CallerRules, checkCaller } from '../api/guard.js'
+import { type CallerRules, checkCaller, isLoopback } from '../api/guard.js'
 import type { Middleware } from '../api/http.js'
 import type { EngineService } from '../api/service.js'
 import { ApiError } from '../engine.js'
@@ -54,7 +54,7 @@ export function createMcpMiddleware(options: McpOptions): Middleware {
 
 async function serve(req: Parameters<Middleware>[0], res: Parameters<Middleware>[1], service: EngineService, log: (m: string) => void) {
   const server = new McpServer({ name: 'trivia', version: pkg.version }, { instructions: INSTRUCTIONS })
-  registerTools(server, service, log)
+  registerTools(server, service, log, isLoopback(req.socket.remoteAddress))
   // No sessionIdGenerator: stateless (the SDK's documented `sessionIdGenerator: undefined`, which
   // exactOptionalPropertyTypes will not let us spell).
   const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true })
