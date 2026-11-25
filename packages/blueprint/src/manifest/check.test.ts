@@ -72,3 +72,26 @@ it('FR-KT-07: gives deferred types a hint to use a local component', () => {
     { code: 'unknown_component', hint: { text: expect.stringContaining('local component') } },
   ])
 })
+
+it('FR-MF-03: a known missing component reports the registry item and install command', () => {
+  const select: ResolvedManifest = {
+    ...button, type: 'Select', installed: false,
+    source: { registry: 'shadcn', item: 'select', import: { name: 'Select', from: '~ui/select' } },
+  }
+  const blueprint = page({ props: { [child]: { typo: true } } }, { ...childNode, type: 'Select' })
+  expect(checkManifests(blueprint, { ...manifests, Select: select })).toMatchObject([{
+    code: 'missing_component', doc, severity: 'error', pointer: `/nodes/${child}/type`,
+    message: expect.stringContaining('select'),
+    hint: { text: 'pnpm dlx shadcn@latest add select' },
+  }])
+})
+
+it('FR-MF-03: names Refine’s registry item through its public registry URL', () => {
+  const dataTable: ResolvedManifest = {
+    ...button, type: 'DataTable', installed: false,
+    source: { registry: 'refine', item: 'data-table', import: { name: 'DataTable', from: '~refine/data-table' } },
+  }
+  expect(checkManifests(page({}, { ...childNode, type: 'DataTable' }), {
+    ...manifests, DataTable: dataTable,
+  })).toMatchObject([{ hint: { text: 'pnpm dlx shadcn@latest add https://ui.refine.dev/r/data-table.json' } }])
+})

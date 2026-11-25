@@ -82,6 +82,9 @@ For each type:
    - Not found, and the manifest is from the kit: the component is not installed. It stays in
      the result flagged `installed: false` with its registry item, so validation can report
      `missing_component` with a hint such as `pnpm dlx shadcn@latest add select`.
+     ⚑ A missing entry keeps its declared props for discovery until the analyzer finds it.
+     Refine item names expand to the [Refine registry URL](https://refine.dev/core/docs/ui-integrations/shadcn/components/data-table/).
+     A missing local override points to the declared export to restore.
 3. A schema with no manifest gets a derived one: registry `local`, a `children` slot when the
    analyzer says it accepts children, events for props named `on[A-Z]…` from the curated
    intrinsic list, no `exposes`, `client: true` when it has events.

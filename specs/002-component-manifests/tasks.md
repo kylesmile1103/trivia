@@ -22,7 +22,7 @@
 
 ## Phase 4: User Story 2 - Missing components (P1)
 
-- [ ] T009 [US2] Test and implement `installed: false` and the `missing_component` diagnostic with its registry hint
+- [x] T009 [US2] Test and implement `installed: false` and the `missing_component` diagnostic with its registry hint
 
 ## Phase 5: User Story 3 - Events and exposed values (P1)
 

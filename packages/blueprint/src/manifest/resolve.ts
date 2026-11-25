@@ -25,15 +25,14 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
     const { variants: _, ...manifest } = selected.get(type)!
     const { source } = manifest
     const component = components.find(({ name }) => name === source.import.name)
-    if (!component) continue
     const from = source.import.from === 'ui'
-      ? (ui ? `${ui}/${source.item}` : component.importSource)
+      ? (ui ? `${ui}/${source.item}` : (component?.importSource ?? 'ui'))
       : source.import.from
     manifests.push([type, {
       ...manifest,
       source: { ...source, import: { ...source.import, from } },
-      props: component.props,
-      installed: true,
+      props: component?.props ?? manifest.props,
+      installed: component !== undefined,
     }])
   }
   return { manifests: Object.fromEntries(manifests), diagnostics: [] }

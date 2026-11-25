@@ -60,3 +60,16 @@ it('FR-MF-05: picks override metadata before taking the analyzer’s props', () 
   expect(result.manifests.Button?.props).toEqual(components.find(({ name }) => name === 'Button')?.props)
   expect(JSON.stringify(resolveManifests(structuredClone(inputs)))).toBe(JSON.stringify(result))
 })
+
+it('FR-MF-03: retains missing kit entries and their registry metadata', () => {
+  const select = {
+    ...button, type: 'Select',
+    source: { registry: 'shadcn' as const, item: 'select', import: { name: 'Select', from: 'ui' } },
+  }
+  const { manifests, diagnostics } = resolveManifests({ kit: [select], components: [], aliases: { ui: '~design' } })
+  expect(diagnostics).toEqual([])
+  expect(manifests.Select).toMatchObject({
+    installed: false, props: select.props,
+    source: { registry: 'shadcn', item: 'select', import: { name: 'Select', from: '~design/select' } },
+  })
+})

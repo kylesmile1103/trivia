@@ -4,7 +4,7 @@ import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import type { CustomPage } from '../types/page.js'
 import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
-import type { PropSchema } from './types.js'
+import type { ComponentManifest, PropSchema } from './types.js'
 
 const deferredTypes = new Set([
   'Tree', 'TreeSelect', 'Cascader', 'Transfer', 'Upload', 'TimePicker', 'DateRangePicker', 'Steps', 'Rate', 'Tour', 'Chart',
@@ -27,6 +27,17 @@ function invalidValue(prop: PropSchema, value: unknown): string | undefined {
   if (typeof value !== kind) return kind
 }
 
+function installHint({ registry, item, import: specifier }: ComponentManifest['source']): string {
+  if (registry === 'local') return `Restore the local export "${specifier.name}" from "${specifier.from}".`
+  const target = registry === 'refine' && /^[a-z][a-z0-9-]*$/.test(item)
+    ? `https://ui.refine.dev/r/${item}.json`
+    : item
+  const arg = /^[A-Za-z0-9@][A-Za-z0-9_@./:-]*$/.test(target)
+    ? target
+    : `-- '${target.replaceAll("'", "'\\''")}'`
+  return `pnpm dlx shadcn@latest add ${arg}`
+}
+
 function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, out: Diagnostic[]): void {
   const report = (code: string, path: string[], message: string, hint?: string) => {
     out.push({ code, doc, pointer: toPointer(path), message, severity: 'error', ...(hint && { hint: { text: hint } }) })
@@ -40,10 +51,16 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
       report('unknown_component', ['nodes', id, 'type'], `Unknown component ${node.type}`, hint)
       continue
     }
+    if (!manifest.installed) {
+      const { source } = manifest
+      report('missing_component', ['nodes', id, 'type'],
+        `${node.type} is missing (${source.registry} item "${source.item}")`, installHint(source))
+      continue
+    }
     if (node.parent !== null && node.slot !== null) {
       const parent = page.nodes[node.parent]
       const parentManifest = parent && lookup(manifests, parent.type)
-      if (parentManifest) {
+      if (parent && parentManifest?.installed) {
         const slot = parentManifest.slots.find(({ name }) => name === node.slot)
         const path = ['nodes', id, 'slot']
         if (!slot) {
