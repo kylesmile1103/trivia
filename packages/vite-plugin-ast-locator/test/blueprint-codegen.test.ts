@@ -278,3 +278,22 @@ it('SC-003: ejects four CRUD pages and restores every touched byte on undo and r
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 120_000)
+
+it('FR-RC-02: a list header action can refetch the current table query', async () => {
+  const context = await contextFor(REFINE_ADMIN)
+  const emitted = compilePage(accountPage('list', {
+    headerActions: [{ name: 'refresh', label: 'Refresh', steps: [{ do: 'refetch', query: 'list' }] }],
+  }), 'Account', context)
+  expect(emitted.code).toContain('await table.refineCore.tableQuery.refetch();')
+  expect(emitted.code).toContain('>Refresh</Button>')
+
+  const root = copyRefineAdmin()
+  try {
+    fs.writeFileSync(path.join(root, emitted.file), emitted.code)
+    execFileSync(process.execPath, [path.join(REFINE_ADMIN, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.app.json', '--noEmit'], {
+      cwd: root, encoding: 'utf8',
+    })
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)

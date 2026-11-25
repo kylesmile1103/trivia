@@ -61,6 +61,8 @@ fields keeps the existing generator's default selection.
   field's type, as the columns tool decides it.
 - An action is a button whose handler is compiled from its steps (section 4). Row actions go
   in the actions column, header actions in the page header.
+- ⚑ A list header can use `{ "do": "refetch", "query": "list" }` to refetch the
+  existing Refine table query with its current filters and pagination.
 
 ⚑ A row handler receives the data record, and confirmation uses the browser's confirm dialog.
 The generator puts header actions just below the Refine header, whose implementation may
@@ -301,3 +303,6 @@ the workspace. It prints commands for Refine UI's layout and views registry item
 - Deferred: needs spec 010 (app-specific backend and data provider orchestration).
 - Deferred: needs spec 012 (Next.js preview and eject target).
 - A page-level error boundary and loading skeleton for custom pages remain open.
+
+⚑ The Vite template uses the application's `Plugin` type for the Trivia plugin at the
+config boundary. A checkout link can resolve a separate compatible Vite 8 installation.

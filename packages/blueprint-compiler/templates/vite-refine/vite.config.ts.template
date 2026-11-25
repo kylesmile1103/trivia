@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import astLocator from '@trivia/vite-plugin-ast-locator'
 import react from '@vitejs/plugin-react'
-import { defineConfig, loadEnv, type ProxyOptions, type ServerOptions } from 'vite'
+import { defineConfig, loadEnv, type Plugin, type ProxyOptions, type ServerOptions } from 'vite'
 
 function serverOptions(env: NodeJS.ProcessEnv): ServerOptions {
   const target = env.services__api__https__0 || env.services__api__http__0 || env.API_URL
@@ -27,7 +27,8 @@ function serverOptions(env: NodeJS.ProcessEnv): ServerOptions {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [astLocator(), react(), tailwindcss()],
+  // A checkout-linked Trivia plugin resolves Vite from the workspace.
+  plugins: [astLocator() as Plugin, react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

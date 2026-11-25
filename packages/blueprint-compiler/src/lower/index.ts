@@ -8,6 +8,7 @@ import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '
 import { printHandler, printModule } from '../print/module.js'
 import { compareBytes, literal, property, quote, restyleModule, statement } from '../print/style.js'
 import { refineName, relativeModule } from '../targets/vite-refine/files.js'
+import { queryStatus } from '../targets/vite-refine/refine-hooks.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
 import { Names } from './names.js'
@@ -163,7 +164,10 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     contract: context.contract, page: page.name, file, style: facts.style, expression,
     name: (preferred) => names.take(preferred),
     setter: (key) => setters.get(key),
-    query: (key) => query.definitions.get(key)?.name,
+    refetch: (key) => {
+      const definition = query.definitions.get(key)
+      return definition && definition.name + '.' + queryStatus.refetch
+    },
     state: renderObject(stateObject),
     setters: renderObject(setterObject),
   })

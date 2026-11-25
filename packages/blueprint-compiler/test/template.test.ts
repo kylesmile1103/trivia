@@ -11,7 +11,7 @@ it('ships a Vite Refine shell with eject anchors and registry aliases', () => {
   expect(app).toContain('<Route path="*"')
   expect(app).toContain('<Layout>')
   expect(app).toContain('<style id="trivia-theme" />')
-  expect(read('vite.config.ts.template')).toContain('plugins: [astLocator(), react(), tailwindcss()]')
+  expect(read('vite.config.ts.template')).toContain('plugins: [astLocator() as Plugin, react(), tailwindcss()]')
   expect(JSON.parse(read('components.json')).aliases.ui).toBe('@/components/ui')
   expect(JSON.parse(read('tsconfig.json')).compilerOptions.paths['@/*']).toEqual(['./src/*'])
   expect(existsSync(path.join(root, 'src/components'))).toBe(false)
