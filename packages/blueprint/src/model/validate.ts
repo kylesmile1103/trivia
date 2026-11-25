@@ -165,6 +165,52 @@ function inverseHint(entity: ModelEntity, target: ModelEntity, foreignKey: strin
   }] }
 }
 
+const CRUD_ROUTES = {
+  list: ['GET', ''],
+  get: ['GET', '{id}'],
+  create: ['POST', ''],
+  update: ['PUT', '{id}'],
+  delete: ['DELETE', '{id}'],
+} as const
+
+function routeKey(method: string, path: string): string {
+  return `${method} ${path.toLowerCase().replace(/\{[^}]+\}/g, '{}')}`
+}
+
+function checkApiFieldsAndRoutes(
+  entity: ModelEntity,
+  path: Path,
+  fields: ReadonlyMap<string, ModelFieldType | undefined>,
+  report: Report,
+): void {
+  for (const list of ['filterable', 'sortable', 'searchable'] as const) {
+    entity.api[list]?.forEach((field, i) => {
+      const fieldPath = [...path, list, i]
+      if (!fields.has(field)) {
+        report('dangling_reference', fieldPath, `No field named "${field}" on ${entity.name}`)
+        return
+      }
+      const type = fields.get(field)
+      if (type === undefined) return // The relation already reports its missing target.
+      const supported = list === 'searchable' ? type === 'string' || type === 'text' : type !== 'json'
+      if (!supported) report('invalid_api', fieldPath, `The ${type} field "${field}" is not ${list}`)
+    })
+  }
+
+  const routes = new Map<string, string>()
+  for (const operation of entity.api.operations) {
+    const [method, template] = CRUD_ROUTES[operation]
+    routes.set(routeKey(method, template), operation)
+  }
+  entity.api.custom?.forEach((operation, i) => {
+    const key = routeKey(operation.method, operation.path)
+    const existing = routes.get(key)
+    if (existing === undefined) routes.set(key, operation.name)
+    else report('invalid_api', [...path, 'custom', i, 'path'],
+      `${operation.method} "${operation.path}" conflicts with the ${existing} operation`)
+  })
+}
+
 function checkEntityReferences(
   entity: ModelEntity,
   path: Path,
@@ -215,9 +261,7 @@ function checkEntityReferences(
     if (!fields.has(name)) report('dangling_reference', fieldPath, `No field named "${name}" on ${entity.name}`)
   }
   entity.indexes.forEach((index, i) => index.fields.forEach((field, j) => checkFieldRef(field, [...path, 'indexes', i, 'fields', j])))
-  for (const list of ['filterable', 'sortable', 'searchable'] as const) {
-    entity.api[list]?.forEach((field, i) => checkFieldRef(field, [...path, 'api', list, i]))
-  }
+  checkApiFieldsAndRoutes(entity, [...path, 'api'], fields, report)
   entity.api.custom?.forEach((operation, i) => {
     const opPath = [...path, 'api', 'custom', i]
     operation.input?.forEach((field, j) => checkEnum(field, [...opPath, 'input', j]))
@@ -267,11 +311,15 @@ export function validateModel(value: unknown, baseRev: string): Diagnostic[] {
   const entities = new Map<string, ModelEntity>()
   for (const entity of model.entities) if (!entities.has(entity.name)) entities.set(entity.name, entity)
 
+  const plurals = new Map<string, string>()
   model.entities.forEach((entity, index) => {
     const path = ['entities', index]
     claim(entity.name, [...path, 'name'], names, report)
     checkName(entity.name, [...path, 'name'], report)
     checkName(entity.plural, [...path, 'plural'], report)
+    const owner = plurals.get(entity.plural)
+    if (owner === undefined) plurals.set(entity.plural, entity.name)
+    else report('invalid_api', [...path, 'plural'], `The plural "${entity.plural}" is already used by ${owner}`)
     checkName(entity.key.name, [...path, 'key', 'name'], report, true)
 
     const members = new Set<string>()

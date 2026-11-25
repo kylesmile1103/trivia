@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { FIXTURES, readFixture } from '../../test/helpers.js'
+import { apply, loadBlueprint, sequenceSource } from '../index.js'
 import { revOfText } from '../serialize.js'
 import { MODEL_DOC } from '../types/ops.js'
 import { modelSchema } from './types.js'
@@ -73,5 +74,40 @@ describe('FR-DM-05: relations and references', () => {
       { code: 'invalid_constraint', pointer: '/entities/1/relations/0/foreignKey', message: expect.stringContaining('uuid') },
       { code: 'invalid_constraint', pointer: '/entities/1/relations/0/onDelete' },
     ])
+  })
+})
+
+describe('FR-DM-06: model API fields and routes', () => {
+  it('reports unsupported field types, conflicting paths and reused plurals', () => {
+    expectFixtureDiagnostic('invalid_api')
+  })
+
+  it('accepts key and foreign-key filters and distinguishes methods, literals and disabled CRUD routes', () => {
+    const text = readFixture(`${fixtures}/valid/bank`)[MODEL_DOC]!
+    const model = modelSchema.parse(JSON.parse(text))
+    model.entities[0]!.api.custom!.push({ name: 'exportCustomers', method: 'GET', path: 'export' })
+    model.entities[1]!.api = {
+      operations: ['list'],
+      filterable: ['id', 'customerId'],
+      sortable: ['customerId', 'frozen'],
+      searchable: ['accountNumber'],
+      custom: [
+        { name: 'getByKey', method: 'GET', path: '{accountKey}' },
+        { name: 'exportAccounts', method: 'GET', path: 'export' },
+        { name: 'auditByKey', method: 'POST', path: '{accountKey}' },
+      ],
+    }
+    expect(validate(JSON.stringify(model))).toEqual([])
+  })
+
+  it('refuses a model op that adds a conflicting custom route', () => {
+    const text = readFixture(`${fixtures}/valid/bank`)[MODEL_DOC]!
+    const outcome = apply(loadBlueprint({ [MODEL_DOC]: text }), [{
+      op: 'setEntityApi', doc: MODEL_DOC, baseRev: revOfText(text), entity: 'Customer',
+      api: { operations: ['list'], custom: [{ name: 'findCustomers', method: 'GET', path: '' }] },
+    }], { ids: sequenceSource() })
+    expect(outcome).toMatchObject({ ok: false, error: { code: 'invalid_result', details: {
+      diagnostics: [{ code: 'invalid_api', pointer: '/entities/0/api/custom/0/path' }],
+    } } })
   })
 })

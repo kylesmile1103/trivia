@@ -163,7 +163,7 @@ Model diagnostics, on top of the schema layer:
 | `unmatched_relation` | A `hasMany` without its `belongsTo` |
 | `invalid_default` | A default that does not fit the type, the enum or the bounds |
 | `invalid_constraint` | `minimum` above `maximum`, a `scale` above `precision`, or other conflicting constraints |
-| `invalid_api` | A sortable or filterable `json` field, a custom operation path that collides with a CRUD route |
+| `invalid_api` | An unsupported API field type, a conflicting custom route, or a reused entity plural |
 | `breaking_change` (warning) | Against the lock's last generated model: a removed field, a narrowed type, a new required field without a default |
 
 ⚑ The reserved word lists have a `source` and `date` header in each JSON object, followed by
@@ -183,6 +183,11 @@ diagnosed as reserved.
 length, ECMAScript Unicode patterns and email or absolute URI formats. Date-time defaults
 require an offset. Decimal defaults must fit both bounds and the precision and scale of the
 column using the digits that JSON serialization emits.
+
+⚑ Filters and sorts accept scalar fields, and searches accept `string` and `text`. Custom
+routes conflict by HTTP method and template with enabled CRUD or earlier custom routes.
+Template comparison folds literal case and ignores parameter names. A literal segment has
+its own precedence over a parameter segment. [ASP.NET Core routing](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/routing?view=aspnetcore-10.0)
 
 ## 6. Pages and the model
 

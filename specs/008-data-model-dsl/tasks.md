@@ -30,7 +30,7 @@
 
 ## Phase 6: User Story 4 - API options (P2)
 
-- [ ] T010 [US4] `invalid_api` checks: list membership by type, custom operation path collisions, plural collisions
+- [x] T010 [US4] `invalid_api` checks: list membership by type, custom operation path collisions, plural collisions
 
 ## Phase 7: User Story 5 - Breaking changes (P3)
 
