@@ -1,0 +1,5 @@
+# The Rust CLAUDE.md names, for every shell and for CI, so clippy agrees everywhere (docs/ci.md).
+[toolchain]
+channel = "1.99.0"
+components = ["clippy"]
+profile = "minimal"
