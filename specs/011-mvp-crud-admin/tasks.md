@@ -1,0 +1,45 @@
+# Tasks: MVP slice
+
+**Input**: [spec.md](spec.md), [plan.md](plan.md)
+**Depends on**: specs 001 to 010
+
+## Phase 1: Setup
+
+- [ ] T001 Write `examples/blueprint-mvp/blueprint/`: the app document, the model (Customer, Account, two enums, `approveKyc`), five pages with their options and two actions. It must validate
+- [ ] T002 `examples/blueprint-mvp/README.md` with the commands, and `PROMPT.md` with the one-paragraph agent prompt
+
+## Phase 2: User Story 1 - Blueprint to running solution (P1)
+
+- [ ] T003 [US1] `tools/blueprint/mvp.test.mjs`: temp folder, `new`, copy the blueprint and the committed kit, `backend --migration Initial`, `eject`, `dotnet build -warnaserror`, `tsc`. Skips with a message when the .NET SDK or a container runtime is missing
+- [ ] T004 [US1] Fix each failure in its owning spec with a regression test there. List them in this file under "Found by the slice"
+- [ ] T005 [US1] Extend the script: start the AppHost through the Aspire testing host, create a customer through the API, read it back from the list
+- [ ] T006 [US1] `e2e/blueprint-mvp.spec.ts` and a Playwright project: list, filter by status, create, a field error from the API, the Approve KYC action answering 501
+
+## Phase 3: User Story 2 - Edit with Trivia (P1)
+
+- [ ] T007 [US2] In the e2e spec, through the designer: add `creditLimit` with the columns tool, add `notes` with the form-fields tool, change a button variant. Assert the changed lines and byte-exact undo for each
+- [ ] T008 [US2] Assert that ejecting an edited page again is refused with `conflict`
+
+## Phase 4: User Story 3 - Model change and drift (P1)
+
+- [ ] T009 [US3] In the script: patch the model (add `segment`, remove `notes`), run `backend --migration Segment`, assert the backend diff is `.g.cs` files plus one migration, assert the drift list
+- [ ] T010 [US3] Apply the fix and add the column through the plugin API. `tsc` passes
+
+## Phase 5: User Story 4 - Agent (P1)
+
+- [ ] T011 [US4] Run the prompt in a fresh Claude Code session with only the Trivia server, twice. Save both transcripts' tool-call lists under `examples/blueprint-mvp/sessions/`
+- [ ] T012 [US4] Fix what the agent tripped on (tool descriptions, hints, diagnostics) in specs 001 to 005. Note it in `docs/mcp.md`
+
+## Phase 6: Close-out
+
+- [ ] T013 Measure SC-004 and SC-005. Record them in `docs/blueprint/README.md`
+- [ ] T014 Add the slice to the release checklist: `tools/release` runs it before tagging
+- [ ] T015 Update `docs/HANDOFF.md` (status, catches) and `docs/product.md` (day 1 is in, with a link to the BRD), and review the ⚑ decisions with the owner
+
+## Found by the slice
+
+(Filled in during T004 and T012: the failure, the owning spec, the regression test.)
+
+## Dependencies
+
+Strictly ordered by phase. T004 loops with T003 until the script passes.
