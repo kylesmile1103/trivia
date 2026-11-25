@@ -1,7 +1,8 @@
 import {
   exposedScope, expressionCheck, manifestCheck, toPointer,
-  type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ValidationContext,
+  type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ResolvedManifests, type ValidationContext,
 } from '@trivia/blueprint'
+import { checkDataTable } from '@trivia/blueprint-compiler'
 import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import type { EngineBinding } from '../engine.js'
@@ -9,7 +10,7 @@ import { bodyFields } from '../refine/form.js'
 
 const pageOperation = { list: 'list', show: 'get', create: 'create', edit: 'update' } as const
 
-function contractCheck(manifest: TriviaManifest | null): LayerCheck {
+function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManifests): LayerCheck {
   const resources = new Map(manifest?.resources.map((resource) => [resource.name, resource]))
   const knownResources = [...resources.keys()].sort().join(', ')
   return (blueprint) => {
@@ -50,6 +51,9 @@ function contractCheck(manifest: TriviaManifest | null): LayerCheck {
           }
         }
       } else {
+        for (const [id, node] of Object.entries(page.nodes)) {
+          if (manifests[node.type]?.composite === 'DataTable') diagnostics.push(...checkDataTable(page, id, manifest).diagnostics)
+        }
         for (const [name, query] of Object.entries(page.queries)) {
           const source = resourceOf(query.resource, ['queries', name, 'resource'])
           if (source) checkOperation(source, query.kind === 'custom' ? query.operation : query.kind === 'one' ? 'get' : 'list',
@@ -84,7 +88,7 @@ export function validationContext(
   const checkManifests = manifestCheck(manifests)
   return {
     manifests: (blueprint) => [...diagnostics, ...checkManifests(blueprint)],
-    contract: contractCheck(contract),
+    contract: contractCheck(contract, manifests),
     expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),
   }
 }

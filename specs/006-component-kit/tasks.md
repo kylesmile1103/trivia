@@ -22,7 +22,7 @@
 
 ## Phase 4: User Story 2 - DataTable (P1)
 
-- [ ] T009 [US2] Golden for a `DataTable` page, then `src/composites/data-table.ts`: `useTable`, columns from the shared builders, the refine-ui table element
+- [x] T009 [US2] Golden for a `DataTable` page, then `src/composites/data-table.ts`: `useTable`, columns from the shared builders, the refine-ui table element
 - [ ] T010 [US2] `selectable` with `selectedRow` and `selectedRows` exposure, and a binding test
 - [ ] T011 [US2] Plugin test: the columns tool adds, reorders and removes a column on the emitted page (SC-004)
 

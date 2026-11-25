@@ -20,6 +20,7 @@ export function printModule(ir: PageIR, facts: ProjectFacts): string {
     ...ir.state.map(({ name, setter, type, initial }) => statement(
       'const [' + (name ?? '') + (setter ? ', ' + setter : '') + '] = useState<' + type + '>(' + initial + ')', style)),
     ...[...ir.hooks, ...ir.queries, ...ir.mutations].map((hook) => printHook(hook, style)),
+    ...(ir.declarations ?? []),
   ]
   const body = [
     ...(declarations.length ? [declarations.map(indent).join('\n')] : []),

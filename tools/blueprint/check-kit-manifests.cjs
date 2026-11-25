@@ -33,7 +33,7 @@ async function main() {
     const { type, source, composite, events, exposes, slots } = { ...base, ...base.variants?.[style] }
     const report = (name, description) => failures.push(`${type}: ${name} ${description}`)
     const component = analyzed.find(({ name, importSource }) =>
-      name === source.import.name && (source.import.from === 'ui' || source.import.from === importSource))
+      name === source.import.name && (['ui', 'refine-ui'].includes(source.import.from) || source.import.from === importSource))
     if (!component) {
       report(source.import.name, 'is missing from the installed library')
       continue

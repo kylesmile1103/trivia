@@ -108,7 +108,9 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
     const manifest = { ...base, ...replacements }
     const { source } = manifest
     const { name } = source.import
-    const declaredFrom = source.import.from === 'ui' ? (ui && `${ui}/${source.item}`) : source.import.from
+    const inferredRefine = componentsAlias ?? ui?.slice(0, ui.lastIndexOf('/')) ?? '@/components'
+    const declaredFrom = source.import.from === 'ui' ? (ui && `${ui}/${source.item}`)
+      : source.import.from === 'refine-ui' ? `${inferredRefine}/refine-ui/${source.item}/${source.item}` : source.import.from
     const candidates = byName.get(name) ?? []
     const matching = candidates.length > 1 ? candidates.filter(({ importSource }) => importSource === declaredFrom) : candidates
     if (candidates.length > 1 && matching.length !== 1) {
@@ -118,7 +120,7 @@ export function resolveManifests({ kit, overrides = [], components, aliases }: M
     const component = matching[0]
     const from = source.import.from === 'ui' && ui && component
       ? ui + '/' + component.importSource.split('/').at(-1)
-      : declaredFrom ?? component?.importSource ?? 'ui'
+      : (source.import.from === 'refine-ui' ? component?.importSource : undefined) ?? declaredFrom ?? component?.importSource ?? 'ui'
     const known = new Set(component?.props.map(({ name }) => name))
     if (component && overrideTypes.has(type)) inspectOverride(manifest, style, variant, known, diagnostics)
     const descriptions: Array<[string, string]> = []

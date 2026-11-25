@@ -16,6 +16,7 @@ export function lowerJsx(
   wire: (id: string, tag: string, props: Map<string, AttributeIR['value']>, repeated: boolean) => void,
   repeats: ReadonlyMap<string, RepeatLocal>,
   style: PrintStyle,
+  expand: (id: string, manifest: ResolvedManifest, element: Extract<JsxIR, { kind: 'element' }>) => JsxIR,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -30,7 +31,7 @@ export function lowerJsx(
     const repeated = outerRepeat || repeat !== undefined
     const node = page.nodes[id]!
     const manifest = manifestOf(node.type)
-    const tag = component(manifest)
+    const tag = manifest.composite ? manifest.source.import.name : component(manifest)
     const attributes = new Map<string, AttributeIR['value']>(Object.entries({ ...page.props[id], ...page.styles[id] })
       .map(([name, value]) => [name, { kind: 'static', value }]))
     for (const name of Object.keys(page.bindings[id] ?? {})) {
@@ -65,7 +66,7 @@ export function lowerJsx(
       }
     }
     const element: Extract<JsxIR, { kind: 'element' }> = { kind: 'element', tag, props, children }
-    let tree: JsxIR = kitElement(manifest, element, tabs, (part) => component(manifest, part),
+    let tree: JsxIR = manifest.composite ? expand(id, manifest, element) : kitElement(manifest, element, tabs, (part) => component(manifest, part),
       (part) => component(manifestOf('Popover'), part), style)
     if (page.control[id]?.when !== undefined) {
       tree = { kind: 'cond', test: expression(toPointer(['control', id, 'when'])), child: tree }

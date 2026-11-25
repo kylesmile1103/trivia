@@ -8,7 +8,7 @@ import {
 } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
-import { ApiError, type EngineBinding } from '../engine.js'
+import { ApiError, type EngineBinding, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
 import { validationContext } from './context.js'
 import { checkedPath } from './paths.js'
@@ -96,6 +96,11 @@ export class BlueprintWorkspace implements BlueprintStore {
     const config = this.#json('components.json') as { style?: string; aliases?: { components?: string } } | null
     const components = fs.existsSync(path.resolve(this.root, this.#host.uiDir))
       ? this.#components() as ComponentSchema[] : []
+    const tableDir = path.posix.join(path.posix.dirname(this.#host.uiDir), 'refine-ui', 'data-table')
+    if (fs.existsSync(path.resolve(this.root, tableDir))) {
+      const base = this.#host.importBase.slice(0, this.#host.importBase.lastIndexOf('/'))
+      components.push(...unwrap<ComponentSchema[]>(this.#engine.components(this.root, tableDir, base + '/refine-ui/data-table')))
+    }
     const overrides: ComponentManifest[] = []
     const diagnostics: Diagnostic[] = []
     for (const name of listFiles(this.root, `${this.dir}/manifests`).filter((file) => file.endsWith('.manifest.json'))) {

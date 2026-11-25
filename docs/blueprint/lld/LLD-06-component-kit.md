@@ -90,6 +90,10 @@ Expansion, in `composites/data-table.ts`:
 - With `virtual: true`, the body renders through TanStack Virtual. This applies to client-side
   row sets (`pagination: "off"`). With server paging it is ignored, with a warning.
 
+⚑ The table requires an explicit nonempty column list. It preserves the first occurrence of
+each field, defaults to ten rows per server page, and allows filters on visible columns.
+The `refine-ui` source marker resolves the installed table beside the project's UI library.
+
 After eject the table is ordinary Refine code, and the columns tool adds, removes and reorders
 its columns. That is the reason to emit this shape and no other.
 

@@ -1,9 +1,11 @@
 import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
+import { lowerDataTable } from '../composites/data-table.js'
+import type { CompositeScope } from '../composites/source.js'
 import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
 import { printHandler, printModule } from '../print/module.js'
-import { compareBytes, literal, property, quote, statement } from '../print/style.js'
+import { compareBytes, literal, property, quote, restyleModule, statement } from '../print/style.js'
 import { refineName, relativeModule } from '../targets/vite-refine/files.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
@@ -36,8 +38,17 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
       }
     }
     if (!manifest || manifest.type !== type) throw new CompileError('invalid_result', 'No component manifest for ' + type)
-    if (manifest.composite) throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
     return manifest
+  }
+  const importReference = (spec: ImportIR): string => {
+    const key = spec.source + '\0' + spec.name + (spec.kind === 'type' ? '\0type' : '')
+    let identifier = identifiers.get(key)
+    if (!identifier) {
+      identifier = names.take(spec.name)
+      identifiers.set(key, identifier)
+      imports.push({ ...spec, ...(identifier !== spec.name && { as: identifier }) })
+    }
+    return identifier
   }
   const component = (manifest: ResolvedManifest, part?: string): string => {
     const { source, installed } = manifest
@@ -48,15 +59,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     if (!installed) missing.set(registry + '/' + item, { registry, item })
     const module = from === 'ui' ? facts.aliases['ui'] + '/' + item : from
     if (module.startsWith('@trivia/')) throw new CompileError('unsupported', 'Generated pages cannot import ' + module)
-    const key = module + '\0' + name
-    let identifier = identifiers.get(key)
-    if (!identifier) {
-      identifier = names.take(name)
-      identifiers.set(key, identifier)
-      imports.push({ name, source: module, ...(identifier !== name && { as: identifier }) })
-    }
     client ||= manifest.client
-    return identifier
+    return importReference({ name, source: module })
   }
 
   const ui = exposedScope(page, context.manifests ?? {})
@@ -194,7 +198,12 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style)
+  const declarations: string[] = []
+  const composite: CompositeScope = { context, name: (preferred) => names.take(preferred), import: importReference, component, declarations }
+  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style, (id, manifest, root) => {
+    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite)
+    throw new CompileError('unsupported', manifest.type + ' requires the component kit.')
+  })
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))
@@ -202,10 +211,10 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
     name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
-    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers,
+    imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations,
   }
   return {
-    code: printModule(ir, facts), file, route: page.route, component: page.name,
+    code: declarations.length ? restyleModule(printModule(ir, facts), facts.style) : printModule(ir, facts), file, route: page.route, component: page.name,
     importPath: relativeModule('src/App.tsx', file),
     ...(handler && { handler }),
     requires: [...missing.entries()].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item),

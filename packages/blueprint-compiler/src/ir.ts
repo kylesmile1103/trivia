@@ -10,6 +10,7 @@ export interface PageIR {
   mutations: HookIR[]
   hooks: HookIR[]
   handlers: HandlerIR[]
+  declarations?: string[]
   jsx: JsxIR
 }
 

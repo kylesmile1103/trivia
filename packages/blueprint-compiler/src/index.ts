@@ -5,6 +5,7 @@ export {
   type CompileContext, type EmittedModule, type RegistryItem,
 } from './compile.js'
 export type { ContractPageGenerator, ContractPageInput, RefineSnippetGenerator, RefineSnippetImport } from './contract-pages.js'
+export { checkDataTable } from './composites/data-table.js'
 export { refineName } from './targets/vite-refine/files.js'
 export { restyleModule } from './print/style.js'
 export { emptyLock, readLock, serializeLock, LOCK_FILE, type Lock, type LockedPage } from './lock.js'

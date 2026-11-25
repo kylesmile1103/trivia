@@ -68,6 +68,8 @@ Example, trimmed:
 
 `from: "ui"` means the project's `components.json` alias for `ui` plus the item's file. The
 resolver never hardcodes `@/components/ui` (`CLAUDE.md` rule 9).
+⚑ `from: "refine-ui"` resolves the installed Refine table export using the project's
+component aliases (LLD-06).
 
 ## 3. Resolution (FR-MF-02 to FR-MF-06)
 

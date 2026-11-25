@@ -1,0 +1,56 @@
+{
+  "type": "DataTable",
+  "source": {
+    "registry": "refine",
+    "item": "data-table",
+    "import": {
+      "name": "DataTable",
+      "from": "refine-ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [],
+  "exposes": [],
+  "client": true,
+  "composite": "DataTable",
+  "configuration": [
+    {
+      "name": "resource",
+      "kind": "string",
+      "optional": false,
+      "source": "declared"
+    },
+    {
+      "name": "columns",
+      "kind": "unknown",
+      "optional": false,
+      "source": "declared",
+      "typeText": "string[]"
+    },
+    {
+      "name": "filters",
+      "kind": "unknown",
+      "optional": true,
+      "source": "declared",
+      "typeText": "string[]"
+    },
+    {
+      "name": "pageSize",
+      "kind": "number",
+      "optional": true,
+      "source": "declared"
+    },
+    {
+      "name": "pagination",
+      "kind": "enum",
+      "optional": true,
+      "source": "declared",
+      "options": [
+        "server",
+        "off"
+      ]
+    }
+  ],
+  "template": {}
+}

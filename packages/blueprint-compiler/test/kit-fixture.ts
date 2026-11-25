@@ -63,3 +63,12 @@ export function compileKitPage(name: string, context = kitContext()) {
   if (errors.length) throw new Error(JSON.stringify(errors, null, 2))
   return compilePage(blueprint, name, context)
 }
+
+
+export async function kitServiceContext(app = kitApp): Promise<CompileContext> {
+  // The compiler's Nx test target builds the plugin and its dev-service dependency.
+  const module = new URL('../../dev-service/dist/index.js', import.meta.url)
+  const { createStandaloneHost, EngineService } = await import(module.href)
+  const service = new EngineService({ engine, host: createStandaloneHost(fileURLToPath(app)), version: 'test' })
+  return (await service.blueprintInputs()).context
+}
