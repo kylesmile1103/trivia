@@ -57,7 +57,7 @@
 ## Phase 10: Polish
 
 - [x] T025 [P] Optional `concurrency: true`: row version, `version` in contracts, 409 `stale`
-- [ ] T026 [P] Performance test for SC-004 with a generated 50-entity model
+- [x] T026 [P] Performance test for SC-004 with a generated 50-entity model
 - [ ] T027 Edge cases: non-identifier enum values, self-relations, empty model, newer blueprint version
 - [ ] T028 Fill `src/blueprint/backend.ts` in the plugin: run `trivia-dotnet` with an argument array and a timeout, map its JSON to `BackendResult`, the missing-`dotnet` message. Replace the stub of spec 004 and its MCP tool
 - [ ] T029 Update LLD-09 with verified API names. Run `dotnet test` (all traits) and `pnpm check`
