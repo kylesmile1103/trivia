@@ -3,6 +3,8 @@
 // from these zod schemas (schemas/*.v1.json) enforce exactly what zod enforces.
 import { z } from 'zod'
 
+import { ULID_SOURCE as ULID } from '../ids.js'
+
 /** The format version this package reads and writes. Older documents are migrated (migrate/). */
 export const BLUEPRINT_VERSION = 1
 
@@ -12,8 +14,6 @@ export const SCHEMA_URL = {
   model: 'https://trivia.dev/schemas/blueprint/model.v1.json',
 } as const
 
-/** Crockford base32, 48-bit time first: the first character is at most '7'. */
-const ULID = '[0-7][0-9A-HJKMNP-TV-Z]{25}'
 export const PAGE_ID = new RegExp(`^pg_${ULID}$`)
 export const NODE_ID = new RegExp(`^n_${ULID}$`)
 

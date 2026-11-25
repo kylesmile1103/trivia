@@ -16,7 +16,7 @@ Tests come before the code they cover and must fail first.
 - [x] T005 [P] `src/types/diagnostics.ts` and `src/types/ops.ts` (the op union, without model ops)
 - [ ] T006 Round-trip tests in `src/serialize.test.ts` (canonical fixture, shuffled keys, defaults omitted, final newline)
 - [ ] T007 `src/serialize.ts`: canonical JSON and `rev()`
-- [ ] T008 [P] `src/ids.ts` with an injectable source, and tests
+- [x] T008 [P] `src/ids.ts` with an injectable source, and tests
 - [ ] T009 [P] `src/order.ts` fractional keys, with the 1 000-insert test
 
 ## Phase 3: User Story 1 - Describe a page (P1)
