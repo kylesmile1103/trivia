@@ -1,4 +1,4 @@
-import { pageDocPath, revOfText } from '@trivia/blueprint'
+import { APP_DOC, pageDocPath, revOfText } from '@trivia/blueprint'
 import { LOCK_FILE, planCompiledEject, prepareEject, readLock, serializeLock, type Lock } from '@trivia/blueprint-compiler'
 import { z } from 'zod'
 
@@ -40,12 +40,17 @@ export async function planEject(request: z.infer<typeof planInput>, service: Eng
     const routes = await service.routes()
     const { registrations, ops, ...plan } = planCompiledEject(prepared, { compiler: health.version, files, routes }, baseline)
     const registration = await service.refine.planBlueprintRegistrations(registrations, context.contract ?? null)
+    const app = blueprint.docs[APP_DOC]
+    const decorations = app?.kind === 'app' && app.doc
+      ? await service.refine.planBlueprintDecorations(app.doc, blueprint, registrations, context.contract ?? null)
+      : { beforeRoutes: [], afterRoutes: [], warnings: [] }
     const file = workspace.dir + '/' + LOCK_FILE
     const content = serializeLock(plan.lock)
     const lock = before === null ? { op: 'createFile', file, content } : { op: 'replaceFile', file, content, expectedHash: revOfText(before) }
     return {
       ...plan,
-      ops: [...ops, ...registration as EjectPlan['ops'], lock],
+      ops: [...ops, ...[...decorations.beforeRoutes, ...registration, ...decorations.afterRoutes] as EjectPlan['ops'], lock],
+      warnings: [...plan.warnings, ...decorations.warnings],
     }
   } catch (error) {
     return compilerError(error)

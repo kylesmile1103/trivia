@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { pageDocPath, type AppDoc, type Blueprint } from '@trivia/blueprint'
 import { projectFacts, relativeModule, resourceOps, restyleModule, routeOps, type EjectPage, type EmittedModule, type RouteRegistration } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
@@ -371,6 +372,64 @@ export class RefineAdapter {
       return { ...module, kind: page.kind, resource: refineName(resource) }
     })
     return this.#registrationOps(app, files)
+  }
+
+  async planBlueprintDecorations(
+    doc: AppDoc, blueprint: Blueprint, registrations: readonly EjectPage[], contract: TriviaManifest | null,
+  ): Promise<{ beforeRoutes: Plan['ops']; afterRoutes: Plan['ops']; warnings: string[] }> {
+    const beforeRoutes: Plan['ops'] = []
+    const afterRoutes: Plan['ops'] = []
+    const warnings: string[] = []
+    const tokens = Object.entries(doc.theme.tokens).sort(([a], [b]) => a < b ? -1 : a === b ? 0 : 1)
+    if (!tokens.length && !doc.nav.length) return { beforeRoutes, afterRoutes, warnings }
+    const app = await this.#app()
+    const newResources = new Set(registrations.flatMap(({ page }) => {
+      const resource = page.kind === 'custom' ? null : contractResource(contract, page.resource, null)
+      return resource ? [refineName(resource)] : []
+    }))
+    const labelled = new Set<string>()
+    for (const nav of doc.nav) {
+      const entry = blueprint.docs[pageDocPath(nav.page)]
+      const page = entry?.kind === 'page' ? entry.doc : null
+      const resource = page && page.kind !== 'custom' ? contractResource(contract, page.resource, null) : null
+      const name = resource && refineName(resource)
+      const current = name ? entryOf(app?.resources, name) : undefined
+      const meta = current?.kind === 'object' ? current.properties.find(({ key }) => key === 'meta')?.value : undefined
+      if (!app || !name || (!current && !newResources.has(name)) || (meta && meta.kind !== 'object')) {
+        warnings.push(`Nav label for ${nav.page} needs a Refine resource with literal metadata.`)
+        continue
+      }
+      if (labelled.has(name)) {
+        warnings.push(`Refine resource ${name} already has a nav label from another blueprint page.`)
+        continue
+      }
+      labelled.add(name)
+      const resourcePath = app.resourcesPath + '[name=' + name + ']'
+      const label = JSON.stringify(nav.label)
+      afterRoutes.push(meta
+        ? { op: 'setProperty', path: resourcePath + '.meta', prop: 'label', value: label }
+        : { op: 'setProperty', path: resourcePath, prop: 'meta', value: '{ label: ' + label + ' }' })
+      if (nav.icon) warnings.push(`Nav icon for ${nav.page} needs a project icon import.`)
+    }
+    if (tokens.length) {
+      const shape = (locator: string) => this.#host.inspect(locator) as {
+        text: string | null; line: number; column: number; attributes: Array<{ name: string; value: unknown }>
+      }
+      const anchor = app && findNode(this.#host.outline(app.file) as OutlineNode[], (node) =>
+        node.name === 'style' && shape(node.locator).attributes.some(({ name, value }) => name === 'id' && value === 'trivia-theme'))
+      const details = anchor && shape(anchor.locator)
+      const line = details && fs.readFileSync(path.join(this.#host.root, app!.file), 'utf8').split('\n')[details.line - 1]
+      const empty = details && /^<style\s+id=(?:"trivia-theme"|'trivia-theme')\s*\/>/.test(line?.slice(details.column - 1) ?? '')
+      if (!anchor || !details || (!empty && !/^:root \{ (?:--[a-z0-9-]+: [^{}]*; )+\}$/.test(details.text ?? ''))) {
+        warnings.push('Theme tokens need a <style id="trivia-theme" /> anchor in the Refine app.')
+      } else if (tokens.some(([, value]) => /[;{}<>\r\n\u2028\u2029]|\/\*/u.test(value))) {
+        warnings.push('Theme tokens must contain single CSS values.')
+      } else {
+        const text = ':root { ' + tokens.map(([name, value]) => `--${name}: ${value};`).join(' ') + ' }'
+        beforeRoutes.push({ op: 'setText', target: anchor.locator, expectedName: 'style', text })
+      }
+    }
+    return { beforeRoutes, afterRoutes, warnings }
   }
 
   #registrationOps(app: AppShell, files: readonly RouteRegistration[]): Plan['ops'] {

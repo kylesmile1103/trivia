@@ -185,6 +185,24 @@ it('ejects and undoes generated source and lock in one Agent entry', async () =>
   expect(fs.existsSync(lock)).toBe(false)
 })
 
+it.each([true, false])('plans safe nav and theme edits with theme anchor=%s', async (anchor) => {
+  const app = path.join(root, 'src/App.tsx')
+  if (anchor) fs.writeFileSync(app, fs.readFileSync(app, 'utf8').replace('</Refine>', '<style id="trivia-theme" />\n      </Refine>'))
+  const draft = { ...listPage('AccountDraft', 'Account'), kind: 'show', route: '/draft-account/:id' }
+  expect((await tool('trivia_blueprint_patch', { label: 'Draft', ops: [
+    draft,
+    { op: 'setApp', doc: 'app.blueprint.json', baseRev: null, name: 'Bank', targets: { web: 'vite-refine' }, theme: { tokens: { radius: '6px' } } },
+    { op: 'setNav', doc: 'app.blueprint.json', baseRev: null, nav: [{ page: draft.name, label: 'Bank accounts', icon: 'landmark' }] },
+  ] })).isError).not.toBe(true)
+  const result = await tool('trivia_blueprint_eject', { pages: [draft.name], label: 'Decorate' })
+  expect(result.structuredContent).toMatchObject({ entry: 'Agent: Decorate', warnings: expect.arrayContaining([expect.stringContaining('icon')]) })
+  const source = fs.readFileSync(app, 'utf8')
+  expect(source).toContain('label: "Bank accounts"')
+  expect(source).toContain('icon: <LandmarkIcon />')
+  if (anchor) expect(source).toContain('--radius: 6px;')
+  else expect(result.structuredContent?.warnings).toEqual(expect.arrayContaining([expect.stringContaining('trivia-theme')]))
+})
+
 it('NFR-14 executes the documented blueprint authoring calls', async () => {
   const docs = fs.readFileSync(new URL('../../../docs/mcp.md', import.meta.url), 'utf8')
   const section = docs.split(/^## Blueprint authoring$/m)[1]!

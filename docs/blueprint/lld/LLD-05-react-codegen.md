@@ -191,9 +191,14 @@ package's original fixture assets. Spec 006 supplies the full kit.
   tool uses (`setProperty` or `insertElement` on `<Refine resources>`, `insert` of `<Route>`
   before the catch-all), each with its guards;
 - `createFile` for `src/handlers/<page>.ts` when a `call` step needs it and it is missing;
-- for the app document's `nav` and theme tokens: value ops on the layout's menu, and a guarded
-  edit of the stylesheet's variables. These are skipped with a warning when the expected
-  anchors are not found, never guessed.
+- for the app document's `nav` and theme tokens: value ops on literal Refine resource
+  metadata and a text op on the app's explicitly marked root stylesheet. Missing anchors
+  produce warnings.
+
+⚑ Eject updates `meta.label` on a matching literal Refine resource and leaves any existing
+icon import in place. Custom menu links and requested icons require project-specific wiring.
+Theme tokens use a dedicated `<style id="trivia-theme" />` anchor so eject can update the
+variables with the same JSX transaction and leave the project's stylesheet intact.
 
 Refusals: 422 with `requires` when a component is not installed; 409 when a page's file
 differs from its lock hash; 409 when a route or file already exists and is not in the lock.
