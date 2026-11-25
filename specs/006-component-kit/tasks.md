@@ -29,7 +29,7 @@
 ## Phase 5: User Story 3 - Form (P1)
 
 - [x] T012 [US3] Golden for a `Form` page in both styles, then `src/composites/form.ts`: schema, defaults, controls, layout, redirect
-- [ ] T013 [US3] Plugin tests: the form-fields tool adds a field, and drift fixes a changed bound, on the emitted page (SC-004)
+- [x] T013 [US3] Plugin tests: the form-fields tool adds a field, and drift fixes a changed bound, on the emitted page (SC-004)
 
 ## Phase 6: User Story 4 - Limits (P2)
 

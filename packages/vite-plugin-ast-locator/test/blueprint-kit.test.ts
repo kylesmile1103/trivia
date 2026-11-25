@@ -15,7 +15,7 @@ const fixture = path.resolve(import.meta.dirname, '../../blueprint-compiler/fixt
 async function withEjectedPage(name: string, run: (root: string, file: string, client: Client, socket: string) => Promise<void>) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-kit-plugin-'))
   try {
-    for (const entry of ['src', 'package.json', 'components.json', 'trivia.manifest.json', 'tsconfig.json']) {
+    for (const entry of ['src', 'openapi', 'package.json', 'components.json', 'trivia.manifest.json', 'tsconfig.json']) {
       fs.cpSync(path.join(example, entry), path.join(root, entry), { recursive: true })
     }
     fs.symlinkSync(path.join(example, 'node_modules'), path.join(root, 'node_modules'), 'junction')
@@ -63,5 +63,42 @@ it('SC-004 adds, moves and removes columns through MCP after blueprint eject', a
     expect(read()).toContain('customersSelectedRow.id')
     expect((await post(socket, '/undo')).status).toBe(200)
     expect(read()).toBe(before)
+  })
+}, 60_000)
+
+it('SC-004 edits an ejected form and aligns a changed contract bound in place', async () => {
+  await withEjectedPage('KitForm', async (root, file, client, socket) => {
+    const read = () => fs.readFileSync(path.join(root, file), 'utf8')
+    const edit = async (changes: unknown[], label: string) => {
+      const result = await client.callTool({ name: 'trivia_edit_fields', arguments: { file, changes, label } })
+      expect(result.isError, JSON.stringify(result.content)).toBeFalsy()
+      return result.structuredContent as { page: { fields: Array<{ name: string }> } }
+    }
+    const added = await edit([{ action: 'add', field: 'phone', index: 2 }], 'Collect phone')
+    expect(added.page.fields.map(({ name }) => name)).toEqual(['fullName', 'email', 'phone', 'segment', 'notes'])
+    const before = read()
+    expect(before).toContain('phone: z.string().nullable().optional()')
+    expect(before).toContain('phone: undefined')
+    expect(before).toContain('name="phone"')
+
+    const openapi = path.join(root, 'openapi/bank.openapi.json')
+    const spec = JSON.parse(fs.readFileSync(openapi, 'utf8'))
+    spec.components.schemas.CreateCustomerRequest.properties.notes.maxLength = 800
+    fs.writeFileSync(openapi, JSON.stringify(spec, null, 2) + '\n')
+    const synced = await post(socket, '/sync')
+    expect(synced.status, JSON.stringify(synced.body)).toBe(200)
+    const drift = async () => {
+      const result = await client.callTool({ name: 'trivia_contract_drift' })
+      expect(result.isError, JSON.stringify(result.content)).toBeFalsy()
+      return result.structuredContent as { pages: Array<{ file: string; issues: Array<{
+        code: string; name: string; fix: { changes: unknown[]; label: string }
+      }> }> }
+    }
+    const issues = (await drift()).pages.find((page) => page.file === file)?.issues
+    expect(issues).toEqual([expect.objectContaining({ code: 'constraint_changed', name: 'notes' })])
+    const { fix } = issues![0]!
+    await edit(fix.changes, fix.label)
+    expect(read()).toBe(before.replace('1000, "Enter at most 1000 characters."', '800, "Enter at most 800 characters."'))
+    expect((await drift()).pages).toEqual([])
   })
 }, 60_000)
