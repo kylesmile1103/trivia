@@ -205,7 +205,7 @@ type for a node or parent guard. A successful patch returns its `revs`, new IDs 
 `created`, `diagnostics`, `entry` and `summary`.
 
 ```json
-{"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}}
+{"name":"trivia_blueprint_patch","arguments":{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customer-workbench","kind":"custom"}]}}
 ```
 
 After each patch, inspect `summary.pages[].errors`, `diagnostics` and `summary.next`. A draft
@@ -220,16 +220,21 @@ The patch schema includes the guarded model ops, such as `setModel` and `setEnti
 To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agent: ` prefix.
 `trivia_get_selection` also returns the next undo label in `history.undoLabel`.
 
-`trivia_blueprint_preview` accepts a page name and optional `includeCode`. Open the returned
-route in the designer's canvas and call `trivia_screenshot` after it loads. The response
-includes setup advice when the designer has no active screenshot poll.
+`trivia_blueprint_preview` accepts a page name and optional `includeCode` on a running Vite
+Refine app. Open the returned `route` in the designer's canvas and call `trivia_screenshot`
+after it loads. The response lists diagnostics and any registry requirements, and includes
+setup advice when the designer has no active screenshot poll.
 
 ```json
-{"name":"trivia_blueprint_preview","arguments":{"page":"Customers"}}
+{"name":"trivia_blueprint_preview","arguments":{"page":"Customers","includeCode":true}}
 ```
 
-`trivia_blueprint_eject` accepts a label and optional page names. It writes source files,
-registrations, and the lock in one edit. Use its `entry` with `trivia_undo` to undo that edit.
+`trivia_blueprint_eject` accepts a label and optional page names, defaulting to all drafts.
+For a Vite Refine app, it writes source files, registrations and the lock in one edit. Read
+the returned `files`, `warnings` and `summary` to check what changed. Pass the returned
+`entry`, including its `Agent: ` prefix, as `label` to `trivia_undo` to undo the entire edit.
+If the tool returns `conflict`, read the named routes or files before retrying. For
+`unresolved_component`, install the registry items in `error.details.requires`.
 
 ```json
 {"name":"trivia_blueprint_eject","arguments":{"pages":["Customers"],"label":"Eject customers"}}

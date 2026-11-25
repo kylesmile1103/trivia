@@ -4,8 +4,10 @@ import path from 'node:path'
 import { apply, loadBlueprint, revOfText, sequenceSource } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import type { EjectPlan } from '../src/blueprint/plan.js'
+import type { PreviewResult } from '../src/blueprint/preview.js'
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
-import { copyBlueprintProject, listPage } from './blueprint-fixture.js'
+import { copyBlueprintProject, listPage, previewBlueprintHost } from './blueprint-fixture.js'
 
 let root: string
 let running: RunningDevService
@@ -246,6 +248,8 @@ it.each([
 })
 
 it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
+  await running.close()
+  running = await startDevService(previewBlueprintHost(root))
   const docs = fs.readFileSync(new URL('../../../docs/api.md', import.meta.url), 'utf8')
   const section = docs.split(/^## Blueprint$/m)[1]!
   const examples = new Map([...section.matchAll(/^```http\n([\s\S]*?)\n^```$/gm)].map(([, text]) => {
@@ -258,13 +262,13 @@ it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
     })), ...(body !== undefined && { body }) } }]
   }))
   const prefix = '/@trivia/api/blueprint'
-  async function send(suffix: string, status = 200) {
+  async function send<T = unknown>(suffix: string, status = 200): Promise<T> {
     const route = prefix + suffix
     const example = examples.get(route)
     expect(example, route).toBeDefined()
     const response = await fetch(running.url + route, example!.init)
     expect(response.status, route).toBe(status)
-    return response.json()
+    return response.json() as Promise<T>
   }
 
   expect(examples.size).toBe(8)
@@ -272,9 +276,16 @@ it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
   expect(await send('/components')).toMatchObject({ ok: true, data: { schemas: { Button: { type: 'object' } } } })
   expect(await send('/patch')).toMatchObject({ ok: true, data: { entry: 'Add customers' } })
   expect(await send(`${pagePath}&projection=1`)).toMatchObject({ ok: true, data: { projection: expect.stringContaining('Customers') } })
-  expect(await send('/preview', 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
-  expect(await send('/plan', 409)).toMatchObject({ ok: false, error: { code: 'conflict' } })
-  expect(await send('/ejected', 409)).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  const { data: preview } = await send<{ data: PreviewResult }>('/preview')
+  expect(preview).toMatchObject({ route: '/__blueprint/Customers', module: expect.stringMatching(/^\/@trivia\/preview\//), code: expect.stringContaining('function Customers') })
+  const { data: plan } = await send<{ data: EjectPlan }>('/plan')
+  expect(plan).toMatchObject({ files: ['src/pages/Customers/Customers.tsx'], label: 'Eject Customers' })
+  const batch = await fetch(running.url + '/@trivia/api/batch', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ops: plan.ops, label: plan.label }),
+  })
+  expect(await batch.json()).toMatchObject({ ok: true, data: { history: { undoLabel: plan.label } } })
+  expect(fs.readFileSync(path.join(root, plan.files[0]!), 'utf8')).toBe(preview.code)
+  expect(await send('/ejected')).toMatchObject({ ok: true, data: { lockRev: expect.stringMatching(/^sha256:/) } })
   vi.stubEnv('PATH', root)
   try {
     expect(await send('/backend', 422)).toMatchObject({

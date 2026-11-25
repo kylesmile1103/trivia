@@ -9,7 +9,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
-import { copyBlueprintProject, listPage } from './blueprint-fixture.js'
+import { copyBlueprintProject, listPage, previewBlueprintHost } from './blueprint-fixture.js'
 
 let root: string
 let running: RunningDevService
@@ -204,6 +204,11 @@ it.each([true, false])('plans safe nav and theme edits with theme anchor=%s', as
 })
 
 it('NFR-14 executes the documented blueprint authoring calls', async () => {
+  await client.close()
+  await running.close()
+  running = await startDevService(previewBlueprintHost(root))
+  client = new Client({ name: 'blueprint-mcp-doc-test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
   const docs = fs.readFileSync(new URL('../../../docs/mcp.md', import.meta.url), 'utf8')
   const section = docs.split(/^## Blueprint authoring$/m)[1]!
   const examples = [...section.matchAll(/^```json\n([\s\S]*?)\n^```$/gm)].map(([, json]) =>
@@ -224,8 +229,10 @@ it('NFR-14 executes the documented blueprint authoring calls', async () => {
   expect((await call('trivia_blueprint_get/components')).structuredContent).toMatchObject({ schemas: { Button: { type: 'object' } } })
   expect((await call('trivia_blueprint_patch')).structuredContent).toMatchObject({ entry: 'Agent: Add customers', summary: { pages: [{ errors: 0 }] } })
   expect((await call('trivia_blueprint_get/doc')).structuredContent).toMatchObject({ doc: { name: 'Customers' }, projection: expect.stringContaining('Customers') })
-  expect(await call('trivia_blueprint_preview')).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
-  expect(await call('trivia_blueprint_eject')).toMatchObject({ isError: true, structuredContent: { error: { code: 'conflict' } } })
+  expect((await call('trivia_blueprint_preview')).structuredContent).toMatchObject({ route: '/__blueprint/Customers', code: expect.stringContaining('function Customers') })
+  const ejected = await call('trivia_blueprint_eject')
+  expect(ejected.structuredContent).toMatchObject({ entry: 'Agent: Eject customers', summary: { pages: [{ status: 'ejected' }] } })
+  expect((await tool('trivia_undo', { label: ejected.structuredContent?.entry })).isError).not.toBe(true)
   vi.stubEnv('PATH', root)
   try {
     expect(await call('trivia_blueprint_backend')).toMatchObject({
@@ -286,11 +293,7 @@ it('FR-DM-07 advertises model payloads and summarizes a patched model with its d
 it('FR-AG-06 returns a loadable blueprint preview and optional code over MCP', async () => {
   await client.close()
   await running.close()
-  const host = createStandaloneHost(root)
-  running = await startDevService({
-    ...host,
-    preview: { blueprints: true, publish: (id) => '/@trivia/preview/' + id + '.tsx' },
-  }, { port: 0 })
+  running = await startDevService(previewBlueprintHost(root))
   client = new Client({ name: 'blueprint-preview-test', version: '0' })
   await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
   expect((await tool('trivia_blueprint_patch', { ops: [listPage()], label: 'Draft' })).isError).not.toBe(true)

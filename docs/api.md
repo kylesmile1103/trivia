@@ -509,8 +509,10 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
 
 ## Blueprint
 
-Vite and Next.js serve the same blueprint API. Paths in blueprint requests and results are
-relative to the blueprint directory, which defaults to `blueprint` and is configurable on Vite.
+Vite and Next.js serve the blueprint read and patch API. Blueprint preview and eject target
+Vite Refine. Document paths are relative to the blueprint directory, which defaults to
+`blueprint` and is configurable on Vite. The emitted `files` and source operations in an
+eject plan use project-relative paths.
 `dir` in the summary is relative to the project root. Blueprint endpoints require loopback even with Vite's
 `allowRemote: true`. Paths that traverse outside the blueprint directory or contain
 symlinks return 422 `path_outside_root`.
@@ -554,7 +556,7 @@ schema or reference error returns 422 `invalid_result` without writing.
 POST /@trivia/api/blueprint/patch
 Content-Type: application/json
 
-{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customers","kind":"list","resource":"Customer"}]}
+{"label":"Add customers","ops":[{"op":"createPage","doc":"pages/Customers.page.json","baseRev":null,"name":"Customers","route":"/customer-workbench","kind":"custom"}]}
 ```
 
 A document from an unsupported version gives the same 422 error on a patch against
@@ -564,9 +566,10 @@ A stale revision or a file changed between planning and writing returns 409 `con
 with `error.details.revs`. The map contains the current revision of each affected
 document, with `null` for a missing document. Re-read the affected documents before retrying.
 
-`preview` takes the page name and returns its development route, module, compiled code,
-required registry items and diagnostics. A running Vite Refine host mounts the route in the
-app. An invalid page returns 422 `invalid_result` with diagnostic details.
+`preview` takes the page name and returns `{ page, route, module, code, requires, diagnostics }`.
+Load `route` in the canvas of a running Vite Refine app. The app loads `module` at
+`/@trivia/preview/<id>.tsx`. Reload the route to see the current draft. An invalid page returns
+422 `invalid_result` with `error.details.diagnostics`.
 
 ```http
 POST /@trivia/api/blueprint/preview
@@ -575,8 +578,11 @@ Content-Type: application/json
 {"page":"Customers"}
 ```
 
-`plan` takes optional page names (defaults to all drafts) and returns an eject plan with
-guarded source operations, files, requirements, warnings, a lock and a label.
+`plan` accepts optional `pages` and defaults to all drafts. It returns
+`{ ops, files, requires, warnings, lock, label }`. Review the operations and warnings before
+applying them. A file changed since eject or a foreign file or route returns 409 `conflict`.
+Missing components return 422 `unresolved_component` with `error.details.requires` listing
+the registry items to install.
 
 ```http
 POST /@trivia/api/blueprint/plan
@@ -585,16 +591,17 @@ Content-Type: application/json
 {"pages":["Customers"]}
 ```
 
-Apply `ops` in order with `POST /@trivia/api/batch` and the returned label. The final
+Apply `{ ops, label }` as returned with `POST /@trivia/api/batch`. The final
 operation creates or replaces the managed `blueprint.lock.json` inside the blueprint
-directory. The draft revisions are checked before the batch writes any files.
-`ejected` confirms that the latest history entry committed the lock and returns `lockRev`.
+directory. The draft revisions are checked before the batch writes any files. Source,
+registrations and the lock share an undo entry. `ejected` verifies the latest entry and
+checks that its lock still matches and includes the requested pages. It returns `{ lockRev }`.
 
 ```http
 POST /@trivia/api/blueprint/ejected
 Content-Type: application/json
 
-{"pages":["Customers"],"entry":"Eject customers"}
+{"pages":["Customers"],"entry":"Eject Customers"}
 ```
 
 `backend` runs `trivia-dotnet` for the project's blueprint and solution root. Install the
