@@ -509,8 +509,10 @@ documented once, in `crates/trivia_oxc_engine/src/locator.rs`. Key consequences 
 
 ## Blueprint
 
-Vite and Next.js serve the blueprint read and patch API. Blueprint preview and eject target
-Vite Refine. Document paths are relative to the blueprint directory, which defaults to
+Vite and Next.js serve the blueprint read and patch API, and both preview and eject (spec
+012): Vite Refine through a virtual module, Next.js App Router (`targets.web = next-refine`) through
+compiled files the dev service writes under `app/(blueprint-preview)/%5F_blueprint/<Name>/`
+(LLD-12). Document paths are relative to the blueprint directory, which defaults to
 `blueprint` and is configurable on Vite. The emitted `files` and source operations in an
 eject plan use project-relative paths.
 `dir` in the summary is relative to the project root. Blueprint endpoints require loopback even with Vite's
