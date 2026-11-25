@@ -57,7 +57,7 @@ dotnet/
 | `plan --blueprint <dir> --root <dir> [--content]` | Prints the file plan as JSON on stdout | 0, or 1 on diagnostics |
 | `write --blueprint <dir> --root <dir> [--force]` | Applies the plan | 0, 1, or 2 when a write is refused |
 | `check --blueprint <dir> --root <dir>` | Fails when a generated file is stale or was edited by hand. For CI | 0 or 1 |
-| `migrate <Name> --root <dir>` | Adds an EF Core migration and applies rename hints | 0 or 1 |
+| `migrate <Name> --root <dir>` | Adds an EF Core migration and settles every rename marker. A run that would drop renamed data is undone | 0 or 1 |
 
 The tool reads the blueprint through the published JSON Schemas. It refuses a
 `blueprintVersion` it does not know. It validates only what it needs, since the Node side has
@@ -279,11 +279,26 @@ with `code: "stale"`.
 
 ## 6. Migrations (FR-NC-12)
 
-`migrate <Name>` runs `dotnet ef migrations add <Name>` for the API project. If the model
-carries `renamedFrom` markers and the new migration contains the matching drop and add pair,
-the tool rewrites that pair into a rename with a Roslyn rewriter and reports it. It touches
-only the migration file this run created. The Node side then clears the markers with a model
-op. Migrations are applied by the migration service at start (LLD-10), never by the tool.
+`migrate <Name>` runs `dotnet ef migrations add <Name>` for the API project, then accounts
+for every `renamedFrom` marker in the model: a declared rename never becomes a drop. A
+Roslyn rewriter turns EF's drop and create of a renamed table or column into renames, and
+the tool reports every marker it settled. The Node side then clears those markers with the
+guarded `clearRenameMarkers` op (LLD-08 section 4). Migrations are applied by the migration
+service at start (LLD-10), never by the tool.
+
+```json
+{ "migration": "src/BackOffice.Api/Data/Migrations/20261126090000_RenameClient.cs",
+  "modelRev": "sha256:…",
+  "renames": [{ "kind": "column", "entity": "Client", "field": "displayName", "from": "fullName",
+                "oldName": "customers.full_name", "newName": "clients.display_name" }],
+  "settled": [{ "entity": "Client", "field": "displayName", "from": "fullName", "outcome": "renamed" }],
+  "diagnostics": [] }
+```
+
+`modelRev` hashes the model file `migrate` read, and the clear uses it as `baseRev`. `renames`
+lists every RenameTable or RenameColumn in the final migration that carries out a marker,
+whether EF or the rewriter emitted it. `settled` lists every marker read, with `field` for a
+field marker.
 
 ⚑ `migrate` uses an installed `dotnet ef` and fixes the destination to `Data/Migrations`.
   Use `--blueprint <dir>` for input outside `<root>/blueprint`. With no model, the command
@@ -291,10 +306,48 @@ op. Migrations are applied by the migration service at start (LLD-10), never by 
   Build the project with warnings as errors before invoking EF, which expects restored
   project metadata. EF maintains its model snapshot. Earlier migration and designer files
   remain untouched.
-⚑ Resolve an old table's actual plural from EF's preceding model snapshot. Rewrite only
-  equivalent and unambiguous drop/add pairs with matching Up and Down statements. Keep
-  table pairs that also recreate indexes and column pairs that change storage shape in
-  EF's original form. Apply Roslyn-derived spans to preserve surrounding migration text.
+⚑ (decided 2026-11-26) Resolve each marker against EF's previous model snapshot: the
+  entity's table (through the entity's own marker when the table was renamed) and that
+  table's columns. Each marker ends `renamed` (the final migration renames the old name to
+  the current one), `alreadyApplied` (the snapshot has the current name and not the old
+  one) or `notInDatabase` (it has neither). Otherwise `migrate` exits 1, names the entity
+  and field in the diagnostic and undoes its run:
+  - `rename_drops_data`: the snapshot has the old table or column, and the migration drops
+    it, renames it to another name, or does not rename it. EF pairs look-alike columns by
+    structure, so it can rename the old column to a new field instead of the marked one.
+    The rewriter fails closed: a marker it cannot fully account for ends here.
+  - `rename_marker_stale`: the old name is absent from the snapshot, and the migration adds
+    the marked column while dropping a column of the same table (for an entity, it creates
+    the marked table while dropping a table). This catches a marker that outlived its
+    migration, such as `displayName <- name` over a snapshot that holds `full_name`. It also
+    refuses a new field renamed before its first migration beside an unrelated removal on
+    the same table, so the diagnostic offers both remedies: clear the marker, or migrate the
+    removal separately.
+  - `rename_conflict`: the old name is the current name of another field of the entity, or
+    of another entity, as in a swap. The migration cannot tell which data belongs where.
+    There is no three-step rename in v1.
+  Comparing against the snapshot, not the marker's name alone, is what makes a spent or
+  stale marker loud instead of a silent drop.
+⚑ (decided 2026-11-26) A failed run after `ef migrations add` undoes itself. It deletes
+  `<ts>_<Name>.cs` and `<ts>_<Name>.Designer.cs` and restores `AppDbContextModelSnapshot.cs`
+  to its bytes before the run. This reverses "touches only the migration file": a snapshot
+  left updated would make the next `migrate` see no difference, and the change would vanish.
+⚑ (decided 2026-11-26) A table rename is rewritten into the form EF emits for a table it
+  renames itself, when only the plural changes. Drop the table's own foreign keys, primary
+  key and check constraints, then RenameTable and RenameColumn for the declared field
+  renames. Add the primary key, check constraints and foreign keys back under their new
+  names, and RenameIndex each index whose arguments match once its columns are renamed. The
+  other indexes are dropped and created. Apart from the declared renames, the columns must
+  match exactly: any other column change in a renamed table is refused, and the diagnostic
+  says to migrate the rename on its own first. The old rewrite never matched real EF output
+  (Down lists the columns alphabetically, and key and check names carry the table name), so
+  table renames shipped as a drop and a create.
+⚑ (decided 2026-11-26) Column renames inside a table that keeps its name: EF emits
+  RenameColumn itself when the old and new columns have the same structure, and RenameIndex
+  for their indexes. Otherwise the rewriter turns an equivalent DropColumn and AddColumn pair
+  in both directions into RenameColumn. A rename that also changes the column's definition
+  is refused, so rename in one migration and change the definition in the next. Roslyn spans
+  keep the surrounding migration text.
 
 ## 7. Auth (FR-NC-13, should)
 
@@ -324,6 +377,12 @@ is added.
 - `model.v1.json` fixtures from the Node package deserialize without loss.
 - The migration test runs the installed `dotnet ef` CLI. The integration tests use
   Testcontainers with PostgreSQL and start the emitted API on loopback.
+- Renames (`RenameMigrationTests`, `Category=Build`, real EF): EF's own RenameColumn, a
+  rename with a shape change and the full diff after the undone run, markers created and
+  renamed before their first migration then renamed again, a stale marker, a new field's
+  marker beside a removal, table renames with keys, indexes and constraints, a swap, and EF
+  pairing the old column with another field. `RenameDatabaseTests` (`Category=Integration`)
+  applies table and column renames to PostgreSQL with rows, up and down.
 
 ⚑ The Nx `dotnet` build and test targets run without caching. The test target depends on
   the build and runs all traits against the current local toolchain and Docker runtime.

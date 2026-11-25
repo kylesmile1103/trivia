@@ -12,6 +12,16 @@ supports Vite and Next.js.
 
 Use the .NET 10 SDK, Aspire CLI 13.6.5, a running container runtime, Node and pnpm. Make
 `trivia-blueprint` and `trivia-dotnet` available from your Trivia build or distribution.
+A fresh Aspire install gets a newer CLI, which these solutions are not verified with, so
+install the pinned version as CI does. `trivia-blueprint backend` stops when the Aspire CLI
+on PATH has another major or minor version.
+
+```sh
+curl -fsSL https://aspire.dev/install.sh -o aspire-install.sh
+bash aspire-install.sh --version 13.6.5
+```
+
+Then create, generate and run the app:
 
 ```sh
 trivia-blueprint new backoffice --api dotnet-minimal
@@ -25,7 +35,9 @@ aspire run
 The backend command generates the solution, restores its pinned EF tool, adds the migration,
 builds the API, syncs the web client and reports contract drift. Commit the OpenAPI document
 under `web/openapi/` with your changes. After changing the model, run the backend command
-again and pass `--migration <Name>` when the database schema changes.
+again and pass `--migration <Name>` when the database schema changes. A renamed entity or
+field becomes a rename in the migration. When a rename would drop data instead, the command
+stops, names the entity and field, and leaves no migration behind.
 
 Open the web endpoint in the Aspire dashboard after the migration completes. When running
 Vite on its own, set `API_URL` to the API origin. If Aspire reports a missing or stopped

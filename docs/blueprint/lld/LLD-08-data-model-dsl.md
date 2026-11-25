@@ -128,9 +128,21 @@ BlueprintOps on `model.blueprint.json` (LLD-01 section 4):
 | `setField`, `removeField`, `renameField`, `moveField` | A rename records `renamedFrom` and updates indexes and API lists |
 | `setRelation`, `removeRelation` | |
 | `setIndexes`, `setEntityApi` | |
+| `clearRenameMarkers` | After a successful migration: removes the markers it settled. Each item names the entity, the field for a field marker, and the expected `renamedFrom`. All or nothing |
 
-`renamedFrom` stays in the document until the next migration is generated. `trivia-dotnet`
-turns it into a column or table rename, and `migrate` clears the marker (LLD-09).
+`renamedFrom` stays in the document until a migration settles it. `trivia-dotnet migrate`
+turns it into a table or column rename, or refuses the migration, and reports every marker
+it settled (LLD-09 section 6).
+
+⚑ (decided 2026-11-26) After a successful migrate, the CLI `backend` loop and the dev
+service's backend call apply `clearRenameMarkers` to every marker it settled, with `baseRev`
+set to the model revision migrate read. In the dev service the clear is one undo entry. A
+marker added or changed after migrate read the model stays, and a refused clear fails loudly
+while the migration stays, because the migration is correct. Clearing only the markers that
+became renames left spent markers behind. A field created and renamed before its first
+migration kept `fullName <- name`, a later rename kept that first name, and the next
+migration dropped the column. Once its marker is cleared, the next rename starts from the
+migrated name: A to B, migrate, B to C gives `C <- B`.
 
 ⚑ `setModel` can create the document with empty entity and enum arrays. `setEntity` merges
 supplied top-level properties and replaces any supplied arrays or API object. Creation
@@ -212,6 +224,10 @@ backend this tool did not generate.
   and relation kind. It round-trips canonically.
 - One fixture per diagnostic code.
 - Each op, with the diff it produces. Renames update every reference.
+- `clearRenameMarkers`: a stale `baseRev` or a changed `renamedFrom` is refused with nothing
+  cleared, a marker it does not name survives, and a rename after the clear starts from the
+  migrated name. The dev service and CLI tests check a successful migrate leaves no settled
+  marker and a refused clear fails with its message.
 - The mapping fixture is regenerated in CI and must match the committed file.
 - The JSON Schema validates the fixtures under ajv strict mode. The C# side's deserializer
   reads the same fixtures (LLD-09).
