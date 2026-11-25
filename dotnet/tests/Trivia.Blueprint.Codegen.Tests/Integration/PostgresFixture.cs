@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -11,7 +12,25 @@ public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17").Build();
 
-    public Task InitializeAsync() => container.StartAsync();
+    public async Task InitializeAsync()
+    {
+        await container.StartAsync();
+        // A Docker VM can publish the host port after PostgreSQL is ready inside the container.
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(20));
+        while (true)
+        {
+            try
+            {
+                await using NpgsqlConnection connection = new(container.GetConnectionString());
+                await connection.OpenAsync(timeout.Token);
+                return;
+            }
+            catch (NpgsqlException exception) when (exception.InnerException is SocketException && !timeout.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200), timeout.Token);
+            }
+        }
+    }
     public Task DisposeAsync() => container.DisposeAsync().AsTask();
 
     internal async Task<RunningApi> StartAsync(GeneratedProject project, IReadOnlyDictionary<string, string>? settings = null)
