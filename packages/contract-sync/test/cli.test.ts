@@ -84,7 +84,7 @@ describe('trivia-contract-sync CLI', () => {
     const io = capture()
     const code = await main(['--input', 'openapi/missing.json', '--output', 'src/never', '--manifest', 'never.json', '--cwd', root], io)
     expect(code).toBe(1)
-    expect(io.err.join('')).toMatch(/^error\[input_not_found\]: Spec file not found: .*openapi\/missing\.json\n$/)
+    expect(io.err.join('')).toMatch(/^error\[input_not_found\]: Spec file not found: .*openapi[\\/]missing\.json\n$/)
     expect(fs.existsSync(path.join(root, 'src/never'))).toBe(false)
     expect(fs.existsSync(path.join(root, 'never.json'))).toBe(false)
   })
