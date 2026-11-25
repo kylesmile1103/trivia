@@ -93,7 +93,7 @@ export function summarize(workspace: BlueprintWorkspace, blueprint: Blueprint, f
   const next = errors > 0
     ? 'Review the diagnostics and patch the affected documents using their current revisions.'
     : pages.length === 0
-      ? 'Start with createPage (baseRev: null). Use setApp to set the app name and targets.'
+      ? 'Start with createPage (baseRev: null), or use setApp with baseRev: null, a name and targets.web (vite-refine or next-refine) to create the app.'
       : 'Read a page document before editing it, or use createPage to add another.'
   return {
     dir: workspace.dir, exists: blueprint.exists,

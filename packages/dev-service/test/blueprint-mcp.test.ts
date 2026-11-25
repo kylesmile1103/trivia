@@ -80,7 +80,7 @@ it('FR-AG-02 lists blueprint tools and their guarded input shapes', async () => 
 })
 
 interface OperationSchema {
-  properties: { op: { const: string } }
+  properties: { op: { const: string }; targets?: { description?: string } }
   required: string[]
 }
 
@@ -194,4 +194,16 @@ it('NFR-14 executes the documented blueprint authoring calls', async () => {
   for (const toolName of ['trivia_blueprint_preview', 'trivia_blueprint_eject', 'trivia_blueprint_backend']) {
     expect(await call(toolName)).toMatchObject({ isError: true, structuredContent: { error: { code: 'unsupported' } } })
   }
+})
+
+it('SC-001 tells a first-time author that creating the app requires a web target', async () => {
+  const summary = await tool('trivia_blueprint_get')
+  expect(summary.structuredContent).toMatchObject({ next: expect.stringContaining('targets.web') })
+  const { tools } = await client.listTools()
+  const patch = tools.find(({ name }) => name === 'trivia_blueprint_patch')
+  const { items } = patch?.inputSchema.properties?.ops as {
+    items: { oneOf?: OperationSchema[]; anyOf?: OperationSchema[] }
+  }
+  const setApp = (items.oneOf ?? items.anyOf)!.find(({ properties }) => properties.op.const === 'setApp')
+  expect(setApp?.properties.targets?.description).toContain('required when baseRev is null')
 })

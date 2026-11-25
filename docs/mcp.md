@@ -239,3 +239,18 @@ and `force`. It currently returns `unsupported` pending the trivia-dotnet bridge
 ```json
 {"name":"trivia_blueprint_backend","arguments":{"mode":"plan"}}
 ```
+
+### Blueprint authoring with Claude Code (2026-11-25)
+
+Claude Code 2.1.332 (Sonnet 5.5) connected to the standalone dev service on a fresh copy
+of the Refine example. Strict MCP config exposed only Trivia, and the built-in tools were
+disabled. The prompt asked for BackOffice with customer and account lists, using `Client`
+for the customer resource on the first patch to exercise diagnostic recovery.
+
+The first run omitted `targets.web` on `setApp` and retried with `vite-refine` after
+`invalid_op`. The empty summary and the published op schema now call out
+`targets.web` as required when creating the app. On a fresh copy, Claude Code used one
+summary read and two patches with zero refused calls. The draft's
+`unknown_resource` hint listed Account, Customer and Transaction. Claude Code used the
+returned revision to change `Client` to `Customer`. An independent HTTP read verified
+two draft pages with zero errors and zero warnings.

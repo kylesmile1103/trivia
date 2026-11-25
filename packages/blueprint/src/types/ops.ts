@@ -35,7 +35,8 @@ export const blueprintOpSchema = z.discriminatedUnion('op', [
     op: z.literal('setApp'),
     ...appOp,
     name: pageName.optional(),
-    targets: z.strictObject({ web: z.enum(WEB_TARGETS).optional(), api: z.enum(API_TARGETS).nullable().optional() }).optional(),
+    targets: z.strictObject({ web: z.enum(WEB_TARGETS).optional(), api: z.enum(API_TARGETS).nullable().optional() }).optional()
+      .describe('targets.web is required when baseRev is null. Set it to vite-refine or next-refine when creating the app.'),
     auth: z.strictObject({ mode: z.enum(AUTH_MODES) }).optional(),
     /** Per token: a value sets it, null removes it. */
     theme: z.strictObject({ tokens: z.record(z.string().regex(TOKEN), z.string().min(1).nullable()) }).optional(),

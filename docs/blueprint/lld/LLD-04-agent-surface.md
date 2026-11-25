@@ -89,6 +89,8 @@ interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaf
   a malformed document returns 422 `invalid_result` with its diagnostics.
 - `status`: `draft` when the lock has no entry; `ejected` when the file's hash matches the
   lock; `edited` when it differs or the file is gone.
+- ⚑ The starter hint and published `setApp` schema call out the web target required on
+  creation. The reducer still allows updates that preserve the current target.
 - A blueprint that does not exist is not an error: `exists: false`, and `createPage` or
   `setApp` creates the directory on the first patch.
 - ⚑ Patch plans, derives the summary from the result snapshot, and commits while holding
