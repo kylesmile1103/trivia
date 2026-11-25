@@ -1,0 +1,33 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "Bank",
+  "enums": [],
+  "entities": [
+    {
+      "name": "Account",
+      "plural": "accounts",
+      "key": {
+        "name": "id",
+        "type": "uuid"
+      },
+      "fields": [
+        {
+          "name": "balance",
+          "type": "decimal",
+          "scale": 2
+        },
+        {
+          "name": "sequenceNumber",
+          "type": "long",
+          "maxLength": 10
+        }
+      ],
+      "relations": [],
+      "indexes": [],
+      "api": {
+        "operations": []
+      }
+    }
+  ]
+}

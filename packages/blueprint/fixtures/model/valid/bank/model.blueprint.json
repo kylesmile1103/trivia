@@ -1,0 +1,237 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "BackOffice",
+  "enums": [
+    {
+      "name": "CustomerStatus",
+      "values": [
+        "pending",
+        "active",
+        "suspended"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "Customer",
+      "plural": "customers",
+      "key": {
+        "name": "id",
+        "type": "uuid",
+        "generated": "v7"
+      },
+      "fields": [
+        {
+          "name": "fullName",
+          "type": "string",
+          "required": true,
+          "description": "Legal name",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "format": "email"
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "enum": "CustomerStatus",
+          "required": true,
+          "default": "pending"
+        },
+        {
+          "name": "creditLimit",
+          "type": "decimal",
+          "default": 0,
+          "precision": 18,
+          "scale": 2,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "maxLength": 1000
+        },
+        {
+          "name": "createdAt",
+          "type": "datetime",
+          "required": true,
+          "readOnly": true,
+          "generated": "onCreate"
+        },
+        {
+          "name": "birthDate",
+          "type": "date"
+        },
+        {
+          "name": "externalRef",
+          "type": "uuid"
+        }
+      ],
+      "relations": [
+        {
+          "name": "accounts",
+          "kind": "hasMany",
+          "to": "Account",
+          "foreignKey": "customerId"
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "status"
+          ]
+        }
+      ],
+      "api": {
+        "operations": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete"
+        ],
+        "filterable": [
+          "status",
+          "email"
+        ],
+        "sortable": [
+          "fullName",
+          "createdAt"
+        ],
+        "searchable": [
+          "fullName",
+          "email"
+        ],
+        "custom": [
+          {
+            "name": "approveKyc",
+            "method": "POST",
+            "path": "{id}/approve-kyc",
+            "input": [
+              {
+                "name": "reason",
+                "type": "string",
+                "maxLength": 500
+              }
+            ],
+            "returns": "Customer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Account",
+      "plural": "accounts",
+      "key": {
+        "name": "id",
+        "type": "int"
+      },
+      "fields": [
+        {
+          "name": "accountNumber",
+          "type": "string",
+          "required": true,
+          "pattern": "^[0-9]{10}$"
+        },
+        {
+          "name": "sequenceNumber",
+          "type": "int",
+          "minimum": 1
+        },
+        {
+          "name": "frozen",
+          "type": "bool",
+          "required": true,
+          "default": false
+        },
+        {
+          "name": "updatedAt",
+          "type": "datetime",
+          "readOnly": true,
+          "generated": "onUpdate"
+        }
+      ],
+      "relations": [
+        {
+          "name": "customer",
+          "kind": "belongsTo",
+          "to": "Customer",
+          "foreignKey": "customerId",
+          "required": true,
+          "onDelete": "restrict"
+        },
+        {
+          "name": "transactions",
+          "kind": "hasMany",
+          "to": "Transaction",
+          "foreignKey": "accountId"
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "customerId",
+            "accountNumber"
+          ],
+          "unique": true
+        }
+      ],
+      "api": {
+        "operations": [
+          "list",
+          "get"
+        ]
+      }
+    },
+    {
+      "name": "Transaction",
+      "plural": "transactions",
+      "key": {
+        "name": "id",
+        "type": "long"
+      },
+      "fields": [
+        {
+          "name": "ledgerSequence",
+          "type": "long",
+          "required": true
+        },
+        {
+          "name": "details",
+          "type": "json"
+        }
+      ],
+      "relations": [
+        {
+          "name": "account",
+          "kind": "belongsTo",
+          "to": "Account",
+          "foreignKey": "accountId",
+          "required": true,
+          "onDelete": "cascade"
+        },
+        {
+          "name": "reviewer",
+          "kind": "belongsTo",
+          "to": "Customer",
+          "foreignKey": "reviewerId",
+          "onDelete": "setNull"
+        }
+      ],
+      "indexes": [],
+      "api": {
+        "operations": [
+          "list",
+          "get"
+        ]
+      }
+    }
+  ]
+}

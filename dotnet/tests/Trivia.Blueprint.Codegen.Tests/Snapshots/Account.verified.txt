@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+
+namespace BackOffice.Features.Account;
+public partial class Account
+{
+    public int Id { get; set; }
+    public required string AccountNumber { get; set; }
+    public int? SequenceNumber { get; set; }
+    public bool Frozen { get; set; } = false;
+    public DateTimeOffset? UpdatedAt { get; set; }
+    public Guid CustomerId { get; set; }
+    public global::BackOffice.Features.Customer.Customer Customer { get; set; } = null !;
+    public ICollection<global::BackOffice.Features.Transaction.Transaction> Transactions { get; } = new List<global::BackOffice.Features.Transaction.Transaction>();
+}

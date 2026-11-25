@@ -1,6 +1,7 @@
 // The batch reducer (LLD-01 section 4, FR-BP-07). A batch is applied to a working copy and
 // either every op applies or nothing is written. Pure: it computes the files to write and
 // leaves writing them to the caller (the dev service, LLD-04). Never throws.
+import { applyModelOp } from '../model/apply.js'
 import { compareBytes, serialize } from '../serialize.js'
 import { loadDocument, type Blueprint, type DocEntry } from '../store.js'
 import { applyError, type ApplyError, type Diagnostic } from '../types/diagnostics.js'
@@ -41,6 +42,10 @@ type Handler<N extends OpName> = (draft: Draft, op: OpOf<N>) => void
 const HANDLERS: { [N in OpName]: Handler<N> } = {
   setApp, setNav, createPage, deletePage, setPageMeta, addNode, removeNode, moveNode, renameNode,
   setProp, setBinding, setStyle, setControl, setState, removeState, setQuery, removeQuery, setActions,
+  setModel: applyModelOp, setEnum: applyModelOp, removeEnum: applyModelOp,
+  setEntity: applyModelOp, removeEntity: applyModelOp, renameEntity: applyModelOp,
+  setField: applyModelOp, removeField: applyModelOp, renameField: applyModelOp, moveField: applyModelOp,
+  setRelation: applyModelOp, removeRelation: applyModelOp, setIndexes: applyModelOp, setEntityApi: applyModelOp,
 }
 
 function run(draft: Draft, op: BlueprintOp): void {

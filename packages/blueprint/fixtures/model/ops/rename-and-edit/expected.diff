@@ -1,0 +1,39 @@
+--- a/model.blueprint.json
++++ b/model.blueprint.json
+-        "suspended"
++        "suspended",
++        "closed"
+-      "name": "Customer",
+-      "plural": "customers",
++      "name": "Client",
++      "plural": "clients",
++          "name": "accountStatus",
++          "type": "enum",
++          "enum": "CustomerStatus",
++          "required": true,
++          "default": "pending",
++          "renamedFrom": "status"
++        },
++        {
+-          "name": "status",
+-          "type": "enum",
+-          "enum": "CustomerStatus",
+-          "required": true,
+-          "default": "pending"
+-        },
+-        {
+-            "status"
++            "accountStatus"
+-          "status",
++          "accountStatus",
+-            "returns": "Customer"
++            "returns": "Client"
+-      }
++      },
++      "renamedFrom": "Customer"
+-          "to": "Customer",
++          "to": "Client",
+-          "onDelete": "restrict"
++          "onDelete": "cascade"
+-          "to": "Customer",
++          "to": "Client",

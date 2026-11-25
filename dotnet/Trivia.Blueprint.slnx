@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj" />
+  <Project Path="tests/Trivia.Blueprint.Codegen.Tests/Trivia.Blueprint.Codegen.Tests.csproj" />
+</Solution>

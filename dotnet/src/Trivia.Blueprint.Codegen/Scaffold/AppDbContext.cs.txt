@@ -1,0 +1,10 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace {{Namespace}}.Data;
+
+public partial class AppDbContext
+{
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
+    {
+    }
+}

@@ -46,11 +46,21 @@ identity. A rename is explicit (section 4).
 Names: entities and enums PascalCase, fields and relations camelCase, `plural` kebab-case (the
 URL segment and, in snake_case, the table name).
 
+⚑ The namespace is one or more dot-separated PascalCase identifiers. The document declares
+its enum and entity arrays, and each entity declares its fields, relations, indexes and API
+operations, using empty arrays where appropriate. Enum values are nonempty strings. Custom
+operations take an uppercase method, a relative path of literal or brace-parameter segments
+(empty for the collection), optional input fields and an optional entity name for the return.
+
 ## 2. Types and mapping (FR-DM-02, FR-DM-04)
 
 `mapping.ts` is one table and the only place this knowledge lives on the Node side. LLD-09
 holds the same table in C#. A shared fixture, `model-mapping.json`, is generated from the
 TypeScript table and asserted by a C# test, so the two cannot drift.
+
+⚑ The mapping fixture is keyed by blueprint field type. Each row carries the four target
+forms, with braced names for substitutions and a separate PostgreSQL fallback for
+`string` without `maxLength`. The test regenerates the fixture in memory and compares its bytes.
 
 | Blueprint | C# | PostgreSQL | OpenAPI 3.1 | zod |
 | --- | --- | --- | --- | --- |
@@ -75,6 +85,11 @@ Constraints per type: strings take `minLength`, `maxLength`, `pattern` and `form
 `scale`. Any field may have `required`, `unique`, `readOnly`, `default` and `description`.
 `generated` is `onCreate` or `onUpdate` for `datetime`, and `v7` for a `uuid` key.
 
+⚑ Each field type has a strict schema, so a constraint on the wrong field type produces
+`schema_violation` at that property. `invalid_constraint` covers conflicts between valid
+properties. String and text lengths use a nonnegative minimum and positive maximum.
+Integer bounds use the signed 32-bit range for `int` and safe JSON integers for `long`.
+
 Keys: `uuid` (generated, the default), `int` or `long` (an identity column). One key field per
 entity. Composite keys are refused in version 1.
 
@@ -90,6 +105,16 @@ entity. Composite keys are refused in version 1.
 In the API a `belongsTo` shows as its foreign key field (`customerId`). Nested objects are not
 embedded in responses in version 1, which keeps list pages and forms flat, as the Refine
 generator expects.
+
+⚑ An inverse matches the exact entity and foreign-key names, including in self-relations.
+Indexes and API lists can reference the entity key, declared fields and implied foreign keys.
+`invalid_constraint` reports an implied key that would collide with a declared member or
+another implied key, and `setNull` on a required relation.
+
+⚑ An unmatched relation's guarded `setRelation` hint uses the foreign key without its `Id`
+suffix or the lowercased source type as the inverse name. If that name is taken, it appends
+`Relation` and a number as needed. If the implied key would collide, the diagnostic
+explains what name to free before adding the inverse.
 
 ## 4. Ops (FR-DM-07, FR-DM-08)
 
@@ -107,6 +132,26 @@ BlueprintOps on `model.blueprint.json` (LLD-01 section 4):
 `renamedFrom` stays in the document until the next migration is generated. `trivia-dotnet`
 turns it into a column or table rename, and `migrate` clears the marker (LLD-09).
 
+⚑ `setModel` can create the document with empty entity and enum arrays. `setEntity` merges
+supplied top-level properties and replaces any supplied arrays or API object. Creation
+requires `plural` and `key` and starts with empty collections and no API operations unless
+provided. Setters for enums, fields and relations replace an exact-name match in place or
+append a new entry. `moveField.index` addresses the field's final position.
+
+⚑ An entity rename also updates custom operation returns and can be paired with `setEntity`
+to change the plural. A chain of renames retains the first name through later field updates
+and clears the marker if the name returns to that original.
+
+⚑ Entity and enum removals report the blocking references in the draft. Remove those
+references before the removal op in the same batch. Self-references disappear with their
+entity, and custom operation inputs and returns count as references.
+
+⚑ The public model API exposes the full schema and `validateModel(value, baseRev)`. The
+shared loader checks the model envelope. `validateStructure` checks the full model shape
+and runs the model's layer-2 checks only if the shape passes. Read-only validation and the
+batch reducer use the same structural diagnostics. Only newly introduced errors block a
+batch. Fixing ops carry the revision of the file being validated.
+
 ## 5. Validation (FR-DM-03)
 
 Model diagnostics, on top of the schema layer:
@@ -118,11 +163,32 @@ Model diagnostics, on top of the schema layer:
 | `dangling_reference` | A relation to a missing entity, a field's enum that does not exist, an index or API list naming a missing field |
 | `unmatched_relation` | A `hasMany` without its `belongsTo` |
 | `invalid_default` | A default that does not fit the type, the enum or the bounds |
-| `invalid_constraint` | `minimum` above `maximum`, a `scale` above `precision`, `maxLength` on a number |
-| `invalid_api` | A sortable or filterable `json` field, a custom operation path that collides with a CRUD route |
+| `invalid_constraint` | `minimum` above `maximum`, a `scale` above `precision`, or other conflicting constraints |
+| `invalid_api` | An unsupported API field type, a conflicting custom route, or a reused entity plural |
 | `breaking_change` (warning) | Against the lock's last generated model: a removed field, a narrowed type, a new required field without a default |
 
-The reserved word lists are data files, with their sources named in a header comment.
+⚑ The reserved word lists have a `source` and `date` header in each JSON object, followed by
+`words`. JSON has no comment syntax. The lists cover C# reserved keywords, the reserved
+entries in PostgreSQL 19's own keyword column, and the generator's key and paging member
+names (`Id`, `Items`, `Total`, `Page`, `PageSize`).
+
+⚑ Enums and entities share a case-insensitive type namespace. Fields and relations share a
+case-insensitive member namespace within an entity, and custom operation inputs use the same
+name and constraint checks in their own scope. Enum wire values are compared exactly.
+
+⚑ Reserved checks fold identifier case and compare SQL names in their emitted snake_case.
+The conventional `id` is available for a key, and any member using the declared key name is
+diagnosed as reserved.
+
+⚑ Explicit null defaults require a nullable field. String defaults check Unicode character
+length, ECMAScript Unicode patterns and email or absolute URI formats. Date-time defaults
+require an offset. Decimal defaults must fit both bounds and the precision and scale of the
+column using the digits that JSON serialization emits.
+
+⚑ Filters and sorts accept scalar fields, and searches accept `string` and `text`. Custom
+routes conflict by HTTP method and template with enabled CRUD or earlier custom routes.
+Template comparison folds literal case and ignores parameter names. A literal segment has
+its own precedence over a parameter segment. [ASP.NET Core routing](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/routing?view=aspnetcore-10.0)
 
 ## 6. Pages and the model
 
@@ -141,6 +207,11 @@ backend this tool did not generate.
 - The mapping fixture is regenerated in CI and must match the committed file.
 - The JSON Schema validates the fixtures under ajv strict mode. The C# side's deserializer
   reads the same fixtures (LLD-09).
+
+⚑ The shared schema emitter writes the model's draft 2020-12 input schema to
+`packages/blueprint/schemas/model.v1.json`, beside the app and page schemas. The path
+matches the package's schema exports. The ajv tests check both acceptance of structurally
+valid documents with semantic errors and rejection of schema-layer failures.
 
 ## 8. Open points
 

@@ -1,0 +1,1027 @@
+{
+  "$id": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "title": "Trivia Blueprint Model",
+  "description": "Ordered entities, fields, relations and API settings for a Trivia data model.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://trivia.dev/schemas/blueprint/model.v1.json"
+    },
+    "blueprintVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*(?:\\.[A-Z][A-Za-z0-9]*)*$"
+    },
+    "enums": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "values": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "name",
+          "values"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "plural": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "key": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "uuid"
+                  },
+                  "generated": {
+                    "type": "string",
+                    "const": "v7"
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "text"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "minLength": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "maxLength": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "uri",
+                        "password"
+                      ]
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "int"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "minimum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "maximum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "long"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "minimum": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maximum": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "decimal"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "precision": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "scale": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "minimum": {
+                      "type": "number"
+                    },
+                    "maximum": {
+                      "type": "number"
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "precision",
+                    "scale"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "bool",
+                        "date",
+                        "uuid",
+                        "json"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "datetime"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "generated": {
+                      "type": "string",
+                      "enum": [
+                        "onCreate",
+                        "onUpdate"
+                      ]
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "enum"
+                    },
+                    "enum": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "renamedFrom": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "enum"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "belongsTo"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$"
+                    },
+                    "foreignKey": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "onDelete": {
+                      "type": "string",
+                      "enum": [
+                        "restrict",
+                        "cascade",
+                        "setNull"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "kind",
+                    "to",
+                    "foreignKey"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "hasMany"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$"
+                    },
+                    "foreignKey": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "kind",
+                    "to",
+                    "foreignKey"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "indexes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fields": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  }
+                },
+                "unique": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "fields"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "api": {
+            "type": "object",
+            "properties": {
+              "operations": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "get",
+                    "create",
+                    "update",
+                    "delete"
+                  ]
+                }
+              },
+              "filterable": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
+              },
+              "sortable": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
+              },
+              "searchable": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
+              },
+              "custom": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "method": {
+                      "type": "string",
+                      "pattern": "^[A-Z]+$"
+                    },
+                    "path": {
+                      "type": "string",
+                      "pattern": "^(?:(?:\\{[a-z][A-Za-z0-9]*\\}|(?!\\.{1,2}(?:\\/|$))[A-Za-z0-9._~-]+)(?:\\/(?:\\{[a-z][A-Za-z0-9]*\\}|(?!\\.{1,2}(?:\\/|$))[A-Za-z0-9._~-]+))*)?$"
+                    },
+                    "input": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "text"
+                                ]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "minLength": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "maxLength": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "pattern": {
+                                "type": "string"
+                              },
+                              "format": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "uri",
+                                  "password"
+                                ]
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "int"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "minimum": {
+                                "type": "integer",
+                                "minimum": -2147483648,
+                                "maximum": 2147483647
+                              },
+                              "maximum": {
+                                "type": "integer",
+                                "minimum": -2147483648,
+                                "maximum": 2147483647
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "long"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "minimum": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "maximum": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "decimal"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "precision": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "scale": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "minimum": {
+                                "type": "number"
+                              },
+                              "maximum": {
+                                "type": "number"
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "precision",
+                              "scale"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "bool",
+                                  "date",
+                                  "uuid",
+                                  "json"
+                                ]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "datetime"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "generated": {
+                                "type": "string",
+                                "enum": [
+                                  "onCreate",
+                                  "onUpdate"
+                                ]
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "enum"
+                              },
+                              "enum": {
+                                "type": "string",
+                                "pattern": "^[A-Z][A-Za-z0-9]*$"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "unique": {
+                                "type": "boolean"
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "default": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "renamedFrom": {
+                                "type": "string",
+                                "pattern": "^[a-z][A-Za-z0-9]*$"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "enum"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "returns": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "method",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "operations"
+            ],
+            "additionalProperties": false
+          },
+          "concurrency": {
+            "type": "boolean"
+          },
+          "renamedFrom": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          }
+        },
+        "required": [
+          "name",
+          "plural",
+          "key",
+          "fields",
+          "relations",
+          "indexes",
+          "api"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "$schema",
+    "blueprintVersion",
+    "namespace",
+    "enums",
+    "entities"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    }
+  }
+}

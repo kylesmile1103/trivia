@@ -1,0 +1,10 @@
+[
+  {
+    "pointer": "/entities/0/fields/1/name",
+    "message": "The name \"fullname\" is already in use"
+  },
+  {
+    "pointer": "/entities/1/name",
+    "message": "The name \"CUSTOMER\" is already in use"
+  }
+]

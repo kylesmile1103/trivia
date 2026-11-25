@@ -1,0 +1,24 @@
+{
+  "name": "dotnet",
+  "namedInputs": {
+    "dotnet": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/packages/blueprint/schemas/app.v1.json",
+      "{workspaceRoot}/packages/blueprint/schemas/model.v1.json"
+    ]
+  },
+  "targets": {
+    "build": {
+      "command": "dotnet build dotnet/Trivia.Blueprint.slnx",
+      "inputs": ["dotnet"],
+      "outputs": [],
+      "cache": true
+    },
+    "test": {
+      "command": "dotnet test dotnet/Trivia.Blueprint.slnx",
+      "dependsOn": ["build"],
+      "inputs": ["dotnet", "{workspaceRoot}/packages/blueprint/fixtures/model/**/*"],
+      "cache": true
+    }
+  }
+}

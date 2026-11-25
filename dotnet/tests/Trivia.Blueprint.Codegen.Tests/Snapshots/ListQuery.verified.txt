@@ -1,0 +1,79 @@
+﻿using System.Globalization;
+using System.Linq.Expressions;
+using System.Text.Json;
+
+namespace BackOffice.Generated;
+internal sealed record ListFilter(string Field, string Operator, string Value);
+internal sealed record ListSort(string Field, bool Descending);
+internal static class ListQuery
+{
+    internal static int PageNumber(string? text, string field, int fallback, int max)
+    {
+        if (text is null)
+            return fallback;
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int value) && value >= 1 && value <= max)
+            return value;
+        throw Invalid(field, $"Expected an integer from 1 to {max.ToString(CultureInfo.InvariantCulture)}.");
+    }
+
+    internal static IEnumerable<ListSort> Sorts(string? sort)
+    {
+        if (sort is null)
+            yield break;
+        foreach (string item in sort.Split(','))
+        {
+            bool descending = item.StartsWith('-');
+            string field = descending ? item[1..] : item;
+            if (field.Length == 0)
+                throw Invalid("sort", "A sort field is required.");
+            yield return new(field, descending);
+        }
+    }
+
+    internal static IEnumerable<ListFilter> Filters(string[]? filters)
+    {
+        foreach (string filter in filters ?? [])
+        {
+            string[] parts = filter.Split(':', 3);
+            if (parts.Length != 3 || parts[0].Length == 0 || parts[1].Length == 0)
+                throw Invalid("filter", "Expected field:operator:value.");
+            yield return new(parts[0], parts[1], parts[2]);
+        }
+    }
+
+    internal static IOrderedQueryable<TEntity> Order<TEntity, TKey>(IQueryable<TEntity> query, IOrderedQueryable<TEntity>? ordered, Expression<Func<TEntity, TKey>> key, bool descending) => ordered is null ? (descending ? query.OrderByDescending(key) : query.OrderBy(key)) : (descending ? ordered.ThenByDescending(key) : ordered.ThenBy(key));
+    internal static string SearchPattern(string text) => "%" + text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%";
+    internal static T[] Values<T>(ListFilter filter, Func<string, T> parse)
+    {
+        string[] values = filter.Value.Split(',');
+        if (values.Any(string.IsNullOrEmpty))
+            throw BadValue(filter.Field);
+        return values.Select(parse).ToArray();
+    }
+
+    internal static int Int32(string text, string field) => int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int value) ? value : throw BadValue(field);
+    internal static long Int64(string text, string field) => long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long value) ? value : throw BadValue(field);
+    internal static decimal Decimal(string text, string field) => decimal.TryParse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out decimal value) ? value : throw BadValue(field);
+    internal static bool Boolean(string text, string field) => text switch
+    {
+        "true" => true,
+        "false" => false,
+        _ => throw BadValue(field)};
+    internal static DateOnly Date(string text, string field) => DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly value) ? value : throw BadValue(field);
+    internal static DateTimeOffset Timestamp(string text, string field) => text.Length >= 20 && text[10] == 'T' && (text.EndsWith('Z') || text[^6] is '+' or '-') && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset value) ? value.ToUniversalTime() : throw BadValue(field);
+    internal static Guid Uuid(string text, string field) => Guid.TryParseExact(text, "D", out Guid value) ? value : throw BadValue(field);
+    internal static T EnumValue<T>(string text, string field, Func<string, T> parse)
+    {
+        try
+        {
+            return parse(text);
+        }
+        catch (JsonException)
+        {
+            throw BadValue(field);
+        }
+    }
+
+    internal static ApiProblemException Invalid(string field, string message) => new(400, "Invalid list query.", errors: new Dictionary<string, string[]> { [field] = [message] });
+    private static ApiProblemException BadValue(string field) => Invalid("filter", $"Invalid filter value for '{field}'.");
+}

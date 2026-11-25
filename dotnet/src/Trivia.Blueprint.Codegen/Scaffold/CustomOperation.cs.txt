@@ -1,0 +1,10 @@
+using Microsoft.AspNetCore.Http.HttpResults;
+using {{Namespace}}.Data;
+
+namespace {{Namespace}}.Features.{{Entity}};
+
+public static partial class {{Entity}}Endpoints
+{
+    {{Signature}}
+        => Task.FromResult<{{Result}}>(TypedResults.Problem(statusCode: 501, title: "Custom operation is not implemented."));
+}

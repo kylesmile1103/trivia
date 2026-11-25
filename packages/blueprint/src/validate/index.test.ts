@@ -5,14 +5,17 @@ import { describe, expect, it } from 'vitest'
 import { FIXTURES, readFixture } from '../../test/helpers.js'
 import { apply } from '../apply/index.js'
 import { sequenceSource } from '../ids.js'
+import { revOfText } from '../serialize.js'
 import { loadBlueprint, type Blueprint } from '../store.js'
 import type { Diagnostic } from '../types/diagnostics.js'
+import { MODEL_DOC } from '../types/ops.js'
 import type { ValidationContext } from './context.js'
 import { validate, validateStructure } from './index.js'
 
 const LIST = 'pages/CustomerList.page.json'
 const OVERVIEW = 'pages/CustomerOverview.page.json'
 const files = readFixture(path.join(FIXTURES, 'valid/backoffice'))
+const unmatchedModel = readFixture(path.join(FIXTURES, 'model/invalid/unmatched_relation'))[MODEL_DOC]!
 
 const finding = (doc: string, code: string, severity: Diagnostic['severity'] = 'error'): Diagnostic =>
   ({ code, severity, doc, pointer: '', message: code })
@@ -29,6 +32,31 @@ describe('validate(): the layers composed (T023, FR-BP-05)', () => {
   it('is layers 1 and 2 without a context', () => {
     const bp = loadBlueprint({ ...files, [LIST]: '{' })
     expect(validate(bp)).toEqual(validateStructure(bp))
+  })
+
+  it('reports a model finding on read, with a fixing op guarded by the file revision', () => {
+    const text = '\n' + unmatchedModel
+    const bp = loadBlueprint({ ...files, [MODEL_DOC]: text })
+    const seen: string[][] = []
+    const findings = validate(bp, { manifests: layer(seen) })
+    expect(findings).toEqual(validateStructure(bp))
+    expect(findings).toMatchObject([{
+      code: 'unmatched_relation', severity: 'error', doc: MODEL_DOC, pointer: '/entities/0/relations/0/foreignKey',
+      hint: { ops: [{ op: 'setRelation', doc: MODEL_DOC, entity: 'Account', baseRev: revOfText(text) }] },
+    }])
+    expect(seen).toEqual([Object.keys(files).sort()])
+    const repair = apply(bp, findings[0]?.hint?.ops ?? [], { ids: sequenceSource() })
+    expect(repair.ok && repair.writes.map((write) => write.file)).toEqual([MODEL_DOC])
+    expect(repair.ok && validate(repair.blueprint)).toEqual([])
+  })
+
+  it('skips model references when the full model schema fails', () => {
+    const value = JSON.parse(unmatchedModel)
+    value.namespace = 42
+    const findings = validate(loadBlueprint({ [MODEL_DOC]: JSON.stringify(value) }))
+    expect(findings).toMatchObject([{
+      code: 'schema_violation', severity: 'error', doc: MODEL_DOC, pointer: '/namespace',
+    }])
   })
 
   it('runs manifests, contract and expressions in order, each on the documents the earlier layers passed', () => {
