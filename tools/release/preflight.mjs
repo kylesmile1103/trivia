@@ -27,7 +27,14 @@ export function unknownCommitTypes(subjects, knownTypes) {
 }
 
 
+/**
+ * Run the BankAdmin slice in required mode before a release, or trust the release workflow:
+ * its gate job (ci.yml on the same commit) ran the slice on Linux with Docker, which the macOS
+ * runner that bundles the app does not have. The flag counts only on GitHub Actions.
+ * Returns 'gate' or 'ran'.
+ */
 export function checkMvpBeforeRelease(root, env, prerequisite = missingMvpPrerequisite, run = spawnSync) {
+  if (env.GITHUB_ACTIONS === 'true' && env.TRIVIA_MVP_GATE_PASSED === '1') return 'gate'
   const missing = prerequisite()
   if (missing) throw new Error(missing)
   const result = run(path.join(root, 'node_modules', '.bin', 'nx'), ['run', 'tools:mvp'], {
@@ -37,4 +44,5 @@ export function checkMvpBeforeRelease(root, env, prerequisite = missingMvpPrereq
     const reason = result.error?.message ?? result.signal ?? 'exit ' + result.status
     throw new Error(`MVP acceptance failed (${reason}).`)
   }
+  return 'ran'
 }

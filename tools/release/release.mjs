@@ -68,7 +68,9 @@ if (dryRun) {
   console.log('release: a real release runs the BankAdmin MVP acceptance slice before tagging.')
 } else {
   try {
-    checkMvpBeforeRelease(root, process.env)
+    if (checkMvpBeforeRelease(root, process.env) === 'gate') {
+      console.log('release: the BankAdmin MVP slice passed in this workflow\'s gate job (ci.yml, integration).')
+    }
   } catch (error) {
     fail(error.message)
   }

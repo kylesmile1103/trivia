@@ -35,8 +35,8 @@ cache, the Nx cache, and `pnpm install --frozen-lockfile`.
 | Job | Runner | What | Why there |
 | --- | --- | --- | --- |
 | `gate` | `ubuntu-24.04` | `nx run-many -t build typecheck lint test --exclude shell` (+ .NET when `dotnet/` exists) | The local gate. Linux is the fastest and cheapest runner. |
-| `integration` | `ubuntu-24.04` | `nx run dotnet:integration`: the generated API against PostgreSQL, the Aspire AppHost, Compose publishing (Docker, .NET 10, `dotnet-ef`, the Aspire CLI 13.6.5 from its install script) | The container tests, kept out of `pnpm check` so the local gate needs no Docker (LLD-10). Linux runners have Docker. |
-| `e2e` | `ubuntu-24.04` | `pnpm e2e` (Playwright, Chromium, + .NET for `trivia-dotnet`), report uploaded on failure | Runs beside `gate`, not after it: both build what they need, and the wall time is the longer of the two. |
+| `integration` | `ubuntu-24.04` | `nx run dotnet:integration`: the generated API against PostgreSQL, the Aspire AppHost, Compose publishing; then the BankAdmin MVP slice, required (`nx run tools:mvp`, spec 011). Docker, .NET 10, `dotnet-ef`, the Aspire CLI 13.6.5 from its install script | The container tests, kept out of `pnpm check` so the local gate needs no Docker (LLD-10). Linux runners have Docker. |
+| `e2e` | `ubuntu-24.04` | `pnpm e2e` (Playwright, Chromium; .NET for `trivia-dotnet` and the Aspire CLI for the BankAdmin MVP project), report uploaded on failure | Runs beside `gate`, not after it: both build what they need, and the wall time is the longer of the two. |
 | `desktop` | `macos-15` (Apple silicon) | `nx run-many -t lint test -p shell` | The Tauri shell ships for macOS only, and on Linux it would need WebKitGTK headers. ⚑ |
 | `workflows` | `ubuntu-24.04` | actionlint over `.github/workflows` | A broken workflow fails in review, not after merge. |
 | `ci-ok` | `ubuntu-24.04` | succeeds only if every job above succeeded | The one check branch protection requires, so adding a job never needs a settings change. |
@@ -84,13 +84,16 @@ does not block anyone; it is a signal to look.
 Manual (`workflow_dispatch`) from `main`, with two inputs: `version` (`x.y.z`, `major`,
 `minor` or `patch`) and `dry-run` (⚑ on by default, so a stray click changes nothing).
 
-1. `gate` calls `ci.yml` on the same commit: nothing is released that did not just pass.
+1. `gate` calls `ci.yml` on the same commit: nothing is released that did not just pass,
+   the BankAdmin MVP slice included (its `integration` job).
 2. `release` runs on `macos-15` (the desktop app is built for Apple silicon) with
    `contents: write`, and runs the same `pnpm release` a developer runs locally
    (`tools/release/release.mjs`): `nx release` bumps every version, writes `CHANGELOG.md`,
    commits `release: vX.Y.Z`, tags, pushes, and creates the GitHub release; then it builds the
    `.dmg` and attaches it. The token is the workflow's own `GITHUB_TOKEN`, scoped to this job
-   and this repository. The release commit is authored by `github-actions[bot]`.
+   and this repository. The release commit is authored by `github-actions[bot]`. The runner has
+   no Docker, so `pnpm release` trusts the gate job's MVP slice (`TRIVIA_MVP_GATE_PASSED`,
+   honoured only on GitHub Actions); a local release runs the slice itself.
 
 Nothing is published to npm, as before. The job uses the `release` environment, which can be
 given required reviewers in the settings without changing the workflow.

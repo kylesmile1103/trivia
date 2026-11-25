@@ -70,4 +70,20 @@ describe('the release MVP check', () => {
     run.mockReturnValue({ status: 3 })
     expect(() => checkMvpBeforeRelease(root, {}, () => undefined, run)).toThrow('MVP acceptance failed (exit 3).')
   })
+
+  it('trusts the release workflow, whose gate job ran the slice on this commit with Docker', () => {
+    const prerequisite = vi.fn(() => 'The MVP slice needs a running container runtime.')
+    const run = vi.fn()
+    expect(checkMvpBeforeRelease(root, { GITHUB_ACTIONS: 'true', TRIVIA_MVP_GATE_PASSED: '1' }, prerequisite, run))
+      .toBe('gate')
+    expect(prerequisite).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('ignores that flag outside GitHub Actions: a local release runs the slice itself', () => {
+    const run = vi.fn().mockReturnValue({ status: 0 })
+    expect(checkMvpBeforeRelease(root, { TRIVIA_MVP_GATE_PASSED: '1' }, () => undefined, run)).toBe('ran')
+    expect(run).toHaveBeenCalledOnce()
+    expect(() => checkMvpBeforeRelease(root, { TRIVIA_MVP_GATE_PASSED: '1' }, () => 'no Docker', run)).toThrow('no Docker')
+  })
 })
