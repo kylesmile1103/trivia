@@ -54,7 +54,7 @@ const exposedValueSchema = z.strictObject({
   via: z.strictObject({
     valueProp: propName,
     changeProp: eventName,
-    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked']),
+    changeArg: z.enum(['value', 'event.target.value', 'event.target.checked', 'value === true', 'valueToString']),
   }),
 })
 
@@ -66,6 +66,8 @@ const manifestFields = z.strictObject({
     parts: z.record(slotName, exportName).optional(),
   }),
   props: z.array(propSchema),
+  configuration: z.array(propSchema).optional(),
+  deferred: z.record(propName, text).optional(),
   slots: z.array(slotSchema),
   events: z.array(eventSchema),
   exposes: z.array(exposedValueSchema),
@@ -89,16 +91,33 @@ export function manifestJsonSchema(): object {
 }
 
 /** Static prop contracts include structural text and controlled values described by the manifest. */
-export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes'>): Map<string, PropSchema> {
-  const props = new Map(manifest.props.map((prop) => [prop.name, prop]))
+export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes' | 'configuration' | 'composite'>): Map<string, PropSchema> {
+  const props = new Map([...manifest.props, ...(manifest.configuration ?? [])].map((prop) => [prop.name, prop]))
   if (!props.has('children') && manifest.slots.some(({ kind }) => kind === 'text')) {
     props.set('children', { name: 'children', kind: 'string', optional: true, source: 'declared' })
   }
-  for (const { type, via: { valueProp } } of manifest.exposes) {
+  for (const { type, via: { valueProp } } of manifest.composite ? [] : manifest.exposes) {
     if (props.has(valueProp)) continue
     const base = { name: valueProp, optional: true, source: 'declared' as const }
     if (type === 'string' || type === 'number' || type === 'boolean') props.set(valueProp, { ...base, kind: type })
     else props.set(valueProp, { ...base, kind: 'unknown', typeText: type })
   }
   return props
+}
+
+
+const tabItemsSchema = z.array(z.strictObject({ name: slotName, label: text }))
+  .refine((items) => new Set(items.map(({ name }) => name)).size === items.length)
+
+/** Static tab descriptors also name the node slots on a kit Tabs instance. */
+export function configuredTabs(manifest: Pick<ComponentManifest, 'type' | 'source' | 'configuration'>, value: unknown) {
+  if (manifest.type !== 'Tabs' || manifest.source.registry !== 'shadcn' ||
+    !manifest.configuration?.some(({ name }) => name === 'tabs')) return undefined
+  return tabItemsSchema.safeParse(value === undefined ? [] : value).data
+}
+
+export function manifestSlots(manifest: ComponentManifest, props: Readonly<Record<string, unknown>> | undefined): ManifestSlot[] {
+  const tabs = configuredTabs(manifest, props?.['tabs'])
+  const wrapper = manifest.source.parts?.['content']
+  return tabs ? tabs.map(({ name }) => ({ name, kind: 'nodes', ...(wrapper && { wrapper }) })) : manifest.slots
 }

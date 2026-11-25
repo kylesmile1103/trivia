@@ -1,0 +1,8 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/app.v1.json",
+  "blueprintVersion": 1,
+  "name": "BankComponentKit",
+  "targets": {
+    "web": "vite-refine"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "type": "Button",
+  "source": {
+    "registry": "shadcn",
+    "item": "button",
+    "import": {
+      "name": "Button",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "children",
+      "kind": "text"
+    }
+  ],
+  "events": [
+    {
+      "name": "onClick",
+      "prop": "onClick"
+    }
+  ],
+  "exposes": [],
+  "client": true,
+  "template": {
+    "children": "Button"
+  }
+}

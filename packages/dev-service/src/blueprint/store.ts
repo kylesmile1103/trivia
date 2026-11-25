@@ -1,21 +1,25 @@
 import fs from 'node:fs'
-import Button from '@trivia/blueprint/samples/Button.manifest.json' with { type: 'json' }
-import Card from '@trivia/blueprint/samples/Card.manifest.json' with { type: 'json' }
-import Input from '@trivia/blueprint/samples/Input.manifest.json' with { type: 'json' }
 import path from 'node:path'
 
 import {
   APP_DOC, BLUEPRINT_VERSION, MODEL_DOC, apply, blueprintOpSchema, componentManifestSchema, loadBlueprint, resolveManifests, ulidSource,
-  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type Diagnostic, type DocEntry, type ManifestResolution,
+  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type DeferredComponents, type Diagnostic, type DocEntry, type ManifestResolution,
   type ApplyOutcome,
 } from '@trivia/blueprint'
 import { LOCK_FILE, readLock } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
-import { ApiError, type EngineBinding } from '../engine.js'
+import { ApiError, type EngineBinding, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
 import { validationContext } from './context.js'
 import { checkedPath } from './paths.js'
+
+const kitDir = new URL('./kit/', import.meta.resolve('@trivia/blueprint-compiler/package.json'))
+const kit = fs.readdirSync(kitDir).filter((file) => file.endsWith('.manifest.json')).sort().map((file) =>
+  componentManifestSchema.parse(JSON.parse(fs.readFileSync(new URL(file, kitDir), 'utf8'))),
+)
+
+const deferred = JSON.parse(fs.readFileSync(new URL('deferred.json', kitDir), 'utf8')) as DeferredComponents
 
 export function readBytes(root: string, file: string): Buffer | null {
   try {
@@ -95,6 +99,11 @@ export class BlueprintWorkspace implements BlueprintStore {
     const config = this.#json('components.json') as { style?: string; aliases?: { components?: string } } | null
     const components = fs.existsSync(path.resolve(this.root, this.#host.uiDir))
       ? this.#components() as ComponentSchema[] : []
+    const tableDir = path.posix.join(path.posix.dirname(this.#host.uiDir), 'refine-ui', 'data-table')
+    if (fs.existsSync(path.resolve(this.root, tableDir))) {
+      const base = this.#host.importBase.slice(0, this.#host.importBase.lastIndexOf('/'))
+      components.push(...unwrap<ComponentSchema[]>(this.#engine.components(this.root, tableDir, base + '/refine-ui/data-table')))
+    }
     const overrides: ComponentManifest[] = []
     const diagnostics: Diagnostic[] = []
     for (const name of listFiles(this.root, `${this.dir}/manifests`).filter((file) => file.endsWith('.manifest.json'))) {
@@ -110,7 +119,7 @@ export class BlueprintWorkspace implements BlueprintStore {
       }
     }
     const resolved = resolveManifests({
-      kit: [Button, Card, Input].map((value) => componentManifestSchema.parse(value)),
+      kit,
       overrides,
       components,
       aliases: { ...config?.aliases, ui: this.#host.importBase, ...(typeof config?.style === 'string' && { style: config.style }) },
@@ -136,7 +145,7 @@ export class BlueprintWorkspace implements BlueprintStore {
   }
 
   context(manifests = this.manifests(), contract = this.contract()) {
-    const context = validationContext(manifests, contract, this.#engine)
+    const context = validationContext(manifests, contract, this.#engine, deferred)
     const lock = this.readDocumentText(LOCK_FILE)
     try {
       const { model } = readLock(lock)

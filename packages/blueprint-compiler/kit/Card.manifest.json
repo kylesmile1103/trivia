@@ -1,0 +1,38 @@
+{
+  "type": "Card",
+  "source": {
+    "registry": "shadcn",
+    "item": "card",
+    "import": {
+      "name": "Card",
+      "from": "ui"
+    },
+    "parts": {
+      "header": "CardHeader",
+      "content": "CardContent",
+      "footer": "CardFooter"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "header",
+      "kind": "nodes",
+      "wrapper": "CardHeader"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "CardContent"
+    },
+    {
+      "name": "footer",
+      "kind": "nodes",
+      "wrapper": "CardFooter"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

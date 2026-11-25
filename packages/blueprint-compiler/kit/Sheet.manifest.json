@@ -1,0 +1,48 @@
+{
+  "type": "Sheet",
+  "source": {
+    "registry": "shadcn",
+    "item": "sheet",
+    "import": {
+      "name": "Sheet",
+      "from": "ui"
+    },
+    "parts": {
+      "trigger": "SheetTrigger",
+      "content": "SheetContent"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "trigger",
+      "kind": "nodes",
+      "wrapper": "SheetTrigger"
+    },
+    {
+      "name": "content",
+      "kind": "nodes",
+      "wrapper": "SheetContent"
+    }
+  ],
+  "events": [
+    {
+      "name": "onOpenChange",
+      "prop": "onOpenChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "open",
+      "type": "boolean",
+      "initial": false,
+      "via": {
+        "valueProp": "open",
+        "changeProp": "onOpenChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {}
+}

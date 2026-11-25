@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { defineConfig, devices } from '@playwright/test'
 
 // End-to-end tests drive the real stack: an example app (the user's Vite dev server with
@@ -10,6 +12,12 @@ const refineDesignerPort = Number(process.env.TRIVIA_REFINE_PORT ?? 4401)
 const nextAppPort = Number(process.env.TRIVIA_NEXT_APP_PORT ?? 5175)
 const nextDesignerPort = Number(process.env.TRIVIA_NEXT_PORT ?? 4402)
 const nextApiPort = Number(process.env.TRIVIA_NEXT_API_PORT ?? 4403)
+const kitAppPort = Number(process.env.TRIVIA_KIT_APP_PORT ?? 5176)
+const kitDesignerPort = Number(process.env.TRIVIA_KIT_PORT ?? 4404)
+
+// The dev service runs `trivia-dotnet` for the backend routes. The apps' servers find this
+// checkout's build of it first: `e2e/bin` holds a shim for what `nx run dotnet:tool` publishes.
+const appEnv = { PATH: [path.resolve('e2e/bin'), process.env.PATH ?? ''].join(path.delimiter) }
 
 const designer = (port: number, target: number, cache: string, apiPort?: number) => ({
   command: `pnpm --filter @trivia/designer exec vite`,
@@ -34,14 +42,16 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
     { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
+    { name: 'blueprint-kit', testMatch: /blueprint-kit\.spec\.ts$/, use: { baseURL: `http://localhost:${kitDesignerPort}` } },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [
     {
       command: `pnpm --filter playground exec vite --port ${appPort} --strictPort`,
       url: `http://localhost:${appPort}/`,
+      env: appEnv,
       reuseExistingServer: false,
       timeout: 120_000,
     },
@@ -49,6 +59,7 @@ export default defineConfig({
     {
       command: `pnpm --filter refine-admin exec vite --port ${refineAppPort} --strictPort`,
       url: `http://localhost:${refineAppPort}/`,
+      env: appEnv,
       reuseExistingServer: false,
       timeout: 120_000,
     },
@@ -56,10 +67,19 @@ export default defineConfig({
     {
       command: `pnpm --filter next-admin dev --port ${nextAppPort} --service-port ${nextApiPort}`,
       url: `http://127.0.0.1:${nextAppPort}/`,
+      env: appEnv,
       reuseExistingServer: false,
       timeout: 120_000,
       gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
     },
     designer(nextDesignerPort, nextAppPort, 'node_modules/.vite-next', nextApiPort),
+    {
+      command: `pnpm --filter blueprint-kit exec vite --port ${kitAppPort} --strictPort`,
+      url: `http://localhost:${kitAppPort}/`,
+      env: appEnv,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    designer(kitDesignerPort, kitAppPort, 'node_modules/.vite-kit'),
   ],
 })

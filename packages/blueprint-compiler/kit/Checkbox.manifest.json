@@ -1,0 +1,49 @@
+{
+  "type": "Checkbox",
+  "source": {
+    "registry": "shadcn",
+    "item": "checkbox",
+    "import": {
+      "name": "Checkbox",
+      "from": "ui"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onCheckedChange",
+      "prop": "onCheckedChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "checked",
+      "type": "boolean",
+      "initial": false,
+      "via": {
+        "valueProp": "checked",
+        "changeProp": "onCheckedChange",
+        "changeArg": "value === true"
+      }
+    }
+  ],
+  "client": true,
+  "template": {},
+  "variants": {
+    "base": {
+      "exposes": [
+        {
+          "name": "checked",
+          "type": "boolean",
+          "initial": false,
+          "via": {
+            "valueProp": "checked",
+            "changeProp": "onCheckedChange",
+            "changeArg": "value"
+          }
+        }
+      ]
+    }
+  }
+}

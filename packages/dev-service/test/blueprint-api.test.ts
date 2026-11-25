@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { apply, loadBlueprint, revOfText, sequenceSource } from '@trivia/blueprint'
+import { apply, loadBlueprint, revOfText, sequenceSource, type ManifestIndexEntry } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import type { EjectPlan } from '../src/blueprint/plan.js'
@@ -306,5 +306,38 @@ it('FR-DM-07 keeps the summary readable for a model with only the legacy envelop
     ok: true, data: { model: null, diagnostics: expect.arrayContaining([
       expect.objectContaining({ doc: 'model.blueprint.json', code: 'schema_violation', pointer: '/entities' }),
     ]) },
+  })
+})
+
+it('FR-KT-01 publishes the kit through the existing component response', async () => {
+  const response = await get('/components')
+  expect(response.status).toBe(200)
+  const result = await response.json() as {
+    ok: boolean
+    data: { components: ManifestIndexEntry[]; schemas: Record<string, object> }
+  }
+  expect(result.ok).toBe(true)
+  expect(result.data.components.find(({ type }) => type === 'Checkbox')?.exposes)
+    .toEqual([expect.objectContaining({ name: 'checked' })])
+  expect(result.data.components.find(({ type }) => type === 'Tabs')?.events)
+    .toEqual([expect.objectContaining({ name: 'onValueChange' })])
+  expect(result.data.schemas['Tabs']).toMatchObject({ properties: { tabs: expect.any(Object) } })
+  expect(Object.keys(result.data).sort()).toEqual(['components', 'schemas'])
+})
+
+it('FR-KT-07 returns the published deferred reason for a tree component', async () => {
+  const dir = new URL('../../blueprint-compiler/fixtures/kit/invalid/', import.meta.url)
+  writeBlueprint('app.blueprint.json', fs.readFileSync(new URL('../app.blueprint.json', dir), 'utf8'))
+  writeBlueprint('pages/KitTree.page.json', fs.readFileSync(new URL('KitTree.page.json', dir), 'utf8'))
+  const response = await get()
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    data: {
+      diagnostics: [{
+        code: 'unknown_component', pointer: '/nodes/n_00000000000000000000000001/type',
+        hint: { text: 'Tree is deferred in the kit. Tree navigation and lazy children need a dedicated adapter. Use a local component with its own manifest.' },
+      }],
+    },
   })
 })

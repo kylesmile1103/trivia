@@ -1,0 +1,38 @@
+{
+  "type": "Alert",
+  "source": {
+    "registry": "shadcn",
+    "item": "alert",
+    "import": {
+      "name": "Alert",
+      "from": "ui"
+    },
+    "parts": {
+      "title": "AlertTitle",
+      "description": "AlertDescription",
+      "action": "AlertAction"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "title",
+      "kind": "nodes",
+      "wrapper": "AlertTitle"
+    },
+    {
+      "name": "description",
+      "kind": "nodes",
+      "wrapper": "AlertDescription"
+    },
+    {
+      "name": "action",
+      "kind": "nodes",
+      "wrapper": "AlertAction"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": false,
+  "template": {}
+}

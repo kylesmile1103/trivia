@@ -122,6 +122,8 @@ pub fn analyze(source: &str, file: &str, import_source: &str) -> Result<Vec<Comp
         }
         if let Some(def) = index.component(local, 1, 0) {
             found.push((def.start, index.schema(name, &def, file, import_source)));
+        } else if let Some(alias) = index.base_select_alias(local, name, file, import_source) {
+            found.push(alias);
         }
     }
     // Stable sort: aliases of one definition keep their export order.
@@ -371,6 +373,30 @@ impl<'b, 'a> FileIndex<'b, 'a> {
 
     fn text(&self, span: Span) -> &'b str {
         self.src.get(span.start as usize..span.end as usize).unwrap_or_default()
+    }
+
+    /// shadcn's Base UI Select exports the primitive Root directly, without a wrapper function.
+    fn base_select_alias(&self, local: &str, name: &str, file: &str, import_source: &str) -> Option<(u32, ComponentSchema)> {
+        let Binding::Var(declaration) = self.values.get(local)? else { return None };
+        let Expression::StaticMemberExpression(member) = declaration.init.as_ref()?.get_inner_expression() else { return None };
+        let Expression::Identifier(root) = member.object.get_inner_expression() else { return None };
+        if member.optional || member.property.name.as_str() != "Root" || !matches!(
+            self.imports.get(root.name.as_str()), Some(Import::Named { source: "@base-ui/react/select", imported: "Select" })
+        ) {
+            return None;
+        }
+        let mut props = Collected::default();
+        let element = self.text(member.span);
+        props.base_ui_control(element, "@base-ui/react/select", "Root");
+        Some((declaration.span.start, ComponentSchema {
+            name: name.to_string(),
+            file: file.to_string(),
+            import_source: import_source.to_string(),
+            base_element: Some(element.to_string()),
+            accepts_children: true,
+            props: props.finish(&[]),
+            unresolved_types: Vec::new(),
+        }))
     }
 
     /// The component bound to `local`, if it is one.
@@ -790,6 +816,24 @@ impl Collected {
         self.intrinsic.extend(radix_props(family, part));
     }
 
+    /// Curated native props forwarded by the Base UI kit controls.
+    fn base_ui_control(&mut self, element: &str, source: &str, part: &str) -> bool {
+        let (accepts_children, names): (bool, &[&str]) = match (source, part) {
+            ("@base-ui/react/select", "Root") => (true, &["disabled", "id", "name"]),
+            ("@base-ui/react/select", "Item") => (true, &["value", "disabled"]),
+            ("@base-ui/react/radio", "Root") => (false, &["value", "disabled", "id"]),
+            ("@base-ui/react/checkbox" | "@base-ui/react/switch", "Root") => (false, &["disabled", "id", "defaultChecked"]),
+            _ => return false,
+        };
+        self.set_base(Some(element.to_string()), accepts_children);
+        self.intrinsic.extend(names.iter().map(|name| intrinsic(name, match *name {
+            "disabled" | "defaultChecked" => PropKind::Boolean,
+            "value" => unknown("unknown"),
+            _ => PropKind::String,
+        })));
+        true
+    }
+
     fn has(&self, name: &str) -> bool {
         self.variants.iter().chain(&self.declared).chain(&self.intrinsic).chain(&self.class_name).any(|p| p.name == name)
     }
@@ -897,6 +941,14 @@ impl<'b, 'a> Resolver<'_, 'b, 'a> {
             if self.index.interfaces.contains_key(local) || self.index.aliases.contains_key(local) {
                 return self.local_type(local, out, depth);
             }
+        }
+        if let TSTypeName::QualifiedName(qualified) = name
+            && qualified.right.name.as_str() == "Props"
+            && let Some(id) = qualified.left.get_identifier_reference()
+            && let Some(Import::Named { source, .. }) = self.index.imports.get(id.name.as_str())
+            && out.base_ui_control(self.index.text(qualified.left.span()), source, last_segment(&qualified.left))
+        {
+            return;
         }
         match last_segment(name) {
             "VariantProps" => match arg(0) {

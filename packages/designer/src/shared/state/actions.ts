@@ -70,7 +70,7 @@ async function run(call: () => Promise<ApplyResult>, ops: readonly Op[], left: s
     const result = await call()
     // A new `history` tells the canvas an HMR is on its way; an unchanged result writes
     // nothing and adds no entry (docs/api.md), so there is nothing to wait for.
-    if (result.changed) designer.getState().setHistory(result.history, { files: filesOf(result.file, ops), sentAt })
+    if (result.changed) designer.getState().setHistory(result.history, { files: [...new Set([result.file, ...editedFiles(ops)])], sentAt })
     if (left === null) followSelection(result, ops, selectedBefore)
     return result
   } catch (error) {
@@ -129,8 +129,8 @@ function subjectOf(op: Op): string | null {
 }
 
 /** Every file the ops write: each op's own file, and a move's destination file (it may be another). */
-function filesOf(resultFile: string, ops: readonly Op[]): string[] {
-  const files = new Set([resultFile])
+export function editedFiles(ops: readonly Op[]): string[] {
+  const files = new Set<string>()
   for (const op of ops) {
     if ('file' in op) {
       files.add(op.file)

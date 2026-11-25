@@ -1,0 +1,55 @@
+{
+  "type": "Combobox",
+  "source": {
+    "registry": "shadcn",
+    "item": "command",
+    "import": {
+      "name": "Command",
+      "from": "ui"
+    },
+    "parts": {
+      "input": "CommandInput",
+      "list": "CommandList",
+      "empty": "CommandEmpty",
+      "group": "CommandGroup",
+      "option": "CommandItem"
+    }
+  },
+  "props": [],
+  "slots": [],
+  "events": [
+    {
+      "name": "onValueChange",
+      "prop": "onValueChange"
+    }
+  ],
+  "exposes": [
+    {
+      "name": "value",
+      "type": "string",
+      "initial": "",
+      "via": {
+        "valueProp": "value",
+        "changeProp": "onValueChange",
+        "changeArg": "value"
+      }
+    }
+  ],
+  "client": true,
+  "template": {},
+  "configuration": [
+    {
+      "name": "options",
+      "kind": "unknown",
+      "optional": true,
+      "source": "declared",
+      "typeText": "string[]"
+    },
+    {
+      "name": "placeholder",
+      "kind": "string",
+      "optional": true,
+      "source": "declared"
+    }
+  ]
+}

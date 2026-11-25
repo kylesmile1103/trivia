@@ -20,6 +20,9 @@ export interface FieldContext {
   idPrefix: string
   /** The project has shadcn's `textarea` (long text gets one). */
   textarea?: boolean
+  /** Use the installed Calendar and Popover for dates in kit forms. */
+  datePicker?: boolean
+  describeErrors?: boolean
   /**
    * How the form writes a field (docs/product.md, slice 5): `field` is a react-hook-form
    * `<Controller>` around shadcn's `Field` (v4); `form` is shadcn's older `<FormField>` with
@@ -204,9 +207,14 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
   }
   // `Field` wires the label and the error state by hand; `FormControl` does it from context.
   const wired = style === 'field' ? [`  id=${str(id)}`] : []
-  const invalid = style === 'field' ? [`  aria-invalid={fieldState.invalid}`] : []
+  const errorId = str(id + '-error')
+  const describe = context.describeErrors && style === 'field'
+    ? [`aria-describedby={fieldState.invalid ? ${errorId} : undefined}`, ...(field.required ? ['aria-required'] : [])]
+    : []
+  const invalid = style === 'field' ? ['  aria-invalid={fieldState.invalid}', ...describe.map((prop) => '  ' + prop)] : []
   /** `lines` as the control: inside `<FormControl>` in the `form` style. */
-  const control = (lines: string[]) => (style === 'field' ? lines : ['<FormControl>', ...lines.map((l) => `  ${l}`), '</FormControl>'])
+  const formControl = context.describeErrors && field.required ? '<FormControl aria-required>' : '<FormControl>'
+  const control = (lines: string[]) => (style === 'field' ? lines : [formControl, ...lines.map((l) => `  ${l}`), '</FormControl>'])
 
   // An optional text field left empty is absent, not "" (which a format check would refuse).
   const emptyIsAbsent = field.required ? '' : ' || undefined'
@@ -214,7 +222,7 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
   if (shape === 'enum') {
     for (const name of ['Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue']) use(name, `${context.ui}/select`)
     const values = (field.enum ?? []).filter((v): v is string => typeof v === 'string')
-    const trigger = style === 'field' ? `<SelectTrigger id=${str(id)} aria-invalid={fieldState.invalid}>` : '<SelectTrigger>'
+    const trigger = style === 'field' ? `<SelectTrigger id=${str(id)} aria-invalid={fieldState.invalid}${describe.length ? ' ' + describe.join(' ') : ''}>` : '<SelectTrigger>'
     input = [
       `<Select value={field.value ?? ""} onValueChange={field.onChange}>`,
       ...control([trigger, `  <SelectValue placeholder="Choose…" />`, `</SelectTrigger>`]).map((l) => `  ${l}`),
@@ -225,7 +233,8 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
     ]
   } else if (shape === 'boolean') {
     use('Checkbox', `${context.ui}/checkbox`)
-    input = control([`<Checkbox`, ...wired, `  checked={field.value ?? false}`, `  onCheckedChange={(checked) => field.onChange(checked === true)}`, `/>`])
+    input = control([`<Checkbox`, ...wired, `  checked={field.value ?? false}`, `  onCheckedChange={(checked) => field.onChange(checked === true)}`,
+      ...(context.describeErrors ? invalid : []), `/>`])
   } else if (shape === 'number') {
     use('Input', `${context.ui}/input`)
     input = control([
@@ -238,6 +247,24 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
       ...invalid,
       `/>`,
     ])
+  } else if (shape === 'date' && context.datePicker) {
+    use('Calendar', `${context.ui}/calendar`)
+    for (const part of ['Popover', 'PopoverContent', 'PopoverTrigger']) use(part, `${context.ui}/popover`)
+    use('format', 'date-fns')
+    const cleared = field.nullable ? 'null' : field.required ? '""' : 'undefined'
+    input = [
+      '<Popover>',
+      ...control(['<PopoverTrigger type="button"', ...wired, ...invalid, '>', '  {field.value || "Pick a date"}', '</PopoverTrigger>'])
+        .map((line) => '  ' + line),
+      '  <PopoverContent>',
+      '    <Calendar',
+      '      mode="single"',
+      '      selected={field.value ? new Date(field.value + "T00:00:00") : undefined}',
+      `      onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : ${cleared})}`,
+      '    />',
+      '  </PopoverContent>',
+      '</Popover>',
+    ]
   } else if (context.textarea && isLongText(field)) {
     use('Textarea', `${context.ui}/textarea`)
     input = control([
@@ -284,7 +311,7 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
           `    <Field data-invalid={fieldState.invalid}>`,
           `      <FieldLabel htmlFor=${str(id)}>${escapeJsxText(label)}</FieldLabel>`,
           ...input.map((line) => `      ${line}`),
-          `      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}`,
+          `      {fieldState.invalid && <FieldError${context.describeErrors ? ' id=' + errorId : ''} errors={[fieldState.error]} />}`,
           `    </Field>`,
           `  )}`,
           `/>`,

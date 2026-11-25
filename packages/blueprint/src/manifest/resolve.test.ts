@@ -204,3 +204,10 @@ it('selects the exact Base UI style and uses the Radix fallback for other styles
     expect(resolved.manifests.Slider?.events).toEqual(sliderManifest.events)
   }
 })
+
+it('FR-KT-01 resolves kit exports installed under a different filename', () => {
+  const original = components.find(({ name }) => name === 'Button')!
+  const renamed = { ...original, file: 'src/components/ui/action.tsx', importSource: '@/components/ui/action' }
+  const { manifests } = resolveManifests({ kit: [button], components: [renamed], aliases: { ui: '@/components/ui' } })
+  expect(manifests.Button?.source.import.from).toBe('@/components/ui/action')
+})

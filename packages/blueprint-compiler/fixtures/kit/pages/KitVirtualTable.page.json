@@ -1,0 +1,68 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000006",
+  "name": "KitVirtualTable",
+  "route": "/kit/virtual-table",
+  "kind": "custom",
+  "root": "n_00000000000000000000000001",
+  "nodes": {
+    "n_00000000000000000000000001": {
+      "type": "main",
+      "name": "page",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_00000000000000000000000002": {
+      "type": "h1",
+      "name": "heading",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a1"
+    },
+    "n_00000000000000000000000003": {
+      "type": "DataTable",
+      "name": "customers",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a2"
+    },
+    "n_00000000000000000000000004": {
+      "type": "p",
+      "name": "selectionSummary",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a3"
+    }
+  },
+  "props": {
+    "n_00000000000000000000000002": {
+      "children": "Virtual customer table"
+    },
+    "n_00000000000000000000000003": {
+      "resource": "Customer",
+      "columns": [
+        "fullName",
+        "email",
+        "status"
+      ],
+      "filters": [],
+      "pagination": "off",
+      "virtual": true,
+      "selectable": "multiple"
+    }
+  },
+  "bindings": {
+    "n_00000000000000000000000004": {
+      "children": "`Selected rows: ${ui.customers.selectedRows.length}${ui.customers.selectedRow.id ? \", first \" + ui.customers.selectedRow.id : \"\"}`"
+    }
+  },
+  "styles": {
+    "n_00000000000000000000000001": {
+      "className": "grid max-w-4xl gap-5 p-6"
+    }
+  },
+  "state": {},
+  "actions": {}
+}

@@ -10,6 +10,8 @@ export interface PageIR {
   mutations: HookIR[]
   hooks: HookIR[]
   handlers: HandlerIR[]
+  declarations?: string[]
+  afterState?: string[]
   jsx: JsxIR
 }
 
@@ -55,7 +57,8 @@ export interface AttributeIR {
 }
 
 export type JsxIR =
-  | { kind: 'element'; tag: string; props: AttributeIR[]; children: JsxIR[] }
+  | { kind: 'element'; tag: string; props: AttributeIR[]; children: JsxIR[]; spreads?: string[] }
+  | { kind: 'source'; code: string }
   | { kind: 'text'; value: string }
   | { kind: 'expr'; code: string }
   | { kind: 'cond'; test: string; child: JsxIR }

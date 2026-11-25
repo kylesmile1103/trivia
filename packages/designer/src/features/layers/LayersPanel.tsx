@@ -17,7 +17,7 @@ import { isRootLocator } from '@/shared/lib/locator'
 import { cn } from '@/shared/lib/utils'
 import { designer, useDesigner } from '@/shared/state/store'
 
-import { dropPlacement } from './drop'
+import { dropPlacement } from '@/shared/lib/tree-drop'
 
 /** The drag data type of a layer row; other drags (palette templates) pass over the panel. */
 const LAYER_MIME = 'application/x-trivia-layer'

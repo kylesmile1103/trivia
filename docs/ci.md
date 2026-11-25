@@ -36,7 +36,7 @@ cache, the Nx cache, and `pnpm install --frozen-lockfile`.
 | --- | --- | --- | --- |
 | `gate` | `ubuntu-24.04` | `nx run-many -t build typecheck lint test --exclude shell` (+ .NET when `dotnet/` exists) | The local gate. Linux is the fastest and cheapest runner. |
 | `integration` | `ubuntu-24.04` | `nx run dotnet:integration`: the generated API against PostgreSQL, the Aspire AppHost, Compose publishing (Docker, .NET 10, `dotnet-ef`, the Aspire CLI 13.6.5 from its install script) | The container tests, kept out of `pnpm check` so the local gate needs no Docker (LLD-10). Linux runners have Docker. |
-| `e2e` | `ubuntu-24.04` | `pnpm e2e` (Playwright, Chromium), report uploaded on failure | Runs beside `gate`, not after it: both build what they need, and the wall time is the longer of the two. |
+| `e2e` | `ubuntu-24.04` | `pnpm e2e` (Playwright, Chromium, + .NET for `trivia-dotnet`), report uploaded on failure | Runs beside `gate`, not after it: both build what they need, and the wall time is the longer of the two. |
 | `desktop` | `macos-15` (Apple silicon) | `nx run-many -t lint test -p shell` | The Tauri shell ships for macOS only, and on Linux it would need WebKitGTK headers. ⚑ |
 | `workflows` | `ubuntu-24.04` | actionlint over `.github/workflows` | A broken workflow fails in review, not after merge. |
 | `ci-ok` | `ubuntu-24.04` | succeeds only if every job above succeeded | The one check branch protection requires, so adding a job never needs a settings change. |

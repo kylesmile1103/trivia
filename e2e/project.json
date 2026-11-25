@@ -2,11 +2,14 @@
   "$schema": "../node_modules/nx/schemas/project-schema.json",
   "name": "e2e",
   "projectType": "application",
-  "implicitDependencies": ["designer", "playground", "refine-admin", "next-admin"],
+  "implicitDependencies": ["designer", "playground", "refine-admin", "next-admin", "blueprint-kit"],
   "targets": {
     "e2e": {
       "command": "playwright test",
-      "dependsOn": [{ "projects": ["plugin", "next"], "target": "build" }],
+      "dependsOn": [
+        { "projects": ["plugin", "next"], "target": "build" },
+        { "projects": ["dotnet"], "target": "tool" }
+      ],
       "cache": false
     }
   }

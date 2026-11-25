@@ -1,7 +1,7 @@
 import { hasErrors, pageDocPath, validate, type Blueprint, type ComponentManifest, type Diagnostic, type ResolvedManifests, type ValidationContext } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
-import { generateContract, type ContractPageGenerator } from './contract-pages.js'
+import { generateContract, type ContractPageGenerator, type RefineSnippetGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
 import { lowerCustom } from './lower/index.js'
 import { compareBytes, moduleImports, restyleModule } from './print/style.js'
@@ -16,6 +16,7 @@ export interface EmittedModule {
   importPath: string
   route: string
   handler?: { file: string; code: string }
+  warnings?: string[]
 }
 
 export interface CompileContext {
@@ -25,6 +26,9 @@ export interface CompileContext {
   manifests?: ResolvedManifests
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
+  refineSnippets?: RefineSnippetGenerator
+  /** Add node ids for selection in a virtual draft preview. Never set for eject. */
+  previewNodeIds?: boolean
 }
 
 export class CompileError extends Error {
@@ -67,6 +71,11 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     throw new CompileError('unsupported', 'Generated modules cannot import from @trivia.')
   }
   if (page.kind !== 'custom') emitted.requires = requiredRegistryItems(sources, context.facts)
+  else if (Object.values(page.nodes).some(({ type }) => context.manifests?.[type]?.composite)) {
+    const requires = [...emitted.requires, ...requiredRegistryItems(sources, context.facts)]
+    const byItem = new Map(requires.map((item) => [item.registry + '/' + item.item, item]))
+    emitted.requires = [...byItem].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item)
+  }
   emitted.code = emitted.code.replace(/\r\n?/g, '\n')
   try {
     context.engine.annotate(emitted.code, emitted.file)
@@ -74,6 +83,8 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   } catch (error) {
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)
   }
+  const warnings = diagnostics.filter(({ severity }) => severity === 'warning').map(({ message }) => message)
+  if (warnings.length) emitted.warnings = warnings
   return emitted
 }
 

@@ -152,3 +152,13 @@ it('FR-RC-11: contract output follows single quotes and omitted semicolons, incl
     "  return <Button title='Clerk&apos;s'>{title}</Button>", '}', '',
   ].join('\n'))
 })
+
+it('FR-DS-09 emits stable blueprint node ids only in preview modules', () => {
+  const name = 'SearchPanel'
+  const source = fs.readFileSync(new URL('../fixtures/pages/state/SearchPanel.page.json', import.meta.url), 'utf8')
+  const blueprint = loadBlueprint({ [pageDocPath(name)]: source })
+  const preview = compilePage(blueprint, name, { ...context, previewNodeIds: true })
+  const ids = [...preview.code.matchAll(/data-bp-node=["']([^"']+)["']/g)].map((match) => match[1])
+  expect(ids).toEqual(Object.keys(JSON.parse(source).nodes))
+  expect(compilePage(blueprint, name, context).code).not.toContain('data-bp-node')
+})

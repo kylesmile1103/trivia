@@ -991,7 +991,8 @@ export class RefineAdapter {
     const { root, uiDir, importBase } = this.#host
     const parentDir = path.posix.dirname(uiDir)
     const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
-    const hasRefineUi = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'views'))
+    const hasRefineUi = ['views', 'data-table'].some((library) =>
+      fs.existsSync(path.join(root, parentDir, 'refine-ui', library)))
     const pagesDir = nextRoutes ? nextPagesDir(root, name, nextRoutes) : await this.#pagesDir()
     return {
       ui: importBase,

@@ -27,6 +27,12 @@
       "dependsOn": ["build"],
       "cache": false,
       "parallelism": false
+    },
+    "tool": {
+      "command": "dotnet publish dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj -c Release -o dist/trivia-dotnet --nologo",
+      "inputs": ["dotnet"],
+      "outputs": ["{workspaceRoot}/dist/trivia-dotnet"],
+      "cache": true
     }
   }
 }

@@ -12,7 +12,9 @@ the left column, **Blueprint**. The rules of `docs/architecture.md` apply and
 canvas through `shared/canvas.ts` (`canvas.navigate` for previews).
 
 The left column holds four tabs at 272 px today. A fifth needs either icons with tooltips or
-an overflow menu. ⚑ Icons with tooltips, decided here so the layout work is not a surprise.
+an overflow menu. ⚑ Icons with tooltips and accessible names. Opening the editor focuses
+its Name field and closing it returns focus to the opening control. The 1280 px keyboard test
+also checks that long names and routes fit the sidebar.
 
 ```
 features/blueprint/
@@ -31,7 +33,9 @@ features/blueprint/
 ```
 
 `shared/engine/` gains the typed client functions and the types of LLD-04, mirrored from the
-plugin as the other engine types are.
+dev service as the other engine types are. ⚑ The blueprint handlers live in
+`packages/dev-service`, behind `DevHost` (LLD-13). The designer uses their HTTP
+envelope, including structured refusal details for diagnostics and registry items.
 
 ## 2. Behaviour
 
@@ -39,14 +43,23 @@ plugin as the other engine types are.
 counts. `draft` offers Preview and Eject. `ejected` offers Open (navigate the canvas to the
 real route) and Eject again. `edited` offers Open only, with a line saying the code has
 changed since eject and is now the truth (ADR-0003). A button adds a page.
+⚑ Open resolves the registered route by the generated file when available. Parameterized
+routes reuse the Pages tab's URL helpers and prompt for required values when the canvas has none.
 
 **Page form.** Kind decides the fields: contract kinds show the resource (from the contract
 manifest), field checklists, title, filters and actions; `custom` shows the node tree. Each
 change is one patch, labelled by what changed ("Blueprint: set route of CustomerList").
+⚑ The reducer permits kind changes within contract kinds. A custom page keeps its kind.
+A resource or kind change keeps the selected fields that are available in the new operation.
+Template field and filter defaults have a separate checkbox. Structured action steps use
+a JSON array editor with an explicit save, so every LLD-01 step can be represented.
 
 **Node tree and props.** The tree is built from the flat maps and reuses the drop rules of the
 Layers tab (before, after, inside), which move into `shared/lib/` since a second feature needs
-them. Adding a node opens the list of manifests, with not-installed types marked. `NodeProps`
+them. Adding a node opens the list of manifests, with not-installed types marked. ⚑ Manifest slots determine which parents
+can accept a child, including empty containers. The explicit Move control exposes the same
+placements to the keyboard and lets the user choose a named destination slot. New nodes
+suggest a unique identifier derived from their type. `NodeProps`
 renders one editor per manifest prop. A toggle switches a prop between a static value and a
 binding. Exposed values and events are listed with the names expressions should use
 (`ui.search.value`).
@@ -54,32 +67,57 @@ binding. Exposed values and events are listed with the names expressions should 
 It does not reuse the inspector's editors directly: features do not import features. The prop
 editor widgets the two share move to `shared/components/` first. ⚑ If that refactor is larger
 than a day, the panel ships with plain inputs and the move becomes its own task.
+⚑ The enum widget is shared. The canvas inspector's text widget keeps its selection and
+HMR lifecycle. The mode selector proposes a change locally until a value is saved. Event
+steps use the same JSON editor as contract actions. Expression diagnostics underline a
+source excerpt beside the editable expression using the reported UTF-16 range.
 
 **Preview.** Calls `POST /blueprint/preview`, then `canvas.navigate(route)`. Preview elements
 carry no locators, so the canvas shows a banner: "Preview of a draft page. Eject to edit it on
 the canvas." With FR-DS-09 (could), the compiler stamps `data-bp-node` in preview modules only,
-and a click selects the node in the tree.
+and a click selects the node in the tree. ⚑ The canvas derives the banner from the
+actual `/__blueprint/` path, so it follows navigation and replaces the missing-locators notice
+for these routes. ⚑ Only the virtual custom preview module receives the node IDs. The
+HTTP response's `code` field still carries the canonical compiled source used by eject.
+A Design click on a marked element opens its draft in Blueprint and selects the stable ID.
 
 **Eject.** `POST /blueprint/plan`. A 422 with `requires` shows the `shadcn add` command to
-copy. Otherwise the dialog lists the files and the route and resource changes. Confirm
-dispatches the plan's ops through the action bus (`dispatch`, `shared/state/actions.ts`), so it
-is one entry of the shared history, then calls `POST /blueprint/ejected`. The canvas navigates
+copy. ⚑ Refine items use their registry URL. Local items are listed for manual installation.
+Otherwise the dialog lists the files and the route and resource changes. Confirm
+dispatches the plan's ops through the action bus (`dispatchBatch`, `shared/state/actions.ts`).
+⚑ The live DevHost plan includes the lock as the final op in that source transaction. For a
+changed batch, `POST /blueprint/ejected` verifies that shared history entry. An unchanged
+re-eject opens the route without verifying an entry it did not create. The dialog lists the
+files named by the ops, including route registration and the lock. The canvas navigates
 to the real route, where every element is now selectable.
 
 **Model editor (Phase 2).** A list of entities, and for the selected one a grid of fields
 (name, type, required, constraints, default) with relations and API options below. Each cell
-edit is a model op (LLD-08). Reserved names and dangling relations show inline.
+edit is a model op (LLD-08). Reserved names and dangling relations show inline. ⚑ A refused hasMany and its suggested belongsTo
+are applied together against the revision the editor read, after the user presses Apply fix.
+Findings on a saved model use their supplied guarded fixes. Constraints, defaults and
+custom API operations use JSON fields. The entity form defaults to a UUID key named
+`id` and derives a plural route segment when the user leaves it blank.
 
-**Generate backend (Phase 2).** `mode: "plan"` first: a table of files with create, update,
-unchanged or refused, and an optional migration name. Confirm runs `mode: "write"`. Backend
-writes are outside the undo history, and the dialog says so. The solution's git status is the
-safety net.
+**Generate backend (Phase 2).** `mode: "plan"` first shows a table of files and the
+optional migration name. Confirm runs `mode: "write"`. Backend writes are outside the
+undo history, and the dialog says so. The solution's git status is the safety net.
+⚑ The table includes the DevHost's delete action. Confirmation checks the app and model
+revisions before calling the generator. It writes the API before requesting a named
+migration, because DevHost runs migration as a separate CLI command. The dialog reports
+generation and migration outcomes and points to sync and drift in the Data tab.
 
 **Undo and redo.** Patches are entries of the shared history, so the toolbar's undo works. The
-panel re-reads the summary after every history change.
+panel re-reads the summary after every history change. ⚑ A successful patch asks the
+shared engine session to sync history immediately so the toolbar takes up its entry.
 
 **Empty states.** No blueprint: one button creates `app.blueprint.json` with the detected
-target. No contract: contract kinds are disabled, with a pointer to the Data tab's sync.
+target. No contract: contract kinds are disabled, with a pointer to the Data tab's sync. ⚑ Initialization uses
+`App` as the initial document name and selects the web target from the designer's
+existing health response (`next-refine` for Next, `vite-refine` for Vite).
+
+**Diagnostic focus.** ⚑ A finding focuses the closest field matching its JSON pointer,
+opening its page first when needed. Document-level findings focus the editor region.
 
 ## 3. State and concurrency
 
@@ -88,8 +126,9 @@ those revs. On 409 `conflict` (an agent or a hand edit got there first) it re-re
 re-renders, and tells the user their change was not applied. It never retries a write on its
 own.
 
-It polls `GET /blueprint` on window focus and after each history change. The plugin has no
-push channel, and one is not added for this.
+It refreshes `GET /blueprint` on window focus and after each history change. The dev service
+has no push channel. ⚑ A refresh waits for an in-flight patch, and only newer reads replace
+the open snapshot. On focus the editor also reloads the contract manifest.
 
 ## 4. Tests
 
@@ -100,6 +139,8 @@ push channel, and one is not added for this.
   small custom page, bind a text to an input, preview and type; a conflict from a concurrent
   MCP patch.
 - Phase 2 adds: edit the model, plan the backend, see the file table.
+  ⚑ Playwright runs the worktree's packaged `trivia-dotnet` on PATH and checks the proposed
+  source and solution are still absent after planning. CI needs .NET 10 and that tool shim.
 
 ## 5. Open points
 

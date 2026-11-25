@@ -1,0 +1,30 @@
+{
+  "type": "Avatar",
+  "source": {
+    "registry": "shadcn",
+    "item": "avatar",
+    "import": {
+      "name": "Avatar",
+      "from": "ui"
+    },
+    "parts": {
+      "fallback": "AvatarFallback"
+    }
+  },
+  "props": [],
+  "slots": [
+    {
+      "name": "image",
+      "kind": "nodes"
+    },
+    {
+      "name": "fallback",
+      "kind": "nodes",
+      "wrapper": "AvatarFallback"
+    }
+  ],
+  "events": [],
+  "exposes": [],
+  "client": true,
+  "template": {}
+}

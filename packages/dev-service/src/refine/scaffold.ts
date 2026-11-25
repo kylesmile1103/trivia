@@ -4,11 +4,11 @@
 // fields.ts, the same code that adds one to an existing page.
 
 import type { ContractOptions } from '@trivia/blueprint'
-import type { ContractPageInput } from '@trivia/blueprint-compiler'
+import type { ContractPageInput, RefineSnippetGenerator } from '@trivia/blueprint-compiler'
 import type { ManifestField, ManifestResource } from '@trivia/contract-sync'
 
 import { type ImportSpec, columnFor, fieldShape, humanize } from './columns.js'
-import { type FormStyle, formFieldFor, kebab } from './fields.js'
+import { type FieldContext, type FormStyle, formFieldFor, kebab } from './fields.js'
 import { bodyFields } from './form.js'
 import { refineName } from './page.js'
 
@@ -145,6 +145,19 @@ const attr = (text: string) => (/^[^"\\\n{}<>&]*$/.test(text) ? `"${text}"` : `{
 
 const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
 
+export function generateRefineSnippets(
+  project: Pick<ScaffoldContext, 'ui' | 'refineUi' | 'textarea' | 'style'>,
+  fieldOptions: Pick<FieldContext, 'datePicker' | 'describeErrors'> = {},
+): RefineSnippetGenerator {
+  const { ui, refineUi, textarea = false, style = 'field' } = project
+  return {
+    column: (field, filter) => columnFor(field, {
+      badge: ui + '/badge', dataTable: refineUi ? refineUi + '/data-table' : null, filter,
+    }),
+    field: (field, idPrefix) => formFieldFor(field, { ui, textarea, style, idPrefix, ...fieldOptions }),
+  }
+}
+
 /** The same generator is used by the new-resource plan, inferencer and blueprint compiler. */
 export const generateRefinePage: RefinePageGenerator = ({ resource: contract, kind, project, options, actions }) => {
   const name = refineName(contract)
@@ -219,8 +232,9 @@ function listPage(
   const visible = context.fields === undefined
     ? fields.filter((f) => f.name !== resource.primaryKey && SCALAR.has(fieldShape(f))).slice(0, MAX_LIST_COLUMNS)
     : selectedFields(fields, context.fields)
+  const snippets = generateRefineSnippets(context)
   const columns = visible.map((f) => {
-    const column = columnFor(f, { filter: context.filters?.includes(f.name) ?? true, badge: `${context.ui}/badge`, dataTable: context.refineUi ? `${context.refineUi}/data-table` : null })
+    const column = snippets.column(f, context.filters?.includes(f.name) ?? true)
     for (const spec of column.imports) imports.add(spec)
     return column.value
   })
@@ -306,9 +320,9 @@ function formPage(
   // `FormField` reads the form from `<Form>`'s context; `Field`s sit in a `FieldGroup`.
   imports.add(style === 'form' ? { name: 'Form', source: `${context.ui}/form` } : { name: 'FieldGroup', source: `${context.ui}/field` })
 
-  const fieldContext = { ui: context.ui, idPrefix: kebab(resource.name), style, ...(context.textarea ? { textarea: true } : {}) }
+  const snippets = generateRefineSnippets(context)
   const pieces = editable.map((f: ManifestField) => {
-    const piece = formFieldFor(f, fieldContext)
+    const piece = snippets.field(f, kebab(resource.name))
     for (const spec of piece.imports) imports.add(spec)
     return { name: f.name, ...piece }
   })

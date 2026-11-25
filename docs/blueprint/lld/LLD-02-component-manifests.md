@@ -43,6 +43,13 @@ A variant replaces whole fields of the base manifest and cannot change the type.
 the `on<Event>` names supported by the page document. Initial and template values are JSON,
 and props may carry an optional description.
 
+⚑ Kit manifests can declare static-only `configuration` alongside the native props.
+The compiler consumes these values when building JSX, and they appear in the agent prop
+schemas. The `value === true` change argument normalizes a primitive's event value to
+a boolean (LLD-06). The `valueToString` argument preserves the blueprint string exposure
+when the installed base returns a nullable value. An exact style variant takes precedence
+over an explicitly declared family variant such as `base`.
+
 `componentManifestSchema` parses manifest files. `manifestJsonSchema()` generates the
 equivalent draft 2020-12 schema for the files, including style variants.
 
@@ -63,6 +70,8 @@ Example, trimmed:
 
 `from: "ui"` means the project's `components.json` alias for `ui` plus the item's file. The
 resolver never hardcodes `@/components/ui` (`CLAUDE.md` rule 9).
+⚑ `from: "refine-ui"` resolves the installed Refine table export using the project's
+component aliases (LLD-06).
 
 ## 3. Resolution (FR-MF-02 to FR-MF-06)
 
@@ -84,6 +93,8 @@ For each type:
    - ⚑ When several files export that name, use the exact module specifier if it selects
      one candidate. Otherwise omit the ambiguous type and report `ambiguous_component`
      with the candidate files and the manifest override that would select one.
+   - ⚑ When a `from: "ui"` export resolves uniquely, the import uses the installed filename
+     under the project's UI alias, including when the file was renamed (LLD-06).
    - Found: `props` is the analyzer's list. The manifest may only annotate props that exist
      (mark one as an event, add a description). The user's file wins on options and defaults.
      ⚑ Descriptions of recognized props are in `propDescriptions`, keeping the analyzer list

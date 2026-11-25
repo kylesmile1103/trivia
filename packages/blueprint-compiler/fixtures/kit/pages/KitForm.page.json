@@ -1,0 +1,67 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000005",
+  "name": "KitForm",
+  "route": "/kit/form",
+  "kind": "custom",
+  "root": "n_00000000000000000000000001",
+  "nodes": {
+    "n_00000000000000000000000001": {
+      "type": "main",
+      "name": "page",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_00000000000000000000000002": {
+      "type": "h1",
+      "name": "heading",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a1"
+    },
+    "n_00000000000000000000000003": {
+      "type": "Form",
+      "name": "customerForm",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a2"
+    },
+    "n_00000000000000000000000004": {
+      "type": "p",
+      "name": "footerNote",
+      "parent": "n_00000000000000000000000003",
+      "slot": "footer",
+      "order": "a0"
+    }
+  },
+  "props": {
+    "n_00000000000000000000000002": {
+      "children": "New customer"
+    },
+    "n_00000000000000000000000003": {
+      "resource": "Customer",
+      "mode": "create",
+      "fields": [
+        "fullName",
+        "email",
+        "segment",
+        "notes"
+      ],
+      "layout": "grid-2",
+      "redirect": "list"
+    },
+    "n_00000000000000000000000004": {
+      "children": "Fields marked required must be completed."
+    }
+  },
+  "bindings": {},
+  "styles": {
+    "n_00000000000000000000000001": {
+      "className": "grid max-w-4xl gap-5 p-6"
+    }
+  },
+  "state": {},
+  "actions": {}
+}
