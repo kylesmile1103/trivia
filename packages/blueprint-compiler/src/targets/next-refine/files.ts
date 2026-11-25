@@ -1,5 +1,6 @@
 import { CompileError, type EmittedModule, type PageSource } from '../../compile.js'
 import type { ProjectFacts } from '../../facts.js'
+import { printModule } from '../../print/module.js'
 import { quote, restyleModule, statement } from '../../print/style.js'
 import type { LoweredPage } from '../target.js'
 
@@ -13,11 +14,23 @@ export function nextPageFile(route: string, facts: ProjectFacts, file = 'page.ts
 }
 
 export function files(lowered: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]] {
-  if (lowered.kind !== 'contract') throw new CompileError('unsupported', 'Next.js custom pages require client boundary analysis.')
-  const { page: { route }, generated } = lowered
-  const { component, content, handler } = generated
+  if (lowered.kind === 'contract') {
+    const { page: { route }, generated: { component, content, handler } } = lowered
+    return withView({ ...entry(route, facts), ...(handler && { handler }) }, component, content, facts)
+  }
+  const { ir, handler, requires } = lowered
+  const page = { ...entry(ir.route, facts), requires, ...(handler && { handler }) }
+  const content = printModule(ir, facts)
+  if (ir.client || ir.hooks.length || ir.queries.length) return withView(page, ir.name, content, facts)
+  return [{ ...page, component: ir.name, code: content.replace('export function ' + ir.name, 'export default function ' + ir.name) }]
+}
+
+function entry(route: string, facts: ProjectFacts): EmittedModule {
   const file = nextPageFile(route, facts)
-  const viewFile = nextPageFile(route, facts, 'view.tsx')
+  return { file, code: '', route, component: 'Page', importPath: file.slice(0, -4), requires: [] }
+}
+
+function withView(page: EmittedModule, component: string, content: string, facts: ProjectFacts): [EmittedModule, PageSource] {
   const { style } = facts
   const code = [
     statement('import { ' + component + ' as View } from ' + quote('./view', style), style), '',
@@ -26,6 +39,5 @@ export function files(lowered: LoweredPage, facts: ProjectFacts): [EmittedModule
     '}', '',
   ].join('\n')
   const view = statement(quote('use client', style), style) + '\n\n' + restyleModule(content, style)
-  return [{ file, code, route, component: 'Page', importPath: file.slice(0, -4), requires: [], ...(handler && { handler }) },
-    { file: viewFile, code: view }]
+  return [{ ...page, code }, { file: nextPageFile(page.route, facts, 'view.tsx'), code: view }]
 }

@@ -8,6 +8,7 @@ import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '
 import { printHandler } from '../print/module.js'
 import { compareBytes, literal, property, quote, statement } from '../print/style.js'
 import { refineName } from '../targets/paths.js'
+import { nextPageFile } from '../targets/next-refine/files.js'
 import type { LoweredPage, RefineHookMap } from '../targets/target.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
@@ -21,7 +22,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
   const dir = resource ? refineName(resource) : page.resource ?? page.name
-  const file = facts.pagesDir + '/' + dir + '/' + page.name + '.tsx'
+  const file = facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx')
+    : facts.pagesDir + '/' + dir + '/' + page.name + '.tsx'
   const imports: ImportIR[] = []
   const missing = new Map<string, RegistryItem>()
   const names = new Names([
