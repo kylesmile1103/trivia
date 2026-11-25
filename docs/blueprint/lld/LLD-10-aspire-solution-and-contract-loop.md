@@ -36,6 +36,15 @@
   `PublishAsStaticWebsite` to serve its built assets in a container.
   [JavaScript publishing](https://aspire.dev/deployment/javascript-apps/).
 
+⚑ Keep the existing .NET 10.0.12 pins for `Microsoft.AspNetCore.OpenApi` and
+`Microsoft.Extensions.ApiDescription.Server`. The API project enables generation with
+`OpenApiGenerateDocumentsOnBuild`, sets `OpenApiDocumentsDirectory` relative to the API
+project, and passes `--openapi-version OpenApi3_1 --file-name api.openapi` in
+`OpenApiGenerateDocumentsOptions`. The generator appends `.json`.
+[Build-time OpenAPI in .NET 10](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0) ·
+[OpenAPI package](https://www.nuget.org/packages/Microsoft.AspNetCore.OpenApi/10.0.12) ·
+[Build package](https://www.nuget.org/packages/Microsoft.Extensions.ApiDescription.Server/10.0.12).
+
 ## 1. The solution
 
 ```

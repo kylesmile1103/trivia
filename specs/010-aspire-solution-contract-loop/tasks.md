@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Read the Aspire documentation for the version to pin: PostgreSQL resource, project references, wait-for and wait-for-completion, the Vite and JavaScript app resources, service discovery variables, the testing package. Note names and versions in LLD-10
-- [ ] T002 Read the .NET documentation for build-time OpenAPI document generation. Note the properties in LLD-10
+- [x] T002 Read the .NET documentation for build-time OpenAPI document generation. Note the properties in LLD-10
 
 ## Phase 2: Foundational
 
