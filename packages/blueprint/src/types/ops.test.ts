@@ -42,6 +42,7 @@ describe('BlueprintOp schema (FR-BP-07)', () => {
     { ...model, op: 'removeRelation', entity: 'Account', relation: 'customer' },
     { ...model, op: 'setIndexes', entity: 'Customer', indexes: [{ fields: ['fullName'] }] },
     { ...model, op: 'setEntityApi', entity: 'Customer', api: { operations: ['list'] } },
+    { ...model, op: 'clearRenameMarkers', markers: [{ entity: 'Customer', from: 'Client' }, { entity: 'Customer', field: 'fullName', from: 'name' }] },
   ]
 
   it('accepts one example of every op', () => {
