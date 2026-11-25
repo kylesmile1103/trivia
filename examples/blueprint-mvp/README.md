@@ -55,8 +55,8 @@ command below it. Start that project's Vite server from a shell with the same `P
 pnpm --dir "$solution/web" exec vite --port 5476 --strictPort
 ```
 
-From a second shell, use that project's `web/` directory and only its local Trivia MCP
-server. Pass the exact paragraph in [PROMPT.md](PROMPT.md).
+In a second shell, set `repo` and `solution` to the same absolute paths used for setup.
+From the project's `web/` directory, connect only to its local Trivia MCP server. Pass the exact paragraph in [PROMPT.md](PROMPT.md).
 
 ```sh
 cd "$solution/web"

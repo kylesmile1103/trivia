@@ -28,7 +28,8 @@
 ## Phase 5: User Story 4 - Agent (P1)
 
 - [ ] T011 [US4] Run the prompt in a fresh Claude Code session with only the Trivia server, twice. Save both transcripts' tool-call lists under `examples/blueprint-mvp/sessions/`
-- [ ] T012 [US4] Fix what the agent tripped on (tool descriptions, hints, diagnostics) in specs 001 to 005. Note it in `docs/mcp.md`
+  Deferred: the lead runs the prompt in Claude Code
+- [x] T012 [US4] Fix what the agent tripped on (tool descriptions, hints, diagnostics) in specs 001 to 005. Note it in `docs/mcp.md`
 
 ## Phase 6: Close-out
 
@@ -53,6 +54,10 @@
 - Spec 009: an enum used only in nullable fields emitted an empty OpenAPI schema, so the
   segment column rendered JSON. Regression: `dotnet/tests/Trivia.Blueprint.Codegen.Tests/OpenApiTests.cs`
   (nullable enum wire values) and the regenerated API browser case.
+
+- Specs 004 and 005: the patch response did not say which operation ID contract sync
+  published and did not flag a mistyped list-header refetch. Regression:
+  `packages/dev-service/test/blueprint-mcp.test.ts` (synced mutation ID and implicit list query).
 
 ## Dependencies
 
