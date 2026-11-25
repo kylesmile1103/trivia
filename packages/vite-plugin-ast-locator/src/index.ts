@@ -10,10 +10,11 @@ import type { Plugin } from 'vite'
 import {
   type EngineBinding, EngineService, PREVIEW_PREFIX, createDevMiddleware, loadEngine,
 } from '@trivia/dev-service'
+import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
 import { createViteHost } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
-import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
+import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
 
 export { API_BASE, MCP_PATH } from '@trivia/dev-service'
 export type * from '@trivia/dev-service'

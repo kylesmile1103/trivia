@@ -6,8 +6,9 @@ import { parseSync, Visitor, type ESTree, type ResolvedConfig } from 'vite'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { type EngineBinding, loadEngine, unwrap } from '@trivia/dev-service'
+import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 import astLocator from '../src/index.js'
-import { annotateModule, isSyntaxError, moduleFile } from '../src/transform.js'
+import { moduleFile } from '../src/transform.js'
 import { PLAYGROUND, copyPlayground, startServer, type TestServer } from './helpers.js'
 
 let engine: EngineBinding
@@ -80,6 +81,12 @@ function tsxFiles(dir: string, base = dir): string[] {
 
 describe('annotateModule', () => {
   const files = tsxFiles(path.join(PLAYGROUND, 'src'), PLAYGROUND)
+
+  it('FR-TN-01 skips the parser for modules without a JSX opening token', () => {
+    const parse = vi.fn(() => [])
+    expect(annotateModule('export const answer = 42', 'src/answer.tsx', 'src/answer.tsx', parse)).toBeNull()
+    expect(parse).not.toHaveBeenCalled()
+  })
 
   it('covers the playground page and component library', () => {
     expect(files).toContain('src/pages/Dashboard.tsx')
