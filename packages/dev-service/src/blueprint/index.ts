@@ -1,4 +1,4 @@
-import { BLUEPRINT_VERSION, loadDocument, manifestsToJsonSchema, project } from '@trivia/blueprint'
+import { loadDocument, manifestsToJsonSchema, project } from '@trivia/blueprint'
 
 import type { z } from 'zod'
 
@@ -8,7 +8,7 @@ import { ApiError } from '../engine.js'
 import { backendInput, runBackend } from './backend.js'
 import { ejectedInput, planEject, planInput, recordEjected } from './plan.js'
 import { previewInput, previewPage } from './preview.js'
-import type { BlueprintWorkspace } from './store.js'
+import { checkDocumentVersion, type BlueprintWorkspace } from './store.js'
 import { readSummary } from './summary.js'
 
 export function readDoc(workspace: BlueprintWorkspace, path: string | null, projection: boolean) {
@@ -16,10 +16,7 @@ export function readDoc(workspace: BlueprintWorkspace, path: string | null, proj
   const text = workspace.readDocumentText(path)
   if (text === null) throw new ApiError('node_not_found', `Blueprint document ${path} does not exist`)
   const entry = loadDocument(path, text)
-  if (entry.diagnostics.some(({ code }) => code === 'unsupported_version')) {
-    const found = (entry.value as { blueprintVersion?: number })?.blueprintVersion
-    throw new ApiError('unsupported', entry.diagnostics[0]!.message, { found, supported: BLUEPRINT_VERSION })
-  }
+  checkDocumentVersion(entry)
   if (!entry.doc) throw new ApiError('invalid_result', `Could not read blueprint document ${path}`, { diagnostics: entry.diagnostics })
   return {
     path, rev: entry.rev, doc: entry.doc,

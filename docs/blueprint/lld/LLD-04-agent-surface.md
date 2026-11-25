@@ -13,8 +13,11 @@ through the same `DevHost` service.
 
 ```
 src/blueprint/
-  index.ts        route and tool registration
+  index.ts        route registration and read helpers
   store.ts        BlueprintStore over the files (LLD-01), reads through fs, writes through the service
+  paths.ts        project and blueprint path containment
+  writes.ts       guarded document transactions
+  summary.ts      status and diagnostics for the current snapshot
   context.ts      builds the validation context: manifests (LLD-02), contract manifest, expressions (LLD-03)
   preview.ts      compiled modules at /@trivia/preview/<id>.tsx (LLD-05)
   plan.ts         eject plans (LLD-05)

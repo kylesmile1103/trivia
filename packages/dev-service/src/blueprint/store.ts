@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import {
-  APP_DOC, MODEL_DOC, apply, componentManifestSchema, loadBlueprint, resolveManifests, ulidSource,
-  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type Diagnostic, type ManifestResolution,
+  APP_DOC, BLUEPRINT_VERSION, MODEL_DOC, apply, blueprintOpSchema, componentManifestSchema, loadBlueprint, resolveManifests, ulidSource,
+  type Blueprint, type BlueprintStore, type ComponentManifest, type ComponentSchema, type Diagnostic, type DocEntry, type ManifestResolution,
   type ApplyOutcome,
 } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
@@ -39,6 +39,14 @@ function listFiles(root: string, dir: string): string[] {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw new ApiError('io_error', `Cannot list ${dir}: ${(error as Error).message}`)
+  }
+}
+
+export function checkDocumentVersion(entry: DocEntry | undefined): void {
+  const unsupported = entry?.diagnostics.find(({ code }) => code === 'unsupported_version')
+  if (unsupported) {
+    const found = (entry?.value as { blueprintVersion?: number })?.blueprintVersion
+    throw new ApiError('unsupported', unsupported.message, { found, supported: BLUEPRINT_VERSION })
   }
 }
 
@@ -111,11 +119,17 @@ export class BlueprintWorkspace implements BlueprintStore {
   }
 
   async apply(ops: readonly unknown[]): Promise<ApplyOutcome> {
-    return apply(await this.read(), ops, {
+    const blueprint = await this.read()
+    const outcome = apply(blueprint, ops, {
       ids: this.#ids,
       ctx: this.context(),
       expressions: { renameReferences: this.#engine.renameReferences },
     })
+    if (!outcome.ok && outcome.error.code === 'invalid_op' && outcome.error.op !== undefined) {
+      const refused = blueprintOpSchema.safeParse(ops[outcome.error.op])
+      if (refused.success) checkDocumentVersion(blueprint.docs[refused.data.doc])
+    }
+    return outcome
   }
 
   #json(file: string): unknown {

@@ -111,12 +111,23 @@ it('FR-AG-01 serves installed and uninstalled component schemas, slots, events a
   })
 })
 
-it('FR-AG-01 refuses a document from a newer version and reports the supported version', async () => {
+it('FR-AG-01 refuses to read or patch a document from a newer version', async () => {
   const text = seedPage()
-  writeBlueprint(listPage().doc, JSON.stringify({ ...JSON.parse(text), blueprintVersion: 2 }))
-  const response = await get(pagePath)
-  expect(response.status).toBe(422)
-  expect(await response.json()).toMatchObject({ ok: false, error: { code: 'unsupported', details: { found: 2, supported: 1 } } })
+  const file = listPage().doc
+  const unsupported = JSON.stringify({ ...JSON.parse(text), blueprintVersion: 2 })
+  writeBlueprint(file, unsupported)
+  const read = await get(pagePath)
+  expect(read.status).toBe(422)
+  const refusal = { ok: false, error: { code: 'unsupported', details: { found: 2, supported: 1 } } }
+  expect(await read.json()).toMatchObject(refusal)
+
+  const patch = await post('/patch', {
+    label: 'Edit a future version',
+    ops: [{ op: 'setPageMeta', doc: file, baseRev: revOfText(unsupported), route: '/new' }],
+  })
+  expect(patch.status).toBe(422)
+  expect(await patch.json()).toMatchObject(refusal)
+  expect(fs.readFileSync(path.join(root, 'blueprint', file), 'utf8')).toBe(unsupported)
 })
 
 it('FR-AG-04 saves a first draft with contract errors and returns usable diagnostics', async () => {
