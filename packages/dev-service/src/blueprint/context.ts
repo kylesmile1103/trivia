@@ -69,12 +69,9 @@ function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManif
         }
       }
       for (const { step, at } of actions(page)) {
-        if (step.do === 'refetch' && page.kind !== 'custom') {
-          const listHeader = page.kind === 'list' && at[1] === 'headerActions'
-          if (!listHeader || step.query !== 'list') {
-            report('unsupported_operation', [...at, 'query'], `No query "${step.query}" to refetch here`,
-              listHeader ? 'Use query "list" to refetch the table.' : 'Contract pages support refetch in list header actions.')
-          }
+        if (step.do === 'refetch' && page.kind !== 'custom' && (page.kind !== 'list' || step.query !== 'list')) {
+          report('unsupported_operation', [...at, 'query'], `No query "${step.query}" to refetch here`,
+            'Use query "list" in row or header actions on a list page.')
         }
         if (step.do !== 'mutate') continue
         const source = resourceOf(step.resource, [...at, 'resource'])
