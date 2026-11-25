@@ -9,7 +9,7 @@
       "outputs": []
     },
     "test": {
-      "command": "cargo test -p trivia_expr",
+      "command": "cargo test -p trivia_expr && cargo bench -p trivia_expr --bench analyze",
       "inputs": ["default", "rust"]
     },
     "lint": {
