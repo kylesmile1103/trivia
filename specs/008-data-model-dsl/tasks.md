@@ -40,7 +40,7 @@
 ## Phase 8: Polish
 
 - [x] T012 [P] Emit `schemas/model.v1.json`. ajv strict test over the fixtures
-- [ ] T013 Edge cases: enum values that are not identifiers, self-relations, mixed key types
+- [x] T013 Edge cases: enum values that are not identifiers, self-relations, mixed key types
 - [ ] T014 Run `pnpm check`
 
 ## Dependencies
