@@ -93,7 +93,12 @@ public sealed class CrudTests(PostgresFixture postgres)
     [Fact]
     public async Task FR_NC_06_PatchChangesOnlyWhatTheRequestSendsAndPutReplaces()
     {
-        using GeneratedProject project = new(ModelLoader.Load(FixtureTests.Bank));
+        // Account adds a required foreign key and an update timestamp to what a PATCH covers.
+        LoadedBlueprint bank = ModelLoader.Load(FixtureTests.Bank);
+        ModelEntity[] entities = bank.Model.Entities.Select(entity => entity.Name == "Account"
+            ? entity with { Api = entity.Api with { Operations = [.. entity.Api.Operations, "update"] } }
+            : entity).ToArray();
+        using GeneratedProject project = new(bank with { Model = bank.Model with { Entities = entities } });
         await using RunningApi api = await postgres.StartAsync(project);
         HttpClient client = api.Client;
 
@@ -150,6 +155,24 @@ public sealed class CrudTests(PostgresFixture postgres)
 
         using HttpResponseMessage missing = await client.PatchAsJsonAsync(Customers + "/" + Guid.CreateVersion7(), new { notes = "None" });
         await ReadProblem(missing, HttpStatusCode.NotFound);
+
+        Guid customer = record.GetProperty("id").GetGuid();
+        await using NpgsqlConnection connection = new(api.ConnectionString);
+        await connection.OpenAsync();
+        await using NpgsqlCommand insert = new(
+            "INSERT INTO accounts (account_number, frozen, customer_id) VALUES ('0123456789', false, @id) RETURNING id", connection);
+        insert.Parameters.AddWithValue("id", customer);
+        string account = $"/api/v1/accounts/{Assert.IsType<int>(await insert.ExecuteScalarAsync())}";
+        using HttpResponseMessage frozen = await client.PatchAsJsonAsync(account, new { frozen = true });
+        Assert.Equal(HttpStatusCode.OK, frozen.StatusCode);
+        JsonElement accountRecord = await frozen.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(accountRecord.GetProperty("frozen").GetBoolean());
+        Assert.Equal("0123456789", accountRecord.GetProperty("accountNumber").GetString());
+        Assert.Equal(customer, accountRecord.GetProperty("customerId").GetGuid());
+        Assert.True(accountRecord.GetProperty("updatedAt").GetDateTimeOffset() > DateTimeOffset.UnixEpoch);
+        using HttpResponseMessage orphaned = await client.PatchAsJsonAsync(account, new { customerId = (Guid?)null });
+        Assert.True((await ReadProblem(orphaned, HttpStatusCode.BadRequest)).GetProperty("errors")
+            .TryGetProperty("customerId", out _));
     }
 
     internal static async Task<JsonElement> ReadProblem(HttpResponseMessage response, HttpStatusCode expected)
