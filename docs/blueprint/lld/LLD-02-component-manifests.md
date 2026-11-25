@@ -131,7 +131,11 @@ Only installed types with exposed values contribute members.
 ## 5. JSON Schema for agents (FR-MF-07, should)
 
 `manifestsToJsonSchema(manifests)` returns one schema per type for the node's props, plus an
-index `{ type, slots, events, exposes, installed }`. `GET /blueprint/components` and
+index `{ type, slots, events, exposes, installed }`.
+⚑ The response fields are `schemas` (draft 2020-12, keyed by type) and `index` (an array).
+Both include missing types. The agent schemas describe required props and close the object
+to unknown keys. Layer 3 checks the values supplied in a draft.
+`GET /blueprint/components` and
 `trivia_blueprint_get { what: "components" }` return both (LLD-04).
 
 ## 6. Tests

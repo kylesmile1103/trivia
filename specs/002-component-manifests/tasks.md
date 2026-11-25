@@ -37,7 +37,7 @@
 
 ## Phase 7: User Story 5 - JSON Schema (P3)
 
-- [ ] T015 [US5] `src/manifest/json-schema.ts` with snapshot tests
+- [x] T015 [US5] `src/manifest/json-schema.ts` with snapshot tests
 
 ## Phase 8: Polish
 
