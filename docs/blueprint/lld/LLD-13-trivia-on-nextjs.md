@@ -161,6 +161,9 @@ paths under `/@trivia/`:
 `server/api-guard.ts` keeps checking API requests before forwarding. The canvas stays
 same-origin (rule 7).
 
+⚑ Configure the second proxy with `TRIVIA_API_TARGET`. `TRIVIA_TARGET` remains the app
+target. The dev service receives only the API and MCP path families.
+
 `trivia-next dev` (the bin of `@trivia/next`) starts `next dev`, the dev service with a `next`
 host, and prints the MCP URL. `Ctrl+C` stops both, and the dev service removes its preview
 files on the way out.
