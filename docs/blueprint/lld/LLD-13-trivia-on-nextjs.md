@@ -176,6 +176,8 @@ It reads shadcn's UI alias, with `--ui-dir` and `--import-base` overrides for cu
 ⚑ Refine previews use `%5F_blueprint/refine-<id>/page.tsx` under the preview group.
 The native guarded writer preserves existing files and cleans only files this launch created
 with their expected content, plus the empty directories it created.
+⚑ Preview cleanup checks that each directory still resolves to its original path inside the
+project before removing it, so a later symlink cannot redirect that removal.
 
 ## 5. Routes and pages (FR-TN-04)
 

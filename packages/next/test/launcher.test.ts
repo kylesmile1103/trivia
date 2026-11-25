@@ -85,3 +85,22 @@ it('publishes compiled pages at the escaped App Router path and removes its own 
   await expect(fs.stat(file)).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await fs.readFile(existing, 'utf8')).toBe(code)
 })
+
+it('leaves directories outside the app alone when a preview ancestor becomes a symlink', async () => {
+  const host = createNextHost(root, await loadEngine())
+  const id = '0123456789abcdef'
+  await host.preview.publish(id, { code: 'export default function Preview() { return <main /> }\n', component: 'Preview' })
+  const group = path.join(root, 'app/(blueprint-preview)')
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'trivia-next-outside-'))
+  try {
+    const directory = path.join(outside, `%5F_blueprint/refine-${id}`)
+    await fs.mkdir(directory, { recursive: true })
+    await fs.rename(group, `${group}-saved`)
+    await fs.symlink(outside, group, 'junction')
+
+    await expect(async () => host.preview.close?.()).rejects.toThrow(/could not remove every Trivia preview/)
+    expect((await fs.stat(directory)).isDirectory()).toBe(true)
+  } finally {
+    await fs.rm(outside, { recursive: true, force: true })
+  }
+})

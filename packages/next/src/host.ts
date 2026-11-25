@@ -92,7 +92,7 @@ function compilerOptions(root: string): ts.CompilerOptions {
 
 function diskPreviews(root: string, app: string | undefined, engine: EngineBinding): PreviewHost {
   const files = new Map<string, string>()
-  const directories = new Set<string>()
+  const directories = new Map<string, string>()
   let closed = false
   return {
     publish(id, { code }) {
@@ -105,7 +105,7 @@ function diskPreviews(root: string, app: string | undefined, engine: EngineBindi
       const missing = [group, segment, folder].filter((dir) => !fs.existsSync(path.join(root, dir)))
       unwrap(engine.restoreFiles(root, JSON.stringify([{ file, expected: files.get(file) ?? null, content: code }])))
       files.set(file, code)
-      for (const dir of missing) directories.add(dir)
+      for (const dir of missing) directories.set(dir, fs.realpathSync(path.join(root, dir)))
       return `/__blueprint/refine-${id}`
     },
     close() {
@@ -119,9 +119,10 @@ function diskPreviews(root: string, app: string | undefined, engine: EngineBindi
         }
       }
       files.clear()
-      for (const directory of [...directories].reverse()) {
+      for (const [directory, expected] of [...directories].reverse()) {
         try {
-          fs.rmdirSync(path.join(root, directory))
+          const real = fs.realpathSync(path.join(root, directory))
+          if (real === expected && projectPath(root, real)) fs.rmdirSync(real)
         } catch (error) {
           if (!['ENOENT', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) errors.push(error)
         }
