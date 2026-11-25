@@ -1,7 +1,9 @@
 ﻿using System;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using global::BackOffice.Data;
+using global::BackOffice.Generated;
 
 namespace BackOffice.Features.Customer;
 public static partial class CustomerEndpoints
@@ -9,11 +11,89 @@ public static partial class CustomerEndpoints
     public static RouteGroupBuilder MapCustomerEndpoints(this IEndpointRouteBuilder routes)
     {
         RouteGroupBuilder group = routes.MapGroup("/api/v1/customers").WithTags("Customers");
+        group.MapGet("", ListAsync).WithName("listCustomers").ProducesValidationProblem();
         group.MapGet("/{id}", GetAsync).WithName("getCustomerById").ProducesProblem(404);
         group.MapPost("", CreateAsync).WithName("createCustomer").ProducesValidationProblem().ProducesProblem(409);
         group.MapPut("/{id}", UpdateAsync).WithName("updateCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
         group.MapDelete("/{id}", DeleteAsync).WithName("deleteCustomer").ProducesProblem(404).ProducesProblem(409);
         return group;
+    }
+
+    private static async Task<Ok<CustomerPage>> ListAsync([FromQuery] string? page, [FromQuery] string? pageSize, [FromQuery] string? sort, [FromQuery(Name = "filter")] string[]? filters, [FromQuery] string? q, AppDbContext db, CancellationToken cancellationToken)
+    {
+        int number = ListQuery.PageNumber(page, "page", 1, int.MaxValue);
+        int size = ListQuery.PageNumber(pageSize, "pageSize", 20, 200);
+        IQueryable<Customer> query = db.CustomerSet.AsNoTracking();
+        foreach (ListFilter filter in ListQuery.Filters(filters))
+            query = ApplyFilter(query, filter);
+        if (!string.IsNullOrEmpty(q))
+        {
+            string pattern = ListQuery.SearchPattern(q);
+            query = query.Where(row => EF.Functions.ILike(row.FullName!, pattern, "\\") || EF.Functions.ILike(row.Email!, pattern, "\\"));
+        }
+
+        IOrderedQueryable<Customer>? ordered = null;
+        foreach (ListSort term in ListQuery.Sorts(sort))
+        {
+            ordered = term.Field switch
+            {
+                "fullName" => ListQuery.Order(query, ordered, row => row.FullName, term.Descending),
+                "createdAt" => ListQuery.Order(query, ordered, row => row.CreatedAt, term.Descending),
+                _ => throw ListQuery.Invalid("sort", $"Unknown sort field '{term.Field}'.")};
+        }
+
+        int total = await query.CountAsync(cancellationToken);
+        long offset = ((long)number - 1) * size;
+        if (offset >= total)
+            return TypedResults.Ok(new CustomerPage([], total, number, size));
+        IOrderedQueryable<Customer> stable = ordered is null ? query.OrderBy(row => row.Id) : ordered.ThenBy(row => row.Id);
+        List<Customer> rows = await stable.Skip((int)offset).Take(size).ToListAsync(cancellationToken);
+        return TypedResults.Ok(new CustomerPage(rows.Select(ToResponse).ToArray(), total, number, size));
+    }
+
+    private static IQueryable<Customer> ApplyFilter(IQueryable<Customer> query, ListFilter filter) => filter.Field switch
+    {
+        "status" => FilterStatus(query, filter),
+        "email" => FilterEmail(query, filter),
+        _ => throw ListQuery.Invalid("filter", $"Unknown filter field '{filter.Field}'.")};
+    private static IQueryable<Customer> FilterStatus(IQueryable<Customer> query, ListFilter filter)
+    {
+        if (filter.Operator == "in")
+        {
+            global::BackOffice.Enums.CustomerStatus[] values = ListQuery.Values(filter, text => ListQuery.EnumValue(text, filter.Field, global::BackOffice.Enums.CustomerStatusValues.FromLiteral));
+            return query.Where(row => values.Contains(row.Status!));
+        }
+
+        if (filter.Operator is not ("eq" or "ne"))
+            throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.");
+        string text = filter.Value;
+        global::BackOffice.Enums.CustomerStatus value = ListQuery.EnumValue(text, filter.Field, global::BackOffice.Enums.CustomerStatusValues.FromLiteral);
+        return filter.Operator switch
+        {
+            "eq" => query.Where(row => row.Status == value),
+            "ne" => query.Where(row => row.Status != value),
+            _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
+    }
+
+    private static IQueryable<Customer> FilterEmail(IQueryable<Customer> query, ListFilter filter)
+    {
+        if (filter.Operator == "in")
+        {
+            string[] values = ListQuery.Values(filter, text => text);
+            return query.Where(row => values.Contains(row.Email!));
+        }
+
+        if (filter.Operator is not ("eq" or "ne" or "contains" or "startswith"))
+            throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.");
+        string text = filter.Value;
+        string value = text;
+        return filter.Operator switch
+        {
+            "eq" => query.Where(row => row.Email == value),
+            "ne" => query.Where(row => row.Email != value),
+            "contains" => query.Where(row => row.Email.Contains(value)),
+            "startswith" => query.Where(row => row.Email.StartsWith(value)),
+            _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
     }
 
     private static async Task<Results<Ok<CustomerResponse>, NotFound>> GetAsync(Guid id, AppDbContext db, CancellationToken cancellationToken)

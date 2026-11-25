@@ -52,3 +52,5 @@ public sealed record UpdateCustomerRequest
     [JsonPropertyName("externalRef")]
     public Guid? ExternalRef { get; init; }
 }
+
+public sealed record CustomerPage(IReadOnlyList<CustomerResponse> Items, int Total, int Page, int PageSize);

@@ -17,6 +17,7 @@ public static class ApiPlan
     {
         yield return new($"{api}/Generated/ApiRegistration.g.cs", FileKind.Generated, CSharp.Print(ApiRegistrationEmitter.Emit(input)));
         yield return new($"{api}/Generated/ApiProblem.g.cs", FileKind.Generated, CSharp.Print(ApiProblemEmitter.Emit(input.Model)));
+        yield return new($"{api}/Generated/ListQuery.g.cs", FileKind.Generated, CSharp.Print(ListQueryEmitter.Emit(input.Model)));
         foreach (EmittedFile file in ScaffoldEmitter.Emit(input, api))
             yield return file;
     }

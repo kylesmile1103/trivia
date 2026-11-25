@@ -29,7 +29,7 @@
 ## Phase 4: User Story 2 - Lists (P1)
 
 - [x] T015 [US2] Integration tests for paging, sorting, each filter operator per field type, `q`, and each 400 case
-- [ ] T016 [US2] `ListQueryEmitter`: shared parsing, per-entity `switch` for filter and sort, the page record
+- [x] T016 [US2] `ListQueryEmitter`: shared parsing, per-entity `switch` for filter and sort, the page record
 
 ## Phase 5: User Story 3 and 4 - Regeneration and review (P1)
 

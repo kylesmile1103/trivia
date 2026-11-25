@@ -19,11 +19,16 @@ public static class ContractsEmitter
         string response = string.Join(",\n", members.Select(member =>
             $"[property: JsonPropertyName({Literal(member.WireName)})] {member.ResponseType} {member.Member}"));
         string request = string.Join("\n", members.Where(member => member.Writable).Select(member => RequestProperty(model, member)));
-        return Unit(Feature(model, entity.Name), ["System", "System.ComponentModel.DataAnnotations",
-                "System.Text.Json", "System.Text.Json.Serialization"],
+        List<string> records =
+        [
             $"public sealed record {entity.Name}Response({response});",
             $"public sealed record Create{entity.Name}Request {{ {request} }}",
-            $"public sealed record Update{entity.Name}Request {{ {request} }}");
+            $"public sealed record Update{entity.Name}Request {{ {request} }}"
+        ];
+        if (entity.Api.Operations.Contains("list"))
+            records.Add($"public sealed record {entity.Name}Page(IReadOnlyList<{entity.Name}Response> Items, int Total, int Page, int PageSize);");
+        return Unit(Feature(model, entity.Name), ["System", "System.ComponentModel.DataAnnotations",
+            "System.Text.Json", "System.Text.Json.Serialization"], [.. records]);
     }
 
     internal static IEnumerable<ApiMember> Members(ModelDocument model, ModelEntity entity)

@@ -156,6 +156,12 @@ List parameters:
   (`true` or `false`). Only `filterable` fields, and only operators that fit the field's type.
 - `q`: a case-insensitive match over the `searchable` fields.
 
+⚑ Always order by the key as the final sort term for stable page boundaries.
+  Ordered comparisons apply to numeric and temporal fields. Text matching uses
+  case-sensitive `contains` and `startswith`, and `q` uses PostgreSQL ILIKE with
+  wildcard characters escaped. The `null` operator applies to nullable fields.
+  Non-null comparisons, including `ne`, exclude null values.
+
 The response's `items`, `total`, `page` and `pageSize` are what contract-sync's pagination
 heuristics already recognize (`docs/data-provider.md`).
 

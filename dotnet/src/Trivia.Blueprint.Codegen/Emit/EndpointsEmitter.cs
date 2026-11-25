@@ -24,6 +24,10 @@ public static class EndpointsEmitter
         {
             switch (operation)
             {
+                case "list":
+                    Register("Get", "", "ListAsync", $"list{Pascal(entity.Plural)}", ".ProducesValidationProblem()");
+                    handlers.Add(ListQueryEmitter.Handler(model, entity, members));
+                    break;
                 case "get":
                     Register("Get", "/{id}", "GetAsync", $"get{name}ById", ".ProducesProblem(404)");
                     handlers.Add($$"""
@@ -89,7 +93,8 @@ public static class EndpointsEmitter
 
         string projection = string.Join(", ", members.Select(member => "entity." + member.Member));
         return Unit(Feature(model, name), ["System", "Microsoft.AspNetCore.Http.HttpResults",
-            "Microsoft.EntityFrameworkCore", $"global::{model.Namespace}.Data"],
+            "Microsoft.AspNetCore.Mvc", "Microsoft.EntityFrameworkCore",
+            $"global::{model.Namespace}.Data", $"global::{model.Namespace}.Generated"],
             $$"""
             public static partial class {{name}}Endpoints
             {
