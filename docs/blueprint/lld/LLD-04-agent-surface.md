@@ -28,7 +28,7 @@ Blueprint documents are JSON, and the engine's `createFile` writes only `.tsx` a
 `EngineService` gains one method:
 
 ```ts
-writeDocuments(writes: FileWrite[], label: string): Promise<HistoryEntryRef>
+writeDocuments(writes: FileWrite[], label: string): Promise<string | null>
 ```
 
 It runs in the service's edit queue, checks each path is inside the blueprint directory, checks
@@ -38,6 +38,8 @@ them through the guarded document writer. ⚑ The native `restoreFiles` prefligh
 `Workspace::exists`, which only accepts `.tsx` and `.jsx`, and reparses replacement source
 through `Workspace::restore`. JSON snapshots use a guarded writer in `blueprint/`; the shared
 history dispatches document entries to it and source entries to the native engine.
+⚑ The entry reference is its history label. A patch without byte changes returns `entry: null`
+and adds no undo entry.
 
 ⚑ Vite's `blueprintDir` option resolves to a child directory of the project root, default
 `blueprint`. Blueprint paths refuse symlink segments to prevent redirection and aliasing.
@@ -68,7 +70,7 @@ interface BlueprintSummary {
   diagnostics: Diagnostic[]
   next?: string                       // one suggested step, as data
 }
-interface PatchResult extends ApplyResult { entry: string; summary: BlueprintSummary }
+interface PatchResult extends ApplyResult { entry: string | null; summary: BlueprintSummary }
 interface PreviewResult { page: string; route: string; module: string; code: string;
                           requires: RegistryItem[]; diagnostics: Diagnostic[] }
 interface EjectPlan { ops: Op[]; files: string[]; requires: RegistryItem[]; warnings: string[];

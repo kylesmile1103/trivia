@@ -3,12 +3,15 @@
 // interleave their read-modify-write of a file, and land in one undo history, whoever sent
 // them.
 
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { resolveBlueprintDir } from '../blueprint/paths.js'
+import { commitDocuments } from '../blueprint/writes.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
-import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
+import type { ApplyResult, Drift, FileChange, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
 import { type Mention, RefineAdapter } from '../refine/index.js'
 import type { RouteEntry } from '../routes/index.js'
 import { normalizePath } from '../routes/paths.js'
@@ -69,6 +72,7 @@ export interface EditSource {
 export class EngineService {
   readonly #options: ServiceOptions
   readonly #history: History
+  readonly #blueprintDir: string
   readonly #queue = new SerialQueue()
   readonly #selection = new SelectionStore()
   readonly #screenshots = new ScreenshotRelay()
@@ -77,6 +81,7 @@ export class EngineService {
 
   constructor(options: ServiceOptions) {
     this.#options = options
+    this.#blueprintDir = resolveBlueprintDir(options.host.root, options.blueprintDir)
     this.#history = new History(options.historyLimit ?? 100)
     this.refine = new RefineAdapter({
       root: options.host.root,
@@ -288,6 +293,18 @@ export class EngineService {
     return this.#queue.run(() => this.#transact(ops, label ?? `${ops.length} edits`, source))
   }
 
+  /** Commit guarded writes relative to the blueprint directory in the shared edit queue. */
+  writeDocuments(writes: readonly FileChange[], label: string): Promise<string | null> {
+    return this.#queue.run(() => {
+      commitDocuments(fs.realpathSync(this.#options.host.root), this.#blueprintDir, writes)
+      const changes = writes.filter(({ before, after }) => before !== after)
+        .map((write) => ({ ...write, file: `${this.#blueprintDir}/${write.file}` }))
+      if (changes.length === 0) return null
+      this.#history.record({ label, changes, documents: true })
+      return label
+    })
+  }
+
   undo(): Promise<HistoryResult> {
     return this.#queue.run(() => this.#travel('undo'))
   }
@@ -337,12 +354,19 @@ export class EngineService {
       direction === 'undo'
         ? entry.changes.toReversed().map((c) => ({ file: c.file, expected: c.after, content: c.before }))
         : entry.changes.map((c) => ({ file: c.file, expected: c.before, content: c.after }))
-    const finish = this.#options.host.trackFileWrites?.(
+    const finish = entry.documents ? undefined : this.#options.host.trackFileWrites?.(
       writes.filter((write) => write.expected === null).map((write) => write.file),
       writes.filter((write) => write.content === null).map((write) => write.file),
     )
     try {
-      unwrap<null>(this.#options.engine.restoreFiles(this.#options.host.root, JSON.stringify(writes)))
+      const { engine, host } = this.#options
+      if (entry.documents) {
+        commitDocuments(fs.realpathSync(host.root), this.#blueprintDir, writes.map(({ file, expected, content }) => ({
+          file: file.slice(this.#blueprintDir.length + 1), before: expected, after: content,
+        })))
+      } else {
+        unwrap<null>(engine.restoreFiles(host.root, JSON.stringify(writes)))
+      }
     } catch (error) {
       if (error instanceof ApiError) throw new ApiError(error.code, `${direction} "${entry.label}" failed: ${error.message}`)
       throw error
