@@ -16,6 +16,7 @@ public static class ApiPlan
     private static IEnumerable<EmittedFile> EmitProject(string api, LoadedBlueprint input)
     {
         yield return new($"{api}/Generated/ApiRegistration.g.cs", FileKind.Generated, CSharp.Print(ApiRegistrationEmitter.Emit(input)));
+        yield return new($"{api}/Generated/ApiProblem.g.cs", FileKind.Generated, CSharp.Print(ApiProblemEmitter.Emit(input.Model)));
         foreach (EmittedFile file in ScaffoldEmitter.Emit(input, api))
             yield return file;
     }
