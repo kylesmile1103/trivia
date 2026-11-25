@@ -24,6 +24,7 @@ interface PartOptions {
   replacements?: ReadonlyMap<string, JsxIR>
   values?: ReadonlyMap<string, string>
   routeValues?: Record<string, string>
+  queryValues?: ReadonlyMap<string, Record<string, string>>
 }
 
 export function lowerCustom(
@@ -148,7 +149,7 @@ export function lowerCustom(
   }
   if (state.length) imports.push({ name: 'useState', source: 'react' })
   const route = part?.routeValues ? { rename: part.routeValues, imports: [], hooks: [] } : routeScope(deps, names, targetHooks.router)
-  const query = prepareQueries(page, context, names, analysis, targetHooks)
+  const query = prepareQueries(page, context, names, analysis, targetHooks, part?.queryValues)
   const repeats = new Map<string, RepeatLocal>()
   const byExpression = new Map<string, RepeatLocal>()
   for (const [id, control] of Object.entries(page.control).sort(([a], [b]) => compareBytes(a, b))) {

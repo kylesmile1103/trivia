@@ -147,6 +147,11 @@ shape for every page is easier to read and to edit later.
 Errors from a server fetch: a 404 calls `notFound()`. Anything else is thrown to the nearest
 `error.tsx`, which the template provides.
 
+⚑ The compiler uses manifest API parameter names for server SDK options and accepts
+`id` as the alias for a single-record identifier. Only GET operations qualify for
+server fetching. The template resolves the Aspire API origin or `TRIVIA_API_ORIGIN`
+and forwards credentials only to that origin.
+
 ## 5. Caching (FR-NX-05)
 
 Nothing is cached by default: internal tools show live, per-user data. A page with

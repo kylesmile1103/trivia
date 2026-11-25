@@ -5,6 +5,7 @@ import type { CompileContext } from '../../compile.js'
 import { analyzePageExpressions } from '../../lower/scope.js'
 import { compareBytes } from '../../print/style.js'
 import { planBoundaries } from './boundaries.js'
+import { serverQueries } from './server-data.js'
 
 export const expressionOwner = (pointer: string) => {
   const [, group, key] = pointer.split('/')
@@ -21,9 +22,11 @@ function isFunction(value: ts.Expression): boolean {
     value.expression.getText() === 'user.roles' && /^(map|filter|sort|find|some|every|join|slice|toString)$/.test(value.name.text)
 }
 
-export function boundaryFacts(page: CustomPage, context: Pick<CompileContext, 'engine' | 'manifests'>) {
+export function boundaryFacts(page: CustomPage, context: Pick<CompileContext, 'engine' | 'manifests' | 'contract'>) {
   const ui = exposedScope(page, context.manifests ?? {})
   const analysis = analyzePageExpressions(page, context.engine, ui)
+  const server = serverQueries(page, analysis, context.contract)
+  const serverNames = new Set(server.map(({ key }) => key))
   const request = new Map(expressionRequest(page, ui).expressions.map((entry) => [entry.id, entry]))
   const nodes = Object.entries(page.nodes).sort(([left], [right]) => compareBytes(left, right))
   const byName = new Map(nodes.map(([id, node]) => [node.name, id]))
@@ -49,8 +52,9 @@ export function boundaryFacts(page: CustomPage, context: Pick<CompileContext, 'e
       } else if (dep.startsWith('data.')) {
         for (const key of dep === 'data.*' ? Object.keys(page.queries) : [dep.slice(5)]) {
           connected.add('data.' + key)
-          clients.add(id)
           queryConsumers.add(key)
+          if (serverNames.has(key)) continue
+          clients.add(id)
           if (visited.has(key)) continue
           visited.add(key)
           dependencies(id, analysis.filter(({ id }) => queryName(id) === key).flatMap(({ deps }) => deps), visited)
@@ -101,13 +105,15 @@ export function boundaryFacts(page: CustomPage, context: Pick<CompileContext, 'e
     }
   }
   const plan = planBoundaries(nodes.map(([id, node]) => ({
-    id, parent: node.parent, client: clients.has(id), dependencies: [...connections.get(id)!], values: values.get(id) ?? [],
+    id, parent: node.parent, client: clients.has(id),
+    dependencies: [...connections.get(id)!].filter((key) => !key.startsWith('data.') || !serverNames.has(key.slice(5))),
+    values: values.get(id) ?? [],
   })))
   const diagnostics: Diagnostic[] = plan.invalid.map(({ node, pointer }) => ({
     doc: pageDocPath(page.name), pointer, severity: 'error', code: 'boundary_not_serializable',
     message: 'The value on ' + page.nodes[node]!.name + ' cannot cross into a Next.js client component.',
   }))
-  return { plan, analysis, connections, diagnostics }
+  return { plan, analysis, connections, diagnostics, server }
 }
 
 export function pagePart(page: CustomPage, root: string, boundaries: ReadonlySet<string>, connections: ReturnType<typeof boundaryFacts>['connections']): CustomPage {

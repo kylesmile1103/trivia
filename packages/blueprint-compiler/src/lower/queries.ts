@@ -27,6 +27,7 @@ export function prepareQueries(
   names: Names,
   analysis: readonly ExpressionAnalysis[],
   { queries: queryHooks, queryStatus }: RefineHookMap,
+  provided?: ReadonlyMap<string, Record<string, string>>,
 ) {
   const { style } = context.facts
   const rename: Record<string, string> = {}
@@ -38,21 +39,25 @@ export function prepareQueries(
     const name = names.take(key + 'Query')
     const hooks = queryHooks[query.kind]
     const fields: Record<string, string> = {}
-    for (const [field, path] of Object.entries({ ...hooks.fields, isLoading: queryStatus.isLoading, error: queryStatus.error })) {
-      const value = name + '.' + path
-      fields[field] = field === 'total' ? '(' + value + ' ?? 0)' : value
-      rename['data.' + key + '.' + field] = fields[field]
+    const direct = provided?.get(key)
+    if (direct) Object.assign(fields, direct)
+    else {
+      for (const [field, path] of Object.entries({ ...hooks.fields, isLoading: queryStatus.isLoading, error: queryStatus.error })) {
+        const value = name + '.' + path
+        fields[field] = field === 'total' ? '(' + value + ' ?? 0)' : value
+      }
     }
+    for (const [field, value] of Object.entries(fields)) rename['data.' + key + '.' + field] = value
     rename['data.' + key] = '(' + object(Object.entries(fields).map(([field, value]) => field + ': ' + value)) + ')'
     definitions.set(key, { key, query, name, resource, fields })
-    imports.push({ name: hooks.hook, source: '@refinedev/core' })
+    if (!direct) imports.push({ name: hooks.hook, source: '@refinedev/core' })
   }
   rename['data'] = '(' + object([...definitions.keys()].map((key) => property(key, style) + ': ' + rename['data.' + key])) + ')'
   const order = dependencyOrder(definitions, analysis)
   const types = new Map<string, string>()
 
   function lower(expression: (pointer: string) => string): QueryIR[] {
-    return order.map(({ key, query, name, resource, fields }) => {
+    return order.filter(({ key }) => !provided?.has(key)).map(({ key, query, name, resource, fields }) => {
       const hook = queryHooks[query.kind].hook
       const path = ['queries', key]
       const params = new Map(Object.keys(query.params).sort(compareBytes)

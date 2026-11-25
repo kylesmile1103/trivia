@@ -11,6 +11,7 @@ import { relativeModule } from '../paths.js'
 import type { LoweredCustomPage, RefineHookMap } from '../target.js'
 import { nextPageFile } from './files.js'
 import { boundaryFacts, expressionOwner, pagePart } from './partition.js'
+import { printServerQueries, queryFields } from './server-data.js'
 
 const request = {
   params: '__bpParams',
@@ -18,13 +19,13 @@ const request = {
   user: '__bpUser',
 }
 
-export function nextBoundaryCheck(context: Pick<CompileContext, 'engine' | 'manifests'>): LayerCheck {
+export function nextBoundaryCheck(context: Pick<CompileContext, 'engine' | 'manifests' | 'contract'>): LayerCheck {
   return (blueprint) => Object.values(blueprint.docs).flatMap((entry) =>
     entry.kind === 'page' && entry.doc?.kind === 'custom' ? boundaryFacts(entry.doc, context).diagnostics : [])
 }
 
 export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks: RefineHookMap): LoweredCustomPage {
-  const { plan, analysis, connections, diagnostics } = boundaryFacts(page, context)
+  const { plan, analysis, connections, diagnostics, server } = boundaryFacts(page, context)
   if (diagnostics.length) throw new CompileError('invalid_result', 'Invalid client boundary in ' + page.name, { diagnostics })
 
   const { facts } = context
@@ -58,7 +59,20 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
     user: '{ id: string | undefined; name: string | undefined; roles: string[] }',
   }
   const ui = exposedScope(page, context.manifests ?? {})
-  const expression = emitPageExpressions(page, context.engine, request, ui)
+  const queryValues = new Map(server.map(({ key, query, name }) => [key, queryFields(query.kind, name)]))
+  const aliases: Record<string, string> = { ...request }
+  for (const [key, fields] of queryValues) {
+    aliases['data.' + key] = '({ ' + Object.entries(fields).map(([name, value]) => name + ': ' + value).join(', ') + ' })'
+    for (const [field, value] of Object.entries(fields)) aliases['data.' + key + '.' + field] = value
+  }
+  aliases['data'] = '({ ' + server.map(({ key }) => key + ': ' + aliases['data.' + key]).join(', ') + ' })'
+  const expression = emitPageExpressions(page, context.engine, aliases, ui)
+  const data = printServerQueries(server, context, expression)
+  for (const { key } of server) {
+    for (const { id } of analysis) if (id.startsWith('/queries/' + key + '/')) readServer(id)
+  }
+  imports.push(...data.imports)
+  preamble.push(...data.preamble)
   for (const root of plan.roots) {
     const name = names.take(capitalize(page.nodes[root]!.name) + 'View')
     const view = nextPageFile(page.route, facts, plan.roots.length === 1 ? 'view.tsx' : 'view.' + page.nodes[root]!.name + '.tsx')
@@ -66,19 +80,23 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
     const values = new Map(props.map(({ pointer }, index) => [pointer, '__bpValue' + (index + 1)]))
     const rootNeeds = new Set(props.flatMap(({ pointer }) => readServer(pointer)))
     const part = pagePart(page, root, new Set(), connections)
-    const lower = lowerCustom(part, context, hooks, { file: view, name, values })
+    const initial = server.filter(({ key }) => Object.hasOwn(part.queries, key))
+    const lower = lowerCustom(part, context, hooks, { file: view, name, values, queryValues })
     const { ir } = lower
     const spread: string[] = []
-    if (values.size) {
+    if (values.size || initial.length) {
       const getter = 'get' + name + 'Props'
       const type = name + 'Props'
-      const args = [...rootNeeds].map((root) => request[root] + ': ' + routeTypes[root]).join(', ')
-      const body = [...values].map(([pointer, key]) => '    ' + key + ': ' + expression(pointer) + ',')
+      const args = [...[...rootNeeds].map((root) => request[root] + ': ' + routeTypes[root]),
+        ...initial.map(({ name, loader, query }) => name + ': Awaited<ReturnType<typeof ' + loader + '>>' +
+          (query.enabled === undefined ? '' : ' | undefined'))].join(', ')
+      const body = [...[...values].map(([pointer, key]) => '    ' + key + ': ' + expression(pointer) + ','),
+        ...initial.map(({ name }) => '    ' + name + ',')]
       preamble.push(['function ' + getter + '(' + args + ') {', '  return {', ...body, '  }', '}'].join('\n'))
       preamble.push(statement('export type ' + type + ' = ReturnType<typeof ' + getter + '>', style))
       ir.imports.push({ kind: 'type', source: './page', name: type })
-      ir.parameters = '{ ' + [...values.values()].join(', ') + ' }: ' + type
-      spread.push(getter + '(' + [...rootNeeds].map((root) => request[root]).join(', ') + ')')
+      ir.parameters = '{ ' + [...values.values(), ...initial.map(({ name }) => name)].join(', ') + ' }: ' + type
+      spread.push(getter + '(' + [...[...rootNeeds].map((root) => request[root]), ...initial.map(({ name }) => name)].join(', ') + ')')
     }
     imports.push({ name, source: relativeModule(file, view) })
     replacements.set(root, { kind: 'element', tag: name, props: [], children: [], ...(spread.length && { spreads: spread }) })
@@ -91,7 +109,7 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
       mutations: [], handlers: [], jsx: replacements.get(page.root)! }
   } else {
     const part = pagePart(page, page.root, enabled, connections)
-    const lower = lowerCustom(part, context, hooks, { file, name: page.name, replacements, routeValues: request })
+    const lower = lowerCustom(part, context, hooks, { file, name: page.name, replacements, routeValues: request, queryValues })
     ir = lower.ir
     items.push(...lower.requires)
     for (const site of analysis) {
@@ -122,7 +140,8 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
     ir.async = true
     ir.parameters = '{ ' + routeProps.join(', ') + ' }: { ' + types.join('; ') + ' }'
   }
-  ir.afterState = [...before, ...(ir.afterState ?? [])]
+  ir.async ||= server.length > 0
+  ir.afterState = [...before, ...data.declarations, ...(ir.afterState ?? [])]
   const calls = Object.values(page.actions).flatMap((steps) => steps.flatMap((step) => step.do === 'call' ? [step.handler] : []))
   const handler = handlerStub(page.name, calls, page.state, style)
   const requires = [...new Map(items.map((item) => [item.registry + '/' + item.item, item]))]

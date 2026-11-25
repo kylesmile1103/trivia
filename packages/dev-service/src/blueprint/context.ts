@@ -93,6 +93,6 @@ export function validationContext(
     manifests: (blueprint) => [...diagnostics, ...checkManifests(blueprint)],
     contract: contractCheck(contract, manifests),
     expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),
-    next: nextBoundaryCheck({ engine, manifests }),
+    next: nextBoundaryCheck({ engine, manifests, contract }),
   }
 }
