@@ -6,7 +6,7 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { APP_DOC, SCHEMA_URL } from '@trivia/blueprint'
+import { APP_DOC, MODEL_DOC, revOfText, SCHEMA_URL } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
@@ -112,17 +112,96 @@ it('FR-AS-08 returns build, sync and drift steps after generation in a solution'
   expect(execFile.mock.calls[0]?.[1]).toEqual(['write', '--blueprint', blueprint, '--root', root])
 })
 
-it('FR-NC-01 reports a successful write and maps a separate migration result', async () => {
+const migration = 'src/Bank.Api/Data/Migrations/20261125000000_AddOrders.cs'
+const migrationFile = { path: migration, kind: 'scaffold', action: 'create' }
+const bank = fs.readFileSync(path.resolve(import.meta.dirname, '../../blueprint/fixtures/model/valid/bank/model.blueprint.json'), 'utf8')
+const modelPath = () => path.join(root, 'blueprint', MODEL_DOC)
+const renamed = { kind: 'column', entity: 'Customer', field: 'fullName', from: 'legalName', oldName: 'customers.legal_name', newName: 'customers.full_name' }
+const settled = [
+  { entity: 'Customer', field: 'fullName', from: 'legalName', outcome: 'renamed' },
+  { entity: 'Account', from: 'Ledger', outcome: 'notInDatabase' },
+]
+
+/** The bank model with two markers migrate settles and one it does not. */
+function markedModel(): string {
+  const model = JSON.parse(bank)
+  model.entities[0].fields[0].renamedFrom = 'legalName'
+  model.entities[0].fields[1].renamedFrom = 'mail'
+  model.entities[1].renamedFrom = 'Ledger'
+  const text = JSON.stringify(model, null, 2) + '\n'
+  fs.mkdirSync(path.dirname(modelPath()), { recursive: true })
+  fs.writeFileSync(modelPath(), text)
+  return text
+}
+
+it('FR-NC-01 reports a successful write', async () => {
   reply({ files: [create], diagnostics: [] })
   expect(await (await post({ mode: 'write' })).json()).toMatchObject({
     ok: true, data: { files: [create], written: true },
   })
-  const migration = 'src/Bank.Api/Data/Migrations/20261125000000_AddOrders.cs'
-  reply({ migration, renames: [], diagnostics: [] })
+  expect(execFile).toHaveBeenCalledOnce()
+})
+
+it('FR-NC-12 writes before migrating in one call, reports the renames and clears the settled markers as one undo entry', async () => {
+  // A stale .g.cs used to give an empty or wrong migration with exit 0: the migration call ran migrate alone.
+  const before = markedModel()
+  reply({ files: [create], diagnostics: [] }, 'generated\n')
+  reply({ migration, modelRev: revOfText(before), renames: [renamed], settled, diagnostics: [] }, 'migrated\n')
   expect(await (await post({ mode: 'write', migration: 'AddOrders' })).json()).toMatchObject({
-    ok: true, data: { files: [{ path: migration, kind: 'scaffold', action: 'create' }], written: true },
+    ok: true, data: {
+      files: [create, migrationFile], written: true, renames: [renamed], diagnostics: [],
+      log: expect.stringMatching(/generated[\s\S]*migrated/), next: expect.arrayContaining([{ tool: 'trivia_contract_drift', arguments: {} }]),
+    },
   })
-  expect(execFile.mock.calls[1]?.[1]).toEqual(['migrate', 'AddOrders', '--blueprint', path.join(root, 'blueprint'), '--root', root])
+  const shared = ['--blueprint', path.join(root, 'blueprint'), '--root', root]
+  expect(execFile.mock.calls.map(([, args]) => args)).toEqual([['write', ...shared], ['migrate', 'AddOrders', ...shared]])
+
+  const after = JSON.parse(fs.readFileSync(modelPath(), 'utf8'))
+  expect(after.entities[0].fields[0]).not.toHaveProperty('renamedFrom')
+  expect(after.entities[1]).not.toHaveProperty('renamedFrom')
+  // migrate did not settle this one (as if it changed after migrate read the model), so it stays.
+  expect(after.entities[0].fields[1].renamedFrom).toBe('mail')
+  const history = await (await fetch(`${running.url}/@trivia/api/history`)).json()
+  expect(history).toMatchObject({ data: { undoLabel: 'Clear migrated rename markers' } })
+  await fetch(`${running.url}/@trivia/api/undo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+  expect(fs.readFileSync(modelPath(), 'utf8')).toBe(before)
+})
+
+it('FR-NC-12 stops before migrating when the write is refused', async () => {
+  const diagnostics = [{ code: 'generated_modified', severity: 'error', doc: create.path, pointer: '', message: 'Changed on disk' }]
+  reply({ files: [create, unchanged], diagnostics }, '', { code: 2 })
+  expect(await (await post({ mode: 'write', migration: 'AddOrders' })).json()).toMatchObject({
+    ok: true, data: { files: [{ ...create, action: 'refused' }, unchanged], written: false, diagnostics },
+  })
+  expect(execFile).toHaveBeenCalledOnce()
+})
+
+it('FR-NC-12 returns migrate diagnostics and leaves the markers when the migration is refused', async () => {
+  const before = markedModel()
+  const refusal = { code: 'rename_drops_data', severity: 'error', doc: MODEL_DOC, pointer: '/entities/0/fields/0/renamedFrom', message: 'drops' }
+  reply({ files: [create], diagnostics: [] })
+  reply({ modelRev: revOfText(before), diagnostics: [refusal] }, '', { code: 1 })
+  const body = await (await post({ mode: 'write', migration: 'AddOrders' })).json() as { data: object }
+  expect(body).toMatchObject({ ok: true, data: { files: [create], written: true, diagnostics: [refusal] } })
+  expect(body.data).not.toHaveProperty('next')
+  expect(fs.readFileSync(modelPath(), 'utf8')).toBe(before)
+})
+
+it('FR-NC-12 says loudly that the markers were not cleared when the model changed after migrate read it', async () => {
+  const before = markedModel()
+  reply({ files: [create], diagnostics: [] })
+  reply({ migration, modelRev: revOfText(bank), renames: [renamed], settled, diagnostics: [] })
+  const response = await post({ mode: 'write', migration: 'AddOrders' })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({
+    error: {
+      code: 'conflict', message: expect.stringMatching(/AddOrders\.cs was added, but its rename markers were not cleared/),
+      details: { migration, renames: [renamed], markers: [
+        { entity: 'Customer', field: 'fullName', from: 'legalName' }, { entity: 'Account', from: 'Ledger' },
+      ] },
+    },
+  })
+  expect(fs.readFileSync(modelPath(), 'utf8')).toBe(before)
 })
 
 it('NFR-05 refuses option-like migration names and a symlinked blueprint before starting a child', async () => {

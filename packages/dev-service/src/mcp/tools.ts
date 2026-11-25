@@ -732,7 +732,7 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     'trivia_blueprint_backend',
     {
       title: 'Plan or regenerate the blueprint backend',
-      description: 'Plan or write .NET backend files for the blueprint model using trivia-dotnet. Add a migration in a separate write-mode call after generation. The next list gives the build, sync and drift steps after a successful write.',
+      description: 'Plan or write .NET backend files for the blueprint model using trivia-dotnet. With migration, the same write-mode call generates the API and then adds the EF migration; renames lists the table and column renames it made for renamedFrom markers, and the markers it settled are cleared as one undo entry. A rename that would drop data refuses the migration with diagnostics and leaves no migration behind. The next list gives the build, sync and drift steps after a successful write.',
       inputSchema: backendInput,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
@@ -741,8 +741,9 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
         const result = await service.blueprintBackend(request)
         return { data: { ...result }, summary: `Backend returned ${result.files.length} file(s) and ${result.diagnostics.length} diagnostic(s).` }
       }, {
-        invalid_op: 'Use write mode to force generation or add a migration in a separate call.',
+        invalid_op: 'Use write mode for a migration; force applies only to a write without one.',
         unsupported: 'Follow error.details.hint to make the .NET SDK and trivia-dotnet available.',
+        conflict: 'The migration was added. Re-read the model and clear the markers in error.details.markers with a clearRenameMarkers op through trivia_blueprint_patch.',
       }, true),
   )
 }
