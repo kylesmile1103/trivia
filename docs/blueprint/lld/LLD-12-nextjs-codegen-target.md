@@ -198,6 +198,14 @@ otherwise read the dev wrapper import as a compiler dependency and form a build 
 The config disables Next's automatic agent-instruction file so starting the app only
 writes development artifacts.
 
+⚑ Aspire 13.6.5 marks `AddNextJsApp` experimental. The generated Next branch scopes
+`ASPIREJAVASCRIPT001` suppression to that resource block, and accepts optional
+`Trivia:WebPort`, `Trivia:ApiPort` and `Trivia:InstallWebDependencies` settings.
+Playwright uses preinstalled fixture dependencies, fixed web and API test ports, and
+ephemeral dashboard ports. Aspire's isolated mode reallocates explicit service ports.
+The Next resolver accepts Aspire's service discovery variables and its simple
+`API_HTTP` / `API_HTTPS` aliases. [Aspire service discovery](https://learn.microsoft.com/en-us/dotnet/aspire/service-discovery/overview).
+
 ## 8. One blueprint, two targets (FR-NX-07)
 
 Nothing in a blueprint names a target except `app.targets.web`. Target-only validation:

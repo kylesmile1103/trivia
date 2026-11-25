@@ -28,6 +28,11 @@ internal static class ScaffoldEmitter
             Render("AppHost/Program.cs", space, app)
                 .Replace("{{WebDirectory}}", webDirectory, StringComparison.Ordinal)
                 .Replace("{{WebResource}}", next ? "AddNextJsApp" : "AddViteApp", StringComparison.Ordinal)
+                .Replace("{{ApiRunOptions}}", next ? "\nif (builder.Configuration.GetValue<int?>(\"Trivia:ApiPort\") is int apiPort)\n    api.WithEndpoint(\"http\", endpoint => endpoint.Port = apiPort);" : "", StringComparison.Ordinal)
+                .Replace("{{InstallOptions}}", next ? "install: builder.Configuration.GetValue(\"Trivia:InstallWebDependencies\", true)" : "", StringComparison.Ordinal)
+                .Replace("{{NextRunOptions}}", next ? "\n    if (builder.Configuration.GetValue<int?>(\"Trivia:WebPort\") is int webPort)\n        web.WithEndpoint(\"http\", endpoint => endpoint.Port = webPort);" : "", StringComparison.Ordinal)
+                .Replace("{{NextAppDiagnostic}}", next ? "#pragma warning disable ASPIREJAVASCRIPT001 // AddNextJsApp is experimental in Aspire 13.6.\n" : "", StringComparison.Ordinal)
+                .Replace("{{StaticPublishDiagnostic}}", next ? "" : "#pragma warning disable ASPIREJAVASCRIPT001 // Static website publishing is experimental in Aspire 13.6.\n", StringComparison.Ordinal)
                 .Replace("{{WebPublishing}}", next ? "" : ".PublishAsStaticWebsite(\"/api\", api)", StringComparison.Ordinal));
         yield return new($"src/{app}.AppHost/Properties/launchSettings.json", FileKind.Scaffold,
             Render("AppHost/launchSettings.json", space, app));

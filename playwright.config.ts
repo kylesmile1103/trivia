@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import { defineConfig, devices } from '@playwright/test'
 
+import { blueprintNextUnavailable } from './e2e/blueprint-next-prerequisites.mjs'
+
 // End-to-end tests drive the real stack: an example app (the user's Vite dev server with
 // vite-plugin-ast-locator or Next App Router) and the designer proxying it. Ports are
 // env-configurable so several worktrees can run suites side by side.
@@ -14,6 +16,8 @@ const nextDesignerPort = Number(process.env.TRIVIA_NEXT_PORT ?? 4402)
 const nextApiPort = Number(process.env.TRIVIA_NEXT_API_PORT ?? 4403)
 const kitAppPort = Number(process.env.TRIVIA_KIT_APP_PORT ?? 5176)
 const kitDesignerPort = Number(process.env.TRIVIA_KIT_PORT ?? 4404)
+const blueprintNextAppPort = Number(process.env.TRIVIA_BLUEPRINT_NEXT_APP_PORT ?? 5486)
+const blueprintNextReason = blueprintNextUnavailable()
 
 // The dev service runs `trivia-dotnet` for the backend routes. The apps' servers find this
 // checkout's build of it first: `e2e/bin` holds a shim for what `nx run dotnet:tool` publishes.
@@ -42,9 +46,11 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit|-next)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
     { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
     { name: 'blueprint-kit', testMatch: /blueprint-kit\.spec\.ts$/, use: { baseURL: `http://localhost:${kitDesignerPort}` } },
+    { name: 'blueprint-next', testMatch: /blueprint-next\.spec\.ts$/, metadata: { blueprintNextUnavailable: blueprintNextReason },
+      use: { baseURL: `http://127.0.0.1:${blueprintNextAppPort}` } },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [
@@ -81,5 +87,14 @@ export default defineConfig({
       timeout: 120_000,
     },
     designer(kitDesignerPort, kitAppPort, 'node_modules/.vite-kit'),
+    ...(blueprintNextReason ? [] : [{
+      command: 'node --experimental-strip-types e2e/blueprint-next-app.mjs',
+      stdout: 'pipe' as const,
+      url: `http://127.0.0.1:${blueprintNextAppPort}/customers`,
+      env: appEnv,
+      reuseExistingServer: false,
+      timeout: 300_000,
+      gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 20_000 },
+    }]),
   ],
 })

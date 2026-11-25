@@ -18,16 +18,15 @@ var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.Exc
     .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
     .WithReference(db, connectionName: "AppDb")
     .WaitForCompletion(migrations)
-    .WithHttpHealthCheck("/health");
+    .WithHttpHealthCheck("/health");{{ApiRunOptions}}
 
 if (builder.Configuration.GetValue("Trivia:StartWeb", true))
 {
-    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}")
-        .WithPnpm()
+{{NextAppDiagnostic}}    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}")
+        .WithPnpm({{InstallOptions}})
         .WithReference(api)
-        .WaitFor(api);
-#pragma warning disable ASPIREJAVASCRIPT001 // Static website publishing is experimental in Aspire 13.6.
-    web{{WebPublishing}}.WithExternalHttpEndpoints();
+        .WaitFor(api);{{NextRunOptions}}
+{{StaticPublishDiagnostic}}    web{{WebPublishing}}.WithExternalHttpEndpoints();
 #pragma warning restore ASPIREJAVASCRIPT001
 }
 

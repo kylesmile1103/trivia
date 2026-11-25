@@ -30,7 +30,7 @@
 
 - [x] T012 [US3] `next-refine/server-data.ts`: await server-tier queries through the typed client with the internal API address, forward `cookie` and `authorization`, `notFound()` on 404
 - [x] T013 [US3] Initial data into the Refine hooks through `RefineHookMap`. Prefetch for `show` and `edit` contract pages
-- [ ] T014 [US3] `e2e/blueprint-next.spec.ts` under the AppHost: the show page's HTML contains the record with a plain HTTP request, no immediate refetch after hydration, a missing id gives the not-found page
+- [x] T014 [US3] `e2e/blueprint-next.spec.ts` under the AppHost: the show page's HTML contains the record with a plain HTTP request, no immediate refetch after hydration, a missing id gives the not-found page
 
 ## Phase 6: User Story 4 - One origin (P1)
 
