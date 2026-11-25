@@ -1,0 +1,57 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_01JDK3M6A00000000000000001",
+  "name": "CustomerList",
+  "route": "/customers",
+  "kind": "list",
+  "resource": "Customer",
+  "options": {
+    "fields": [
+      "fullName",
+      "email",
+      "status",
+      "creditLimit"
+    ],
+    "hideFields": [
+      "notes"
+    ],
+    "title": "Customers",
+    "filters": [
+      "status"
+    ],
+    "rowActions": [
+      {
+        "name": "approve",
+        "label": "Approve",
+        "confirm": "Approve this customer?",
+        "steps": [
+          {
+            "do": "mutate",
+            "resource": "Customer",
+            "operation": "approveKyc",
+            "input": "{ reason: 'Approved from the list' }",
+            "id": "row.id"
+          },
+          {
+            "do": "toast",
+            "message": "'Customer approved'",
+            "variant": "success"
+          }
+        ]
+      }
+    ],
+    "headerActions": [
+      {
+        "name": "overview",
+        "label": "Overview",
+        "steps": [
+          {
+            "do": "navigate",
+            "to": "'/customers/overview'"
+          }
+        ]
+      }
+    ]
+  }
+}

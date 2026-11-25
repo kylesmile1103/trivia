@@ -1,0 +1,29 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/app.v1.json",
+  "blueprintVersion": 1,
+  "name": "BackOffice",
+  "targets": {
+    "web": "vite-refine",
+    "api": "dotnet-minimal"
+  },
+  "auth": {
+    "mode": "oidc"
+  },
+  "theme": {
+    "tokens": {
+      "primary": "oklch(0.21 0.006 285.9)",
+      "radius": "0.5rem"
+    }
+  },
+  "nav": [
+    {
+      "page": "CustomerList",
+      "label": "Customers",
+      "icon": "users"
+    },
+    {
+      "page": "CustomerOverview",
+      "label": "Overview"
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_01JDK3M7Q2X8Y4Z6A1B3C5D7E9",
+  "name": "CustomerOverview",
+  "route": "/customers/overview",
+  "kind": "custom",
+  "resource": "Customer",
+  "root": "n_01JDK3M8A00000000000000001",
+  "nodes": {
+    "n_01JDK3M8A00000000000000001": {
+      "type": "div",
+      "name": "page",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000002": {
+      "type": "div",
+      "name": "header",
+      "parent": "n_01JDK3M8A00000000000000001",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000003": {
+      "type": "h1",
+      "name": "title",
+      "parent": "n_01JDK3M8A00000000000000002",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000004": {
+      "type": "Button",
+      "name": "refresh",
+      "parent": "n_01JDK3M8A00000000000000002",
+      "slot": "children",
+      "order": "a1"
+    },
+    "n_01JDK3M8A00000000000000005": {
+      "type": "Card",
+      "name": "summary",
+      "parent": "n_01JDK3M8A00000000000000001",
+      "slot": "children",
+      "order": "a1"
+    },
+    "n_01JDK3M8A00000000000000006": {
+      "type": "ul",
+      "name": "customerList",
+      "parent": "n_01JDK3M8A00000000000000005",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000007": {
+      "type": "li",
+      "name": "customerItem",
+      "parent": "n_01JDK3M8A00000000000000006",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000008": {
+      "type": "Button",
+      "name": "details",
+      "parent": "n_01JDK3M8A00000000000000001",
+      "slot": "children",
+      "order": "a2"
+    },
+    "n_01JDK3M8A00000000000000009": {
+      "type": "Button",
+      "name": "approve",
+      "parent": "n_01JDK3M8A00000000000000001",
+      "slot": "children",
+      "order": "a3"
+    }
+  },
+  "props": {
+    "n_01JDK3M8A00000000000000003": {
+      "children": "Customers"
+    },
+    "n_01JDK3M8A00000000000000004": {
+      "children": "Refresh",
+      "variant": "outline"
+    },
+    "n_01JDK3M8A00000000000000008": {
+      "children": "Open",
+      "variant": "secondary"
+    },
+    "n_01JDK3M8A00000000000000009": {
+      "children": "Approve",
+      "disabled": false
+    }
+  },
+  "bindings": {
+    "n_01JDK3M8A00000000000000005": {
+      "title": "`${data.customers.total} customers`"
+    },
+    "n_01JDK3M8A00000000000000007": {
+      "children": "customer.fullName"
+    }
+  },
+  "styles": {
+    "n_01JDK3M8A00000000000000001": {
+      "className": "grid gap-4 p-6"
+    },
+    "n_01JDK3M8A00000000000000002": {
+      "className": "flex items-center justify-between"
+    }
+  },
+  "control": {
+    "n_01JDK3M8A00000000000000004": {
+      "when": "data.customers.total > 0"
+    },
+    "n_01JDK3M8A00000000000000007": {
+      "each": "data.customers.data",
+      "as": "customer",
+      "key": "customer.id"
+    },
+    "n_01JDK3M8A00000000000000008": {
+      "when": "state.selectedId !== null"
+    }
+  },
+  "state": {
+    "filters": {
+      "type": "{ status: string }",
+      "initial": {
+        "status": "active"
+      }
+    },
+    "selectedId": {
+      "type": "string | null",
+      "initial": null
+    }
+  },
+  "queries": {
+    "customers": {
+      "kind": "list",
+      "resource": "Customer",
+      "params": {
+        "filters": "[{ field: 'status', operator: 'eq', value: state.filters.status }]",
+        "pageSize": "20"
+      }
+    },
+    "selected": {
+      "kind": "one",
+      "resource": "Customer",
+      "params": {
+        "id": "state.selectedId"
+      },
+      "enabled": "state.selectedId !== null"
+    },
+    "stats": {
+      "kind": "custom",
+      "resource": "Customer",
+      "operation": "customerStats"
+    }
+  },
+  "actions": {
+    "n_01JDK3M8A00000000000000004.onClick": [
+      {
+        "do": "refetch",
+        "query": "customers"
+      },
+      {
+        "do": "toast",
+        "message": "'Refreshed'"
+      }
+    ],
+    "n_01JDK3M8A00000000000000007.onClick": [
+      {
+        "do": "setState",
+        "name": "selectedId",
+        "value": "customer.id"
+      }
+    ],
+    "n_01JDK3M8A00000000000000008.onClick": [
+      {
+        "do": "navigate",
+        "to": "`/customers/show/${state.selectedId}`"
+      }
+    ],
+    "n_01JDK3M8A00000000000000009.onClick": [
+      {
+        "do": "mutate",
+        "resource": "Customer",
+        "operation": "approveKyc",
+        "input": "{ reason: 'Approved from the overview' }",
+        "id": "state.selectedId"
+      },
+      {
+        "do": "refetch",
+        "query": "selected"
+      },
+      {
+        "do": "call",
+        "handler": "logApproval"
+      }
+    ]
+  }
+}

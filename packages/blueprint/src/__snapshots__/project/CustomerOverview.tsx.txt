@@ -1,0 +1,42 @@
+// CustomerOverview (custom) /customers/overview · Customer
+<div name="page" className="grid gap-4 p-6">
+  <div name="header" className="flex items-center justify-between">
+    <h1 name="title">Customers</h1>
+    {data.customers.total > 0 && (
+      <Button name="refresh" variant="outline" onClick={/* 2 steps */}>Refresh</Button>
+    )}
+  </div>
+  <Card name="summary" title={`${data.customers.total} customers`}>
+    <ul name="customerList">
+      {data.customers.data.map((customer) => (
+        <li name="customerItem" key={customer.id} onClick={/* 1 step */}>{customer.fullName}</li>
+      ))}
+    </ul>
+  </Card>
+  {state.selectedId !== null && (
+    <Button name="details" variant="secondary" onClick={/* 1 step */}>Open</Button>
+  )}
+  <Button name="approve" disabled={false} onClick={/* 3 steps */}>Approve</Button>
+</div>
+
+/*
+state:
+  filters: { status: string } = {"status":"active"}
+  selectedId: string | null = null
+queries:
+  customers = list Customer { filters: [{ field: 'status', operator: 'eq', value: state.filters.status }], pageSize: 20 }
+  selected = one Customer { id: state.selectedId } if state.selectedId !== null
+  stats = custom Customer.customerStats
+actions:
+  refresh.onClick:
+    refetch customers
+    toast 'Refreshed'
+  customerItem.onClick:
+    setState selectedId = customer.id
+  details.onClick:
+    navigate `/customers/show/${state.selectedId}`
+  approve.onClick:
+    mutate Customer.approveKyc(id: state.selectedId, input: { reason: 'Approved from the overview' })
+    refetch selected
+    call logApproval()
+*/

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_01JDK3M6A00000000000000001",
+  "name": "Legacy",
+  "route": "/legacy",
+  "kind": "list",
+  "resource": "Customer",
+  "options": {
+    "fields": [
+      "fullName",
+      "email"
+    ]
+  }
+}

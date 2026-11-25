@@ -44,7 +44,7 @@
     }
   },
   "release": {
-    "projects": ["engine", "oxc-engine", "plugin", "contract-sync", "inferencer", "designer", "shell"],
+    "projects": ["engine", "oxc-engine", "plugin", "contract-sync", "inferencer", "designer", "shell", "blueprint"],
     "projectsRelationship": "fixed",
     "releaseTag": { "pattern": "v{version}" },
     "version": {
@@ -83,6 +83,9 @@
         "security": { "changelog": { "title": "Security" } },
         "e2e": { "changelog": { "title": "Tests" } },
         "docs": { "changelog": { "title": "Docs" } },
+        "blueprint": { "changelog": { "title": "Blueprint" } },
+        "compiler": { "changelog": { "title": "Compiler" } },
+        "dotnet": { "changelog": { "title": ".NET" } },
         "repo": { "changelog": { "title": "Repo" } },
         "tools": { "changelog": { "title": "Repo" } },
         "release": { "changelog": false },

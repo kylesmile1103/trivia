@@ -1,0 +1,22 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "deletePage",
+      "doc": "pages/CustomerOverview.page.json",
+      "baseRev": "@current"
+    },
+    {
+      "op": "setNav",
+      "doc": "app.blueprint.json",
+      "baseRev": "@current",
+      "nav": [
+        {
+          "page": "CustomerList",
+          "label": "Customers",
+          "icon": "users"
+        }
+      ]
+    }
+  ]
+}

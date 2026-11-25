@@ -1,0 +1,20 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setApp",
+      "doc": "app.blueprint.json",
+      "baseRev": "@current",
+      "auth": {
+        "mode": "none"
+      },
+      "theme": {
+        "tokens": {
+          "card": "oklch(1 0 0)",
+          "primary": null,
+          "radius": "1rem"
+        }
+      }
+    }
+  ]
+}

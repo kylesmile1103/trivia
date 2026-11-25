@@ -1,0 +1,21 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setNav",
+      "doc": "app.blueprint.json",
+      "baseRev": "@current",
+      "nav": [
+        {
+          "page": "CustomerList",
+          "label": "Customers",
+          "icon": "users"
+        },
+        {
+          "page": "CustomerOverview",
+          "label": "Dashboard"
+        }
+      ]
+    }
+  ]
+}

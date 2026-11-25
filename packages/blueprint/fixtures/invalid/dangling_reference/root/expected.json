@@ -1,0 +1,8 @@
+[
+  {
+    "code": "dangling_reference",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/root"
+  }
+]

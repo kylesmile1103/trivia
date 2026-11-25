@@ -30,6 +30,12 @@ describe('commit types', () => {
       expect(declared).toHaveProperty([type])
     }
   })
+
+  it('declares the areas of the blueprint track (specs/001-blueprint-schema T002)', () => {
+    for (const type of ['blueprint', 'compiler', 'dotnet']) {
+      expect(declared).toHaveProperty([type])
+    }
+  })
 })
 
 describe('changelog sections', () => {

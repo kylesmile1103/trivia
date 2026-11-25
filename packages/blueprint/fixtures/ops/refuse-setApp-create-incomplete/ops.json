@@ -1,0 +1,15 @@
+{
+  "base": "none",
+  "ops": [
+    {
+      "op": "setApp",
+      "doc": "app.blueprint.json",
+      "baseRev": null,
+      "name": "Shop"
+    }
+  ],
+  "error": {
+    "code": "invalid_op",
+    "op": 0
+  }
+}

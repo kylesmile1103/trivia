@@ -1,0 +1,9 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_01JDK3M6A00000000000000001",
+  "name": "Other",
+  "route": "/",
+  "kind": "list",
+  "resource": "Customer"
+}

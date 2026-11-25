@@ -1,0 +1,8 @@
+[
+  {
+    "code": "missing_document",
+    "severity": "warning",
+    "doc": "app.blueprint.json",
+    "pointer": ""
+  }
+]

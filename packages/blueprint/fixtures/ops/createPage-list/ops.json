@@ -1,0 +1,17 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "createPage",
+      "doc": "pages/Orders.page.json",
+      "baseRev": null,
+      "name": "Orders",
+      "route": "/orders",
+      "kind": "list",
+      "resource": "Order"
+    }
+  ],
+  "created": {
+    "Orders": "pg_00000000000000000000000001"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setPageMeta",
+      "doc": "pages/CustomerList.page.json",
+      "baseRev": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "route": "/clients"
+    }
+  ],
+  "error": {
+    "code": "conflict",
+    "op": 0
+  }
+}
