@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -28,6 +29,10 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  // A jsdom render takes about 0.3 s here and several seconds on a CI runner compiling Rust
+  // beside it. Past the 5 s default a test is failed but keeps running against the shared
+  // stores, and breaks the tests after it, so the limit only guards against a hang.
+  test: { testTimeout: 30_000 },
   server: {
     port: Number(process.env.TRIVIA_PORT ?? 4400),
     strictPort: true,
