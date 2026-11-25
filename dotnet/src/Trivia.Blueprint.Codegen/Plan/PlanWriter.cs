@@ -73,8 +73,9 @@ public static class PlanWriter
 
     public static void Write(string root, FilePlan plan)
     {
-        if (plan.Diagnostics.Count > 0)
-            throw new WriteRefusedException(plan.Diagnostics);
+        Diagnostic[] errors = plan.Diagnostics.Where(diagnostic => diagnostic.IsError).ToArray();
+        if (errors.Length > 0)
+            throw new WriteRefusedException(errors);
 
         root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         if (!StringComparer.Ordinal.Equals(root, plan.Root))

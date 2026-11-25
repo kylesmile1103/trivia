@@ -54,7 +54,7 @@ dotnet/
 
 | Command | Does | Exit |
 | --- | --- | --- |
-| `plan --blueprint <dir> --root <dir> [--content]` | Prints the file plan as JSON on stdout | 0, or 1 on diagnostics |
+| `plan --blueprint <dir> --root <dir> [--content]` | Prints the file plan as JSON on stdout | 0, or 1 on error diagnostics |
 | `write --blueprint <dir> --root <dir> [--force]` | Applies the plan | 0, 1, or 2 when a write is refused |
 | `check --blueprint <dir> --root <dir>` | Fails when a generated file is stale or was edited by hand. For CI | 0 or 1 |
 | `migrate <Name> --root <dir>` | Adds an EF Core migration and applies rename hints | 0 or 1 |
@@ -144,7 +144,9 @@ src/<App>.AppHost/, .ServiceDefaults/, .MigrationService/     scaffold (LLD-10)
   `Host=localhost;Database=<app>;Username=postgres` when `ConnectionStrings:AppDb` is missing
   or blank. Elsewhere `MapGeneratedEndpoints` throws at startup with a message naming
   `ConnectionStrings:AppDb`, except under build-time OpenAPI generation, which runs the entry
-  point as `GetDocument.Insider` in Production with no database. EF's design-time tools default
+  point as `GetDocument.Insider` in Production with no database
+  ([the documented check](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0#customize-runtime-behavior-during-build-time-document-generation)).
+  EF's design-time tools default
   to Development, so `migrate` keeps working without a database. Why: a production API that
   silently pointed at localhost failed late and far from its cause.
   Model-dependent setup, including auth, stays behind the generated methods.
@@ -339,6 +341,15 @@ With `auth.mode: "oidc"`, `AddGeneratedServices` adds JWT bearer authentication 
 from `Authentication:Authority` and `Authentication:Audience`, and every group requires an
 authenticated user. Per-entity roles (`api.roles`) are a later extension. With `none`, nothing
 is added.
+
+⚑ (decided 2026-11-26) `none` stays the default, and with it the runtime OpenAPI endpoint is
+mapped only in Development. `plan`, `write` and `check` report one `auth_none` diagnostic with
+severity `warning` on `app.blueprint.json` (pointer `/auth/mode`, or `""` when the mode is
+defaulted). Warnings never change an exit code or block a write; only errors do. The CLI's
+`backend` prints the warnings `write` returns, and the dev service passes them through. Why:
+the AppHost publishes the web app externally and proxies `/api`, so a published API without
+`oidc` or an authenticating gateway in front answers anyone, and its document mapped the whole
+surface in every environment.
 
 ⚑ Protect the runtime OpenAPI endpoint as well as the model groups in OIDC mode.
   The document declares a global HTTP bearer security requirement. Build-time generation

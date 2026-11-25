@@ -48,7 +48,8 @@ public static class ApiRegistration
             _ = AppDbConnection(app.Configuration, app.Environment);
         app.UseExceptionHandler();
         app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
-        app.MapOpenApi();
+        if (app.Environment.IsDevelopment())
+            app.MapOpenApi();
         app.MapCustomerEndpoints();
         app.MapAccountEndpoints();
         app.MapTransactionEndpoints();

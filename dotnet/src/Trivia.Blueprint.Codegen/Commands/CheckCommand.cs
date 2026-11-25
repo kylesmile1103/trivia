@@ -15,6 +15,6 @@ internal static class CheckCommand
                     if (file.Kind == FileKind.Generated && file.Action != FileAction.Unchanged &&
                         !plan.Diagnostics.Any(diagnostic => diagnostic.Doc == file.Path))
                         diagnostics.Add(new("stale_generated_file", file.Path, "", "The generated file is out of date."));
-                return (diagnostics.Count == 0 ? 0 : 1, plan with { Diagnostics = diagnostics }, false);
+                return (diagnostics.Any(diagnostic => diagnostic.IsError) ? 1 : 0, plan with { Diagnostics = diagnostics }, false);
             });
 }

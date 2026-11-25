@@ -30,4 +30,24 @@ public sealed class StartupTests(BankApiBuild build) : IClassFixture<BankApiBuil
         await using RunningApi development = await RunningApi.StartAsync(build.Project, connectionString: null, Development);
         Assert.Equal("Healthy", await development.Client.GetStringAsync("/health"));
     }
+
+    [Fact]
+    public async Task NFR_05_WithoutAuthenticationTheDocumentIsServedOnlyInDevelopment()
+    {
+        // Nothing here touches the database; the setting only has to be present outside Development.
+        const string unused = "Host=127.0.0.1;Port=1;Database=unused;Username=unused";
+        Dictionary<string, string> noDatabase = new() { ["TRIVIA_TEST_CREATE_DB"] = "0" };
+        await using (RunningApi production = await RunningApi.StartAsync(build.Project, unused, noDatabase))
+        {
+            using HttpResponseMessage hidden = await production.Client.GetAsync("/openapi/v1.json");
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, hidden.StatusCode);
+        }
+
+        await using RunningApi development = await RunningApi.StartAsync(build.Project, unused,
+            new Dictionary<string, string>(noDatabase) { ["ASPNETCORE_ENVIRONMENT"] = "Development" });
+        using HttpResponseMessage served = await development.Client.GetAsync("/openapi/v1.json");
+        Assert.Equal(System.Net.HttpStatusCode.OK, served.StatusCode);
+        Assert.Contains("\"patchCustomer\"", await served.Content.ReadAsStringAsync());
+        Assert.True(File.Exists(build.Project.DocumentPath), "The build-time document must not depend on the environment.");
+    }
 }

@@ -25,6 +25,12 @@ public static class ApiRegistrationEmitter
             services.AddAuthorization();
             """ : "";
         string authMiddleware = oidc ? "app.UseAuthentication(); app.UseAuthorization();" : "";
+        // Without authentication the runtime document is for development only. The build-time
+        // document does not depend on this route.
+        string openApi = oidc ? "app.MapOpenApi().RequireAuthorization();" : """
+            if (app.Environment.IsDevelopment())
+                app.MapOpenApi();
+            """;
         string lists = string.Join(" or ", model.Entities.Where(entity => entity.Api.Operations.Contains("list"))
             .Select(entity => Literal("list" + Pascal(entity.Plural))));
         string addListMetadata = lists.Length == 0 ? "" : $$"""
@@ -76,7 +82,7 @@ public static class ApiRegistrationEmitter
                     app.UseExceptionHandler();
                     app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
                     {{authMiddleware}}
-                    app.MapOpenApi(){{require}};
+                    {{openApi}}
                     {{maps}}
                 }
 
