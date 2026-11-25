@@ -60,7 +60,7 @@ setInterval(() => {}, 1000)
       await exited
     }
   }
-})
+}, 30_000) // above the 15 s wait for next to start: without it Vitest's 5 s default ends the test first
 
 it('refuses the same explicit port for the app and dev service before starting either', async () => {
   const occupied = net.createServer()
