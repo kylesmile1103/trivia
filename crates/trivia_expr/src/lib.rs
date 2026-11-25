@@ -2,3 +2,6 @@
 
 #[doc(hidden)]
 pub mod parse;
+
+#[doc(hidden)]
+pub mod utf16;
