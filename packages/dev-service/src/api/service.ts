@@ -425,7 +425,10 @@ export class EngineService {
     const { engine, host } = this.#options
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
-    if (result.changed) finish?.()
+    if (result.changed) {
+      finish?.()
+      host.filesChanged?.(result.changes.map((change) => change.file))
+    }
     if (result.changes.length > 0) {
       const last = ops.at(-1)
       const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
@@ -484,6 +487,7 @@ export class EngineService {
     }
     finish?.()
     if (entry.documents) this.#options.host.preview.invalidateBlueprints?.()
+    this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }
