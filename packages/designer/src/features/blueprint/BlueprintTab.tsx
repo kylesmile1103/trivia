@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { APP_DOC } from '@/shared/engine/blueprint-types'
 import { engine } from '@/shared/engine/client'
-import type { ManifestResource } from '@/shared/engine/types'
+import type { BlueprintDiagnostic, ManifestResource } from '@/shared/engine/types'
 import { useDesigner } from '@/shared/state/store'
 import { Button } from '@/shared/ui/button'
 
 import { problemOf } from './api'
+import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
 import { PagesList } from './PagesList'
 import { createBlueprintStore } from './store'
@@ -15,6 +16,9 @@ import { createBlueprintStore } from './store'
 export function BlueprintTab() {
   const [store] = useState(createBlueprintStore)
   const { summary, refresh, loadError, problem, pending, path, document, open, patch } = useStore(store)
+  const root = useRef<HTMLElement>(null)
+  const editor = useRef<HTMLElement>(null)
+  const [focusRequest, setFocusRequest] = useState<BlueprintDiagnostic | null>(null)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
   const [manifestError, setManifestError] = useState<string | null>(null)
@@ -43,8 +47,25 @@ export function BlueprintTab() {
     return () => { active = false }
   }, [refresh])
 
+  const findings = [...(problem?.diagnostics ?? []), ...(summary?.diagnostics.filter((item) => path === null || item.doc === path) ?? [])]
+
+  function activateDiagnostic(diagnostic: BlueprintDiagnostic) {
+    if (diagnostic.doc !== path && summary?.pages.some((page) => page.path === diagnostic.doc)) {
+      setAdding(false)
+      void open(diagnostic.doc)
+    }
+    setFocusRequest(diagnostic)
+  }
+
+  useEffect(() => {
+    if (!focusRequest || pending || (focusRequest.doc === path && !document && !loadError)) return
+    const region = editor.current ?? root.current
+    if (region && !focusDiagnosticField(region, focusRequest.pointer)) region.focus()
+    setFocusRequest(null)
+  }, [focusRequest, pending, path, document, loadError])
+
   return (
-    <section aria-label="Blueprint pages" className="min-h-0 flex-1 overflow-y-auto p-3">
+    <section ref={root} tabIndex={-1} aria-label="Blueprint pages" className="min-h-0 flex-1 overflow-y-auto p-3">
       {loadError && (
         <div className="space-y-2">
           <p role="alert" className="text-destructive">{loadError}</p>
@@ -60,7 +81,7 @@ export function BlueprintTab() {
         />
       )}
       {(adding || path !== null) && (
-        <section aria-label="Page editor" className="mt-3 space-y-3 border-t pt-3">
+        <section ref={editor} tabIndex={-1} aria-label="Page editor" className="mt-3 space-y-3 border-t pt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="min-w-0 text-xs font-semibold [overflow-wrap:anywhere]">{adding ? 'New page' : page?.doc.name ?? 'Page'}</h3>
             <Button size="xs" variant="ghost" disabled={pending !== null} onClick={() => { setAdding(false); void open(null) }}>Close editor</Button>
@@ -71,6 +92,7 @@ export function BlueprintTab() {
             : !loadError && <p role="status">Loading page…</p>}
         </section>
       )}
+      <Diagnostics diagnostics={findings} onActivate={activateDiagnostic} showPath={path === null && !adding} />
       {!summary && !loadError && <p role="status" className="text-muted-foreground">Loading blueprint…</p>}
     </section>
   )

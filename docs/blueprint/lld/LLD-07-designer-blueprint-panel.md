@@ -89,6 +89,9 @@ target. No contract: contract kinds are disabled, with a pointer to the Data tab
 `App` as the initial document name and selects the web target from the designer's
 existing health response (`next-refine` for Next, `vite-refine` for Vite).
 
+**Diagnostic focus.** ⚑ A finding focuses the closest field matching its JSON pointer,
+opening its page first when needed. Document-level findings focus the editor region.
+
 ## 3. State and concurrency
 
 The feature keeps the last summary and the revs of the documents it shows. Every patch sends
