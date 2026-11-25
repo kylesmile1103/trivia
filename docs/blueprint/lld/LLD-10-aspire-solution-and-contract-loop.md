@@ -79,7 +79,7 @@ for captured builds so a surviving worker does not hold their output pipes open.
 
 ⚑ Select `AddViteApp` or Aspire's dedicated `AddNextJsApp` from `targets.web`. The latter
 is the JavaScript integration's Next.js resource. The Next.js template itself belongs to
-spec 007.
+spec 012.
 
 ⚑ `Trivia:StartWeb` and `Trivia:UseDataVolume` default to true and can be disabled for API
 integration tests. The test loads the generated AppHost assembly, uses the normal migration
@@ -214,8 +214,10 @@ can still use their installed `dotnet ef`.
 
 For agents, `trivia_blueprint_backend` covers steps 1
 and 2, and its result's `next` field names the rest: build, then `trivia_sync_openapi`, then
-`trivia_contract_drift`. The build is not hidden inside a tool, because it can take minutes
-and its errors belong to the developer's terminal.
+`trivia_contract_drift`. The build can take minutes and its errors belong in the developer's
+terminal. ⚑ The dev service returns these entries after a successful write or migration.
+The generated web package declares its containing solution root so the tool builds there
+while the OpenAPI and drift tools work from the web root.
 
 ## 4. First run of a new app
 

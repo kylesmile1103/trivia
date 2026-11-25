@@ -731,7 +731,7 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     'trivia_blueprint_backend',
     {
       title: 'Plan or regenerate the blueprint backend',
-      description: 'Plan or write .NET backend files for the blueprint model using trivia-dotnet. Add a migration in a separate write-mode call after generation.',
+      description: 'Plan or write .NET backend files for the blueprint model using trivia-dotnet. Add a migration in a separate write-mode call after generation. The next list gives the build, sync and drift steps after a successful write.',
       inputSchema: backendInput,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },

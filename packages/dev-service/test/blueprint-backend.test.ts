@@ -6,6 +6,7 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { APP_DOC, SCHEMA_URL } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { createStandaloneHost, startDevService, type RunningDevService } from '../src/standalone.js'
@@ -80,6 +81,35 @@ it('FR-NC-01 returns typed backend diagnostics and refused actions over MCP on e
     await client.close()
   }
   expect(execFile.mock.calls[0]?.[1]).toEqual(['write', '--blueprint', path.join(root, 'blueprint'), '--root', root, '--force'])
+})
+
+it('FR-AS-08 returns build, sync and drift steps after generation in a solution', async () => {
+  await running.close()
+  const web = path.join(root, 'web')
+  const blueprint = path.join(web, 'blueprint')
+  fs.mkdirSync(blueprint, { recursive: true })
+  fs.writeFileSync(path.join(blueprint, APP_DOC), JSON.stringify({
+    $schema: SCHEMA_URL.app, blueprintVersion: 1, name: 'Bank', targets: { web: 'vite-refine', api: 'dotnet-minimal' },
+  }))
+  fs.writeFileSync(path.join(web, 'package.json'), JSON.stringify({ trivia: { solutionRoot: '..' } }))
+  running = await startDevService(createStandaloneHost(web))
+  reply({ files: [create], diagnostics: [] })
+  const client = new Client({ name: 'backend-mcp-test', version: '0' })
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL('/@trivia/mcp', running.url)) as unknown as Transport)
+    const result = await client.callTool({ name: 'trivia_blueprint_backend', arguments: { mode: 'write' } })
+    expect(result.structuredContent).toMatchObject({
+      written: true,
+      next: [
+        { command: ['dotnet', 'build', 'Bank.slnx'], cwd: root },
+        { tool: 'trivia_sync_openapi', arguments: { input: 'openapi/api.openapi.json', zod: true } },
+        { tool: 'trivia_contract_drift', arguments: {} },
+      ],
+    })
+  } finally {
+    await client.close()
+  }
+  expect(execFile.mock.calls[0]?.[1]).toEqual(['write', '--blueprint', blueprint, '--root', root])
 })
 
 it('FR-NC-01 reports a successful write and maps a separate migration result', async () => {

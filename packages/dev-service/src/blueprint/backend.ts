@@ -1,12 +1,13 @@
 import { execFile, type ExecFileException } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
 
-import { APP_DOC, MODEL_DOC, type Diagnostic } from '@trivia/blueprint'
+import { APP_DOC, loadDocument, MODEL_DOC, type Diagnostic } from '@trivia/blueprint'
 import { z } from 'zod'
 
 import { ApiError } from '../engine.js'
 import { checkedPath } from './paths.js'
-import type { BlueprintWorkspace } from './store.js'
+import { readBytes, type BlueprintWorkspace } from './store.js'
 
 interface BackendFile {
   path: string
@@ -19,6 +20,11 @@ export interface BackendResult {
   written: boolean
   diagnostics: Diagnostic[]
   log: string
+  next?: Array<
+    | { command: string[]; cwd: string }
+    | { tool: 'trivia_sync_openapi'; arguments: { input: string; zod: true } }
+    | { tool: 'trivia_contract_drift'; arguments: Record<string, never> }
+  >
 }
 
 export const backendInput = z.strictObject({
@@ -85,10 +91,15 @@ export async function runBackend(workspace: BlueprintWorkspace, { mode, migratio
     throw new ApiError('invalid_op', 'Force applies to a backend write without a migration.')
   }
 
-  const root = fs.realpathSync(workspace.root)
-  const blueprint = checkedPath(root, workspace.dir)
+  const web = fs.realpathSync(workspace.root)
+  const blueprint = checkedPath(web, workspace.dir)
   // The CLI reads these two documents directly. Apply the service's symlink guard first.
-  for (const file of [APP_DOC, MODEL_DOC]) checkedPath(root, `${workspace.dir}/${file}`)
+  for (const file of [APP_DOC, MODEL_DOC]) checkedPath(web, `${workspace.dir}/${file}`)
+  const source = workspace.readDocumentText(APP_DOC)
+  const entry = source === null ? null : loadDocument(APP_DOC, source)
+  const app = entry?.kind === 'app' ? entry.doc : null
+  const root = app?.targets.api === 'dotnet-minimal' && path.basename(web) === 'web' && usesSolutionRoot(web)
+    ? path.dirname(web) : web
   const shared = ['--blueprint', blueprint, '--root', root]
   const args = migration === undefined
     ? [mode, ...shared, ...(force ? ['--force'] : [])]
@@ -120,5 +131,23 @@ export async function runBackend(workspace: BlueprintWorkspace, { mode, migratio
   return {
     files, written: mode === 'write' && status === 0 && files.some(({ action }) => action !== 'unchanged'),
     diagnostics: result.diagnostics, log,
+    ...(mode === 'write' && status === 0 && !result.diagnostics.some(({ severity }) => severity === 'error') && {
+      next: [
+        { command: ['dotnet', 'build', ...(app ? [app.name + '.slnx'] : [])], cwd: root },
+        { tool: 'trivia_sync_openapi', arguments: { input: 'openapi/api.openapi.json', zod: true } },
+        { tool: 'trivia_contract_drift', arguments: {} },
+      ],
+    }),
+  }
+}
+
+function usesSolutionRoot(web: string): boolean {
+  const bytes = readBytes(web, 'package.json')
+  if (bytes === null) return false
+  try {
+    const manifest = JSON.parse(bytes.toString('utf8')) as { trivia?: { solutionRoot?: string } } | null
+    return manifest?.trivia?.solutionRoot === '..'
+  } catch {
+    throw new ApiError('invalid_result', 'Could not read the web app package.json.')
   }
 }

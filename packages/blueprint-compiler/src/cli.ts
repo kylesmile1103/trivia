@@ -71,6 +71,7 @@ function createProject(root: string, dest: string, version: string, dotnet: bool
   const dir = dotnet ? path.join(destination, 'web') : destination
   const template = fileURLToPath(new URL('../templates/vite-refine/', import.meta.url))
   const manifest = JSON.parse(fs.readFileSync(path.join(template, 'package.json.template'), 'utf8'))
+  if (dotnet) manifest.trivia = { solutionRoot: '..' }
   const localPlugin = resolveManifest(root, plugin) ?? checkoutManifest('vite-plugin-ast-locator')
   manifest.devDependencies[plugin] = localPlugin ? 'link:' + path.dirname(localPlugin) : version
   const localSync = resolveManifest(root, contractSync) ?? checkoutManifest('contract-sync')
