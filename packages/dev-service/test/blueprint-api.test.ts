@@ -21,6 +21,9 @@ afterEach(async () => {
 })
 
 const get = (suffix = '') => fetch(`${running.url}/@trivia/api/blueprint${suffix}`)
+const post = (suffix: string, body: unknown) => fetch(`${running.url}/@trivia/api/blueprint${suffix}`, {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+})
 const pagePath = '/doc?path=pages%2FCustomers.page.json'
 
 function writeBlueprint(file: string, text: string) {
@@ -113,4 +116,40 @@ it('FR-AG-01 refuses a document from a newer version and reports the supported v
   const response = await get(pagePath)
   expect(response.status).toBe(422)
   expect(await response.json()).toMatchObject({ ok: false, error: { code: 'unsupported', details: { found: 2, supported: 1 } } })
+})
+
+it('FR-AG-04 saves a first draft with contract errors and returns usable diagnostics', async () => {
+  const orders = listPage('Orders', 'Order')
+  const rootDir = path.join(root, 'blueprint')
+  expect(fs.existsSync(rootDir)).toBe(false)
+  const response = await post('/patch', { ops: [orders], label: 'Add orders' })
+  expect(response.status).toBe(200)
+
+  const text = fs.readFileSync(path.join(rootDir, orders.doc), 'utf8')
+  const rev = revOfText(text)
+  const finding = expect.objectContaining({
+    code: 'unknown_resource', severity: 'error', doc: orders.doc, pointer: '/resource',
+    hint: { text: 'Known resources: Account, Customer, Transaction.' },
+  })
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    data: {
+      entry: 'Add orders', changed: true, revs: { [orders.doc]: rev }, created: { Orders: JSON.parse(text).id },
+      diagnostics: expect.arrayContaining([finding]),
+      summary: { exists: true, pages: [{ name: 'Orders', status: 'draft', rev, errors: 1 }], diagnostics: expect.arrayContaining([finding]), next: expect.stringContaining('diagnostics') },
+    },
+  })
+  expect(await (await get(`/doc?path=${orders.doc}`)).json()).toMatchObject({ ok: true, data: { rev, doc: { resource: 'Order' } } })
+})
+
+it('FR-AG-01 refuses a structurally invalid patch without creating the directory', async () => {
+  const response = await post('/patch', {
+    label: 'Create colliding routes',
+    ops: [listPage(), { ...listPage('Accounts', 'Account'), route: '/customers' }],
+  })
+  expect(response.status).toBe(422)
+  expect(await response.json()).toMatchObject({
+    ok: false, error: { code: 'invalid_result', details: { diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'duplicate_route' })]) } },
+  })
+  expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
 })
