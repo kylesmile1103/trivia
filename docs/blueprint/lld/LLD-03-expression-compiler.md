@@ -70,6 +70,7 @@ shadow roots, with a warning.
   The same representation can describe both `ui` and each query's result fields.
 - ⚑ Page-wide and per-expression `locals` accept a name array (all `client`) or a name-to-tier
   object. Per-expression locals take precedence, so one batch can include nested repeat scopes.
+  A local can also use `{ "from": "<expression id>" }` to take that expression's tier when read.
 - ⚑ `expr_shadowed_root` is a warning on the parameter name, including names in destructuring
   patterns. Value references resolve to arrow bindings first, then site and page locals, then
   roots and built-ins. Known-member checks diagnose the first missing property in a chain.
@@ -110,6 +111,19 @@ shadow roots, with a warning.
 Diagnostics carry `start` and `end` as UTF-16 code units from the start of the expression
 string, and the response says so (`CLAUDE.md` rule 2). Internally spans are UTF-8 bytes and are
 converted at the boundary, as `annotate_utf16` does.
+
+### Blueprint validation
+
+- ⚑ `expressionCheck(analyzeExpressions, page => exposedScope(page, manifests))` plugs into
+  `ValidationContext.expressions`. `expressionRequest` builds one batch per page from the
+  schema's expression marks and uses their JSON pointers as ids. The native package is a
+  test dependency of Blueprint. The runtime binding and the manifest scope are injected.
+- ⚑ The page adapter gets `params` from the route and checks query result field names by kind
+  (LLD-05). Both query parameters and `enabled` define `data.<query>`. Static state initializers
+  and imperative action steps define no reactive entity.
+- ⚑ A repeat alias and `index` inherit the tier of `each` throughout the subtree. The `each`
+  expression itself sees only outer repeats. Custom actions add client `event` and `value`
+  locals. Contract actions get `event`, and row actions get `row` as well.
 
 ## 4. Emission (FR-EX-06)
 

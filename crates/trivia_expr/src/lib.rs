@@ -42,18 +42,26 @@ pub enum Members {
 #[serde(untagged)]
 pub enum Locals {
     Names(Vec<String>),
-    Tiered(BTreeMap<String, Tier>),
+    Tiered(BTreeMap<String, LocalTier>),
 }
 
 impl Default for Locals {
     fn default() -> Self { Self::Names(Vec::new()) }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum LocalTier {
+    Fixed(Tier),
+    FromExpression { from: String },
+}
+
 impl Locals {
-    pub fn tier(&self, name: &str) -> Option<Tier> {
+    fn get(&self, name: &str) -> Option<&LocalTier> {
+        const CLIENT: LocalTier = LocalTier::Fixed(Tier::Client);
         match self {
-            Self::Names(names) => names.iter().any(|local| local == name).then_some(Tier::Client),
-            Self::Tiered(tiers) => tiers.get(name).copied(),
+            Self::Names(names) => names.iter().any(|local| local == name).then_some(&CLIENT),
+            Self::Tiered(tiers) => tiers.get(name),
         }
     }
 }
@@ -188,6 +196,7 @@ impl Diagnostic {
 }
 
 pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
+    let mut local_reads = Vec::with_capacity(request.expressions.len().min(MAX_EXPRESSIONS));
     let mut results: Vec<_> = request.expressions.iter().enumerate().map(|(index, input)| {
         let source = &input.source;
         let (diagnostics, reads) = if index >= MAX_EXPRESSIONS {
@@ -198,10 +207,11 @@ pub fn analyze(request: AnalyzeRequest) -> AnalyzeResponse {
             }, true))
                 .unwrap_or_else(|error| (vec![Diagnostic::from_parse(source, error)], deps::Reads::default()))
         };
+        if index < MAX_EXPRESSIONS { local_reads.push(reads.local_sources); }
         let ok = diagnostics.iter().all(|diagnostic| diagnostic.severity != Severity::Error);
         Analysis { id: input.id.clone(), ok, deps: reads.deps, tier: reads.tier, diagnostics }
     }).collect();
-    deps::propagate_query_tiers(&request, &mut results);
+    deps::propagate_tiers(&request, &mut results, &local_reads);
     graph::report_cycles(&request, &mut results);
     AnalyzeResponse { unit: Unit::Utf16, results }
 }
@@ -230,8 +240,8 @@ mod wire_tests {
         assert_eq!(request.scope.roots["ui"].members, Some(Members::Shaped(BTreeMap::from([
             ("search".into(), Some(Members::Names(vec!["value".into()]))),
         ]))));
-        assert_eq!(request.scope.locals.tier("row"), Some(Tier::Client));
-        assert_eq!(request.expressions[0].locals.tier("item"), Some(Tier::Server));
+        assert!(matches!(request.scope.locals.get("row"), Some(LocalTier::Fixed(Tier::Client))));
+        assert!(matches!(request.expressions[0].locals.get("item"), Some(LocalTier::Fixed(Tier::Server))));
         assert_eq!(request.expressions[0].defines.as_deref(), Some("data.orders"));
     }
 

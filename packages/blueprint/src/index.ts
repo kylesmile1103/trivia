@@ -34,4 +34,8 @@ export { validate, validateStructure, type LayerCheck, type ValidationContext } 
 export { checkSchema } from './validate/schema.js'
 export { MIGRATIONS, migrate, type MigrateResult, type Migration, type MigrationTable } from './migrate/index.js'
 export { project } from './project.js'
+export {
+  expressionCheck, expressionRequest,
+  type ExpressionBinding, type ExpressionInput, type ExpressionRequest, type ExpressionTier, type UiExpressionScope,
+} from './validate/expressions.js'
 export { jsonSchemas } from './schemas.js'

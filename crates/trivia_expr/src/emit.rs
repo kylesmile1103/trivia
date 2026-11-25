@@ -154,7 +154,7 @@ impl<'r> Rewriter<'r, '_> {
     }
 
     fn is_local(&self, name: &str) -> bool {
-        self.bindings.contains(name) || self.locals.tier(name).is_some()
+        self.bindings.contains(name) || self.locals.get(name).is_some()
     }
 
     fn replacement(&self, name: &str) -> Option<&'r str> {

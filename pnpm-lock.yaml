@@ -379,6 +379,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@trivia/engine':
+        specifier: workspace:*
+        version: link:../../crates/trivia_napi
       '@types/node':
         specifier: ^24.13.3
         version: 24.19.1
