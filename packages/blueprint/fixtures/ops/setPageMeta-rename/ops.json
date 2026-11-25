@@ -1,0 +1,27 @@
+{
+  "base": "valid/backoffice",
+  "ops": [
+    {
+      "op": "setPageMeta",
+      "doc": "pages/CustomerList.page.json",
+      "baseRev": "@current",
+      "name": "ClientList"
+    },
+    {
+      "op": "setNav",
+      "doc": "app.blueprint.json",
+      "baseRev": "@current",
+      "nav": [
+        {
+          "page": "ClientList",
+          "label": "Customers",
+          "icon": "users"
+        },
+        {
+          "page": "CustomerOverview",
+          "label": "Overview"
+        }
+      ]
+    }
+  ]
+}

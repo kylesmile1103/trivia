@@ -1,0 +1,62 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_01JDK3M7Q2X8Y4Z6A1B3C5D7E9",
+  "name": "Home",
+  "route": "/",
+  "kind": "custom",
+  "root": "n_01JDK3M8A00000000000000001",
+  "nodes": {
+    "n_01JDK3M8A00000000000000001": {
+      "type": "div",
+      "name": "page",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000002": {
+      "type": "Button",
+      "name": "save",
+      "parent": "n_01JDK3M8A00000000000000001",
+      "slot": "children",
+      "order": "a0"
+    },
+    "n_01JDK3M8A00000000000000003": {
+      "type": "div",
+      "name": "box",
+      "parent": null,
+      "slot": null,
+      "order": "a1"
+    }
+  },
+  "props": {
+    "n_01JDK3M8A00000000000000002": {
+      "children": "Save"
+    }
+  },
+  "state": {
+    "busy": {
+      "type": "boolean",
+      "initial": false
+    }
+  },
+  "queries": {
+    "rows": {
+      "kind": "list",
+      "resource": "Customer"
+    }
+  },
+  "actions": {
+    "n_01JDK3M8A00000000000000002.onClick": [
+      {
+        "do": "setState",
+        "name": "busy",
+        "value": "true"
+      },
+      {
+        "do": "refetch",
+        "query": "rows"
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+[
+  { "op": "removeRelation", "entity": "Account", "relation": "transactions" },
+  { "op": "removeEntity", "entity": "Transaction" },
+  { "op": "setIndexes", "entity": "Customer", "indexes": [] },
+  { "op": "setEntityApi", "entity": "Customer", "api": { "operations": ["get"], "filterable": ["email"] } },
+  { "op": "removeField", "entity": "Customer", "field": "status" },
+  { "op": "removeEnum", "name": "CustomerStatus" }
+]

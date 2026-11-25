@@ -1,0 +1,8 @@
+[
+  {
+    "code": "dangling_reference",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/nodes/n_01JDK3M8A00000000000000002/parent"
+  }
+]

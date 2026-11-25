@@ -1,0 +1,6 @@
+[
+  {
+    "pointer": "/entities/0/relations/0/foreignKey",
+    "message": "Account needs a belongsTo relation to Customer with foreign key \"customerId\""
+  }
+]

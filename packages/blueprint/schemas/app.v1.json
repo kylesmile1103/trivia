@@ -1,0 +1,118 @@
+{
+  "$id": "https://trivia.dev/schemas/blueprint/app.v1.json",
+  "title": "Trivia Blueprint App",
+  "description": "Application settings and navigation for a Trivia blueprint.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://trivia.dev/schemas/blueprint/app.v1.json"
+    },
+    "blueprintVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+    },
+    "targets": {
+      "type": "object",
+      "properties": {
+        "web": {
+          "type": "string",
+          "enum": [
+            "vite-refine",
+            "next-refine"
+          ]
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "dotnet-minimal"
+          ]
+        }
+      },
+      "required": [
+        "web"
+      ],
+      "additionalProperties": false
+    },
+    "auth": {
+      "default": {
+        "mode": "none"
+      },
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "oidc"
+          ]
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "theme": {
+      "default": {
+        "tokens": {}
+      },
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "tokens"
+      ],
+      "additionalProperties": false
+    },
+    "nav": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "required": [
+          "page",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "$schema",
+    "blueprintVersion",
+    "name",
+    "targets"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,19 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+
+namespace BackOffice.Features.Customer;
+public partial class Customer
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required string FullName { get; set; }
+    public required string Email { get; set; }
+    public global::BackOffice.Enums.CustomerStatus Status { get; set; } = global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending");
+    public decimal? CreditLimit { get; set; } = 0m;
+    public string? Notes { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateOnly? BirthDate { get; set; }
+    public Guid? ExternalRef { get; set; }
+    public ICollection<global::BackOffice.Features.Account.Account> Accounts { get; } = new List<global::BackOffice.Features.Account.Account>();
+}

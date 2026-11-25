@@ -1,0 +1,8 @@
+[
+  {
+    "code": "dangling_reference",
+    "severity": "error",
+    "doc": "app.blueprint.json",
+    "pointer": "/nav/1/page"
+  }
+]

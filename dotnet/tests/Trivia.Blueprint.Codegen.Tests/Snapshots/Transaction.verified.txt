@@ -1,0 +1,16 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+
+namespace BackOffice.Features.Transaction;
+public partial class Transaction
+{
+    public long Id { get; set; }
+    public long LedgerSequence { get; set; }
+    public JsonDocument? Details { get; set; }
+    public int AccountId { get; set; }
+    public global::BackOffice.Features.Account.Account Account { get; set; } = null !;
+    public Guid? ReviewerId { get; set; }
+    public global::BackOffice.Features.Customer.Customer? Reviewer { get; set; }
+}

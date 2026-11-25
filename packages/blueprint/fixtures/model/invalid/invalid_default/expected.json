@@ -1,0 +1,34 @@
+[
+  {
+    "pointer": "/entities/0/fields/0/default",
+    "message": "Invalid default for enabled: expected a boolean"
+  },
+  {
+    "pointer": "/entities/0/fields/1/default",
+    "message": "Invalid default for balance: less than minimum 0"
+  },
+  {
+    "pointer": "/entities/0/fields/2/default",
+    "message": "Invalid default for status: expected a value of CustomerStatus"
+  },
+  {
+    "pointer": "/entities/0/fields/3/default",
+    "message": "Invalid default for opened: expected a calendar date (YYYY-MM-DD)"
+  },
+  {
+    "pointer": "/entities/0/fields/4/default",
+    "message": "Invalid default for amount: does not fit decimal precision 4 and scale 2"
+  },
+  {
+    "pointer": "/entities/0/fields/5/default",
+    "message": "Invalid default for email: expected an email address"
+  },
+  {
+    "pointer": "/entities/0/fields/6/default",
+    "message": "Invalid default for fullName: a required field cannot default to null"
+  },
+  {
+    "pointer": "/entities/0/fields/7/default",
+    "message": "Invalid default for countedAt: expected a date-time with an offset"
+  }
+]

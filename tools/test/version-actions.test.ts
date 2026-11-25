@@ -66,7 +66,7 @@ describe('Cargo.lock', () => {
 
   it('reads every crate version from crates/*/Cargo.toml', () => {
     const versions = actions.crateVersions(repo)
-    expect(Object.keys(versions).sort()).toEqual(['trivia_napi', 'trivia_oxc_engine', 'trivia_shell'])
+    expect(Object.keys(versions).sort()).toEqual(['trivia_expr', 'trivia_napi', 'trivia_oxc_engine', 'trivia_shell'])
     expect(new Set(Object.values(versions)).size).toBe(1)
   })
 })

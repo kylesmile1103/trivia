@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+    <OpenApiGenerateDocumentsOptions>--openapi-version OpenApi3_1 --file-name openapi</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <Target Name="ExcludeRetiredTriviaScaffolds" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <TriviaScaffold Include="Features/*/*.cs" Exclude="Features/*/*.g.cs" />
+      <Compile Remove="%(TriviaScaffold.Identity)"
+        Condition="'%(TriviaScaffold.Identity)' != '' And
+          $([System.Text.RegularExpressions.Regex]::IsMatch('%(TriviaScaffold.Identity)', '^Features[/\\]([A-Z][A-Za-z0-9]*)[/\\]\1(?:Endpoints|\.[A-Z][A-Za-z0-9]*)?\.cs$')) And
+          !Exists('%(TriviaScaffold.RelativeDir)%(TriviaScaffold.Filename).g.cs')" />
+    </ItemGroup>
+  </Target>
+</Project>

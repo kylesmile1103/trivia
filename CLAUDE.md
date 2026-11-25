@@ -35,6 +35,9 @@ the sections below record what was verified against the reference code on 2026-1
 - `tools/` — `@trivia/tools`: the package generator (`nx g @trivia/tools:package <name>`) and
   the release helpers (`tools/release/`, run by `pnpm release`). Plain CommonJS: Nx loads `.ts`
   there only through swc/ts-node on Node 22.16.
+- `.github/` — CI/CD on GitHub's free runners: the pull request gate (`ci-ok`), a nightly
+  cross-OS run, the Release workflow, CodeQL. Design and repository settings: `docs/ci.md`.
+  `rust-toolchain.toml` and `.node-version` pin the toolchain for every shell and for CI.
 
 Nx 23.2.1 runs the tasks (`nx.json`). Each package's `package.json` scripts stay the source of
 truth, and Nx adds caching, `dependsOn: ["^build"]` and long-running `dev` targets. Projects have

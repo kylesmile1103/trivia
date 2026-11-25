@@ -1,0 +1,122 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "ReviewDesk",
+  "enums": [
+    {
+      "name": "ReviewStage",
+      "values": [
+        "in-review",
+        "approved",
+        "1st-review"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "ReviewQueue",
+      "plural": "review-queues",
+      "key": {
+        "name": "id",
+        "type": "int"
+      },
+      "fields": [],
+      "relations": [
+        {
+          "name": "reviewCases",
+          "kind": "hasMany",
+          "to": "ReviewCase",
+          "foreignKey": "queueId"
+        }
+      ],
+      "indexes": [],
+      "api": {
+        "operations": [
+          "get"
+        ]
+      }
+    },
+    {
+      "name": "ReviewCase",
+      "plural": "review-cases",
+      "key": {
+        "name": "id",
+        "type": "uuid",
+        "generated": "v7"
+      },
+      "fields": [
+        {
+          "name": "stage",
+          "type": "enum",
+          "enum": "ReviewStage",
+          "required": true,
+          "default": "in-review"
+        }
+      ],
+      "relations": [
+        {
+          "name": "parentCase",
+          "kind": "belongsTo",
+          "to": "ReviewCase",
+          "foreignKey": "parentCaseId",
+          "onDelete": "setNull"
+        },
+        {
+          "name": "childCases",
+          "kind": "hasMany",
+          "to": "ReviewCase",
+          "foreignKey": "parentCaseId"
+        },
+        {
+          "name": "queue",
+          "kind": "belongsTo",
+          "to": "ReviewQueue",
+          "foreignKey": "queueId",
+          "required": true
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "queueId",
+            "parentCaseId"
+          ]
+        }
+      ],
+      "api": {
+        "operations": [
+          "list"
+        ],
+        "filterable": [
+          "stage",
+          "queueId",
+          "parentCaseId"
+        ]
+      }
+    },
+    {
+      "name": "ReviewLog",
+      "plural": "review-logs",
+      "key": {
+        "name": "id",
+        "type": "long"
+      },
+      "fields": [],
+      "relations": [
+        {
+          "name": "reviewCase",
+          "kind": "belongsTo",
+          "to": "ReviewCase",
+          "foreignKey": "caseId",
+          "required": true
+        }
+      ],
+      "indexes": [],
+      "api": {
+        "operations": [
+          "get"
+        ]
+      }
+    }
+  ]
+}

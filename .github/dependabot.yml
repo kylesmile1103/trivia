@@ -1,0 +1,14 @@
+# Only the actions' commit pins (docs/ci.md, "Security"). npm and Cargo stay manual: OXC,
+# hey-api and the MCP SDK are pinned to exact versions on purpose, and every OXC crate must move
+# together.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories: ['/', '/.github/actions/*']
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: repo

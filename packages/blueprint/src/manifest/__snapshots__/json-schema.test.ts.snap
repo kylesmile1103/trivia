@@ -1,0 +1,269 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FR-MF-07: snapshots schemas and discovery metadata for installed and missing types 1`] = `
+{
+  "index": [
+    {
+      "events": [
+        {
+          "name": "onClick",
+          "payload": "React.MouseEvent<HTMLButtonElement>",
+          "prop": "onClick",
+        },
+      ],
+      "exposes": [],
+      "installed": true,
+      "slots": [
+        {
+          "kind": "text",
+          "name": "children",
+        },
+      ],
+      "type": "Button",
+    },
+    {
+      "events": [],
+      "exposes": [],
+      "installed": false,
+      "slots": [
+        {
+          "kind": "nodes",
+          "name": "header",
+          "wrapper": "CardHeader",
+        },
+        {
+          "kind": "nodes",
+          "name": "content",
+          "wrapper": "CardContent",
+        },
+        {
+          "kind": "nodes",
+          "name": "footer",
+          "wrapper": "CardFooter",
+        },
+      ],
+      "type": "Card",
+    },
+    {
+      "events": [
+        {
+          "name": "onChange",
+          "payload": "React.ChangeEvent<HTMLInputElement>",
+          "prop": "onChange",
+        },
+      ],
+      "exposes": [
+        {
+          "initial": "",
+          "name": "value",
+          "type": "string",
+          "via": {
+            "changeArg": "event.target.value",
+            "changeProp": "onChange",
+            "valueProp": "value",
+          },
+        },
+      ],
+      "installed": true,
+      "slots": [],
+      "type": "Input",
+    },
+    {
+      "events": [
+        {
+          "name": "onClick",
+          "prop": "onClick",
+        },
+        {
+          "name": "onDoubleClick",
+          "prop": "onDoubleClick",
+        },
+        {
+          "name": "onFocus",
+          "prop": "onFocus",
+        },
+        {
+          "name": "onBlur",
+          "prop": "onBlur",
+        },
+        {
+          "name": "onKeyDown",
+          "prop": "onKeyDown",
+        },
+        {
+          "name": "onKeyUp",
+          "prop": "onKeyUp",
+        },
+        {
+          "name": "onMouseEnter",
+          "prop": "onMouseEnter",
+        },
+        {
+          "name": "onMouseLeave",
+          "prop": "onMouseLeave",
+        },
+      ],
+      "exposes": [],
+      "installed": true,
+      "slots": [
+        {
+          "kind": "nodes",
+          "name": "children",
+        },
+      ],
+      "type": "div",
+    },
+  ],
+  "schemas": {
+    "Button": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "asChild": {
+          "default": false,
+          "type": "boolean",
+        },
+        "children": {
+          "type": "string",
+        },
+        "className": {
+          "type": "string",
+        },
+        "disabled": {
+          "type": "boolean",
+        },
+        "size": {
+          "default": "default",
+          "enum": [
+            "default",
+            "xs",
+            "sm",
+            "lg",
+            "icon",
+            "icon-xs",
+            "icon-sm",
+            "icon-lg",
+          ],
+          "type": "string",
+        },
+        "type": {
+          "enum": [
+            "button",
+            "submit",
+            "reset",
+          ],
+          "type": "string",
+        },
+        "variant": {
+          "default": "default",
+          "enum": [
+            "default",
+            "outline",
+            "secondary",
+            "ghost",
+            "destructive",
+            "link",
+          ],
+          "type": "string",
+        },
+      },
+      "title": "Button",
+      "type": "object",
+    },
+    "Card": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "size": {
+          "default": "default",
+          "enum": [
+            "default",
+            "sm",
+          ],
+          "type": "string",
+        },
+      },
+      "title": "Card",
+      "type": "object",
+    },
+    "Input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "className": {
+          "type": "string",
+        },
+        "disabled": {
+          "type": "boolean",
+        },
+        "id": {
+          "type": "string",
+        },
+        "name": {
+          "type": "string",
+        },
+        "placeholder": {
+          "type": "string",
+        },
+        "type": {
+          "enum": [
+            "text",
+            "email",
+            "password",
+            "number",
+            "search",
+            "tel",
+            "url",
+            "date",
+            "time",
+            "datetime-local",
+            "month",
+            "week",
+            "color",
+            "file",
+            "range",
+            "checkbox",
+            "radio",
+            "hidden",
+          ],
+          "type": "string",
+        },
+        "value": {
+          "type": "string",
+        },
+      },
+      "title": "Input",
+      "type": "object",
+    },
+    "div": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "aria-label": {
+          "type": "string",
+        },
+        "children": {
+          "type": "string",
+        },
+        "className": {
+          "type": "string",
+        },
+        "hidden": {
+          "type": "boolean",
+        },
+        "id": {
+          "type": "string",
+        },
+        "role": {
+          "type": "string",
+        },
+        "title": {
+          "type": "string",
+        },
+      },
+      "title": "div",
+      "type": "object",
+    },
+  },
+}
+`;

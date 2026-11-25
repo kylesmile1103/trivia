@@ -1,0 +1,97 @@
+# Trivia Blueprint: document index (2026-11-25)
+
+The blueprint track adds day 1 to Trivia: a typed app description that compiles to a real
+React + shadcn and ASP.NET Core codebase, which Trivia then edits. These documents came out of
+the Openblocks port assessment and Kyle's choices after it (strategy C, clean room, one-way
+eject, minimal API slices on PostgreSQL, Phases 0 to 3 in depth).
+
+**Status: specified, not started.** Nothing here is built yet. `docs/HANDOFF.md` and
+`docs/product.md` still describe the shipped product and have not been changed.
+
+## Reading order
+
+1. [BRD.md](BRD.md): why, for whom, what is in and out, success measures.
+2. [HLD.md](HLD.md): the architecture on a few pages.
+3. [adr/](adr/README.md): sixteen decisions, two of them waiting for review (⚑).
+4. [SRS.md](SRS.md): the numbered requirements that specs and tests cite.
+5. [lld/](lld/): one design per feature.
+6. `specs/NNN-*/`: Spec Kit features (`spec.md`, `plan.md`, `tasks.md`), governed by
+   `.specify/memory/constitution.md`.
+
+## Features
+
+| # | Feature | Phase | LLD | Spec | Requirements |
+| --- | --- | --- | --- | --- | --- |
+| 001 | Blueprint schema and store | 0 | [LLD-01](lld/LLD-01-blueprint-schema.md) | [spec](../../specs/001-blueprint-schema/spec.md) | FR-BP |
+| 002 | Component manifests | 0 | [LLD-02](lld/LLD-02-component-manifests.md) | [spec](../../specs/002-component-manifests/spec.md) | FR-MF |
+| 003 | Expression compiler | 0 | [LLD-03](lld/LLD-03-expression-compiler.md) | [spec](../../specs/003-expression-compiler/spec.md) | FR-EX |
+| 004 | Agent surface (HTTP, MCP) | 0 | [LLD-04](lld/LLD-04-agent-surface.md) | [spec](../../specs/004-blueprint-agent-surface/spec.md) | FR-AG |
+| 005 | React code generation (Vite) | 1 | [LLD-05](lld/LLD-05-react-codegen.md) | [spec](../../specs/005-react-codegen-vite/spec.md) | FR-RC |
+| 006 | Component kit | 1 | [LLD-06](lld/LLD-06-component-kit.md) | [spec](../../specs/006-component-kit/spec.md) | FR-KT |
+| 007 | Designer Blueprint panel | 1, 2 | [LLD-07](lld/LLD-07-designer-blueprint-panel.md) | [spec](../../specs/007-designer-blueprint-panel/spec.md) | FR-DS |
+| 008 | Data model DSL | 2 | [LLD-08](lld/LLD-08-data-model-dsl.md) | [spec](../../specs/008-data-model-dsl/spec.md) | FR-DM |
+| 009 | .NET code generation | 2 | [LLD-09](lld/LLD-09-dotnet-codegen.md) | [spec](../../specs/009-dotnet-codegen/spec.md) | FR-NC |
+| 010 | Aspire solution and contract loop | 2 | [LLD-10](lld/LLD-10-aspire-solution-and-contract-loop.md) | [spec](../../specs/010-aspire-solution-contract-loop/spec.md) | FR-AS |
+| 011 | MVP slice: a CRUD admin end to end | 2 | none (a test slice) | [spec](../../specs/011-mvp-crud-admin/spec.md) | FR-MVP |
+| 012 | Next.js code generation target | 3 | [LLD-12](lld/LLD-12-nextjs-codegen-target.md) | [spec](../../specs/012-nextjs-codegen-target/spec.md) | FR-NX |
+| 013 | Trivia on Next.js | 3 | [LLD-13](lld/LLD-13-trivia-on-nextjs.md) | [spec](../../specs/013-trivia-on-nextjs/spec.md) | FR-TN |
+
+Phase 4 (a hosted runtime) is described in HLD section 11 only, behind a demand gate (ADR-0014).
+
+## Build order
+
+```
+001 ─┬─ 002 ─┬─ 004 ── 005 ─┬─ 006 ─┐
+     └─ 003 ─┘              └─ 007 ─┤
+001 ── 008 ── 009 ── 010 ───────────┴─ 011 (MVP)
+005, 006, 010 ── 012          013 is independent (needs 004's adapter to exist, since it moves)
+```
+
+Each `tasks.md` lists its own dependencies. Within a feature, tests come before the code they
+cover.
+
+## Using the specs with Spec Kit
+
+The folder layout is Spec Kit's: a constitution in `.specify/memory/` and one folder per
+feature under `specs/`. The specs were written by hand from the designs, so `/speckit.specify`
+and `/speckit.plan` have nothing left to generate. To get the slash commands and templates for
+later features, run `specify init --here` for your agent, and check afterwards that it left
+`.specify/memory/constitution.md` as it is. Then, per feature: `/speckit.analyze` to
+cross-check spec, plan and tasks against the constitution, and `/speckit.implement` to work
+through `tasks.md`.
+
+Without Spec Kit the files are plain Markdown: give an agent the feature folder, the LLD it
+points to and the constitution.
+
+## Decisions waiting for you (⚑)
+
+| Decision | Where | Why it matters |
+| --- | --- | --- |
+| Generated frontends are Refine + shadcn apps, not plain TanStack Query | ADR-0009 | It is what lets the existing day-2 tools work on emitted apps, and it departs from the research report's suggestion |
+| Trivia on Next.js through a stamping loader and a separate dev service | ADR-0015 | Unproven until the spike in spec 013 |
+| Dependencies of expressions are computed, not stored in the document | ADR-0006 | Departs from the research report |
+| The JSX-like projection is read-only | ADR-0005 | Agents write through ops only |
+| New files follow the project's semicolon and quote style, with no formatter run | ADR-0007 | Determinism over house formatting |
+| A fifth designer tab with icons and tooltips | LLD-07 | Layout work in a 272 px column |
+| Previews on Next.js are files in a gitignored folder | LLD-12 | The least proven part of that design |
+| Day 1 joins the product for this track | ADR-0002, BRD section 8 | It supersedes a line of `docs/product.md`, which is not yet edited |
+
+BRD section 10 lists four open questions with the defaults taken.
+
+## What was verified and what was not
+
+- **From the research (2026-11-25):** Openblocks' last release was March 2023 and it is
+  AGPL-3.0; Lowcoder is its live fork under the same licence; Next.js was at 16.x with no 17
+  announced; Aspire was at 13.x with JavaScript app support; .NET 10 is the current LTS;
+  shadcn made Base UI its default in July 2026.
+- **From this repository (read on 2026-11-25):** the engine ops and envelope (`docs/api.md`),
+  the MCP tools (`docs/mcp.md`), the manifest shape (`docs/data-provider.md`), the product
+  decisions and slices (`docs/product.md`), the layout rules (`docs/architecture.md`,
+  `CLAUDE.md`), and that `createFile` writes only `.tsx` and `.jsx`.
+- **Not verified, and marked so where it is used:** exact API names in Aspire 13, .NET 10's
+  minimal API validation and build-time OpenAPI output, Refine 5's hook result shapes and its
+  Next.js server-side options, Turbopack's loader behaviour, whether the engine's
+  `restoreFiles` accepts non-source paths. Each has a first task that reads the current
+  documentation or code (constitution, principle IX).
+- **Estimates** (6 to 9 months to the MVP) are the research's and are inference.
+- The licence reading in ADR-0001 is not legal advice.

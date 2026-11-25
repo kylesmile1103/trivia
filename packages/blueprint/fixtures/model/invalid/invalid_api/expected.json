@@ -1,0 +1,30 @@
+[
+  {
+    "pointer": "/entities/0/api/filterable/0",
+    "message": "The json field \"metadata\" is not filterable"
+  },
+  {
+    "pointer": "/entities/0/api/sortable/0",
+    "message": "The json field \"metadata\" is not sortable"
+  },
+  {
+    "pointer": "/entities/0/api/searchable/0",
+    "message": "The int field \"points\" is not searchable"
+  },
+  {
+    "pointer": "/entities/0/api/custom/0/path",
+    "message": "GET \"{customerKey}\" conflicts with the get operation"
+  },
+  {
+    "pointer": "/entities/0/api/custom/1/path",
+    "message": "POST \"\" conflicts with the create operation"
+  },
+  {
+    "pointer": "/entities/0/api/custom/3/path",
+    "message": "POST \"{customerKey}/VERIFY\" conflicts with the verifyCustomer operation"
+  },
+  {
+    "pointer": "/entities/1/plural",
+    "message": "The plural \"customers\" is already used by Customer"
+  }
+]

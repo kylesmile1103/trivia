@@ -44,7 +44,7 @@
     "react": "^19.2.8",
     "typescript": "~6.0.2",
     "vitest": "^5.0.3",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "nx": {
     "name": "contract-sync"

@@ -1,0 +1,9 @@
+--- a/app.blueprint.json
++++ b/app.blueprint.json
+-  "auth": {
+-    "mode": "oidc"
+-  },
+-      "primary": "oklch(0.21 0.006 285.9)",
+-      "radius": "0.5rem"
++      "card": "oklch(1 0 0)",
++      "radius": "1rem"

@@ -1,0 +1,4 @@
+--- a/pages/CustomerList.page.json
++++ b/pages/CustomerList.page.json
+-  "route": "/customers",
++  "route": "/clients",

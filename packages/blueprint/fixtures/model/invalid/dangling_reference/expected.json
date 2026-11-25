@@ -1,0 +1,22 @@
+[
+  {
+    "pointer": "/entities/0/fields/0/enum",
+    "message": "No enum named \"CustomerStatus\""
+  },
+  {
+    "pointer": "/entities/0/relations/0/to",
+    "message": "No entity named \"Account\""
+  },
+  {
+    "pointer": "/entities/0/indexes/0/fields/0",
+    "message": "No field named \"obsolete\" on Customer"
+  },
+  {
+    "pointer": "/entities/0/api/sortable/0",
+    "message": "No field named \"unknown\" on Customer"
+  },
+  {
+    "pointer": "/entities/0/api/custom/0/returns",
+    "message": "No entity named \"Missing\""
+  }
+]

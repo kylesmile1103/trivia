@@ -1,0 +1,107 @@
+--- a/model.blueprint.json
++++ b/model.blueprint.json
+-  "enums": [
+-    {
+-      "name": "CustomerStatus",
+-      "values": [
+-        "pending",
+-        "active",
+-        "suspended"
+-      ]
+-    }
+-  ],
++  "enums": [],
+-          "name": "status",
+-          "type": "enum",
+-          "enum": "CustomerStatus",
+-          "required": true,
+-          "default": "pending"
+-        },
+-        {
+-      "indexes": [
+-        {
+-          "fields": [
+-            "status"
+-          ]
+-        }
+-      ],
++      "indexes": [],
+-          "list",
+-          "get",
+-          "create",
+-          "update",
+-          "delete"
++          "get"
+-          "status",
+-        ],
+-        "sortable": [
+-          "fullName",
+-          "createdAt"
+-        ],
+-        "searchable": [
+-          "fullName",
+-          "email"
+-        ],
+-        "custom": [
+-          {
+-            "name": "approveKyc",
+-            "method": "POST",
+-            "path": "{id}/approve-kyc",
+-            "input": [
+-              {
+-                "name": "reason",
+-                "type": "string",
+-                "maxLength": 500
+-              }
+-            ],
+-            "returns": "Customer"
+-          }
+-        },
+-        {
+-          "name": "transactions",
+-          "kind": "hasMany",
+-          "to": "Transaction",
+-          "foreignKey": "accountId"
+-    },
+-    {
+-      "name": "Transaction",
+-      "plural": "transactions",
+-      "key": {
+-        "name": "id",
+-        "type": "long"
+-      },
+-      "fields": [
+-        {
+-          "name": "ledgerSequence",
+-          "type": "long",
+-          "required": true
+-        },
+-        {
+-          "name": "details",
+-          "type": "json"
+-        }
+-      ],
+-      "relations": [
+-        {
+-          "name": "account",
+-          "kind": "belongsTo",
+-          "to": "Account",
+-          "foreignKey": "accountId",
+-          "required": true,
+-          "onDelete": "cascade"
+-        },
+-        {
+-          "name": "reviewer",
+-          "kind": "belongsTo",
+-          "to": "Customer",
+-          "foreignKey": "reviewerId",
+-          "onDelete": "setNull"
+-        }
+-      ],
+-      "indexes": [],
+-      "api": {
+-        "operations": [
+-          "list",
+-          "get"
+-        ]
+-      }

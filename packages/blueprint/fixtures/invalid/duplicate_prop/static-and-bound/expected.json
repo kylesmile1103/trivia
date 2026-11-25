@@ -1,0 +1,8 @@
+[
+  {
+    "code": "duplicate_prop",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/bindings/n_01JDK3M8A00000000000000002/children"
+  }
+]

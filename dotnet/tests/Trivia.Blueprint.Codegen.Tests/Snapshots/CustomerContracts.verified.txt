@@ -1,0 +1,61 @@
+﻿using System;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace BackOffice.Features.Customer;
+public sealed record CustomerResponse([property: JsonPropertyName("id")] Guid Id, [property: JsonPropertyName("fullName")] string FullName, [property: JsonPropertyName("email")] string Email, [property: JsonPropertyName("status")] global::BackOffice.Enums.CustomerStatus Status, [property: JsonPropertyName("creditLimit")] decimal? CreditLimit, [property: JsonPropertyName("notes")] string? Notes, [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt, [property: JsonPropertyName("birthDate")] DateOnly? BirthDate, [property: JsonPropertyName("externalRef")] Guid? ExternalRef);
+public sealed record CreateCustomerRequest
+{
+    [JsonPropertyName("fullName"), Required(AllowEmptyStrings = true), MinLength(2), MaxLength(120), global::System.ComponentModel.Description("Legal name")]
+    public string? FullName { get; init; }
+
+    [JsonPropertyName("email"), Required(AllowEmptyStrings = true), EmailAddress]
+    public string? Email { get; init; }
+
+    [JsonPropertyName("status"), Required(AllowEmptyStrings = true)]
+    public global::BackOffice.Enums.CustomerStatus? Status { get; init; } = global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending");
+
+    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true), global::BackOffice.Generated.DecimalPrecision(18, 2)]
+    public decimal? CreditLimit { get; init; } = 0m;
+
+    [JsonPropertyName("notes"), MaxLength(1000)]
+    public string? Notes { get; init; }
+
+    [JsonPropertyName("birthDate")]
+    public DateOnly? BirthDate { get; init; }
+
+    [JsonPropertyName("externalRef")]
+    public Guid? ExternalRef { get; init; }
+}
+
+public sealed record UpdateCustomerRequest
+{
+    [JsonPropertyName("fullName"), Required(AllowEmptyStrings = true), MinLength(2), MaxLength(120), global::System.ComponentModel.Description("Legal name")]
+    public string? FullName { get; init; }
+
+    [JsonPropertyName("email"), Required(AllowEmptyStrings = true), EmailAddress]
+    public string? Email { get; init; }
+
+    [JsonPropertyName("status"), Required(AllowEmptyStrings = true)]
+    public global::BackOffice.Enums.CustomerStatus? Status { get; init; } = global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending");
+
+    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true), global::BackOffice.Generated.DecimalPrecision(18, 2)]
+    public decimal? CreditLimit { get; init; } = 0m;
+
+    [JsonPropertyName("notes"), MaxLength(1000)]
+    public string? Notes { get; init; }
+
+    [JsonPropertyName("birthDate")]
+    public DateOnly? BirthDate { get; init; }
+
+    [JsonPropertyName("externalRef")]
+    public Guid? ExternalRef { get; init; }
+}
+
+public sealed record CustomerPage(IReadOnlyList<CustomerResponse> Items, int Total, int Page, int PageSize);
+public sealed record ApproveKycCustomerRequest
+{
+    [JsonPropertyName("reason"), MaxLength(500)]
+    public string? Reason { get; init; }
+}

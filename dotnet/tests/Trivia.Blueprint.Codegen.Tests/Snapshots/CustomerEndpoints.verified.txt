@@ -1,0 +1,177 @@
+﻿using System;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using global::BackOffice.Data;
+using global::BackOffice.Generated;
+
+namespace BackOffice.Features.Customer;
+public static partial class CustomerEndpoints
+{
+    public static RouteGroupBuilder MapCustomerEndpoints(this IEndpointRouteBuilder routes)
+    {
+        RouteGroupBuilder group = routes.MapGroup("/api/v1/customers").WithTags("Customers");
+        group.MapGet("", ListAsync).WithName("listCustomers").ProducesValidationProblem();
+        group.MapGet("/{id}", GetAsync).WithName("getCustomerById").ProducesProblem(404);
+        group.MapPost("", CreateAsync).WithName("createCustomer").ProducesValidationProblem().ProducesProblem(409);
+        group.MapPut("/{id}", UpdateAsync).WithName("updateCustomer").ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409);
+        group.MapDelete("/{id}", DeleteAsync).WithName("deleteCustomer").ProducesProblem(404).ProducesProblem(409);
+        group.MapMethods("/{id}/approve-kyc", ["POST"], HandleApproveKycAsync).WithName("approveKycCustomer").ProducesProblem(501).ProducesValidationProblem();
+        return group;
+    }
+
+    private static async Task<Ok<CustomerPage>> ListAsync([FromQuery] string? page, [FromQuery] string? pageSize, [FromQuery] string? sort, [FromQuery(Name = "filter")] string[]? filters, [FromQuery] string? q, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+    {
+        int number = ListQuery.PageNumber(page, "page", 1, int.MaxValue);
+        int size = ListQuery.PageNumber(pageSize, "pageSize", 20, 200);
+        IQueryable<Customer> query = Scoped(db, http, tracked: false);
+        foreach (ListFilter filter in ListQuery.Filters(filters))
+            query = ApplyFilter(query, filter);
+        if (!string.IsNullOrEmpty(q))
+        {
+            string pattern = ListQuery.SearchPattern(q);
+            query = query.Where(row => EF.Functions.ILike(row.FullName!, pattern, "\\") || EF.Functions.ILike(row.Email!, pattern, "\\"));
+        }
+
+        IOrderedQueryable<Customer>? ordered = null;
+        foreach (ListSort term in ListQuery.Sorts(sort))
+        {
+            ordered = term.Field switch
+            {
+                "fullName" => ListQuery.Order(query, ordered, row => row.FullName, term.Descending),
+                "createdAt" => ListQuery.Order(query, ordered, row => row.CreatedAt, term.Descending),
+                _ => throw ListQuery.Invalid("sort", $"Unknown sort field '{term.Field}'.")};
+        }
+
+        int total = await query.CountAsync(cancellationToken);
+        long offset = ((long)number - 1) * size;
+        if (offset >= total)
+            return TypedResults.Ok(new CustomerPage([], total, number, size));
+        IOrderedQueryable<Customer> stable = ordered is null ? query.OrderBy(row => row.Id) : ordered.ThenBy(row => row.Id);
+        List<Customer> rows = await stable.Skip((int)offset).Take(size).ToListAsync(cancellationToken);
+        return TypedResults.Ok(new CustomerPage(rows.Select(ToResponse).ToArray(), total, number, size));
+    }
+
+    private static IQueryable<Customer> ApplyFilter(IQueryable<Customer> query, ListFilter filter) => filter.Field switch
+    {
+        "status" => FilterStatus(query, filter),
+        "email" => FilterEmail(query, filter),
+        _ => throw ListQuery.Invalid("filter", $"Unknown filter field '{filter.Field}'.")};
+    private static IQueryable<Customer> FilterStatus(IQueryable<Customer> query, ListFilter filter)
+    {
+        if (filter.Operator == "in")
+        {
+            global::BackOffice.Enums.CustomerStatus[] values = ListQuery.Values(filter, text => ListQuery.EnumValue(text, filter.Field, global::BackOffice.Enums.CustomerStatusValues.FromLiteral));
+            return query.Where(row => values.Contains(row.Status!));
+        }
+
+        if (filter.Operator is not ("eq" or "ne"))
+            throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.");
+        string text = filter.Value;
+        global::BackOffice.Enums.CustomerStatus value = ListQuery.EnumValue(text, filter.Field, global::BackOffice.Enums.CustomerStatusValues.FromLiteral);
+        return filter.Operator switch
+        {
+            "eq" => query.Where(row => row.Status == value),
+            "ne" => query.Where(row => row.Status != value),
+            _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
+    }
+
+    private static IQueryable<Customer> FilterEmail(IQueryable<Customer> query, ListFilter filter)
+    {
+        if (filter.Operator == "in")
+        {
+            string[] values = ListQuery.Values(filter, text => text);
+            return query.Where(row => values.Contains(row.Email!));
+        }
+
+        if (filter.Operator is not ("eq" or "ne" or "contains" or "startswith"))
+            throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.");
+        string text = filter.Value;
+        string value = text;
+        return filter.Operator switch
+        {
+            "eq" => query.Where(row => row.Email == value),
+            "ne" => query.Where(row => row.Email != value),
+            "contains" => query.Where(row => row.Email.Contains(value)),
+            "startswith" => query.Where(row => row.Email.StartsWith(value)),
+            _ => throw ListQuery.Invalid("filter", $"Operator '{filter.Operator}' is not supported for '{filter.Field}'.")};
+    }
+
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> GetAsync(Guid id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+    {
+        Customer? entity = await Scoped(db, http, tracked: false).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        return entity is null ? TypedResults.NotFound() : TypedResults.Ok(ToResponse(entity));
+    }
+
+    private static async Task<Created<CustomerResponse>> CreateAsync(CreateCustomerRequest input, AppDbContext db, CancellationToken cancellationToken)
+    {
+        Customer entity = new()
+        {
+            FullName = input.FullName!,
+            Email = input.Email!,
+            Status = input.Status.GetValueOrDefault(),
+            CreditLimit = input.CreditLimit,
+            Notes = input.Notes,
+            BirthDate = input.BirthDate,
+            ExternalRef = input.ExternalRef
+        };
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnCreating(entity, input, db);
+        db.CustomerSet.Add(entity);
+        await db.SaveChangesAsync(cancellationToken);
+        OnCreated(entity, db);
+        await transaction.CommitAsync(cancellationToken);
+        return TypedResults.Created(FormattableString.Invariant($"/api/v1/customers/{entity.Id}"), ToResponse(entity));
+    }
+
+    private static async Task<Results<Ok<CustomerResponse>, NotFound>> UpdateAsync(Guid id, UpdateCustomerRequest input, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+    {
+        Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (entity is null)
+            return TypedResults.NotFound();
+        entity.FullName = input.FullName!;
+        entity.Email = input.Email!;
+        entity.Status = input.Status.GetValueOrDefault();
+        entity.CreditLimit = input.CreditLimit;
+        entity.Notes = input.Notes;
+        entity.BirthDate = input.BirthDate;
+        entity.ExternalRef = input.ExternalRef;
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnUpdating(entity, input, db);
+        await db.SaveChangesAsync(cancellationToken);
+        OnUpdated(entity, db);
+        await transaction.CommitAsync(cancellationToken);
+        return TypedResults.Ok(ToResponse(entity));
+    }
+
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(Guid id, AppDbContext db, HttpContext http, CancellationToken cancellationToken)
+    {
+        Customer? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (entity is null)
+            return TypedResults.NotFound();
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        OnDeleting(entity, db);
+        db.CustomerSet.Remove(entity);
+        await db.SaveChangesAsync(cancellationToken);
+        OnDeleted(entity, db);
+        await transaction.CommitAsync(cancellationToken);
+        return TypedResults.NoContent();
+    }
+
+    private static IQueryable<Customer> Scoped(AppDbContext db, HttpContext http, bool tracked)
+    {
+        IQueryable<Customer> query = tracked ? db.CustomerSet : db.CustomerSet.AsNoTracking();
+        ConfigureQuery(ref query, http);
+        return query;
+    }
+
+    private static CustomerResponse ToResponse(Customer entity) => new(entity.Id, entity.FullName, entity.Email, entity.Status, entity.CreditLimit, entity.Notes, entity.CreatedAt, entity.BirthDate, entity.ExternalRef);
+    static partial void ConfigureQuery(ref IQueryable<Customer> query, HttpContext http);
+    static partial void OnCreating(Customer entity, CreateCustomerRequest request, AppDbContext db);
+    static partial void OnCreated(Customer entity, AppDbContext db);
+    static partial void OnUpdating(Customer entity, UpdateCustomerRequest request, AppDbContext db);
+    static partial void OnUpdated(Customer entity, AppDbContext db);
+    static partial void OnDeleting(Customer entity, AppDbContext db);
+    static partial void OnDeleted(Customer entity, AppDbContext db);
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "Bank",
+  "enums": [],
+  "entities": [
+    {
+      "name": "Customer",
+      "plural": "customers",
+      "key": {
+        "name": "id",
+        "type": "uuid"
+      },
+      "fields": [
+        {
+          "name": "status",
+          "type": "enum",
+          "enum": "CustomerStatus"
+        }
+      ],
+      "relations": [
+        {
+          "name": "account",
+          "kind": "belongsTo",
+          "to": "Account",
+          "foreignKey": "accountId"
+        }
+      ],
+      "indexes": [
+        {
+          "fields": [
+            "obsolete"
+          ]
+        }
+      ],
+      "api": {
+        "operations": [
+          "list"
+        ],
+        "sortable": [
+          "unknown"
+        ],
+        "custom": [
+          {
+            "name": "approveKyc",
+            "method": "POST",
+            "path": "{id}/approve-kyc",
+            "returns": "Missing"
+          }
+        ]
+      }
+    }
+  ]
+}

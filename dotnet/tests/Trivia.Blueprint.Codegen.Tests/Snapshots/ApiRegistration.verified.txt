@@ -1,0 +1,153 @@
+﻿using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
+using global::BackOffice.Data;
+using global::BackOffice.Features.Customer;
+using global::BackOffice.Features.Account;
+using global::BackOffice.Features.Transaction;
+
+namespace BackOffice.Generated;
+public static class ApiRegistration
+{
+    public static void AddGeneratedServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(configuration.GetConnectionString("AppDb") ?? "Host=localhost;Database=backoffice;Username=postgres"));
+        services.AddValidation();
+        services.AddProblemDetails();
+        services.AddExceptionHandler<ApiProblemHandler>();
+        services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+            options.SerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+        });
+        services.AddOpenApi(options =>
+        {
+            options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
+            options.AddSchemaTransformer(DescribeSchema);
+            options.AddDocumentTransformer(DescribeInputs);
+            options.AddOperationTransformer((operation, context, cancellationToken) =>
+            {
+                if (operation.OperationId is "listCustomers" or "listAccounts" or "listTransactions")
+                    DescribePageParameters(operation);
+                return Task.CompletedTask;
+            });
+        });
+    }
+
+    public static void MapGeneratedEndpoints(this WebApplication app)
+    {
+        app.UseExceptionHandler();
+        app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
+        app.MapOpenApi();
+        app.MapCustomerEndpoints();
+        app.MapAccountEndpoints();
+        app.MapTransactionEndpoints();
+    }
+
+    private static Task DescribeSchema(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken cancellationToken)
+    {
+        Type type = context.JsonTypeInfo.Type;
+        if (type == typeof(JsonDocument))
+            schema.Type = JsonSchemaType.Object;
+        if (type == typeof(global::BackOffice.Enums.CustomerStatus))
+        {
+            schema.Type = JsonSchemaType.String;
+            schema.Enum = [JsonValue.Create("pending")!, JsonValue.Create("active")!, JsonValue.Create("suspended")!];
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static Task DescribeInputs(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
+    {
+        if (document.Components?.Schemas?.TryGetValue("CreateCustomerRequest", out IOpenApiSchema? CreateCustomerRequestSchema) == true && CreateCustomerRequestSchema is OpenApiSchema CreateCustomerRequestContract)
+        {
+            DescribeInput(CreateCustomerRequestContract, "fullName", true, null, null);
+            DescribeInput(CreateCustomerRequestContract, "email", true, "email", null);
+            DescribeInput(CreateCustomerRequestContract, "status", true, null, "\"pending\"");
+            DescribeInput(CreateCustomerRequestContract, "creditLimit", false, null, "0");
+        }
+
+        if (document.Components?.Schemas?.TryGetValue("UpdateCustomerRequest", out IOpenApiSchema? UpdateCustomerRequestSchema) == true && UpdateCustomerRequestSchema is OpenApiSchema UpdateCustomerRequestContract)
+        {
+            DescribeInput(UpdateCustomerRequestContract, "fullName", true, null, null);
+            DescribeInput(UpdateCustomerRequestContract, "email", true, "email", null);
+            DescribeInput(UpdateCustomerRequestContract, "status", true, null, "\"pending\"");
+            DescribeInput(UpdateCustomerRequestContract, "creditLimit", false, null, "0");
+        }
+
+        if (document.Components?.Schemas?.TryGetValue("CreateAccountRequest", out IOpenApiSchema? CreateAccountRequestSchema) == true && CreateAccountRequestSchema is OpenApiSchema CreateAccountRequestContract)
+        {
+            DescribeInput(CreateAccountRequestContract, "accountNumber", true, null, null);
+            DescribeInput(CreateAccountRequestContract, "frozen", true, null, "false");
+            DescribeInput(CreateAccountRequestContract, "customerId", true, null, null);
+        }
+
+        if (document.Components?.Schemas?.TryGetValue("UpdateAccountRequest", out IOpenApiSchema? UpdateAccountRequestSchema) == true && UpdateAccountRequestSchema is OpenApiSchema UpdateAccountRequestContract)
+        {
+            DescribeInput(UpdateAccountRequestContract, "accountNumber", true, null, null);
+            DescribeInput(UpdateAccountRequestContract, "frozen", true, null, "false");
+            DescribeInput(UpdateAccountRequestContract, "customerId", true, null, null);
+        }
+
+        if (document.Components?.Schemas?.TryGetValue("CreateTransactionRequest", out IOpenApiSchema? CreateTransactionRequestSchema) == true && CreateTransactionRequestSchema is OpenApiSchema CreateTransactionRequestContract)
+        {
+            DescribeInput(CreateTransactionRequestContract, "ledgerSequence", true, null, null);
+            DescribeInput(CreateTransactionRequestContract, "accountId", true, null, null);
+        }
+
+        if (document.Components?.Schemas?.TryGetValue("UpdateTransactionRequest", out IOpenApiSchema? UpdateTransactionRequestSchema) == true && UpdateTransactionRequestSchema is OpenApiSchema UpdateTransactionRequestContract)
+        {
+            DescribeInput(UpdateTransactionRequestContract, "ledgerSequence", true, null, null);
+            DescribeInput(UpdateTransactionRequestContract, "accountId", true, null, null);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static void DescribeInput(OpenApiSchema schema, string name, bool nonNull, string? format, string? defaultJson)
+    {
+        if (defaultJson is not null)
+            schema.Required?.Remove(name);
+        if (schema.Properties?.TryGetValue(name, out IOpenApiSchema? value) != true || value is not OpenApiSchema property)
+            return;
+        if (nonNull)
+        {
+            if (property.Type is JsonSchemaType type)
+                property.Type = type & ~JsonSchemaType.Null;
+            if (property.OneOf is IList<IOpenApiSchema> alternatives)
+                for (int index = alternatives.Count - 1; index >= 0; index--)
+                    if (alternatives[index].Type == JsonSchemaType.Null)
+                        alternatives.RemoveAt(index);
+        }
+
+        if (format is not null)
+            property.Format = format;
+        if (defaultJson is not null)
+            property.Default = JsonNode.Parse(defaultJson);
+    }
+
+    private static void DescribePageParameters(OpenApiOperation operation)
+    {
+        foreach (OpenApiParameter parameter in (operation.Parameters ?? []).OfType<OpenApiParameter>())
+        {
+            if (parameter.Name is "page" or "pageSize")
+            {
+                bool size = parameter.Name == "pageSize";
+                parameter.Schema = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Integer,
+                    Format = "int32",
+                    Minimum = "1",
+                    Maximum = size ? "200" : "2147483647",
+                    Default = JsonValue.Create(size ? 20 : 1)
+                };
+            }
+        }
+    }
+}

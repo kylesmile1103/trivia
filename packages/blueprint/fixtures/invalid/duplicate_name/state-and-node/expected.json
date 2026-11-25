@@ -1,0 +1,8 @@
+[
+  {
+    "code": "duplicate_name",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/state/save"
+  }
+]

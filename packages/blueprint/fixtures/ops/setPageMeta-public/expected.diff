@@ -1,0 +1,3 @@
+--- a/pages/CustomerList.page.json
++++ b/pages/CustomerList.page.json
++  "public": true,

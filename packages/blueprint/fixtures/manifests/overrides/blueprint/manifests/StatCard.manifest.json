@@ -1,0 +1,29 @@
+{
+  "type": "StatCard",
+  "source": {
+    "registry": "local",
+    "item": "stat-card",
+    "import": { "name": "StatCard", "from": "~cards/stat-card" }
+  },
+  "props": [
+    {
+      "name": "count",
+      "kind": "string",
+      "optional": true,
+      "source": "declared",
+      "description": "The number of matching items."
+    },
+    {
+      "name": "retired",
+      "kind": "string",
+      "optional": true,
+      "source": "declared",
+      "description": "A prop removed from the component."
+    }
+  ],
+  "slots": [{ "name": "footer", "kind": "nodes" }],
+  "events": [{ "name": "onClick", "prop": "onActivate" }],
+  "exposes": [],
+  "client": true,
+  "template": {}
+}

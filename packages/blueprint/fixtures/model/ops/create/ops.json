@@ -1,0 +1,7 @@
+[
+  { "op": "setModel", "namespace": "Finance.BackOffice" },
+  { "op": "setEnum", "enum": { "name": "PaymentState", "values": ["waiting", "settled"] } },
+  { "op": "setEntity", "entity": { "name": "Payment", "plural": "payments", "key": { "name": "id", "type": "long" } } },
+  { "op": "setField", "entity": "Payment", "field": { "name": "state", "type": "enum", "enum": "PaymentState" } },
+  { "op": "setEntityApi", "entity": "Payment", "api": { "operations": ["list"], "filterable": ["state"] } }
+]

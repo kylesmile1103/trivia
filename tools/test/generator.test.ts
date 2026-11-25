@@ -55,7 +55,9 @@ describe('nx g @trivia/tools:package', () => {
     const after = generator.addReleaseProject(before, 'widgets')
     const changed = after.split('\n').filter((line: string, i: number) => line !== before.split('\n')[i])
     expect(changed).toHaveLength(1)
-    expect(changed[0]).toMatch(/"projects": \[.*"shell", "widgets"\],$/)
+    // Appended after whichever project is last today: each generated package moves the end.
+    const last: string = JSON.parse(before).release.projects.at(-1)
+    expect(changed[0]).toMatch(new RegExp(`"projects": \\[.*"${last}", "widgets"\\],$`))
   })
 
   it('keeps a one-per-line array one per line, and fills an empty one', () => {
