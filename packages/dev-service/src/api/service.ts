@@ -82,6 +82,7 @@ export class EngineService {
       uiDir: options.host.uiDir,
       importBase: options.host.importBase,
       preview: options.host.preview,
+      routes: () => this.routes(),
       describeValues: (file) => this.describeValues(file),
       manifest: () => this.manifest(),
       outline: (file) => this.outline(file),
@@ -295,8 +296,10 @@ export class EngineService {
 
   /** Apply ops as one transaction (the engine writes all files or none) and record it. */
   #transact(ops: Json[], label: string, source: EditSource): ApplyResult {
-    const { engine, host: { root } } = this.#options
-    const result = unwrap<OpsResult>(engine.applyOps(root, JSON.stringify(ops)))
+    const { engine, host } = this.#options
+    const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
+    const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
+    if (result.changed) finish?.()
     if (result.changes.length > 0) this.#history.record({ label, changes: result.changes })
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
@@ -332,12 +335,17 @@ export class EngineService {
       direction === 'undo'
         ? entry.changes.toReversed().map((c) => ({ file: c.file, expected: c.after, content: c.before }))
         : entry.changes.map((c) => ({ file: c.file, expected: c.before, content: c.after }))
+    const finish = this.#options.host.trackFileWrites?.(
+      writes.filter((write) => write.expected === null).map((write) => write.file),
+      writes.filter((write) => write.content === null).map((write) => write.file),
+    )
     try {
       unwrap<null>(this.#options.engine.restoreFiles(this.#options.host.root, JSON.stringify(writes)))
     } catch (error) {
       if (error instanceof ApiError) throw new ApiError(error.code, `${direction} "${entry.label}" failed: ${error.message}`)
       throw error
     }
+    finish?.()
     if (direction === 'undo') history.undone()
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }

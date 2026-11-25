@@ -63,4 +63,16 @@ describe('FR-TN-04: App Router routes', () => {
     const service = new EngineService({ host, engine, version: 'test' })
     expect(await service.routes()).toMatchObject([{ path: '/status', file: 'src/app/status/page.jsx', params: [] }])
   })
+
+  it('undo releases generated route directories while preserving pre-existing directories', async () => {
+    await write('app/page.tsx')
+    await fs.mkdir(path.join(root, 'app/existing'))
+    const engine = await loadEngine()
+    const service = new EngineService({ host: createNextHost(root, engine), engine, version: 'test' })
+    const content = 'export default function Page() { return <main /> }\n'
+    await service.batch(['app/new/page.tsx', 'app/existing/page.tsx'].map((file) => ({ op: 'createFile', file, content })))
+    await service.undo()
+    expect(await fs.readdir(path.join(root, 'app'))).toEqual(['existing', 'page.tsx'])
+    expect(await fs.readdir(path.join(root, 'app/existing'))).toEqual([])
+  })
 })

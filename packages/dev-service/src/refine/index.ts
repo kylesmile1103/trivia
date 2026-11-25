@@ -9,6 +9,7 @@ import path from 'node:path'
 
 import type { TriviaManifest } from '@trivia/contract-sync'
 
+import type { AppRoute } from '../api/service.js'
 import { ApiError } from '../engine.js'
 import type { DevHost, PreviewHost } from '../host.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
@@ -190,6 +191,7 @@ export interface RefineHost {
   uiDir: string
   importBase: string
   preview: PreviewHost
+  routes(): Promise<AppRoute[]>
   describeValues(file: string): unknown
   manifest(): Promise<{ manifest: unknown; drift?: unknown }>
   /** The JSX trees of a file (engine outline). */
@@ -279,7 +281,10 @@ export class RefineAdapter {
       throw new ApiError('node_not_found', `the contract has no resource \`${resourceName}\` (it has ${manifest?.resources.map((r) => r.name).join(', ') ?? 'none: run contract-sync'})`)
     }
     const app = await this.#app()
-    if (!app) throw new ApiError('unsupported', 'no file under src/ renders <Refine resources={[…]}>: Trivia adds pages to an existing Refine app')
+    if (!app) {
+      const where = this.#host.kind === 'vite' ? 'under src/' : 'in the project'
+      throw new ApiError('unsupported', `no file ${where} renders <Refine resources={[…]}>: Trivia adds pages to an existing Refine app`)
+    }
     const name = refineName(resource)
     const existing = registered(app.resources, name)
     const supported = supportedKinds(resource)
@@ -292,7 +297,12 @@ export class RefineAdapter {
     if (wanted.length === 0) throw new ApiError('conflict', `${name} already has every page its contract supports (${existing.join(', ')})`)
 
     const { root } = this.#host
-    const files = pageFiles(resource, wanted, await this.#scaffoldContext())
+    const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
+    const files = pageFiles(resource, wanted, await this.#scaffoldContext(name, nextRoutes))
+    const claimed = new Set(nextRoutes?.map((route) => routePattern(route.path)))
+    for (const file of files) {
+      if (claimed.has(routePattern(file.route))) throw new ApiError('conflict', `${file.route} already has an App Router page`)
+    }
     for (const f of files) {
       if (fs.existsSync(path.join(root, f.file))) throw new ApiError('conflict', `${f.file} already exists; Trivia doesn't overwrite files`)
     }
@@ -309,21 +319,23 @@ export class RefineAdapter {
       ops.push({ op: 'insertElement', path: app.resourcesPath, value: `{\n  ${keys.join(',\n  ')},\n}` })
     }
 
-    // The routes: before the catch-all among the resource routes, else after the last of them.
-    const anchor = this.#routeAnchor(app)
-    if (!anchor) throw new ApiError('unsupported', `${app.file} has no <Route path="…"> to put the new routes next to`)
-    files.forEach((f, i) => {
-      // Before the catch-all, each insert pushes it one further; after the last route, each new
-      // one is the next anchor. Either way the i-th insert names slot index + i.
-      ops.push({
-        op: 'insert',
-        target: `${anchor.parent}.${anchor.index + i}`,
-        expectedName: 'Route',
-        placement: anchor.placement,
-        snippet: `<Route path="${f.route}" element={<${f.component} />} />`,
-        imports: [{ name: f.component, source: f.importPath }],
+    if (this.#host.kind === 'vite') {
+      // The routes: before the catch-all among the resource routes, else after the last of them.
+      const anchor = this.#routeAnchor(app)
+      if (!anchor) throw new ApiError('unsupported', `${app.file} has no <Route path="…"> to put the new routes next to`)
+      files.forEach((f, i) => {
+        // Before the catch-all, each insert pushes it one further; after the last route, each new
+        // one is the next anchor. Either way the i-th insert names slot index + i.
+        ops.push({
+          op: 'insert',
+          target: `${anchor.parent}.${anchor.index + i}`,
+          expectedName: 'Route',
+          placement: anchor.placement,
+          snippet: `<Route path="${f.route}" element={<${f.component} />} />`,
+          imports: [{ name: f.component, source: f.importPath }],
+        })
       })
-    })
+    }
     return { ops, label: `Add ${wanted.join(', ')} ${wanted.length === 1 ? 'page' : 'pages'} for ${humanize(name)}` }
   }
 
@@ -795,8 +807,11 @@ export class RefineAdapter {
     const element = `<${page.component} />`
     if (request.locator) {
       const name = (this.#host.inspect(request.locator) as { name?: string }).name
-      ops.push({ op: 'replaceElement', target: request.locator, ...(name ? { expectedName: name } : {}), snippet: element, imports: [{ name: page.component, source: page.importPath }] })
-    } else {
+      const spec = this.#host.kind === 'next'
+        ? { name: page.component, default: true, source: relativeImport(request.locator, page.file) }
+        : { name: page.component, source: page.importPath }
+      ops.push({ op: 'replaceElement', target: request.locator, ...(name ? { expectedName: name } : {}), snippet: element, imports: [spec] })
+    } else if (this.#host.kind === 'vite') {
       warnings.push(`Trivia doesn't know where the inferencer is rendered: replace it with ${element} (import { ${page.component} } from "${page.importPath}")`)
     }
     return { ops, label: `Eject ${page.component} to ${page.file}`, ...(warnings.length > 0 ? { warnings } : {}) }
@@ -815,7 +830,8 @@ export class RefineAdapter {
     if (!supportedKinds(resource).includes(request.kind)) {
       throw new ApiError('unsupported', `${resource.name}'s contract has no operation for a ${request.kind} page`)
     }
-    const context = await this.#scaffoldContext()
+    const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
+    const context = await this.#scaffoldContext(refineName(resource), nextRoutes)
     const [page] = pageFiles(withoutFields(resource, request.hide ?? []), [request.kind], { ...context, ...(request.title ? { title: request.title } : {}) }) as [PageFile]
     let { file, importPath } = page
     if (request.file !== undefined) {
@@ -832,24 +848,26 @@ export class RefineAdapter {
       component: page.component,
       importPath,
       file,
-      exists: fs.existsSync(path.join(this.#host.root, file)),
+      exists: fs.existsSync(path.join(this.#host.root, file)) ||
+        (request.file === undefined && (nextRoutes?.some((route) => routePattern(route.path) === routePattern(page.route)) ?? false)),
       route: page.route,
       code: page.content,
     }
   }
 
   /** Where the project keeps what generated pages import (shadcn layout: ui/ and refine-ui/ side by side). */
-  async #scaffoldContext(): Promise<ScaffoldContext> {
+  async #scaffoldContext(name: string, nextRoutes?: AppRoute[]): Promise<ScaffoldContext> {
     const { root, uiDir, importBase } = this.#host
     const parentDir = path.posix.dirname(uiDir)
     const parentImport = importBase.slice(0, importBase.lastIndexOf('/'))
     const hasRefineUi = fs.existsSync(path.join(root, parentDir, 'refine-ui', 'views'))
-    const pagesDir = await this.#pagesDir()
+    const pagesDir = nextRoutes ? nextPagesDir(root, name, nextRoutes) : await this.#pagesDir()
     return {
       ui: importBase,
       refineUi: hasRefineUi ? `${parentImport}/refine-ui` : null,
       typesImport: (await this.#manifest())?.modules.types?.importPath ?? '@/api/generated/types.gen',
       pagesDir,
+      ...(nextRoutes ? { appRouter: true } : {}),
       pagesImport: `${this.#srcImport()}/${pagesDir.split('/').slice(1).join('/')}`,
       textarea: this.#hasUi('textarea'),
       style: await this.#projectStyle(),
@@ -1003,15 +1021,15 @@ export class RefineAdapter {
         if (read >= MAX_SCAN) return
         const rel = path.posix.join(dir, entry.name)
         if (entry.isDirectory()) {
-          if (!entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name) && !skip.has(rel)) await walk(rel)
-        } else if (/\.(tsx|jsx)$/.test(entry.name)) {
+          if (!entry.name.startsWith('.') && !SKIP_DIRS.has(entry.name) && !skip.has(rel) && entry.name !== '(blueprint-preview)') await walk(rel)
+        } else if ((this.#host.kind !== 'next' || entry.isFile()) && /\.(tsx|jsx)$/.test(entry.name)) {
           read += 1
           const text = await fsp.readFile(path.join(root, rel), 'utf8').catch(() => '')
           if (/from\s+["']@refinedev\/react-(table|hook-form)["']/.test(text)) found.push(rel)
         }
       }
     }
-    await walk('src')
+    await walk(this.#host.kind === 'next' ? '.' : 'src')
     return found
   }
 }
@@ -1025,4 +1043,28 @@ function normalized(request: PreviewRequest): PreviewRequest {
     ...(request.title ? { title: request.title } : {}),
     ...(request.file ? { file: request.file } : {}),
   }
+}
+
+/** A different dynamic parameter name still claims the same Next URL pattern. */
+function routePattern(pathname: string): string {
+  return pathname.replace(/\/:[^/]+/g, '/:')
+}
+
+function nextPagesDir(root: string, name: string, routes: AppRoute[]): string {
+  const app = ['app', 'src/app'].find((dir) => fs.statSync(path.join(root, dir), { throwIfNoEntry: false })?.isDirectory())
+  if (!app) throw new ApiError('unsupported', 'A Next App Router directory is required to add pages')
+  const example = routes.find((route) => route.resource?.name === name)?.file ??
+    routes.find((route) => route.resource !== null)?.file
+  const dirs = [app]
+  for (const segment of example?.slice(app.length + 1).split('/') ?? []) {
+    if (!/^\(.*\)$/.test(segment)) break
+    dirs.push(segment)
+  }
+  return dirs.join('/')
+}
+
+function relativeImport(locator: string, file: string): string {
+  const source = locator.slice(0, locator.lastIndexOf('#', locator.lastIndexOf('#') - 1))
+  const relative = path.posix.relative(path.posix.dirname(source), file.replace(/\.tsx$/, ''))
+  return relative.startsWith('.') ? relative : `./${relative}`
 }

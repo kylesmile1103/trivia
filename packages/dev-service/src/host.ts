@@ -21,4 +21,6 @@ export interface DevHost {
   readRoutes(source: RouteSource): Promise<RouteEntry[]>
   preview: PreviewHost
   allowedHosts: readonly string[] | true
+  /** Capture host state before file creation/removal. The callback runs after a successful write. */
+  trackFileWrites?(creating: readonly string[], removing: readonly string[]): () => void
 }

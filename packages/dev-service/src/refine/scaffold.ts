@@ -23,6 +23,8 @@ export interface ScaffoldContext {
   /** Where pages go, and their import prefix: `src/pages`, `@/pages`. */
   pagesDir: string
   pagesImport: string
+  /** App Router pages are client entry points and register by filename. */
+  appRouter?: true
   /** The project has shadcn's `textarea`. */
   textarea?: boolean
   /** How forms write fields (`fields.ts` FormStyle); default `field`. */
@@ -134,16 +136,26 @@ export function pageFiles(resource: ManifestResource, kinds: PageKind[], context
       throw new Error(`${resource.name} has no ${kind === 'edit' ? 'update' : kind === 'show' ? 'get' : kind} operation in the contract`)
     }
     const component = `${resource.name}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
-    const base = { kind, file: `${context.pagesDir}/${name}/${kind}.tsx`, importPath: `${context.pagesImport}/${name}/${kind}`, component, route: routeOf(name, kind) }
+    const route = routeOf(name, kind)
+    const file = context.appRouter
+      ? `${context.pagesDir}${route.replace('/:id', '/[id]')}/page.tsx`
+      : `${context.pagesDir}/${name}/${kind}.tsx`
+    const importPath = context.appRouter ? file.slice(0, -'.tsx'.length) : `${context.pagesImport}/${name}/${kind}`
+    let content: string
     switch (kind) {
       case 'list':
-        return { ...base, content: listPage(resource, name, component, typeName, supported, context) }
+        content = listPage(resource, name, component, typeName, supported, context)
+        break
       case 'create':
       case 'edit':
-        return { ...base, content: formPage(resource, name, component, typeName, kind, context) }
+        content = formPage(resource, name, component, typeName, kind, context)
+        break
       case 'show':
-        return { ...base, content: showPage(resource, name, component, typeName, context) }
+        content = showPage(resource, name, component, typeName, context)
+        break
     }
+    if (context.appRouter) content = `"use client";\n\n${content.replace(`export function ${component}`, `export default function ${component}`)}`
+    return { kind, file, importPath, component, route, content }
   })
 }
 

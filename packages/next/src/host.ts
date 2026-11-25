@@ -37,7 +37,38 @@ export function createNextHost(root: string, engine: EngineBinding, paths: { uiD
     },
     readRoutes: () => readRoutes(root),
     preview: diskPreviews(root, app, engine),
+    ...(app ? { trackFileWrites: trackRouteDirectories(root, app) } : {}),
     allowedHosts: [],
+  }
+}
+
+/** Turbopack can keep serving a deleted page while its newly created route folder is empty. */
+function trackRouteDirectories(root: string, app: string): NonNullable<DevHost['trackFileWrites']> {
+  const created = new Set<string>()
+  const parents = (file: string): string[] => {
+    if (!file.startsWith(`${app}/`) || !/\/page\.[jt]sx$/.test(file) || file !== path.posix.normalize(file) || file.includes('\\')) return []
+    const dirs: string[] = []
+    for (let dir = path.posix.dirname(file); dir !== app; dir = path.posix.dirname(dir)) dirs.push(dir)
+    return dirs
+  }
+  return (creating, removing) => {
+    const missing = creating.flatMap(parents).filter((dir) => !fs.existsSync(path.join(root, dir)))
+    return () => {
+      for (const dir of missing) {
+        if (fs.existsSync(path.join(root, dir))) created.add(dir)
+      }
+      for (const dir of removing.flatMap(parents)) {
+        if (!created.has(dir)) continue
+        const absolute = path.join(root, dir)
+        try {
+          if (projectPath(root, fs.realpathSync(absolute)) === null) continue
+          fs.rmdirSync(absolute)
+          created.delete(dir)
+        } catch {
+          // Keep directories the user populated. The native history write already succeeded.
+        }
+      }
+    }
   }
 }
 

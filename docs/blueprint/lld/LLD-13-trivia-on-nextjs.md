@@ -214,6 +214,12 @@ The engine edits files. It does not care which kind of component a file holds. W
 - **Refine tools.** The page analysis finds `useTable` and form pages in client modules as it
   does on Vite. Route registration differs (files, not `<Route>`), which the adapter learns
   through `DevHost.kind`.
+  ⚑ Next scaffolds client `page.tsx` modules with default exports, using the existing
+  resource's leading route group when available. The same plan adds the Refine resource
+  action. It refuses an already claimed URL pattern, including dynamic parameter renames.
+  ⚑ Undo prunes empty App Router directories created by the edit. Turbopack can continue
+  serving its cached page after just the file disappears. Pre-existing directories and any
+  directory holding user files are preserved.
 
 ## 7. Tests
 
