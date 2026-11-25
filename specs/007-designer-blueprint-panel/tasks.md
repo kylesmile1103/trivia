@@ -48,7 +48,7 @@
 ## Phase 9: User Story 6 - Backend (Phase 2)
 
 - [x] T019 [US6] `BackendDialog.tsx`: plan table, migration name, confirm, next steps, the missing-`dotnet` message. Tests
-- [ ] T020 e2e: edit the model, plan the backend, see the file table
+- [x] T020 e2e: edit the model, plan the backend, see the file table
 
 ## Phase 10: User Story 7 - Select from a preview (P3)
 

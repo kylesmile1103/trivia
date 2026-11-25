@@ -137,6 +137,8 @@ the open snapshot. On focus the editor also reloads the contract manifest.
   small custom page, bind a text to an input, preview and type; a conflict from a concurrent
   MCP patch.
 - Phase 2 adds: edit the model, plan the backend, see the file table.
+  ⚑ Playwright runs the worktree's packaged `trivia-dotnet` on PATH and checks the proposed
+  source and solution are still absent after planning. CI needs .NET 10 and that tool shim.
 
 ## 5. Open points
 

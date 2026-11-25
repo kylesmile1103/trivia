@@ -108,7 +108,7 @@ test.describe('Blueprint panel', () => {
   const longName = 'Keyboard' + 'BlueprintPage'.repeat(6)
   const pages = ['AccountIntake', 'SearchDraft', 'ConcurrentDraft', longName]
   const files = [
-    appFile, generated, lock, path.join(blueprint, 'app.blueprint.json'),
+    appFile, generated, lock, path.join(blueprint, 'app.blueprint.json'), path.join(blueprint, 'model.blueprint.json'),
     ...pages.map((name) => path.join(blueprint, 'pages', `${name}.page.json`)),
   ]
 
@@ -280,5 +280,61 @@ test.describe('Blueprint panel', () => {
     await close.focus()
     await close.press('Enter')
     await expect(add).toBeFocused()
+  })
+
+  test('FR-DS-05 FR-DS-06 edits a model and reviews its real .NET file plan before writing', async ({ page }) => {
+    await openBlueprint(page)
+    await panel(page).getByRole('button', { name: 'Model', exact: true }).click()
+    const model = page.getByRole('region', { name: 'Data model' })
+    await model.getByLabel('Namespace', { exact: true }).fill('BlueprintAudit')
+    await model.getByRole('button', { name: 'Create model' }).click()
+
+    await model.locator('summary').filter({ hasText: /^Add entity$/ }).click()
+    const addEntity = model.getByRole('form', { name: 'Add entity' })
+    for (const [name, plural] of [['AuditEntry', 'audit-entries'], ['Auditor', 'auditors']]) {
+      await addEntity.getByLabel('Entity name', { exact: true }).fill(name)
+      await addEntity.getByLabel('Plural route segment', { exact: true }).fill(plural)
+      await addEntity.getByRole('button', { name: 'Add entity' }).click()
+      await expect(model.getByRole('region', { name: name + ' entity' })).toBeVisible()
+    }
+    await model.getByLabel('Entity', { exact: true }).selectOption('AuditEntry')
+    const entity = model.getByRole('region', { name: 'AuditEntry entity' })
+    const addField = entity.getByRole('form', { name: 'Add field' })
+    for (const [name, type] of [
+      ['displayName', 'string'], ['amount', 'decimal'], ['approved', 'bool'], ['receivedOn', 'date'], ['externalRef', 'uuid'],
+    ]) {
+      await addField.getByLabel('New field name', { exact: true }).fill(name)
+      await addField.getByLabel('New field type', { exact: true }).selectOption(type)
+      await addField.getByRole('button', { name: 'Add field' }).click()
+      await expect(entity.getByRole('group', { name: 'Field ' + name, exact: true })).toBeVisible()
+    }
+    const name = entity.getByRole('group', { name: 'Field displayName' }).getByLabel('Name', { exact: true })
+    await name.fill('class')
+    await name.press('Enter')
+    await expect(entity.getByRole('group', { name: 'Field displayName' })).toContainText('"class" is reserved by C#')
+    await name.fill('entryName')
+    await name.press('Enter')
+    await expect(entity.getByRole('group', { name: 'Field entryName' })).toBeVisible()
+
+    const relation = entity.getByRole('form', { name: 'Add relation' })
+    await relation.getByLabel('New relation name', { exact: true }).fill('auditors')
+    await relation.getByLabel('New relation kind', { exact: true }).selectOption('hasMany')
+    await relation.getByLabel('New relation target', { exact: true }).selectOption('Auditor')
+    await relation.getByLabel('New foreign key', { exact: true }).fill('entryId')
+    await relation.getByRole('button', { name: 'Add relation' }).click()
+    await relation.getByRole('button', { name: 'Apply fix' }).click()
+    await expect.poll(() => read(path.join(blueprint, 'model.blueprint.json'))?.toString('utf8')).toContain('"kind": "belongsTo"')
+
+    await panel(page).getByRole('button', { name: 'Generate backend', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Generate backend' })
+    const filePlan = dialog.getByRole('table', { name: 'Backend file plan' })
+    await expect(filePlan).toBeVisible({ timeout: 35_000 })
+    const source = 'src/App.Api/Features/AuditEntry/AuditEntry.g.cs'
+    await expect(filePlan.getByRole('row').filter({ hasText: source })).toContainText('create')
+    await expect(filePlan.getByRole('row').filter({ hasText: 'App.slnx' })).toContainText('create')
+    await expect(dialog.getByRole('button', { name: 'Confirm generation' })).toBeEnabled()
+    expect(read(path.join(appRoot, source))).toBeNull()
+    expect(read(path.join(appRoot, 'App.slnx'))).toBeNull()
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
   })
 })
