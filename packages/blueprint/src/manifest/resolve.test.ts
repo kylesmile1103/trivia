@@ -106,3 +106,27 @@ it('FR-MF-04: derives slots and recognized DOM events for a local component', ()
   const voidCard = resolveManifests({ kit: [], components: [{ ...statCard, acceptsChildren: false, props: [] }] })
   expect(voidCard.manifests.StatCard).toMatchObject({ slots: [], events: [], client: false })
 })
+
+it('FR-MF-05: uses the project override file and reports stale prop annotations', () => {
+  const file = 'manifests/StatCard.manifest.json'
+  const override = componentManifestSchema.parse(JSON.parse(
+    readFileSync(join(FIXTURES, 'manifests/overrides/blueprint', file), 'utf8'),
+  ))
+  const analyzed: ComponentSchema = {
+    name: 'StatCard', file: 'src/cards/stat-card.tsx', importSource: '~cards/stat-card',
+    baseElement: 'section', acceptsChildren: true,
+    props: [
+      { name: 'count', kind: 'number', source: 'declared', optional: false },
+      { name: 'onActivate', kind: 'unknown', typeText: '() => void', source: 'declared', optional: true },
+    ],
+  }
+  const { manifests, diagnostics } = resolveManifests({ kit, overrides: [override], components: [analyzed] })
+  expect(manifests.StatCard?.slots).toEqual(override.slots)
+  expect(manifests.StatCard?.events).toEqual(override.events)
+  expect(manifests.StatCard?.props).toEqual(analyzed.props)
+  expect(manifests.StatCard?.propDescriptions).toEqual({ count: 'The number of matching items.' })
+  expect(diagnostics).toMatchObject([{
+    code: 'override_prop_missing', severity: 'warning', doc: file, pointer: '/props/1/name',
+    message: expect.stringContaining('retired'),
+  }])
+})

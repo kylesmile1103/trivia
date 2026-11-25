@@ -79,6 +79,11 @@ For each type:
 2. Find the analyzer's schema by import name.
    - Found: `props` is the analyzer's list. The manifest may only annotate props that exist
      (mark one as an event, add a description). The user's file wins on options and defaults.
+     ⚑ Descriptions of recognized props are in `propDescriptions`, keeping the analyzer list
+     verbatim. Override prop, event and exposed value references absent from that list give
+     an `override_prop_missing` warning at the declaration. Events and exposed values remain
+     available because the analyzer can omit inherited props. Unknown props named in the
+     override's `props` array do not enter the resolved list.
    - Not found, and the manifest is from the kit: the component is not installed. It stays in
      the result flagged `installed: false` with its registry item, so validation can report
      `missing_component` with a hint such as `pnpm dlx shadcn@latest add select`.
