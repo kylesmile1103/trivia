@@ -95,3 +95,59 @@ it('FR-MF-03: names Refine’s registry item through its public registry URL', (
     ...manifests, DataTable: dataTable,
   })).toMatchObject([{ hint: { text: 'pnpm dlx shadcn@latest add https://ui.refine.dev/r/data-table.json' } }])
 })
+
+const input: ResolvedManifest = {
+  ...button,
+  type: 'Input',
+  source: { registry: 'shadcn', item: 'input', import: { name: 'Input', from: '~ui/input' } },
+  props: [],
+  slots: [],
+  events: [{ name: 'onChange', prop: 'onChange' }],
+  exposes: [{
+    name: 'value', type: 'string', initial: '',
+    via: { valueProp: 'value', changeProp: 'onChange', changeArg: 'event.target.value' },
+  }],
+  client: true,
+}
+const formManifests = {
+  ...manifests,
+  Button: { ...button, events: [{ name: 'onClick', prop: 'onClick' }] },
+  Card: { ...card, slots: [{ name: 'body', kind: 'nodes' as const }] },
+  Input: input,
+}
+const inputNode = { ...childNode, type: 'Input', name: 'search' }
+const toast = [{ do: 'toast', message: "'Changed'" }]
+
+it('checks a component’s action names and lists the available events', () => {
+  expect(checkManifests(page({ actions: { [`${child}.onClick`]: toast } }), formManifests)).toEqual([])
+  expect(checkManifests(page({ actions: { [`${child}.onBlur`]: toast } }), formManifests)).toMatchObject([{
+    code: 'unknown_event', doc, severity: 'error', pointer: `/actions/${child}.onBlur`,
+    message: expect.stringContaining('onClick'),
+  }])
+})
+
+it('accepts an exposed value and an action on its change event', () => {
+  expect(checkManifests(page({
+    props: { [child]: { value: 'Start' } },
+    actions: { [`${child}.onChange`]: toast },
+  }, inputNode), formManifests)).toEqual([])
+  expect(checkManifests(page({ bindings: { [child]: { value: 'state.search' } } }, inputNode), formManifests)).toEqual([])
+  expect(checkManifests(page({ props: { [child]: { value: false } } }, inputNode), formManifests)).toMatchObject([
+    { code: 'invalid_prop_value', pointer: `/props/${child}/value` },
+  ])
+})
+
+it('uses the public event name when it refuses a direct change-prop binding', () => {
+  const otherBase: ResolvedManifest = {
+    ...input,
+    events: [{ name: 'onChange', prop: 'onValueChange' }],
+    exposes: input.exposes.map((value) => ({
+      ...value, via: { ...value.via, changeProp: 'onValueChange', changeArg: 'value' },
+    })),
+  }
+  const blueprint = page({ bindings: { [child]: { onValueChange: 'state.callback' } } }, inputNode)
+  expect(checkManifests(blueprint, { ...formManifests, Input: otherBase })).toMatchObject([{
+    code: 'controlled_change_binding', doc, severity: 'error', pointer: `/bindings/${child}/onValueChange`,
+    hint: { text: expect.stringContaining(`actions["${child}.onChange"]`) },
+  }])
+})

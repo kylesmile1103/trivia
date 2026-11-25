@@ -107,9 +107,16 @@ Nothing is installed during resolution (FR-MF-03).
   slot, or an exposed value's `valueProp`. Static values match the prop's kind and options.
   ⚑ Text children are strings. An analyzer prop of kind `unknown` accepts any JSON value,
   since its source type is not expanded by the analyzer.
-- Action keys name an entry of `events`.
+- Action keys name an entry of `events`. Unlisted actions get `unknown_event`.
 - Binding the `changeProp` of an exposed value directly is refused: the compiler owns that
   wiring. Reacting to a change is an action on the event.
+  ⚑ The `controlled_change_binding` error points at the binding and suggests the matching
+  action by its public event name.
+- ⚑ Kit events and exposed values can describe props that the analyzer skips, such as
+  `onClick` from React's button props and `value` and `onChange` from its input props.
+  The resolved prop list stays equal to the analyzer's list. A static exposed value with
+  no analyzer prop is checked for `string`, `number` and `boolean` types. Other TypeScript
+  types are left to the compiler.
 
 ## 5. JSON Schema for agents (FR-MF-07, should)
 

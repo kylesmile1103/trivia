@@ -87,3 +87,18 @@ export type ExposedValue = z.output<typeof exposedValueSchema>
 export function manifestJsonSchema(): object {
   return z.toJSONSchema(componentManifestSchema, { target: 'draft-2020-12', io: 'input' })
 }
+
+/** Static prop contracts include structural text and controlled values described by the manifest. */
+export function manifestProps(manifest: Pick<ComponentManifest, 'props' | 'slots' | 'exposes'>): Map<string, PropSchema> {
+  const props = new Map(manifest.props.map((prop) => [prop.name, prop]))
+  if (!props.has('children') && manifest.slots.some(({ kind }) => kind === 'text')) {
+    props.set('children', { name: 'children', kind: 'string', optional: true, source: 'declared' })
+  }
+  for (const { type, via: { valueProp } } of manifest.exposes) {
+    if (props.has(valueProp)) continue
+    const base = { name: valueProp, optional: true, source: 'declared' as const }
+    if (type === 'string' || type === 'number' || type === 'boolean') props.set(valueProp, { ...base, kind: type })
+    else props.set(valueProp, { ...base, kind: 'unknown', typeText: type })
+  }
+  return props
+}

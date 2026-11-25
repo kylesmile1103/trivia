@@ -4,7 +4,7 @@ import { toPointer, type Diagnostic } from '../types/diagnostics.js'
 import type { CustomPage } from '../types/page.js'
 import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
-import type { ComponentManifest, PropSchema } from './types.js'
+import { manifestProps, type ComponentManifest, type PropSchema } from './types.js'
 
 const deferredTypes = new Set([
   'Tree', 'TreeSelect', 'Cascader', 'Transfer', 'Upload', 'TimePicker', 'DateRangePicker', 'Steps', 'Rate', 'Tour', 'Chart',
@@ -73,19 +73,35 @@ function checkPage(page: CustomPage, doc: string, manifests: ResolvedManifests, 
       }
     }
 
-    const textChildren = manifest.slots.some(({ kind }) => kind === 'text')
+    const props = manifestProps(manifest)
     for (const map of ['props', 'bindings'] as const) {
       for (const [name, value] of byKey(page[map][id] ?? {})) {
         const path = [map, id, name]
-        const prop = manifest.props.find((prop) => prop.name === name)
-        if (!prop && !(name === 'children' && textChildren)) {
+        if (map === 'bindings' && manifest.exposes.some(({ via }) => via.changeProp === name)) {
+          const event = manifest.events.find(({ prop }) => prop === name)?.name
+          const hint = event === undefined ? 'Use an action on the change event.' : `Use an action at actions["${id}.${event}"].`
+          report('controlled_change_binding', path, `The compiler owns ${node.type}.${name} for its exposed value`, hint)
+          continue
+        }
+        const prop = props.get(name)
+        if (!prop) {
           report('unknown_prop', path, `${node.type} has no prop "${name}"`,
             `Check the component source and its blueprint/manifests/${node.type}.manifest.json override.`)
         } else if (map === 'props') {
-          const expected = prop ? invalidValue(prop, value) : typeof value === 'string' ? undefined : 'string'
+          const expected = invalidValue(prop, value)
           if (expected) report('invalid_prop_value', path, `${node.type}.${name} expects ${expected}`)
         }
       }
+    }
+  }
+  for (const key of Object.keys(page.actions).sort(compareBytes)) {
+    const dot = key.indexOf('.')
+    const node = page.nodes[key.slice(0, dot)]
+    const event = key.slice(dot + 1)
+    const manifest = node && lookup(manifests, node.type)
+    if (manifest?.installed && !manifest.events.some(({ name }) => name === event)) {
+      report('unknown_event', ['actions', key],
+        `${manifest.type} has no event "${event}". Available events: ${describe(manifest.events.map(({ name }) => name))}`)
     }
   }
 }
