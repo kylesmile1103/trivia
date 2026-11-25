@@ -61,6 +61,10 @@ public static class EndpointsEmitter
                     break;
                 case "update":
                     Register("Put", "/{id}", "UpdateAsync", $"update{name}", ".ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
+                    string confirmVersion = entity.Concurrency == true ? $$"""
+                        if (entity.{{Member(entity, "version")}} != input.Version)
+                            throw new ApiProblemException(409, "The record changed after it was read.", "stale");
+                        """ : "";
                     string assignments = string.Join("\n", writable.Select(item => "entity." + item + ";")
                         .Concat(entity.Fields.Where(field => field.Generated == "onUpdate")
                             .Select(field => $"entity.{Member(entity, field.Name)} = DateTimeOffset.UtcNow;")));
@@ -71,6 +75,7 @@ public static class EndpointsEmitter
                             {{name}}? entity = await Scoped(db, http, tracked: true).SingleOrDefaultAsync({{criteria}});
                             if (entity is null)
                                 return TypedResults.NotFound();
+                            {{confirmVersion}}
                             {{assignments}}
                             await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken);
                             OnUpdating(entity, input, db);

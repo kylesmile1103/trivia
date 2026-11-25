@@ -101,6 +101,9 @@ public static class DbContextEmitter
             statements.Add($"entity.HasIndex(row => {expression}){(index.Unique == true ? ".IsUnique()" : "")};");
         }
 
+        if (entity.Concurrency == true)
+            statements.Add($"entity.Property(row => row.{Member(entity, "version")}).IsRowVersion();");
+
         string tableConfig = checks.Count == 0 ? "" : $", table => {{ {string.Join("\n", checks)} }}";
         return $"modelBuilder.Entity<{Entity(model, entity.Name)}>(entity => {{ " +
             $"entity.ToTable({Literal(table)}{tableConfig}); {string.Join("\n", statements)} }});";

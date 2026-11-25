@@ -42,6 +42,17 @@ public static class EntityEmitter
             properties.Add($"public {related}{suffix} {property} {{ get; set; }}{(required ? " = null!;" : "")}");
         }
 
+        if (entity.Concurrency == true)
+        {
+            if (entity.Key.Name.Equals("version", StringComparison.OrdinalIgnoreCase) ||
+                entity.Fields.Any(field => field.Name.Equals("version", StringComparison.OrdinalIgnoreCase)) ||
+                entity.Relations.Any(relation => relation.Name.Equals("version", StringComparison.OrdinalIgnoreCase) ||
+                    relation.Kind == "belongsTo" && relation.ForeignKey.Equals("version", StringComparison.OrdinalIgnoreCase)))
+                throw new BlueprintInputException([new("reserved_name", ModelLoader.ModelFile, "/entities",
+                    $"The version member on {entity.Name} is reserved when concurrency is enabled.")]);
+            properties.Add($"public uint {Member(entity, "version")} {{ get; set; }}");
+        }
+
         return Unit(Feature(model, entity.Name), ["System", "System.Collections.Generic", "System.ComponentModel.DataAnnotations.Schema", "System.Text.Json"],
             $"public partial class {entity.Name} {{ {string.Join("\n", properties)} }}");
     }

@@ -256,6 +256,10 @@ Optional per entity: `concurrency: true` adds a row version from PostgreSQL's `x
 response then carries `version`, `Update<Entity>Request` requires it, and a mismatch is a 409
 with `code: "stale"`.
 
+⚑ Reserve the wire member `version` on entities with concurrency enabled. Check the
+  update token before mutating the entity and let EF's concurrency predicate detect
+  a change that races the database write.
+
 ## 6. Migrations (FR-NC-12)
 
 `migrate <Name>` runs `dotnet ef migrations add <Name>` for the API project. If the model

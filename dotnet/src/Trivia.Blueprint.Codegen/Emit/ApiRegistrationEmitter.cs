@@ -140,7 +140,7 @@ public static class ApiRegistrationEmitter
         {
             ModelField[] fields = entity.Fields.Where(field => field.ReadOnly != true && field.Generated is null).ToArray();
             AddInput($"Create{entity.Name}Request", fields, entity.Relations);
-            AddInput($"Update{entity.Name}Request", fields, entity.Relations);
+            AddInput($"Update{entity.Name}Request", fields, entity.Relations, entity.Concurrency == true);
             foreach (CustomOperation operation in entity.Api.Custom ?? [])
                 AddInput(CustomOperationEmitter.Request(entity, operation), operation.Input ?? [], []);
         }
@@ -183,9 +183,11 @@ public static class ApiRegistrationEmitter
             }
             """;
 
-        void AddInput(string name, ModelField[] fields, ModelRelation[] relations)
+        void AddInput(string name, ModelField[] fields, ModelRelation[] relations, bool version = false)
         {
             string properties = DescribeFields($"{name}Contract", fields, relations);
+            if (version)
+                properties += $"\nDescribeInput({name}Contract, \"version\", true, null, null);";
             if (properties.Length == 0)
                 return;
             inputs.Add($$"""

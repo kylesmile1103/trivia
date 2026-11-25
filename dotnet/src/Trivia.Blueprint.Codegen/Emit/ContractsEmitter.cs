@@ -19,11 +19,14 @@ public static class ContractsEmitter
         string response = string.Join(",\n", members.Select(member =>
             $"[property: JsonPropertyName({Literal(member.WireName)})] {member.ResponseType} {member.Member}"));
         string request = string.Join("\n", members.Where(member => member.Writable).Select(member => RequestProperty(model, member)));
+        string update = entity.Concurrency == true
+            ? request + "\n" + RequestProperty(model, new("version", "Version", "uint", Required: true))
+            : request;
         List<string> records =
         [
             $"public sealed record {entity.Name}Response({response});",
             $"public sealed record Create{entity.Name}Request {{ {request} }}",
-            $"public sealed record Update{entity.Name}Request {{ {request} }}"
+            $"public sealed record Update{entity.Name}Request {{ {update} }}"
         ];
         if (entity.Api.Operations.Contains("list"))
             records.Add($"public sealed record {entity.Name}Page(IReadOnlyList<{entity.Name}Response> Items, int Total, int Page, int PageSize);");
@@ -43,6 +46,8 @@ public static class ContractsEmitter
         foreach (ModelRelation relation in entity.Relations.Where(relation => relation.Kind == "belongsTo"))
             yield return new(relation.ForeignKey, Member(entity, relation.ForeignKey),
                 FieldType(model, FindEntity(model, relation.To).Key.Type, null), relation.Required == true, Writable: true);
+        if (entity.Concurrency == true)
+            yield return new("version", Member(entity, "version"), "uint", Required: true);
     }
 
     internal static string RequestProperty(ModelDocument model, ApiMember member)

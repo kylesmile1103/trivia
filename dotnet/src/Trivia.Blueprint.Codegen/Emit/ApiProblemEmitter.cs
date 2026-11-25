@@ -29,6 +29,7 @@ public static class ApiProblemEmitter
                         BadHttpRequestException { StatusCode: 400, InnerException: JsonException json } =>
                             InvalidRequest(JsonField(json)),
                         BadHttpRequestException bad => Create(bad.StatusCode),
+                        DbUpdateConcurrencyException => Create(409, "The record changed after it was read.", "stale"),
                         DbUpdateException { InnerException: PostgresException postgres } => FromPostgres(postgres),
                         _ => Create(500, "An unexpected error occurred.")
                     };
