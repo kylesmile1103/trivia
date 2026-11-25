@@ -12,6 +12,10 @@ export interface PageIR {
   handlers: HandlerIR[]
   declarations?: string[]
   afterState?: string[]
+  parameters?: string
+  async?: boolean
+  defaultExport?: boolean
+  preamble?: string[]
   jsx: JsxIR
 }
 

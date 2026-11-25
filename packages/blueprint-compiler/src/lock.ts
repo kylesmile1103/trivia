@@ -12,6 +12,8 @@ export interface LockedPage {
   blueprintRev?: string
   route?: string
   component?: string
+  /** Sibling source modules written and guarded with the route entry. */
+  additional?: Record<string, string>
 }
 
 export interface Lock {
@@ -37,13 +39,18 @@ export function readLock(text: string | null): Lock {
       if (!record(page) || typeof page.file !== 'string' || typeof page.hash !== 'string' || !hash.test(page.hash)) {
         throw new Error('invalid page ' + name)
       }
-      const { file, hash: content, blueprintRev, route, component } = page
+      const { file, hash: content, blueprintRev, route, component, additional } = page
       if (blueprintRev !== undefined && (typeof blueprintRev !== 'string' || !hash.test(blueprintRev))) throw new Error('invalid revision for ' + name)
       if (route !== undefined && typeof route !== 'string') throw new Error('invalid route for ' + name)
       if (component !== undefined && typeof component !== 'string') throw new Error('invalid component for ' + name)
+      if (additional !== undefined && (!record(additional) ||
+        Object.entries(additional).some(([path, digest]) => path === file || typeof digest !== 'string' || !hash.test(digest)))) {
+        throw new Error('invalid sibling modules for ' + name)
+      }
       return [name, {
         file, hash: content, ...(blueprintRev !== undefined && { blueprintRev }),
         ...(route !== undefined && { route }), ...(component !== undefined && { component }),
+        ...(additional !== undefined && { additional: additional as Record<string, string> }),
       }]
     })
     return {

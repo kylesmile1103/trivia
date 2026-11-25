@@ -53,8 +53,13 @@ export const TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 export const ICON = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** An exported function of `src/handlers/<page>.ts` (the `call` step). */
 export const HANDLER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
-/** An absolute route: literal segments or `:param`s, no trailing slash except `/` itself. */
-export const ROUTE = /^\/(?:(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*)(?:\/(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*))*)?$/
+/** An absolute route with literals, `:param`s, and an optional final catch-all. */
+export const ROUTE = /^\/(?:(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*)(?:\/(?:[A-Za-z0-9._~-]+|:[a-z][A-Za-z0-9]*))*(?:\/\*)?|\*)?$/
+
+export function routeParameters(route: string): Array<{ name: string; catchAll: boolean }> {
+  return route.split('/').flatMap<{ name: string; catchAll: boolean }>((segment) => segment === '*' ? [{ name: 'splat', catchAll: true }]
+    : segment.startsWith(':') ? [{ name: segment.slice(1), catchAll: false }] : [])
+}
 
 /**
  * A fractional index key (FR-BP-08, order.ts): a head letter that fixes the length of the

@@ -6,8 +6,9 @@ import { modelSchema } from '../model/types.js'
 import { validateModel } from '../model/validate.js'
 import type { Blueprint } from '../store.js'
 import type { Diagnostic } from '../types/diagnostics.js'
-import { MODEL_DOC } from '../types/ops.js'
+import { APP_DOC, MODEL_DOC } from '../types/ops.js'
 import type { LayerCheck, ValidationContext } from './context.js'
+import { checkNextRoutes } from './next.js'
 import { checkReferences } from './references.js'
 
 export type { LayerCheck, ValidationContext } from './context.js'
@@ -25,7 +26,7 @@ export function validateStructure(blueprint: Blueprint): Diagnostic[] {
 const failedDocs = (diagnostics: readonly Diagnostic[]) =>
   new Set(diagnostics.filter((d) => d.severity === 'error').map((d) => d.doc))
 
-/** Every layer: the structure, then the manifests, the contract and the expressions from `ctx`. */
+/** Every layer: the structure, then plugin checks and any target checks. */
 export function validate(blueprint: Blueprint, ctx: ValidationContext = {}): Diagnostic[] {
   const out = validateStructure(blueprint)
   const failed = failedDocs(out)
@@ -39,6 +40,10 @@ export function validate(blueprint: Blueprint, ctx: ValidationContext = {}): Dia
     ['contract', ctx.contract],
     ['expressions', ctx.expressions],
   ]
+  const app = blueprint.docs[APP_DOC]
+  if (app?.kind === 'app' && app.doc?.targets.web === 'next-refine' && !failed.has(APP_DOC)) {
+    layers.push(['Next.js routes', checkNextRoutes], ['Next.js target', ctx.next])
+  }
   for (const [name, check] of layers) {
     if (!check) continue
     const docs = Object.fromEntries(Object.entries(blueprint.docs).filter(([file, entry]) => entry.doc !== null && !failed.has(file)))

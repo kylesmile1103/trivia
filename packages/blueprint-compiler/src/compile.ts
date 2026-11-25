@@ -3,14 +3,18 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { generateContract, type ContractPageGenerator, type RefineSnippetGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
-import { lowerCustom } from './lower/index.js'
-import { compareBytes, moduleImports, restyleModule } from './print/style.js'
+import { compareBytes, moduleImports } from './print/style.js'
+import { targetFor, type LoweredPage } from './targets/target.js'
 
 export type RegistryItem = Pick<ComponentManifest['source'], 'registry' | 'item'>
 
-export interface EmittedModule {
+export interface PageSource {
   file: string
   code: string
+}
+
+export interface EmittedModule extends PageSource {
+  additional?: PageSource[]
   requires: RegistryItem[]
   component: string
   importPath: string
@@ -48,7 +52,7 @@ export function pageDiagnostics(blueprint: Blueprint, page: string, context: Com
 }
 
 export function compilePage(blueprint: Blueprint, name: string, context: CompileContext): EmittedModule {
-  if (context.facts.target !== 'vite-refine') throw new CompileError('unsupported', 'This compiler targets Vite Refine apps.')
+  const target = targetFor(context.facts.target)
   const entry = blueprint.docs[pageDocPath(name)]
   if (entry?.kind !== 'page') throw new CompileError('node_not_found', 'No blueprint page named ' + name)
   const diagnostics = pageDiagnostics(blueprint, name, context)
@@ -56,17 +60,19 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   if (page === null || hasErrors(diagnostics)) {
     throw new CompileError('invalid_result', 'Cannot compile blueprint page ' + name, { diagnostics })
   }
-  let emitted: EmittedModule
+  let lowered: LoweredPage
   if (page.kind === 'custom') {
-    emitted = lowerCustom(page, context)
+    lowered = target.lower(page, context)
   } else {
     const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
     if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
     if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
-    const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
-    emitted = { ...generated, code: restyleModule(content, context.facts.style), route: page.route, requires: [] }
+    const generated = generateContract(page, resource, context, context.generateContractPage, target.hooks)
+    lowered = { kind: 'contract', page, generated }
   }
-  const sources = moduleImports(emitted.code)
+  const [emitted, ...additional] = target.files(lowered, context.facts)
+  const modules = [emitted, ...additional]
+  const sources = modules.flatMap(({ code }) => moduleImports(code))
   if (sources.some((source) => source.startsWith('@trivia/'))) {
     throw new CompileError('unsupported', 'Generated modules cannot import from @trivia.')
   }
@@ -76,9 +82,10 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
     const byItem = new Map(requires.map((item) => [item.registry + '/' + item.item, item]))
     emitted.requires = [...byItem].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item)
   }
-  emitted.code = emitted.code.replace(/\r\n?/g, '\n')
+  if (additional.length) emitted.additional = additional
+  for (const module of modules) module.code = module.code.replace(/\r\n?/g, '\n')
   try {
-    context.engine.annotate(emitted.code, emitted.file)
+    for (const module of modules) context.engine.annotate(module.code, module.file)
     if (emitted.handler) context.engine.annotate(emitted.handler.code, emitted.handler.file)
   } catch (error) {
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)

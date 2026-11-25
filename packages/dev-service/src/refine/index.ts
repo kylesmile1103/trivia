@@ -8,7 +8,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { pageDocPath, type AppDoc, type Blueprint } from '@trivia/blueprint'
-import { projectFacts, relativeModule, resourceOps, restyleModule, routeOps, type EjectPage, type EmittedModule, type RouteRegistration } from '@trivia/blueprint-compiler'
+import { projectFacts, relativeModule, restyleModule, targetFor, type EjectPage, type EmittedModule, type ResourceRegistration, type RouteRegistration } from '@trivia/blueprint-compiler'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import type { AppRoute } from '../api/service.js'
@@ -239,7 +239,8 @@ export class RefineAdapter {
 
   async compileProject() {
     const app = await this.#app()
-    const project = await this.#scaffoldContext('')
+    const routes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
+    const project = await this.#scaffoldContext('', routes)
     const entrySource = app ? fs.readFileSync(path.join(this.#host.root, app.file), 'utf8') : ''
     const { root, uiDir } = this.#host
     const modules = (dir: string, prefix: string | null): string[] => {
@@ -364,7 +365,7 @@ export class RefineAdapter {
   async planBlueprintRegistrations(pages: readonly EjectPage[], contract: TriviaManifest | null): Promise<Plan['ops']> {
     if (!pages.length) return []
     const app = await this.#app()
-    if (!app) throw new ApiError('unsupported', 'The app needs a Refine resources array and React Router routes to eject pages.')
+    if (!app) throw new ApiError('unsupported', 'The app needs a Refine resources array to eject pages.')
     const files = pages.map(({ page, module }): RouteRegistration => {
       if (page.kind === 'custom') return { ...module, importPath: relativeModule(app.file, module.file) }
       const resource = contractResource(contract, page.resource, null)
@@ -440,7 +441,7 @@ export class RefineAdapter {
       routes[file.kind] = file.route
       byResource.set(file.resource, routes)
     }
-    const ops: Plan['ops'] = []
+    const resources: ResourceRegistration[] = []
     if (byResource.size && app.resources?.kind !== 'array') {
       throw new ApiError('unsupported', 'The Refine resources prop must hold an array literal.')
     }
@@ -457,14 +458,12 @@ export class RefineAdapter {
           delete routes[kind]
         }
       }
-      ops.push(...resourceOps(app.resourcesPath, name, routes, entry !== undefined))
+      resources.push({ path: app.resourcesPath, name, routes, exists: entry !== undefined })
     }
-    if (this.#host.kind === 'vite') {
-      const anchor = this.#routeAnchor(app)
-      if (!anchor) throw new ApiError('unsupported', app.file + ' has no React Router route to register the new pages beside.')
-      ops.push(...routeOps(files, anchor))
-    }
-    return ops
+    if (this.#host.kind === 'next') return targetFor('next-refine').routeOps({ files, resources })
+    const anchor = this.#routeAnchor(app)
+    if (!anchor) throw new ApiError('unsupported', app.file + ' has no React Router route to register the new pages beside.')
+    return targetFor('vite-refine').routeOps({ files, resources, anchor })
   }
 
   /** Each `<Refine resources>` action that names a path: its resource, the action and the path. */
@@ -1187,6 +1186,7 @@ function nextPagesDir(root: string, name: string, routes: AppRoute[]): string {
   if (!app) throw new ApiError('unsupported', 'A Next App Router directory is required to add pages')
   const example = routes.find((route) => route.resource?.name === name)?.file ??
     routes.find((route) => route.resource !== null)?.file
+  if (!example && fs.existsSync(path.join(root, app, '(app)', 'layout.tsx'))) return app + '/(app)'
   const dirs = [app]
   for (const segment of example?.slice(app.length + 1).split('/') ?? []) {
     if (!/^\(.*\)$/.test(segment)) break

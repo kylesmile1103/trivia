@@ -1,0 +1,12 @@
+import { withTrivia } from '@trivia/next'
+
+import { apiOrigin } from './src/server/api-origin'
+
+export default withTrivia({
+  agentRules: false,
+  output: 'standalone',
+  async rewrites() {
+    const origin = apiOrigin()
+    return origin ? [{ source: '/api/:path*', destination: origin + '/api/:path*' }] : []
+  },
+})

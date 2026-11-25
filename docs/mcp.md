@@ -221,7 +221,7 @@ To undo a patch, pass its `entry` to `trivia_undo`. The label includes the `Agen
 `trivia_get_selection` also returns the next undo label in `history.undoLabel`.
 
 `trivia_blueprint_preview` accepts a page name and optional `includeCode` on a running Vite
-Refine app. Open the returned `route` in the designer's canvas and call `trivia_screenshot`
+or Next.js Refine app. Open the returned `route` in the designer's canvas and call `trivia_screenshot`
 after it loads. The response lists diagnostics and any registry requirements, and includes
 setup advice when the designer has no active screenshot poll.
 

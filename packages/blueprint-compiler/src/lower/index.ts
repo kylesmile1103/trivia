@@ -1,14 +1,15 @@
 import { configuredTabs, exposedScope, resolveManifests, toPointer, type ActionStep, type CustomPage, type ResolvedManifest } from '@trivia/blueprint'
 
-import { CompileError, type CompileContext, type EmittedModule, type RegistryItem } from '../compile.js'
+import { CompileError, type CompileContext, type RegistryItem } from '../compile.js'
 import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
 import { lowerForm } from '../composites/form.js'
 import type { CompositeScope } from '../composites/source.js'
-import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
-import { printHandler, printModule } from '../print/module.js'
-import { compareBytes, literal, property, quote, restyleModule, statement } from '../print/style.js'
-import { refineName, relativeModule } from '../targets/vite-refine/files.js'
-import { queryStatus } from '../targets/vite-refine/refine-hooks.js'
+import type { AttributeIR, HandlerIR, ImportIR, JsxIR, PageIR, StateIR, StepIR } from '../ir.js'
+import { printHandler } from '../print/module.js'
+import { compareBytes, literal, property, quote, statement } from '../print/style.js'
+import { refineName } from '../targets/paths.js'
+import { nextPageFile } from '../targets/next-refine/files.js'
+import type { LoweredCustomPage, RefineHookMap } from '../targets/target.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
 import { Names } from './names.js'
@@ -17,15 +18,28 @@ import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope
 
 const intrinsic = resolveManifests({ kit: [], components: [] }).manifests
 
-export function lowerCustom(page: CustomPage, context: CompileContext): EmittedModule {
+interface PartOptions {
+  file: string
+  name: string
+  replacements?: ReadonlyMap<string, JsxIR>
+  values?: ReadonlyMap<string, string>
+  routeValues?: Record<string, string>
+  queryValues?: ReadonlyMap<string, Record<string, string>>
+  initialQueries?: ReadonlyMap<string, string>
+}
+
+export function lowerCustom(
+  page: CustomPage, context: CompileContext, targetHooks: RefineHookMap, part?: PartOptions,
+): LoweredCustomPage {
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
   const dir = resource ? refineName(resource) : page.resource ?? page.name
-  const file = facts.pagesDir + '/' + dir + '/' + page.name + '.tsx'
+  const file = part?.file ?? (facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx')
+    : facts.pagesDir + '/' + dir + '/' + page.name + '.tsx')
   const imports: ImportIR[] = []
   const missing = new Map<string, RegistryItem>()
   const names = new Names([
-    page.name, 'useState', 'event', 'value', 'useList', 'useOne', 'useCustom', 'useParams', 'useSearchParams', 'useGetIdentity',
+    page.name, part?.name ?? page.name, 'useState', 'event', 'value', 'useList', 'useOne', 'useCustom', 'useParams', 'useSearchParams', 'useGetIdentity',
     'useCreate', 'useUpdate', 'useDelete', 'useCustomMutation', 'useGo', 'useNotification',
   ])
   const identifiers = new Map<string, string>()
@@ -67,7 +81,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
 
   const ui = exposedScope(page, context.manifests ?? {})
   const analysis = analyzePageExpressions(page, context.engine, ui)
-  const deps = new Set(analysis.flatMap(({ deps }) => deps))
+  const deps = new Set(analysis.flatMap(({ id, deps }) => part?.values?.has(id) ? [] : deps))
   const actions = Object.entries(page.actions).sort(([a], [b]) => compareBytes(a, b))
   const steps = actions.flatMap(([, items]) => items)
   const followsCall = steps.some((step) => step.do === 'call')
@@ -106,6 +120,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   const selections = new Map<string, TableSelection>()
   const exposed = new Map<string, Array<{ valueProp: string; changeProp: string; name: string; update: string; arg: string }>>()
   for (const [id, node] of Object.entries(page.nodes).sort(([a], [b]) => compareBytes(a, b))) {
+    if (part?.replacements?.has(id)) continue
     const manifest = manifestOf(node.type)
     if (manifest.composite === 'DataTable') {
       const selection = prepareTableSelection(page, id, deps, composite, state, rename, afterState)
@@ -134,8 +149,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     exposed.set(id, values)
   }
   if (state.length) imports.push({ name: 'useState', source: 'react' })
-  const route = routeScope(deps, names)
-  const query = prepareQueries(page, context, names, analysis)
+  const route = part?.routeValues ? { rename: part.routeValues, imports: [], hooks: [] } : routeScope(deps, names, targetHooks.router, page.route)
+  const query = prepareQueries(page, context, names, analysis, targetHooks, part?.queryValues, part?.initialQueries)
   const repeats = new Map<string, RepeatLocal>()
   const byExpression = new Map<string, RepeatLocal>()
   for (const [id, control] of Object.entries(page.control).sort(([a], [b]) => compareBytes(a, b))) {
@@ -149,24 +164,26 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     byExpression.set(toPointer(['control', id, 'each']), repeat)
   }
   const localAliases = actions.length ? { event: '_event', value: '_value' } : {}
-  const expression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename, ...localAliases },
+  const emittedExpression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename, ...localAliases },
     ui, new Set(actions.length ? ['event', 'value'] : []), ({ locals }) => Object.fromEntries(
       Object.entries(locals ?? {}).flatMap(([local, tier]) => {
         const repeat = typeof tier === 'object' ? byExpression.get(tier.from) : undefined
         return repeat ? [[local, local === repeat.alias ? repeat.item : repeat.index!]] : []
       }),
     ))
+  const expression = (pointer: string) => part?.values?.get(pointer) ?? emittedExpression(pointer)
   const queries = query.lower(expression)
   imports.push(...route.imports, ...query.imports)
   const handlers: HandlerIR[] = []
   const renderObject = (fields: string[]) => fields.length ? '{ ' + fields.join(', ') + ' }' : '{}'
   const action = actionLowerer({
     contract: context.contract, page: page.name, file, style: facts.style, expression,
+    ...(facts.previewDirectory && { handlerPath: facts.previewDirectory + '/handler.ts' }),
     name: (preferred) => names.take(preferred),
     setter: (key) => setters.get(key),
     refetch: (key) => {
       const definition = query.definitions.get(key)
-      return definition && definition.name + '.' + queryStatus.refetch
+      return definition && definition.name + '.' + targetHooks.queryStatus.refetch
     },
     state: renderObject(stateObject),
     setters: renderObject(setterObject),
@@ -218,19 +235,18 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     client = true
     if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     return lowerForm(page, id, root, composite)
-  }, context.previewNodeIds)
+  }, context.previewNodeIds, part?.replacements)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))
   imports.push(...action.imports)
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
-    name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
+    name: part?.name ?? page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
     imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations, afterState,
   }
   return {
-    code: declarations.length ? restyleModule(printModule(ir, facts), facts.style) : printModule(ir, facts), file, route: page.route, component: page.name,
-    importPath: relativeModule('src/App.tsx', file),
+    kind: 'custom', ir,
     ...(handler && { handler }),
     requires: [...missing.entries()].sort(([a], [b]) => compareBytes(a, b)).map(([, item]) => item),
   }

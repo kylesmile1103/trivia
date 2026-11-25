@@ -29,6 +29,7 @@ export function printModule(ir: PageIR, facts: ProjectFacts): string {
     '  return (\n' + printJsx(ir.jsx, 2, style) + '\n  ' + statement(')', style),
   ]
   const imports = printImports(ir.imports, facts)
-  const component = 'export function ' + ir.name + '() {\n' + body.join('\n\n') + '\n}\n'
-  return (imports ? imports + '\n\n' : '') + component
+  const component = 'export ' + (ir.defaultExport ? 'default ' : '') + (ir.async ? 'async ' : '') +
+    'function ' + ir.name + '(' + (ir.parameters ?? '') + ') {\n' + body.join('\n\n') + '\n}\n'
+  return [imports, ...(ir.preamble ?? []), component].filter(Boolean).join('\n\n')
 }

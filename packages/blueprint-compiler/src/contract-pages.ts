@@ -9,6 +9,9 @@ import { Names } from './lower/names.js'
 import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower/scope.js'
 import { printHook } from './print/module.js'
 import { quote, statement } from './print/style.js'
+import { nextPageFile } from './targets/next-refine/files.js'
+import { contractRecord, type ContractRecord } from './targets/next-refine/server-data.js'
+import type { RefineHookMap } from './targets/target.js'
 
 export interface ContractPageInput {
   resource: ManifestResource
@@ -16,6 +19,7 @@ export interface ContractPageInput {
   facts: ProjectFacts
   options: ContractOptions
   actions?: ContractActionContent
+  initialRecord?: string
 }
 
 export interface ContractActionContent {
@@ -53,11 +57,18 @@ export function generateContract(
   resource: ManifestResource,
   context: CompileContext,
   generator: ContractPageGenerator,
-): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> {
+  hooks: RefineHookMap,
+): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> & { prefetch?: ContractRecord } {
   const { facts } = context
+  const initial = hooks.initialOptions?.('initialRecord')
+  const prefetch = initial && contractRecord(page, resource, context.contract)
+  const input = {
+    resource, kind: page.kind, facts, options: page.options,
+    ...(prefetch && { initialRecord: initial.join(', ') }),
+  }
   const { rowActions = [], headerActions = [] } = page.options
   if (!rowActions.length && !headerActions.length) {
-    return generator({ resource, kind: page.kind, facts, options: page.options })
+    return { ...generator(input), ...(prefetch && { prefetch }) }
   }
   if (rowActions.length && page.kind !== 'list') {
     throw new CompileError('invalid_result', 'Row actions require a list page.')
@@ -68,12 +79,14 @@ export function generateContract(
   const names = new Names(['columns', 'table', 'form', 'record', 'onFinish', 'formLoading', '_event', '_row'])
   const name = (preferred: string) => names.take(preferred)
   const depsOfExpressions = new Set(analyzePageExpressions(page, context.engine).flatMap(({ deps }) => deps))
-  const route = routeScope(depsOfExpressions, names)
+  const route = routeScope(depsOfExpressions, names, hooks.router, page.route)
   const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
   const lower = actionLowerer({
-    contract: context.contract, page: page.name, file: facts.pagesDir + '/resource/' + page.kind + '.tsx',
+    contract: context.contract, page: page.name,
+    file: facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx') : facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
+    ...(facts.previewDirectory && { handlerPath: facts.previewDirectory + '/handler.ts' }),
     refetch: (key, path) => page.kind === 'list' && path[1] === 'headerActions' && key === 'list'
       ? 'table.refineCore.tableQuery.refetch' : undefined,
   })
@@ -90,8 +103,8 @@ export function generateContract(
   })
   const row = definitions('rowActions', rowActions)
   const header = definitions('headerActions', headerActions)
-  const hooks = [...lower.hooks.values()]
-  const deps = [...route.locals, ...hooks.map(({ name, hook }) => hook === 'useGo' ? name
+  const actionHooks = [...lower.hooks.values()]
+  const deps = [...route.locals, ...actionHooks.map(({ name, hook }) => hook === 'useGo' ? name
     : hook === 'useNotification' ? name + '.open' : name + '.mutateAsync')]
   const nodeType = 'MouseEvent<HTMLButtonElement>'
   const rowType = resource.entity?.typeName ?? 'Record<string, unknown>'
@@ -109,14 +122,14 @@ export function generateContract(
     return '<Button type="button" onClick={' + callback + '}>' + text + '</Button>'
   }
   const output = generator({
-    resource, kind: page.kind, facts, options: page.options,
+    ...input,
     actions: {
       imports: [
         ...route.imports, ...lower.imports, { source: 'react', name: 'MouseEvent', kind: 'type' },
         ...(row.length ? [{ source: 'react', name: 'useCallback' }] : []),
       ],
       setup: [
-        ...[...route.hooks, ...hooks].map((hook) => printHook(hook, style)),
+        ...[...route.hooks, ...actionHooks].map((hook) => printHook(hook, style)),
         ...row.map((action) => print(action, true)),
         ...header.map((action) => print(action, false)),
       ].join('\n\n'),
@@ -126,5 +139,5 @@ export function generateContract(
     },
   })
   const handler = handlerStub(page.name, lower.calls.keys(), {}, style)
-  return { ...output, ...(handler && { handler }) }
+  return { ...output, ...(handler && { handler }), ...(prefetch && { prefetch }) }
 }

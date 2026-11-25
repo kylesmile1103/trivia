@@ -8,10 +8,11 @@ import { parseArgs } from 'node:util'
 import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint } from '@trivia/blueprint'
 
 import { compilePage, type CompileContext } from './compile.js'
+import type { ProjectFacts } from './facts.js'
 import { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
 
 const usage = `Usage: trivia-blueprint <command>
-  new <dir> [--target vite-refine] [--api dotnet-minimal] [--web-dir <dir>]
+  new <dir> [--target vite-refine|next-refine] [--api dotnet-minimal] [--web-dir <dir>]
   validate [--json]
   compile <Page> [--out file]
   eject [pages…] [--dry-run]
@@ -27,6 +28,7 @@ const options = {
 
 const contractSync = '@trivia/contract-sync'
 const plugin = '@trivia/vite-plugin-ast-locator'
+const next = '@trivia/next'
 const service = '@trivia/dev-service'
 
 interface Project {
@@ -54,7 +56,10 @@ function checkoutManifest(shortName: string): string | undefined {
 }
 
 async function openProject(root: string): Promise<Project> {
-  const installedPlugin = resolveManifest(root, plugin)
+  const appFile = path.join(root, 'blueprint', APP_DOC)
+  const app = fs.existsSync(appFile) ? loadDocument(APP_DOC, fs.readFileSync(appFile, 'utf8')) : undefined
+  const nextTarget = app?.kind === 'app' && app.doc?.targets.web === 'next-refine'
+  const installedPlugin = resolveManifest(root, nextTarget ? next : plugin)
   const manifest = resolveManifest(root, service)
     ?? (installedPlugin && resolveManifest(path.dirname(installedPlugin), service))
     ?? checkoutManifest('dev-service')
@@ -62,36 +67,46 @@ async function openProject(root: string): Promise<Project> {
   const { main, version } = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { main: string; version: string }
   const entry = pathToFileURL(path.resolve(path.dirname(manifest), main)).href
   const { EngineService, createStandaloneHost, loadEngine } = await import(entry)
-  return new EngineService({ host: createStandaloneHost(root), engine: await loadEngine(), version }) as Project
+  const engine = await loadEngine()
+  if (!nextTarget) return new EngineService({ host: createStandaloneHost(root), engine, version }) as Project
+  const nextManifest = installedPlugin ?? checkoutManifest('next')
+  if (!nextManifest) throw new Error('Install @trivia/next to open this Next.js project.')
+  const nextPackage = JSON.parse(fs.readFileSync(nextManifest, 'utf8')) as { main: string }
+  const { createNextHost } = await import(pathToFileURL(path.resolve(path.dirname(nextManifest), nextPackage.main)).href)
+  return new EngineService({ host: createNextHost(root, engine), engine, version }) as Project
 }
 
-function createProject(root: string, dest: string, version: string, dotnet: boolean, webDirectory = DEFAULT_WEB_DIRECTORY): void {
+function createProject(
+  root: string, dest: string, version: string, target: ProjectFacts['target'], dotnet: boolean, webDirectory = DEFAULT_WEB_DIRECTORY,
+): void {
   const destination = path.resolve(root, dest)
   const stat = fs.lstatSync(destination, { throwIfNoEntry: false })
   if (stat && (!stat.isDirectory() || fs.readdirSync(destination).length > 0)) throw new Error(destination + ' must be an empty directory.')
   const dir = dotnet ? path.join(destination, webDirectory) : destination
-  const template = fileURLToPath(new URL('../templates/vite-refine/', import.meta.url))
+  const template = fileURLToPath(new URL('../templates/' + target + '/', import.meta.url))
   const manifest = JSON.parse(fs.readFileSync(path.join(template, 'package.json.template'), 'utf8'))
   if (dotnet) manifest.trivia = { solutionRoot: path.relative(dir, destination).split(path.sep).join('/') }
-  const localPlugin = resolveManifest(root, plugin) ?? checkoutManifest('vite-plugin-ast-locator')
-  manifest.devDependencies[plugin] = localPlugin ? 'link:' + path.dirname(localPlugin) : version
+  const framework = target === 'next-refine' ? next : plugin
+  const localPlugin = resolveManifest(root, framework) ?? checkoutManifest(framework.slice('@trivia/'.length))
+  manifest.devDependencies[framework] = localPlugin ? 'link:' + path.dirname(localPlugin) : version
   const localSync = resolveManifest(root, contractSync) ?? checkoutManifest('contract-sync')
   manifest.devDependencies[contractSync] = localSync ? 'link:' + path.dirname(localSync) : version
   const candidate = path.basename(destination).replace(/(?:^|[^A-Za-z0-9]+)([A-Za-z0-9])/g, (_, char: string) => char.toUpperCase())
   const fields = {
     $schema: SCHEMA_URL.app, blueprintVersion: BLUEPRINT_VERSION, name: candidate,
-    targets: { web: 'vite-refine', ...(dotnet && { api: 'dotnet-minimal' }) },
+    targets: { web: target, ...(dotnet && { api: 'dotnet-minimal' }) },
   }
   const named = appSchema.safeParse(fields)
   const app = named.success ? named.data : appSchema.parse({ ...fields, name: 'TriviaApp' })
 
   fs.cpSync(template, dir, { recursive: true, force: false, errorOnExist: true, filter: (file) => !file.endsWith('.template') })
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
-  fs.copyFileSync(path.join(template, 'vite.config.ts.template'), path.join(dir, 'vite.config.ts'), fs.constants.COPYFILE_EXCL)
+  const config = target === 'next-refine' ? 'next.config.ts' : 'vite.config.ts'
+  fs.copyFileSync(path.join(template, config + '.template'), path.join(dir, config), fs.constants.COPYFILE_EXCL)
   fs.mkdirSync(path.join(dir, 'blueprint'))
   fs.writeFileSync(path.join(dir, 'blueprint', APP_DOC), serialize(app), { flag: 'wx' })
   console.log(`Created ${destination}`)
-  if (!localPlugin) console.log('Point the Trivia Vite plugin and contract-sync dependencies at your Trivia distribution before installing.')
+  if (!localPlugin) console.log('Point ' + framework + ' and contract-sync at your Trivia distribution before installing.')
   console.log(`Run in ${dir}\n  pnpm install\n  pnpm exec shadcn add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json`)
 }
 
@@ -185,7 +200,9 @@ export async function run(argv: string[], version: string, commands = backendCom
     positionals = parsed.positionals
     if ((command === 'validate' || command === 'backend') && positionals.length) throw new Error(command + ' takes no positional arguments.')
     if ((command === 'new' || command === 'compile') && (positionals.length !== 1 || !positionals[0])) throw new Error('Provide exactly one directory or page name.')
-    if (values.target !== undefined && values.target !== 'vite-refine') throw new Error('The supported target is vite-refine.')
+    if (values.target !== undefined && values.target !== 'vite-refine' && values.target !== 'next-refine') {
+      throw new Error('The supported targets are vite-refine and next-refine.')
+    }
     if (values.api !== undefined && values.api !== 'dotnet-minimal') throw new Error('The supported API target is dotnet-minimal.')
     if (typeof values['web-dir'] === 'string') {
       if (command === 'new' && values.api !== 'dotnet-minimal') throw new Error('--web-dir requires --api dotnet-minimal.')
@@ -201,7 +218,8 @@ export async function run(argv: string[], version: string, commands = backendCom
   const root = process.cwd()
   try {
     if (command === 'new') {
-      createProject(root, positionals[0]!, version, values.api === 'dotnet-minimal', webDirectory)
+      createProject(root, positionals[0]!, version, values.target === 'next-refine' ? 'next-refine' : 'vite-refine',
+        values.api === 'dotnet-minimal', webDirectory)
       return 0
     }
     if (command === 'backend') {
@@ -222,8 +240,15 @@ export async function run(argv: string[], version: string, commands = backendCom
       else for (const finding of diagnostics) console.log(`${finding.severity} ${finding.doc}${finding.pointer}: ${finding.message}`)
       return hasErrors(diagnostics) ? 1 : 0
     }
-    const { code } = compilePage(blueprint, positionals[0]!, context)
-    if (typeof values.out === 'string') fs.writeFileSync(path.resolve(root, values.out), code)
+    const { code, additional = [] } = compilePage(blueprint, positionals[0]!, context)
+    if (typeof values.out === 'string') {
+      const out = path.resolve(root, values.out)
+      if (additional.some(({ file }) => path.basename(file) === path.basename(out))) {
+        throw new Error('The output filename collides with a generated view.')
+      }
+      fs.writeFileSync(out, code)
+      for (const { file, code } of additional) fs.writeFileSync(path.join(path.dirname(out), path.basename(file)), code)
+    }
     else process.stdout.write(code)
     return 0
   } catch (error) {

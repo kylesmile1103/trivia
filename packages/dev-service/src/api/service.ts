@@ -13,6 +13,7 @@ import { LOCK_FILE, projectFacts, readLock, serializeLock, type CompileContext }
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.js'
+import { previewPage, type PreviewResult } from '../blueprint/preview.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { readSummary, summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
@@ -116,17 +117,20 @@ export class EngineService {
     const contract = this.blueprint.contract()
     const app = blueprint.docs[APP_DOC]
     const { project, entrySource, installed } = await this.refine.compileProject()
+    const projectTarget = this.blueprint.hostKind === 'next' ? 'next-refine'
+      : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine'
     const facts = projectFacts({
-      target: this.blueprint.hostKind === 'next' ? 'next-refine'
-        : app?.kind === 'app' && app.doc ? app.doc.targets.web : 'vite-refine',
+      target: projectTarget,
       aliases: { ...this.blueprint.aliases(), ui: project.ui },
-      pagesDir: project.pagesDir, entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
+      ...(projectTarget === 'vite-refine' || project.appRouter ? { pagesDir: project.pagesDir } : {}),
+      entrySource, formStyle: project.style === 'form' ? 'FormField' : 'Field',
       installed,
     })
+    const { appRouter: _appRouter, ...scaffold } = project
     const context: CompileContext = {
       facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
       validation: this.blueprint.context(resolution, contract),
-      generateContractPage: (input) => generateRefinePage({ ...input, project }),
+      generateContractPage: (input) => generateRefinePage({ ...input, project: scaffold }),
       refineSnippets: generateRefineSnippets(project, {
         datePicker: ['calendar', 'popover'].every((item) => installed.includes(project.ui + '/' + item)),
         describeErrors: true,
@@ -392,7 +396,36 @@ export class EngineService {
     if (changes.length === 0) return null
     this.#history.record({ label, changes, documents: true })
     this.#options.host.preview.invalidateBlueprints?.()
+    this.#dropDeletedPreviews(changes.filter(({ after }) => after === null).map(({ file }) => file))
     return label
+  }
+
+  previewBlueprint(page: string): Promise<PreviewResult> {
+    return this.#queue.run(() => previewPage({ page }, this))
+  }
+
+  #dropDeletedPreviews(files: readonly string[]): void {
+    const prefix = this.blueprint.dir + '/pages/'
+    for (const file of files) {
+      const name = file.startsWith(prefix) && /^([A-Z][A-Za-z0-9]*)\.page\.json$/.exec(file.slice(prefix.length))?.[1]
+      if (name) this.#removePreview(name)
+    }
+  }
+
+  #removePreview(page: string): void {
+    try {
+      this.#options.host.preview.removeBlueprint?.(page)
+    } catch (error) {
+      // The source transaction has already committed. Preserve bytes the preview host no longer owns.
+      console.warn('[trivia] Could not remove preview ' + page + ': ' + (error as Error).message)
+    }
+  }
+
+  #dropEjectedPreviews(lock: string, files: ReadonlySet<string>): void {
+    if (!this.#options.host.preview.removeBlueprint) return
+    for (const [page, record] of Object.entries(readLock(lock).pages)) {
+      if (files.has(record.file)) this.#removePreview(page)
+    }
   }
 
   confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
@@ -448,10 +481,14 @@ export class EngineService {
       finish?.()
       host.filesChanged?.(result.changes.map((change) => change.file))
     }
+    const last = ops.at(-1)
+    const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
     if (result.changes.length > 0) {
-      const last = ops.at(-1)
-      const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
       this.#history.record({ label, changes: result.changes, ...(ejectLock !== undefined && { ejectLock }) })
+    }
+    if (ejectLock !== undefined) {
+      this.#dropEjectedPreviews(ejectLock, new Set(ops.flatMap((op) =>
+        typeof op.file === 'string' && (op.op === 'createFile' || op.op === 'replaceFile') ? [op.file] : [])))
     }
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
     return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
@@ -505,7 +542,12 @@ export class EngineService {
       throw error
     }
     finish?.()
-    if (entry.documents) this.#options.host.preview.invalidateBlueprints?.()
+    if (entry.documents) {
+      this.#options.host.preview.invalidateBlueprints?.()
+      this.#dropDeletedPreviews(writes.filter(({ content }) => content === null).map(({ file }) => file))
+    } else if (direction === 'redo' && entry.ejectLock) {
+      this.#dropEjectedPreviews(entry.ejectLock, new Set(writes.filter(({ content }) => content !== null).map(({ file }) => file)))
+    }
     this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()

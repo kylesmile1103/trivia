@@ -11,7 +11,7 @@ import type { EngineService } from '../api/service.js'
 import { backendInput } from '../blueprint/backend.js'
 import { readComponents, readDoc } from '../blueprint/index.js'
 import { ejectInput } from '../blueprint/plan.js'
-import { previewInput, previewPage } from '../blueprint/preview.js'
+import { previewInput } from '../blueprint/preview.js'
 import { readSummary } from '../blueprint/summary.js'
 import { ApiError } from '../engine.js'
 import { type ListPage, parseColumnChanges, parseFieldChanges } from '../refine/index.js'
@@ -698,7 +698,7 @@ function registerBlueprintTools(server: McpServer, service: EngineService, run: 
     },
     ({ page, includeCode }) =>
       run(async () => {
-        const { code, ...preview } = await previewPage({ page }, service)
+        const { code, ...preview } = await service.previewBlueprint(page)
         const next = service.designerConnected
           ? 'Load the preview route in the Trivia canvas, then call trivia_screenshot.'
           : 'Open the Trivia designer and load the preview route, then call trivia_screenshot.'

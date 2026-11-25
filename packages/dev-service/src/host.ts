@@ -1,3 +1,5 @@
+import type { PageSource } from '@trivia/blueprint-compiler'
+
 import type { InferredPage } from './refine/index.js'
 import type { RouteEntry, RoutesHost } from './routes/index.js'
 
@@ -5,8 +7,10 @@ import type { RouteEntry, RoutesHost } from './routes/index.js'
 export type RouteSource = Pick<RoutesHost, 'outline' | 'inspect' | 'describeValues'>
 
 export interface PreviewHost {
-  /** This app host can inject the Vite blueprint route. */
+  /** This app host can render compiled blueprint drafts. */
   blueprints?: true
+  publishBlueprint?(name: string, files: readonly PageSource[]): void
+  removeBlueprint?(name: string): void
   invalidateBlueprints?(): void
   /** Make the compiled preview available to the app and return its URL. */
   publish(id: string, page: Pick<InferredPage, 'code' | 'component'>): string | Promise<string>

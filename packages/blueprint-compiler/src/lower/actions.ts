@@ -5,12 +5,13 @@ import { CompileError } from '../compile.js'
 import type { PrintStyle } from '../facts.js'
 import type { HookIR, ImportIR, StepIR } from '../ir.js'
 import { compareBytes, property, quote, statement } from '../print/style.js'
-import { handlerFile, refineName, relativeModule } from '../targets/vite-refine/files.js'
+import { handlerFile, refineName, relativeModule } from '../targets/paths.js'
 
 interface ActionContext {
   contract?: TriviaManifest | null | undefined
   page: string
   file: string
+  handlerPath?: string
   style: PrintStyle
   expression(pointer: string): string
   name(preferred: string): string
@@ -85,7 +86,7 @@ export function actionLowerer(context: ActionContext) {
           if (!local) {
             local = context.name('call' + capitalize(step.handler))
             calls.set(step.handler, local)
-            imports.push({ name: step.handler, as: local, source: relativeModule(context.file, handlerFile(context.page)) })
+            imports.push({ name: step.handler, as: local, source: relativeModule(context.file, context.handlerPath ?? handlerFile(context.page)) })
           }
           return { await: true, code: local + '({ event: ' + (context.event ?? '_event')
             + ', state: ' + (context.state ?? '{}') + ', setters: ' + (context.setters ?? '{}') + ' })' }

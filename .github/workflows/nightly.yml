@@ -86,6 +86,11 @@ jobs:
         env:
           TRIVIA_MVP_REQUIRED: '1'
         run: pnpm exec nx run tools:mvp --skip-nx-cache --output-style=static
+      - name: The generated Next.js app's production build (spec 012)
+        # Nx's cache key has no environment variables, so the run skips the cache.
+        env:
+          TRIVIA_NEXT_BUILD: '1'
+        run: pnpm exec nx test blueprint-compiler --skip-nx-cache --output-style=static
 
   e2e:
     name: e2e (Linux, Chromium)

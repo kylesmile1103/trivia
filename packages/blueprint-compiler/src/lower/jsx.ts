@@ -18,6 +18,7 @@ export function lowerJsx(
   style: PrintStyle,
   expand: (id: string, manifest: ResolvedManifest, element: Extract<JsxIR, { kind: 'element' }>) => JsxIR,
   previewNodeIds = false,
+  replacements?: ReadonlyMap<string, JsxIR>,
 ): JsxIR {
   const childrenByParent = new Map<string, Array<[string, BlueprintNode]>>()
   for (const [id, node] of Object.entries(page.nodes)) {
@@ -28,6 +29,8 @@ export function lowerJsx(
   }
 
   function lower(id: string, outerRepeat = false): JsxIR {
+    const replacement = replacements?.get(id)
+    if (replacement) return replacement
     const repeat = repeats.get(id)
     const repeated = outerRepeat || repeat !== undefined
     const node = page.nodes[id]!

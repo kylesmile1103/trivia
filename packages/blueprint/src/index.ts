@@ -1,5 +1,5 @@
 // @trivia/blueprint: blueprint documents and the one way they change (LLD-01).
-export { BLUEPRINT_VERSION, EXPRESSION_META, SCHEMA_URL } from './types/common.js'
+export { BLUEPRINT_VERSION, EXPRESSION_META, SCHEMA_URL, routeParameters } from './types/common.js'
 export { appSchema, navEntrySchema, type AppDoc, type NavEntry } from './types/app.js'
 export {
   actionStepSchema, contractPageSchema, controlSchema, customPageSchema, nodeSchema, pageSchema, querySchema, stateSchema,

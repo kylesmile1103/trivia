@@ -2,7 +2,7 @@ import {
   exposedScope, expressionCheck, manifestCheck, toPointer,
   type DeferredComponents, type Diagnostic, type LayerCheck, type ManifestResolution, type PageDoc, type ResolvedManifests, type ValidationContext,
 } from '@trivia/blueprint'
-import { checkDataTable, checkForm } from '@trivia/blueprint-compiler'
+import { checkDataTable, checkForm, nextBoundaryCheck } from '@trivia/blueprint-compiler'
 import type { ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import type { EngineBinding } from '../engine.js'
@@ -106,5 +106,6 @@ export function validationContext(
     manifests: (blueprint) => [...diagnostics, ...checkManifests(blueprint)],
     contract: contractCheck(contract, manifests),
     expressions: expressionCheck(engine.analyzeExpressions, (page) => exposedScope(page, manifests)),
+    next: nextBoundaryCheck({ engine, manifests, contract }),
   }
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000007",
+  "name": "IdentityProbe",
+  "route": "/identity-probe",
+  "kind": "custom",
+  "root": "n_00000000000000000000000001",
+  "nodes": {
+    "n_00000000000000000000000001": {
+      "type": "main",
+      "name": "body",
+      "parent": null,
+      "slot": null,
+      "order": "a0"
+    },
+    "n_00000000000000000000000002": {
+      "type": "Button",
+      "name": "result",
+      "parent": "n_00000000000000000000000001",
+      "slot": "children",
+      "order": "a0"
+    }
+  },
+  "bindings": {
+    "n_00000000000000000000000002": {
+      "children": "user.name ?? \"Guest\""
+    }
+  }
+}

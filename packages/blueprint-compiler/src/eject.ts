@@ -1,7 +1,7 @@
 import { pageDocPath, revOfText, type Blueprint, type PageDoc } from '@trivia/blueprint'
 
 import { CompileError, compilePage, type CompileContext, type EmittedModule, type RegistryItem } from './compile.js'
-import type { Lock } from './lock.js'
+import type { Lock, LockedPage } from './lock.js'
 import { compareBytes } from './print/style.js'
 
 export interface EjectRoute {
@@ -41,6 +41,8 @@ export interface EjectPlan {
 }
 
 export const routePattern = (route: string) => route.replace(/\/(?::|\$)[^/]+/g, '/:').toLowerCase().replace(/\/$/, '')
+
+export const lockedSources = (page: LockedPage): Record<string, string> => ({ [page.file]: page.hash, ...page.additional })
 
 export function prepareEject(
   blueprint: Blueprint, pages: readonly string[] | undefined, context: CompileContext, lock: Lock,
@@ -85,11 +87,11 @@ export function planCompiledEject(prepared: readonly EjectPage[], snapshot: Ejec
   const files: string[] = []
   const registrations: EjectPage[] = []
   const records = { ...lock.pages }
-  const used = new Set(Object.values(records).map(({ file }) => file))
+  const used = new Set(Object.values(records).flatMap((record) => Object.keys(lockedSources(record))))
   const routes = new Map(snapshot.routes.map((route) => [routePattern(route.path), route]))
   for (const candidate of prepared) {
     const { page: { name }, rev, module } = candidate
-    const { file, code, route, component, handler } = module
+    const { file, code, route, component, handler, additional = [] } = module
     const previous = Object.hasOwn(records, name) ? records[name] : undefined
     const conflict = (why: string): never => { throw new CompileError('conflict', why, { page: name, file }) }
     if (previous && (previous.file !== file || (previous.route !== undefined && previous.route !== route))) {
@@ -98,6 +100,9 @@ export function planCompiledEject(prepared: readonly EjectPage[], snapshot: Ejec
     const existing = snapshot.files.get(file)
     if (!previous && (existing !== undefined || used.has(file))) conflict(file + ' is already owned by the project.')
     if (previous && existing !== undefined && revOfText(existing) !== previous.hash) conflict(file + ' changed since its last eject.')
+    if (Object.keys(previous?.additional ?? {}).some((path) => !additional.some((item) => item.file === path))) {
+      conflict('The generated modules of ' + name + ' moved since its last eject.')
+    }
 
     const pattern = routePattern(route)
     const claimed = routes.get(pattern)
@@ -114,7 +119,24 @@ export function planCompiledEject(prepared: readonly EjectPage[], snapshot: Ejec
       : { op: 'replaceFile', file, expectedHash: previous!.hash, content: code })
     files.push(file)
     used.add(file)
-    records[name] = { file, hash: revOfText(code), blueprintRev: rev, route, component }
+    const siblings: Record<string, string> = {}
+    for (const sibling of additional) {
+      const existing = snapshot.files.get(sibling.file)
+      const expected = previous?.additional?.[sibling.file]
+      if (expected === undefined && (existing !== undefined || used.has(sibling.file))) {
+        conflict(sibling.file + ' is already owned by the project.')
+      }
+      if (existing !== undefined && revOfText(existing) !== expected) {
+        conflict(sibling.file + ' changed since its last eject.')
+      }
+      ops.push(existing === undefined ? { op: 'createFile', file: sibling.file, content: sibling.code }
+        : { op: 'replaceFile', file: sibling.file, expectedHash: expected!, content: sibling.code })
+      siblings[sibling.file] = revOfText(sibling.code)
+      files.push(sibling.file)
+      used.add(sibling.file)
+    }
+    records[name] = { file, hash: revOfText(code), blueprintRev: rev, route, component,
+      ...(additional.length > 0 && { additional: siblings }) }
     if (handler && !snapshot.files.has(handler.file)) {
       ops.push({ op: 'createFile', file: handler.file, content: handler.code, ifMissing: true })
       files.push(handler.file)

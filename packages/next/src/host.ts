@@ -94,19 +94,72 @@ function diskPreviews(root: string, app: string | undefined, engine: EngineBindi
   const files = new Map<string, string>()
   const directories = new Map<string, string>()
   let closed = false
+  const folderOf = (name: string) => {
+    if (!app || closed) throw new ApiError('unsupported', 'An active App Router host is required for previews')
+    return path.posix.join(app, PREVIEW_GROUP, PREVIEW_SEGMENT, name)
+  }
+
+  const removeDirectories = (errors: unknown[]) => {
+    for (const [directory, expected] of [...directories].reverse()) {
+      try {
+        const real = fs.realpathSync(path.join(root, directory))
+        if (real === expected && projectPath(root, real)) {
+          fs.rmdirSync(real)
+          directories.delete(directory)
+        }
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'ENOENT') directories.delete(directory)
+        else if (code !== 'ENOTEMPTY') errors.push(error)
+      }
+    }
+  }
+
+  const replace = (folder: string, desired: ReadonlyMap<string, string>) => {
+    const previous = [...files].filter(([file]) => path.posix.dirname(file) === folder)
+    const writes = [
+      ...previous.filter(([file]) => !desired.has(file)).map(([file, expected]) => ({ file, expected, content: null })),
+      ...[...desired].map(([file, content]) => ({ file, expected: files.get(file) ?? null, content })),
+    ]
+    if (!writes.length) return
+    const missing = desired.size ? [path.posix.dirname(path.posix.dirname(folder)), path.posix.dirname(folder), folder]
+      .filter((dir) => !fs.existsSync(path.join(root, dir))) : []
+    unwrap(engine.restoreFiles(root, JSON.stringify(writes)))
+    for (const [file] of previous) files.delete(file)
+    for (const [file, content] of desired) files.set(file, content)
+    for (const dir of missing) directories.set(dir, fs.realpathSync(path.join(root, dir)))
+    const errors: unknown[] = []
+    removeDirectories(errors)
+    if (errors.length) throw new AggregateError(errors, 'could not remove preview directories')
+  }
+
   return {
+    ...(app && { blueprints: true as const }),
     publish(id, { code }) {
-      if (!app || closed) throw new ApiError('unsupported', 'An active App Router host is required for previews')
       if (!/^[a-f0-9]{16}$/.test(id)) throw new ApiError('invalid_op', 'Invalid preview id')
-      const group = path.posix.join(app, PREVIEW_GROUP)
-      const segment = path.posix.join(group, PREVIEW_SEGMENT)
-      const folder = path.posix.join(segment, `refine-${id}`)
+      const folder = folderOf(`refine-${id}`)
       const file = path.posix.join(folder, 'page.tsx')
-      const missing = [group, segment, folder].filter((dir) => !fs.existsSync(path.join(root, dir)))
-      unwrap(engine.restoreFiles(root, JSON.stringify([{ file, expected: files.get(file) ?? null, content: code }])))
-      files.set(file, code)
-      for (const dir of missing) directories.set(dir, fs.realpathSync(path.join(root, dir)))
+      replace(folder, new Map([[file, code]]))
       return `/__blueprint/refine-${id}`
+    },
+    publishBlueprint(name, modules) {
+      if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) throw new ApiError('invalid_op', 'Invalid draft preview name')
+      const folder = folderOf(name)
+      const desired = new Map(modules.map(({ file, code }) => {
+        const name = path.posix.basename(file)
+        if (file !== folder + '/' + name || !/^(page|compiled|handler|view(?:\.[A-Za-z0-9_$]+)?)\.tsx?$/.test(name)) {
+          throw new ApiError('invalid_op', 'Invalid draft preview module')
+        }
+        return [file, code]
+      }))
+      if (!desired.has(folder + '/page.tsx') || desired.size !== modules.length) {
+        throw new ApiError('invalid_op', 'A draft preview must have one entry and distinct modules')
+      }
+      replace(folder, desired)
+    },
+    removeBlueprint(name) {
+      if (!app || closed || !/^[A-Z][A-Za-z0-9]*$/.test(name)) return
+      replace(folderOf(name), new Map())
     },
     close() {
       closed = true
@@ -119,14 +172,7 @@ function diskPreviews(root: string, app: string | undefined, engine: EngineBindi
         }
       }
       files.clear()
-      for (const [directory, expected] of [...directories].reverse()) {
-        try {
-          const real = fs.realpathSync(path.join(root, directory))
-          if (real === expected && projectPath(root, real)) fs.rmdirSync(real)
-        } catch (error) {
-          if (!['ENOENT', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) errors.push(error)
-        }
-      }
+      removeDirectories(errors)
       directories.clear()
       if (errors.length > 0) throw new AggregateError(errors, 'could not remove every Trivia preview')
     },

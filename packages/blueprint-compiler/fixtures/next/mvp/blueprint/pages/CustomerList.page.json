@@ -1,0 +1,50 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000004",
+  "name": "CustomerList",
+  "route": "/customers",
+  "kind": "list",
+  "resource": "Customer",
+  "options": {
+    "fields": [
+      "fullName",
+      "email",
+      "status",
+      "createdAt"
+    ],
+    "title": "Customers",
+    "filters": [
+      "status",
+      "email"
+    ],
+    "rowActions": [
+      {
+        "name": "approveKyc",
+        "label": "Approve KYC",
+        "confirm": "Approve KYC for this customer?",
+        "steps": [
+          {
+            "do": "mutate",
+            "resource": "Customer",
+            "operation": "approveKycCustomer",
+            "input": "{}",
+            "id": "row.id"
+          }
+        ]
+      }
+    ],
+    "headerActions": [
+      {
+        "name": "refresh",
+        "label": "Refresh",
+        "steps": [
+          {
+            "do": "refetch",
+            "query": "list"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -5,27 +5,58 @@
 - Code: `packages/blueprint-compiler/src/targets/next-refine/` and
   `packages/blueprint-compiler/templates/next-refine/`.
 
-Next.js was at 16.x when this was written, with Cache Components opt-in and due to become the
-default in 17. Pin the version when the phase starts, and re-read the caching and `proxy.ts`
-documentation first.
+## 0. Framework versions and APIs
+
+⚑ Match the installed and exercised App Router host from LLD-13. Pin `next@16.4.6`,
+`react@19.2.7`, `react-dom@19.2.7`, `@refinedev/core@5.0.12`,
+`@refinedev/nextjs-router@7.0.5`, `@refinedev/react-hook-form@5.0.4` and
+`@tanstack/react-query@5.103.2`. The current Next.js documentation covers this installed
+release.
+
+- The root layout owns `html` and `body`. A `page.tsx` creates a route and a parenthesized
+  route group is omitted from its URL. An underscore-prefixed URL segment must have its leading
+  underscore escaped as `%5F` on disk. Await `params` and `searchParams`; a catch-all parameter
+  is an array and repeated search keys also produce arrays.
+  [Project structure](https://nextjs.org/docs/app/getting-started/project-structure),
+  [page props](https://nextjs.org/docs/app/api-reference/file-conventions/page),
+  [dynamic segments](https://nextjs.org/docs/app/api-reference/file-conventions/dynamic-routes).
+- A `next.config.ts` rewrite can send a wildcard path to an external origin. Next.js 16
+  renamed Middleware to `proxy.ts`, which runs on Node. The API forwarding here only needs
+  a configuration rewrite. [Rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites),
+  [Proxy](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+- Cache Components is opt-in through `cacheComponents`. Its `'use cache'` directive supports
+  `cacheLife`; a shared cached function cannot read request headers or cookies. With Cache
+  Components enabled, runtime data outside cached functions can require a Suspense boundary.
+  [Caching](https://nextjs.org/docs/app/getting-started/caching),
+  [cacheLife](https://nextjs.org/docs/app/api-reference/functions/cacheLife).
+- Refine runs in a client provider with the App Router binding. The installed router exports
+  the same binding from its root and `/app`. The server entry can await a fetch before rendering
+  the client view. The installed `useShow` and core `useForm` forward `queryOptions` to
+  `useOne`, and the React Hook Form adapter supplies core options through `refineCoreProps`.
+  Initial single-record data has the shape `{ data: record }`. TanStack Query treats initial
+  data as immediately stale by default, so pass a freshness option to avoid the mount refetch.
+  [Refine Next.js guide](https://refine.dev/core/docs/routing/integrations/next-js/),
+  [Refine useOne](https://refine.dev/core/docs/data/hooks/use-one/#queryoptions),
+  [TanStack initial data](https://tanstack.com/query/latest/docs/framework/react/guides/initial-query-data).
 
 ## 1. What a target is
 
-The compiler's stages before printing (lowering to `PageIR`, LLD-05) are shared. A target
-supplies:
+The compiler's stages before printing are shared. Custom pages lower to `PageIR` (LLD-05).
+Contract pages use the shared Refine scaffolder. A target supplies:
 
 ```ts
 interface Target {
   name: 'vite-refine' | 'next-refine'
-  files(ir: PageIR, facts: ProjectFacts): EmittedModule[]      // one or more modules per page
-  routeOps(page: PageIR, facts: ProjectFacts): Op[]            // how a route is registered
+  files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
+  routeOps(plan: RoutePlan): Op[]
   hooks: RefineHookMap                                         // router binding differences
-  preview(page: PageIR): PreviewPlan
+  preview(page: string): PreviewPlan
 }
 ```
 
-The Vite target is refactored onto this interface first, with its golden files unchanged.
-That refactor is the first task of this feature.
+⚑ The target consumes a discriminated input for custom IR and shared contract source. The
+Vite target continues to expose one primary module with its original shape. The shared
+lowerer receives the target's Refine hook map for client route and query bindings.
 
 ## 2. File layout
 
@@ -46,6 +77,12 @@ web/
 Routes are files, so `routeOps` returns no `<Route>` insert. It still registers the resource:
 a value op on the `resources` array in `app/providers.tsx`, with the same guards as the Vite
 target.
+
+⚑ The Refine adapter resolves the array and checks occupied actions before either target
+plans operations. The target receives those guarded registrations and Vite's optional JSX
+anchor. Next emits the shared resource value operations for the discovered provider file.
+The template keeps the literal inline in the prop because the engine's JSX value path
+addresses that expression directly.
 
 ## 3. Splitting server and client (FR-NX-02)
 
@@ -70,8 +107,25 @@ inside a client subtree is evaluated on the server and passed down under a gener
 name. A function-valued prop that would cross is a compiler error at lowering,
 `boundary_not_serializable`, with the node named.
 
+⚑ Boundary planning runs on the parent tree and analyzed expression sites before shared
+lowering so each module contains only the state, handlers and dependencies it needs.
+A client node inside a repeat stays with the loop that owns its aliases. Server values
+without repeat locals cross through generated props whose types are inferred on the server.
+
 Contract pages (`list`, `create`, `edit`, `show`) are one client region: Refine's hooks run on
 the client. Their `page.tsx` is a thin server entry.
+
+⚑ The compiler keeps the primary module API and returns sibling views in `additional`.
+Each sibling passes the same parser and import checks as the entry. The MVP golden inputs
+are the five spec 011 pages and model from commit `a460060`; the fixture changes only the
+app target in its temporary test copy. Its list Refresh action uses Refine's existing
+table query, matching the change in the sibling spec.
+
+⚑ Eject writes and locks every sibling in the same transaction as the entry and registration.
+A hand edit in any of those modules makes the page edited. Removing a generated module
+from an existing page is refused like moving its route until the transaction supports
+retiring guarded files. Older Vite locks keep their original layout. The CLI opens the same
+Next host for offline eject and uses the discovered App Router directory.
 
 A page that is entirely client still gets a server `page.tsx` that renders its view. One
 shape for every page is easier to read and to edit later.
@@ -93,28 +147,55 @@ shape for every page is easier to read and to edit later.
 Errors from a server fetch: a 404 calls `notFound()`. Anything else is thrown to the nearest
 `error.tsx`, which the template provides.
 
+⚑ The compiler uses manifest API parameter names for server SDK options and accepts
+`id` as the alias for a single-record identifier. Only GET operations qualify for
+server fetching. The template resolves the Aspire API origin or `TRIVIA_API_ORIGIN`
+and forwards credentials only to that origin.
+
+⚑ Show and edit entries pass the route id and `{ data: record }` into Refine.
+`refetchOnMount: false` prevents a hydration fetch while leaving invalidation and explicit
+refetch available. Edit also checks the initial record against the partial form schema
+before using it as form defaults.
+
+⚑ Next reads the API origin when it loads the rewrite configuration. Aspire supplies
+it when running the web resource. For an independent production build, set
+`TRIVIA_API_ORIGIN` at build time if the browser will use the rewrite.
+
 ## 5. Caching (FR-NX-05)
 
-Nothing is cached by default: internal tools show live, per-user data. A page with
-`"public": true` whose server part has no dependency on `user` or cookies gets its data
-function marked for caching with a short default lifetime, and the template then enables Cache
-Components. A `public` page that does depend on the user is a validation error,
-`public_page_uses_user`. This is the only place the compiler emits a caching directive.
+Nothing is cached by default. A page with `"public": true` whose server part has no
+dependency on `user` or credentials gets a short-lived cache around its data functions.
+A public page that depends on identity is refused with `public_page_uses_user`.
+
+⚑ Use the pinned Next.js `unstable_cache` API with a 30-second revalidation window.
+Cache Components would require a Suspense fallback around request-time Refine and data
+bindings. The existing Data Cache API keeps the single awaited HTML response, including
+the HTTP status from `notFound()`. The cached SDK calls use anonymous request options.
+[Next.js Data Cache API](https://nextjs.org/docs/app/api-reference/functions/unstable_cache).
 
 ## 6. Preview
 
 The Vite target serves previews as virtual modules. Next.js compiles files from disk, so:
 
-- the dev service writes a draft's compiled files under `app/(blueprint-preview)/__blueprint/<Name>/`,
-  a gitignored folder, outside the undo history;
+- the dev service writes a draft's compiled files under `app/(blueprint-preview)/%5F_blueprint/<Name>/`,
+  a gitignored folder in the template, outside the undo history;
 - the canvas navigates to `/__blueprint/<Name>`;
 - the stamping loader skips that folder, so previews carry no locators, as on Vite;
 - the files are removed on eject, when the draft is deleted, and when the dev service stops.
   `withTrivia` (LLD-13) fails a production build that finds the folder, with a message that
   says to delete it.
 
-⚑ This is the least proven part of the design. It is validated in the same spike as the
-loader of LLD-13.
+⚑ Reuse the guarded disk writer and escaped segment proved by LLD-13. Move the compiled
+entry and views together, and keep any preview handler stub in the same folder. The
+stamping loader skips the folder while draft markup keeps its blueprint selection ids.
+For a route that needs dynamic parameters, a small entry adapter passes matching preview
+search parameters to the compiled page. Preview creation and cleanup share the service
+queue with source and draft edits, including eject plans applied through the batch API.
+
+The LLD-13 spike created an escaped preview segment while Turbopack was running. Next
+served the new page with its heading free of locators, then returned 404 after removing
+the file without a restart. The host tests exercise the same on-disk layout and verify
+cleanup on eject, deletion, and shutdown. [LLD-13 spike](LLD-13-trivia-on-nextjs.md#1-spike-first).
 
 ## 7. Template and AppHost (FR-NX-06)
 
@@ -123,21 +204,59 @@ with `rsc: true`, Refine with its Next.js router binding, the layout shell, an e
 array, `error.tsx` and `not-found.tsx`, and the `sync` script. The AppHost scaffold picks the
 JavaScript app resource running the `dev` script when `targets.web` is `next-refine` (LLD-10).
 
+⚑ The root layout awaits `connection()` so Refine's App Router binding can read search
+parameters during request-time rendering. Static prerendering fails on the binding's
+`useSearchParams()`, and wrapping the app in a streaming fallback would hide the server
+content in the first HTML. [Next.js connection](https://nextjs.org/docs/app/api-reference/functions/connection).
+
+⚑ The template reserves no root page, so a blueprint can own `/`. Its Next configuration is
+shipped as `next.config.ts.template`, following the Vite template's convention. Nx would
+otherwise read the dev wrapper import as a compiler dependency and form a build cycle.
+The config disables Next's automatic agent-instruction file so starting the app only
+writes development artifacts.
+
+⚑ Aspire 13.6.5 marks `AddNextJsApp` experimental. The generated Next branch scopes
+`ASPIREJAVASCRIPT001` suppression to that resource block, and accepts optional
+`Trivia:WebPort`, `Trivia:ApiPort` and `Trivia:InstallWebDependencies` settings.
+Playwright uses preinstalled fixture dependencies, fixed web and API test ports, and
+ephemeral dashboard ports. Aspire's isolated mode reallocates explicit service ports.
+The Next resolver accepts Aspire's service discovery variables and its simple
+`API_HTTP` / `API_HTTPS` aliases. [Aspire service discovery](https://learn.microsoft.com/en-us/dotnet/aspire/service-discovery/overview).
+The resource explicitly runs `dev`, and the template supplies standalone output
+and a `public/` directory for Aspire's Node container build.
+
 ## 8. One blueprint, two targets (FR-NX-07)
 
 Nothing in a blueprint names a target except `app.targets.web`. Target-only validation:
 `public_page_uses_user` and `boundary_not_serializable` appear only for `next-refine`. A test
 compiles the kit fixture and the MVP fixture for both targets from the same documents.
 
+⚑ Validation runs a sixth layer only when the app selects `next-refine`. It reports
+`invalid_next_route` at `/route` for dot segments, repeated parameter names, and
+conflicting names for the same dynamic folder. The layer also accepts an injected compiler
+check, so target-specific checks can use manifest and expression facts while the schema
+package stays independent of the compiler.
+
+⚑ A terminal `/*` exposes `params.splat` as an array. Next emits a required
+`[...splat]` segment, and Vite splits React Router's wildcard value into segments.
+
+⚑ Server expressions can read identity from `TRIVIA_IDENTITY_PATH`, a trusted endpoint
+on the configured API origin. This endpoint receives the same credentials as server
+queries. The generated template keeps signed-out requests anonymous and exposes only
+`id`, `name` and `roles` to expressions.
+
 ## 9. Tests
 
 - Boundary algorithm: unit tests on small trees (two inputs sharing state under a static
   card, a static header above a table, a fully static page, nested groups).
 - Golden files for the kit and MVP fixtures on this target. `tsc` and `next build` on the
-  emitted app (FR-NX-08), the build in CI only.
+  emitted app (FR-NX-08). CI enables the production build with
+  `TRIVIA_NEXT_BUILD=1 pnpm exec nx test blueprint-compiler`.
 - Serialization: a function prop crossing a boundary is refused with the node named.
 - e2e: under the AppHost with the fixture API, the show page's first HTML response already
   contains the record's fields, checked with a plain HTTP request and no JavaScript.
+  The `blueprint-next` project also checks hydration, the API rewrite, catch-all
+  parameters, HTTP 404 and 500 behavior, and forwarded credentials.
 - Preview files: created, visible at the preview route, removed on eject and on stop.
 
 ## 10. Open points

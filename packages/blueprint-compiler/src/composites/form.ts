@@ -4,7 +4,7 @@ import type { ManifestField, TriviaManifest } from '@trivia/contract-sync'
 import { CompileError } from '../compile.js'
 import type { AttributeIR, JsxIR } from '../ir.js'
 import { literal, property, quote } from '../print/style.js'
-import { refineName } from '../targets/vite-refine/files.js'
+import { refineName } from '../targets/paths.js'
 import { resourceRowType, snippet, withNodeAttributes, type CompositeScope } from './source.js'
 
 type Element = Extract<JsxIR, { kind: 'element' }>

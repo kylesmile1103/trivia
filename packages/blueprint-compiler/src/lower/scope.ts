@@ -1,4 +1,4 @@
-import { expressionRequest, pageDocPath, type Diagnostic, type ExpressionInput, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
+import { expressionRequest, pageDocPath, routeParameters, type Diagnostic, type ExpressionInput, type PageDoc, type UiExpressionScope } from '@trivia/blueprint'
 
 import { CompileError, type CompileContext } from '../compile.js'
 import { compareBytes } from '../print/style.js'
@@ -90,7 +90,10 @@ function missing(pointer: string): never {
   throw new CompileError('internal', 'Missing emitted expression at ' + pointer)
 }
 
-export function routeScope(deps: ReadonlySet<string>, names: import('./names.js').Names) {
+export function routeScope(
+  deps: ReadonlySet<string>, names: import('./names.js').Names,
+  router: import('../targets/target.js').RefineHookMap['router'], route: string,
+) {
   const rename: Record<string, string> = {}
   const imports: import('../ir.js').ImportIR[] = []
   const hooks: import('../ir.js').HookIR[] = []
@@ -99,15 +102,24 @@ export function routeScope(deps: ReadonlySet<string>, names: import('./names.js'
   if (has('params')) {
     const name = names.take('params')
     rename['params'] = name
-    imports.push({ name: 'useParams', source: 'react-router' })
-    hooks.push({ name, hook: 'useParams' })
+    const params = routeParameters(route)
+    if (router.searchTuple && params.some(({ catchAll }) => catchAll)) {
+      const splat = '(' + name + '["*"]?.split("/") ?? [])'
+      rename['params'] = '({ ...' + name + ', splat: ' + splat + ' })'
+      rename['params.splat'] = splat
+    }
+    imports.push({ name: 'useParams', source: router.source })
+    const type = !router.searchTuple && params.length
+      ? '{ ' + params.map(({ name, catchAll }) => name + ': ' + (catchAll ? 'string[]' : 'string')).join('; ') + ' }'
+      : undefined
+    hooks.push({ name, hook: 'useParams', ...(type && { type }) })
     locals.push(name)
   }
   if (has('search')) {
     const name = names.take('searchParams')
     rename['search'] = 'Object.fromEntries(' + name + ')'
-    imports.push({ name: 'useSearchParams', source: 'react-router' })
-    hooks.push({ name: '[' + name + ']', hook: 'useSearchParams' })
+    imports.push({ name: 'useSearchParams', source: router.source })
+    hooks.push({ name: router.searchTuple ? '[' + name + ']' : name, hook: 'useSearchParams' })
     locals.push(name)
   }
   if (has('user')) {

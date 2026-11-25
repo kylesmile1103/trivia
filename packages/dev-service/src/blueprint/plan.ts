@@ -1,5 +1,5 @@
 import { APP_DOC, pageDocPath, revOfText } from '@trivia/blueprint'
-import { LOCK_FILE, planCompiledEject, prepareEject, readLock, serializeLock, type Lock } from '@trivia/blueprint-compiler'
+import { LOCK_FILE, lockedSources, planCompiledEject, prepareEject, readLock, serializeLock, type Lock } from '@trivia/blueprint-compiler'
 import { z } from 'zod'
 
 import type { EngineService, Json } from '../api/service.js'
@@ -30,7 +30,7 @@ export async function planEject(request: z.infer<typeof planInput>, service: Eng
     const prepared = prepareEject(blueprint, request.pages, context, baseline)
     const files = new Map<string, string>()
     for (const { module } of prepared) {
-      for (const file of [module.file, module.handler?.file]) {
+      for (const file of [module.file, ...(module.additional ?? []).map((entry) => entry.file), module.handler?.file]) {
         if (!file) continue
         const bytes = readBytes(workspace.root, file)
         if (bytes !== null) files.set(file, bytes.toString('utf8'))
@@ -77,9 +77,19 @@ export function validateEjectLock(workspace: BlueprintWorkspace, ops: readonly J
       if (!Object.hasOwn(after.pages, name)) throw new ApiError('conflict', 'An eject cannot remove the lock record for ' + name)
     }
     for (const [name, record] of Object.entries(after.pages)) {
-      const source = ops.find((op) => op !== lock && op.file === record.file && (op.op === 'createFile' || op.op === 'replaceFile'))
-      if (!source && JSON.stringify(record) === JSON.stringify(before.pages[name])) continue
-      if (typeof source?.content !== 'string' || revOfText(source.content) !== record.hash) throw new ApiError('invalid_op', 'No matching source operation for ' + name)
+      const sources = lockedSources(record)
+      const matches = (file: string) => ops.find((op) => op !== lock && op.file === file &&
+        (op.op === 'createFile' || op.op === 'replaceFile'))
+      const previous = before.pages[name]
+      if (!Object.keys(sources).some(matches) && JSON.stringify(record) === JSON.stringify(previous)) continue
+      const previousSources = previous ? lockedSources(previous) : {}
+      for (const [file, hash] of Object.entries(sources)) {
+        const source = matches(file)
+        if (typeof source?.content !== 'string' || revOfText(source.content) !== hash ||
+          (source.op === 'replaceFile' && source.expectedHash !== previousSources[file])) {
+          throw new ApiError('invalid_op', 'No matching source operation for ' + file)
+        }
+      }
       const doc = pageDocPath(name)
       const content = workspace.readDocumentText(doc)
       const actual = content === null ? null : revOfText(content)
