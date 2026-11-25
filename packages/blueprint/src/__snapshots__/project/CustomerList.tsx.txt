@@ -1,0 +1,12 @@
+// CustomerList (list) /customers · Customer
+<ListPage resource="Customer" fields={["fullName", "email", "status", "creditLimit"]} hideFields={["notes"]} filters={["status"]} title="Customers" />
+
+/*
+rowActions:
+  approve "Approve" (confirm: "Approve this customer?")
+    mutate Customer.approveKyc(id: row.id, input: { reason: 'Approved from the list' })
+    toast 'Customer approved' (success)
+headerActions:
+  overview "Overview"
+    navigate '/customers/overview'
+*/

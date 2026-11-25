@@ -49,7 +49,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 7: User Story 5 - Projection (P3)
 
-- [ ] T026 [US5] `src/project.ts` with snapshot tests on the fixture pages
+- [x] T026 [US5] `src/project.ts` with snapshot tests on the fixture pages
 
 ## Phase 8: Polish
 
