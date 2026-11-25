@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { apply, loadBlueprint, revOfText, sequenceSource } from '@trivia/blueprint'
+import { apply, loadBlueprint, revOfText, sequenceSource, type ManifestIndexEntry } from '@trivia/blueprint'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import type { EjectPlan } from '../src/blueprint/plan.js'
@@ -307,4 +307,20 @@ it('FR-DM-07 keeps the summary readable for a model with only the legacy envelop
       expect.objectContaining({ doc: 'model.blueprint.json', code: 'schema_violation', pointer: '/entities' }),
     ]) },
   })
+})
+
+it('FR-KT-01 publishes the kit through the existing component response', async () => {
+  const response = await get('/components')
+  expect(response.status).toBe(200)
+  const result = await response.json() as {
+    ok: boolean
+    data: { components: ManifestIndexEntry[]; schemas: Record<string, object> }
+  }
+  expect(result.ok).toBe(true)
+  expect(result.data.components.find(({ type }) => type === 'Checkbox')?.exposes)
+    .toEqual([expect.objectContaining({ name: 'checked' })])
+  expect(result.data.components.find(({ type }) => type === 'Tabs')?.events)
+    .toEqual([expect.objectContaining({ name: 'onValueChange' })])
+  expect(result.data.schemas['Tabs']).toMatchObject({ properties: { tabs: expect.any(Object) } })
+  expect(Object.keys(result.data).sort()).toEqual(['components', 'schemas'])
 })

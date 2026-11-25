@@ -1,7 +1,4 @@
 import fs from 'node:fs'
-import Button from '@trivia/blueprint/samples/Button.manifest.json' with { type: 'json' }
-import Card from '@trivia/blueprint/samples/Card.manifest.json' with { type: 'json' }
-import Input from '@trivia/blueprint/samples/Input.manifest.json' with { type: 'json' }
 import path from 'node:path'
 
 import {
@@ -15,6 +12,11 @@ import { ApiError, type EngineBinding } from '../engine.js'
 import type { DevHost } from '../host.js'
 import { validationContext } from './context.js'
 import { checkedPath } from './paths.js'
+
+const kitDir = new URL('./kit/', import.meta.resolve('@trivia/blueprint-compiler/package.json'))
+const kit = fs.readdirSync(kitDir).filter((file) => file.endsWith('.manifest.json')).sort().map((file) =>
+  componentManifestSchema.parse(JSON.parse(fs.readFileSync(new URL(file, kitDir), 'utf8'))),
+)
 
 export function readBytes(root: string, file: string): Buffer | null {
   try {
@@ -109,7 +111,7 @@ export class BlueprintWorkspace implements BlueprintStore {
       }
     }
     const resolved = resolveManifests({
-      kit: [Button, Card, Input].map((value) => componentManifestSchema.parse(value)),
+      kit,
       overrides,
       components,
       aliases: { ...config?.aliases, ui: this.#host.importBase, ...(typeof config?.style === 'string' && { style: config.style }) },

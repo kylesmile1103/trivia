@@ -18,7 +18,7 @@
 - [x] T005 [P] [US1] Actions and display: `Button`, `DropdownMenu`, `Badge`, `Avatar`, `Alert`, `Tooltip`, `Skeleton`, `Breadcrumb`, `Empty`. Manifests, fixture page, golden
 - [x] T006 [P] [US1] Inputs: `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `RadioGroup`, `Combobox`, `DatePicker`, `Label`, `Field`. Each exposed value bound in the fixture page
 - [x] T007 [P] [US1] Containers: `Card`, `Tabs`, `Dialog`, `Sheet`, `Popover`, `Separator`, with slot parts and `open` exposure
-- [ ] T008 [US1] `tsc` over the golden pages in `examples/blueprint-kit`, and the manifest check (T002) in the package's test target
+- [x] T008 [US1] `tsc` over the golden pages in `examples/blueprint-kit`, and the manifest check (T002) in the package's test target
 
 ## Phase 4: User Story 2 - DataTable (P1)
 

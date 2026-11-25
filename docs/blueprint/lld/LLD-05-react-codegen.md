@@ -182,8 +182,9 @@ adds a default export and the preview stylesheet. Relative imports resolve as if
 module were at its ejected path. A missing call stub can also be served virtually.
 Vite invalidates the modules on draft document and contract file changes.
 
-⚑ The dev service resolves the three spec 002 sample manifests from the blueprint
-package's original fixture assets. Spec 006 supplies the full kit.
+⚑ Spec 005 used the three spec 002 sample manifests. Spec 006 replaces that catalog with
+the full kit shipped by `@trivia/blueprint-compiler`. The dev service reads the same files
+for compilation, HTTP component discovery and MCP (LLD-06).
 
 ## 6. Eject (FR-RC-07 to FR-RC-10)
 

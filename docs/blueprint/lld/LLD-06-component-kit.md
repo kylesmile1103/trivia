@@ -44,6 +44,10 @@ section 6). Radix and Base UI are covered first.
 keeps a project's installed filename for a uniquely resolved shadcn export, so a renamed
 component continues compiling with its project alias.
 
+⚑ The dev service reads the shipped kit manifests in place of the three spec 002 samples.
+The spec 004 component response keeps the same `components` and `schemas` fields for the
+designer and MCP clients.
+
 ⚑ `configuration` describes compiler-consumed static props without changing the analyzer's
 native prop list. Select generates its trigger and value around the author-supplied item
 nodes. Radix Combobox uses a searchable Command inside a Popover and commits its value on

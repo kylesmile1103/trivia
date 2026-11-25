@@ -1,0 +1,40 @@
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, globSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { expect, it } from 'vitest'
+
+import { fixture, fixtureDir, kitApp, kitManifests } from './kit-fixture.js'
+
+const compiler = createRequire(import.meta.url).resolve('typescript/bin/tsc')
+const script = fileURLToPath(new URL('../../../tools/blueprint/check-kit-manifests.cjs', import.meta.url))
+
+it('FR-KT-06 checks every published manifest and type-checks all Radix goldens', () => {
+  const result = spawnSync(process.execPath, [script], { encoding: 'utf8' })
+  expect(result.status, result.stdout + result.stderr).toBe(0)
+  expect(result.stdout).toContain(`Checked ${kitManifests().length} manifests`)
+  const app = fileURLToPath(kitApp)
+  const golden = fileURLToPath(new URL('golden/', fixtureDir))
+  const names = globSync('*.tsx', { cwd: golden }).sort()
+  const pages = Object.keys(fixture()).filter((name) => name.endsWith('.page.json'))
+  expect(names).toEqual(pages.map((file) => path.basename(file, '.page.json') + '.tsx').sort())
+  const temp = mkdtempSync(path.join(tmpdir(), 'trivia-kit-tsc-'))
+  try {
+    symlinkSync(path.join(app, 'node_modules'), path.join(temp, 'node_modules'), 'junction')
+    const include = [path.join(app, 'src', '**', '*')]
+    for (const name of names) {
+      const target = path.join(temp, 'src/pages', path.basename(name, '.tsx'), name)
+      mkdirSync(path.dirname(target), { recursive: true })
+      copyFileSync(path.join(golden, name), target)
+      include.push(target)
+    }
+    writeFileSync(path.join(temp, 'tsconfig.json'), JSON.stringify({ extends: path.join(app, 'tsconfig.json'), include }))
+    const tsc = spawnSync(process.execPath, [compiler, '-p', temp, '--pretty', 'false'], { encoding: 'utf8' })
+    expect(tsc.status, tsc.stdout + tsc.stderr).toBe(0)
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+}, 60_000)
