@@ -190,3 +190,40 @@ it('FR-RC-06: Vite transforms fresh preview code and reports invalid drafts with
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 60_000)
+
+it('FR-RC-07: commits the lock with the batch and refuses an intervening draft edit', async () => {
+  const root = copyRefineAdmin()
+  const server = await startServer(root)
+  try {
+    const file = 'pages/Planned.page.json'
+    const lock = path.join(root, 'blueprint/blueprint.lock.json')
+    const patch = (ops: unknown[]) => post(server.socket, '/blueprint/patch', { label: 'Planned draft', ops })
+    const created = await patch([{ op: 'createPage', doc: file, baseRev: null, name: 'Planned', route: '/planned', kind: 'custom' }])
+    expect(created.status).toBe(200)
+    const plan = () => post(server.socket, '/blueprint/plan', { pages: ['Planned'] })
+    const old = await plan()
+    expect(old.status, JSON.stringify(old.body)).toBe(200)
+    expect(fs.existsSync(lock)).toBe(false)
+    expect((await patch([{ op: 'setProp', doc: file, baseRev: created.body.data.revs[file],
+      node: created.body.data.created['Planned/page'], expectedType: 'div', prop: 'children', value: 'Fresh',
+    }])).status).toBe(200)
+
+    const apply = (planned: any) => post(server.socket, '/batch', { ops: planned.ops, label: planned.label })
+    const stale = await apply(old.body.data)
+    expect(stale.status).toBe(409)
+    expect(stale.body.error).toMatchObject({ code: 'conflict', details: { revs: expect.any(Object) } })
+    expect(fs.existsSync(lock)).toBe(false)
+    expect(fs.existsSync(path.join(root, old.body.data.files[0]))).toBe(false)
+
+    const fresh = await plan()
+    expect(fresh.status).toBe(200)
+    expect((await apply(fresh.body.data)).status).toBe(200)
+    expect(JSON.parse(fs.readFileSync(lock, 'utf8'))).toEqual(fresh.body.data.lock)
+    const confirmed = await post(server.socket, '/blueprint/ejected', { pages: ['Planned'], entry: fresh.body.data.label })
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200)
+    expect(confirmed.body.data.lockRev).toMatch(/^sha256:[a-f0-9]{64}$/)
+  } finally {
+    await server.close()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)

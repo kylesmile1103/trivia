@@ -219,8 +219,12 @@ file or route until the existing registration is resolved. Older hashes remain r
 }
 ```
 
-No timestamps (NFR-02). The lock is written after the batch succeeds, in the same history
-entry (LLD-04).
+No timestamps (NFR-02).
+
+⚑ The adapter appends the guarded lock write as the final op of the source batch. The native
+transaction can roll back the sources and lock together. The dev service checks the page
+revisions under the edit queue, and `/ejected` confirms the resulting history entry.
+Only the managed lock basename is allowed as a JSON source-batch target.
 
 ### `replaceFile`
 

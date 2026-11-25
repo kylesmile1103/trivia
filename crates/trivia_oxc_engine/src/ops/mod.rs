@@ -373,10 +373,20 @@ pub fn apply_op(source: &str, file: &str, op: &Op) -> Result<Outcome> {
     }
 }
 
+pub(crate) fn validate_file(file: &str, content: &str) -> Result<()> {
+    if file.rsplit('/').next() == Some("blueprint.lock.json") {
+        serde_json::from_str::<serde_json::Value>(content).map_err(|error| EngineError::Parse {
+            file: file.to_string(), message: error.to_string(),
+        })?;
+    } else {
+        parse(&Allocator::default(), content, file)?;
+    }
+    Ok(())
+}
+
 /// The outcome of creating `file` with `content`: the content must parse as that file.
 pub fn created(file: &str, content: &str) -> Result<Outcome> {
-    let alloc = Allocator::default();
-    parse(&alloc, content, file).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
+    validate_file(file, content).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
     Ok(Outcome { file: file.to_string(), changed: true, locator: None, code: content.to_string() })
 }
 

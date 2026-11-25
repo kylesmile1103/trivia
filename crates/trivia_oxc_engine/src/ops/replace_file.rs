@@ -1,9 +1,7 @@
-use oxc_allocator::Allocator;
 use sha2::{Digest, Sha256};
 
-use super::Outcome;
+use super::{Outcome, validate_file};
 use crate::error::{EngineError, Result};
-use crate::parse;
 
 /// Compare the exact UTF-8 bytes on disk before considering the replacement.
 pub(super) fn replace_file(source: &str, file: &str, expected_hash: &str, content: &str) -> Result<Outcome> {
@@ -13,9 +11,9 @@ pub(super) fn replace_file(source: &str, file: &str, expected_hash: &str, conten
     }
 
     // A history entry (and a failed batch's rollback) must be able to restore the old code.
-    parse(&Allocator::default(), source, file)?;
+    validate_file(file, source)?;
     if source != content {
-        parse(&Allocator::default(), content, file)?;
+        validate_file(file, content)?;
     }
     Ok(Outcome { file: file.to_string(), changed: source != content, locator: None, code: content.to_string() })
 }

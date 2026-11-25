@@ -213,8 +213,7 @@ impl Workspace {
             return Err(conflict(rel));
         }
         // Never write code that doesn't parse.
-        let alloc = oxc_allocator::Allocator::default();
-        crate::parse(&alloc, content, rel).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
+        ops::validate_file(rel, content).map_err(|e| EngineError::InvalidResult(e.to_string()))?;
         self.write(rel, content, Some(expected), edit)
     }
 
@@ -352,6 +351,7 @@ fn supported_file(path: &Path, edit: bool) -> bool {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("tsx" | "jsx") => true,
         Some("ts") => edit,
+        Some("json") => edit && path.file_name().and_then(|name| name.to_str()) == Some("blueprint.lock.json"),
         _ => false,
     }
 }

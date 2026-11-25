@@ -235,13 +235,13 @@ it('NFR-05 refuses traversal, absolute paths and paths through symlinks', async 
 })
 
 it.each([
-  ['/preview', { page: 'Customers' }, 'running Vite app host'],
-  ['/plan', { pages: ['Customers'] }, '005'],
-  ['/ejected', { pages: ['Customers'], entry: 'Eject customers' }, '005'],
-])('FR-AG-01 reserves %s and reports the spec that provides it', async (route, body, spec) => {
+  ['/preview', { page: 'Customers' }, 422, 'unsupported', 'running Vite app host'],
+  ['/plan', { pages: ['Customers'] }, 404, 'node_not_found', 'No blueprint page'],
+  ['/ejected', { pages: ['Customers'], entry: 'Eject customers' }, 409, 'conflict', 'latest edit'],
+])('FR-AG-01 refuses %s without its required host, draft or history', async (route, body, status, code, message) => {
   const response = await post(route, body)
-  expect(response.status).toBe(422)
-  expect(await response.json()).toMatchObject({ ok: false, error: { code: 'unsupported', message: expect.stringContaining(spec === '005' ? 'spec 005' : spec) } })
+  expect(response.status).toBe(status)
+  expect(await response.json()).toMatchObject({ ok: false, error: { code, message: expect.stringContaining(message) } })
   expect(fs.existsSync(path.join(root, 'blueprint'))).toBe(false)
 })
 
@@ -272,9 +272,9 @@ it('NFR-14 executes every blueprint HTTP example in docs/api.md', async () => {
   expect(await send('/components')).toMatchObject({ ok: true, data: { schemas: { Button: { type: 'object' } } } })
   expect(await send('/patch')).toMatchObject({ ok: true, data: { entry: 'Add customers' } })
   expect(await send(`${pagePath}&projection=1`)).toMatchObject({ ok: true, data: { projection: expect.stringContaining('Customers') } })
-  for (const route of ['/preview', '/plan', '/ejected']) {
-    expect(await send(route, 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
-  }
+  expect(await send('/preview', 422)).toMatchObject({ ok: false, error: { code: 'unsupported' } })
+  expect(await send('/plan', 409)).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(await send('/ejected', 409)).toMatchObject({ ok: false, error: { code: 'conflict' } })
   vi.stubEnv('PATH', root)
   try {
     expect(await send('/backend', 422)).toMatchObject({

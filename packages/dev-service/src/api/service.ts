@@ -8,10 +8,11 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { APP_DOC, revOfText } from '@trivia/blueprint'
-import { projectFacts, type CompileContext } from '@trivia/blueprint-compiler'
+import { LOCK_FILE, projectFacts, readLock, type CompileContext } from '@trivia/blueprint-compiler'
 
 import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
+import { validateEjectLock } from '../blueprint/plan.js'
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
@@ -375,6 +376,19 @@ export class EngineService {
     return label
   }
 
+  confirmEject(pages: readonly string[], entry: string): Promise<{ lockRev: string }> {
+    return this.#queue.run(() => {
+      const file = this.blueprint.dir + '/' + LOCK_FILE
+      const history = this.#history.nextUndo
+      const written = history?.label === entry ? history.changes.find((change) => change.file === file)?.after : undefined
+      const current = this.blueprint.readDocumentText(LOCK_FILE)
+      if (!written || written !== current || !pages.length || !pages.every((page) => Object.hasOwn(readLock(written).pages, page))) {
+        throw new ApiError('conflict', 'The latest edit is not the requested blueprint eject entry.')
+      }
+      return { lockRev: revOfText(written) }
+    })
+  }
+
   undo(expectedLabel?: string): Promise<HistoryResult> {
     return this.#queue.run(() => {
       const next = this.#history.nextUndo?.label ?? null
@@ -391,6 +405,7 @@ export class EngineService {
 
   /** Apply ops as one transaction (the engine writes all files or none) and record it. */
   #transact(ops: Json[], label: string, source: EditSource): ApplyResult {
+    validateEjectLock(this.blueprint, ops)
     const { engine, host } = this.#options
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))

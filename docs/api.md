@@ -575,7 +575,7 @@ Content-Type: application/json
 {"page":"Customers"}
 ```
 
-`plan` takes optional page names (defaults to all drafts) and will return an eject plan with
+`plan` takes optional page names (defaults to all drafts) and returns an eject plan with
 guarded source operations, files, requirements, warnings, a lock and a label.
 
 ```http
@@ -585,7 +585,10 @@ Content-Type: application/json
 {"pages":["Customers"]}
 ```
 
-`ejected` will record the eject lock after the source edit succeeds and return `lockRev`.
+Apply `ops` in order with `POST /@trivia/api/batch` and the returned label. The final
+operation creates or replaces the managed `blueprint.lock.json` inside the blueprint
+directory. The draft revisions are checked before the batch writes any files.
+`ejected` confirms that the latest history entry committed the lock and returns `lockRev`.
 
 ```http
 POST /@trivia/api/blueprint/ejected
