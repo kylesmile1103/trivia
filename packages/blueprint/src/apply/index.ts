@@ -1,7 +1,7 @@
 // The batch reducer (LLD-01 section 4, FR-BP-07). A batch is applied to a working copy and
 // either every op applies or nothing is written. Pure: it computes the files to write and
 // leaves writing them to the caller (the dev service, LLD-04). Never throws.
-import { serialize } from '../serialize.js'
+import { compareBytes, serialize } from '../serialize.js'
 import { loadDocument, type Blueprint, type DocEntry } from '../store.js'
 import { applyError, type ApplyError, type Diagnostic } from '../types/diagnostics.js'
 import { blueprintOpSchema, type BlueprintOp, type OpName, type OpOf } from '../types/ops.js'
@@ -58,6 +58,21 @@ export function apply(blueprint: Blueprint, ops: readonly unknown[], options: Ap
     parsed.push(result.data)
   }
 
+  // Every op names the rev its author read: the document's rev before the batch, or null for
+  // a document that must not exist yet. All are checked before anything runs.
+  const current = (doc: string) => blueprint.docs[doc]?.rev ?? null
+  for (const [index, op] of parsed.entries()) {
+    if (op.baseRev !== current(op.doc)) {
+      const revs = Object.fromEntries(parsed.map((o) => [o.doc, current(o.doc)]))
+      return {
+        ok: false,
+        error: applyError('conflict', `${op.doc} changed since it was read (or its existence did)`, {
+          op: index, details: { doc: op.doc, expected: op.baseRev, actual: current(op.doc), revs },
+        }),
+      }
+    }
+  }
+
   const draft = new Draft(blueprint, options)
   for (const [index, op] of parsed.entries()) {
     try {
@@ -84,12 +99,27 @@ export function apply(blueprint: Blueprint, ops: readonly unknown[], options: Ap
       revs[file] = docs[file].rev
     }
   }
-  const sorted = Object.fromEntries(Object.keys(docs).sort().map((file) => [file, docs[file] as DocEntry]))
+  const sorted = Object.fromEntries(Object.keys(docs).sort(compareBytes).map((file) => [file, docs[file] as DocEntry]))
   const next: Blueprint = { exists: blueprint.exists || writes.length > 0, docs: sorted }
+
+  // The result must pass the schema and the references. Only errors the batch introduced
+  // block it, so a broken file elsewhere does not freeze the rest of the blueprint.
+  const key = (d: Diagnostic) => `${d.code}\u0000${d.doc}\u0000${d.pointer}`
+  const known = new Set(validateStructure(blueprint).filter((d) => d.severity === 'error').map(key))
+  const structure = validateStructure(next)
+  const introduced = structure.filter((d) => d.severity === 'error' && !known.has(key(d)))
+  if (introduced.length > 0) {
+    return {
+      ok: false,
+      error: applyError('invalid_result', `The batch would leave ${introduced.length} error(s): ${introduced[0]?.message}`, {
+        details: { diagnostics: introduced },
+      }),
+    }
+  }
   return {
     ok: true,
     writes,
     blueprint: next,
-    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: validateStructure(next) },
+    result: { changed: writes.length > 0, revs, created: draft.created, diagnostics: structure },
   }
 }
