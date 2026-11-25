@@ -25,6 +25,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@trivia/blueprint": "workspace:*",
+    "@trivia/contract-sync": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "typescript": "~6.0.2",

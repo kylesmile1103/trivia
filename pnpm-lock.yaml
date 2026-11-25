@@ -551,6 +551,13 @@ importers:
         version: 5.0.3(@types/node@24.19.1)(jsdom@30.1.2)(vite@8.3.3(@types/node@24.19.1)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/blueprint-compiler:
+    dependencies:
+      '@trivia/blueprint':
+        specifier: workspace:*
+        version: link:../blueprint
+      '@trivia/contract-sync':
+        specifier: workspace:*
+        version: link:../contract-sync
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
@@ -773,6 +780,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.32.2
         version: 1.32.2(supports-color@7.2.0)(zod@4.6.6)
+      '@trivia/blueprint':
+        specifier: workspace:*
+        version: link:../blueprint
+      '@trivia/blueprint-compiler':
+        specifier: workspace:*
+        version: link:../blueprint-compiler
       '@types/node':
         specifier: ^24.13.3
         version: 24.19.1
