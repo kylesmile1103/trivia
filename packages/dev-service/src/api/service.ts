@@ -7,9 +7,10 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
+import type { DevHost } from '../host.js'
 import type { ApplyResult, Drift, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
 import { type Mention, RefineAdapter } from '../refine/index.js'
-import { type RouteEntry, type RoutesHost, discoverRoutes, fileResolver } from '../routes/index.js'
+import type { RouteEntry } from '../routes/index.js'
 import { normalizePath } from '../routes/paths.js'
 import { uncommitted } from './git.js'
 import { History } from './history.js'
@@ -20,10 +21,7 @@ import { type Selected, type SelectionState, SelectionStore, rebase } from './se
 export type Json = Record<string, unknown>
 
 export interface ServiceOptions {
-  /** Absolute project root; every file in the API is relative to it. */
-  root: string
-  uiDir: string
-  importBase: string
+  host: DevHost
   version: string
   engine: EngineBinding
   /** Undo entries kept (docs/api.md: 100). */
@@ -32,8 +30,6 @@ export interface ServiceOptions {
   manifestPath?: string
   /** How long a screenshot request waits for an open designer (ms). Default 15 000. */
   screenshotTimeoutMs?: number
-  /** How the app's bundler resolves an import (the plugin passes Vite's); default: relative and `@/` → `src/`. */
-  resolve?: RoutesHost['resolve']
 }
 
 /** A route, with the Refine resource and action that declare its path (`<Refine resources>`). */
@@ -81,9 +77,10 @@ export class EngineService {
     this.#options = options
     this.#history = new History(options.historyLimit ?? 100)
     this.refine = new RefineAdapter({
-      root: options.root,
-      uiDir: options.uiDir,
-      importBase: options.importBase,
+      root: options.host.root,
+      uiDir: options.host.uiDir,
+      importBase: options.host.importBase,
+      preview: options.host.preview,
       describeValues: (file) => this.describeValues(file),
       manifest: () => this.manifest(),
       outline: (file) => this.outline(file),
@@ -94,46 +91,43 @@ export class EngineService {
   }
 
   health(): Health {
-    const { root, uiDir, importBase, version } = this.#options
+    const { host: { root, uiDir, importBase }, version } = this.#options
     return { root, uiDir, importBase, version }
   }
 
   components(): unknown[] {
-    const { engine, root, uiDir, importBase } = this.#options
+    const { engine, host: { root, uiDir, importBase } } = this.#options
     return unwrap<unknown[]>(engine.components(root, uiDir, importBase))
   }
 
   inspect(locator: string): unknown {
     if (!locator) throw new ApiError('invalid_locator', 'missing locator (<file>#<component>#<i.j.k>)')
-    return unwrap<unknown>(this.#options.engine.inspect(this.#options.root, locator))
+    return unwrap<unknown>(this.#options.engine.inspect(this.#options.host.root, locator))
   }
 
   /** Every JSX tree of the project-relative `file`, with locators (docs/api.md). */
   outline(file: string): unknown[] {
     if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
-    return unwrap<unknown[]>(this.#options.engine.outline(this.#options.root, file))
+    return unwrap<unknown[]>(this.#options.engine.outline(this.#options.host.root, file))
   }
 
   /** The scopes of `file` with their top-level bindings and hook calls (engine value descriptions). */
   describeValues(file: string): unknown[] {
     if (!file) throw new ApiError('invalid_op', 'missing file (project-relative, e.g. src/pages/Home.tsx)')
-    return unwrap<unknown[]>(this.#options.engine.describeValues(this.#options.root, file))
+    return unwrap<unknown[]>(this.#options.engine.describeValues(this.#options.host.root, file))
   }
 
   /** The value at a value path (`<file>#<scope>#<path>`), unwrapped to its literal. */
   describeValue(path: string): unknown {
-    return unwrap<unknown>(this.#options.engine.describeValue(this.#options.root, path))
+    return unwrap<unknown>(this.#options.engine.describeValue(this.#options.host.root, path))
   }
 
   /** The app's routes, read from its source (docs/api.md `GET /routes`). */
   async routes(): Promise<AppRoute[]> {
-    const { root } = this.#options
-    const found = await discoverRoutes({
-      root,
+    const found = await this.#options.host.readRoutes({
       outline: (file) => this.outline(file),
       inspect: (locator) => this.inspect(locator),
       describeValues: (file) => this.describeValues(file),
-      resolve: this.#options.resolve ?? fileResolver(root),
     })
     const resources = await this.refine.resourceRoutes().catch(() => [])
     return found.map((route) => {
@@ -144,7 +138,7 @@ export class EngineService {
 
   /** Where `file` still names `name`: member accesses, string literals, object keys, destructured names. */
   mentions(file: string, name: string): Mention[] {
-    return unwrap<Mention[]>(this.#options.engine.mentions(this.#options.root, file, name))
+    return unwrap<Mention[]>(this.#options.engine.mentions(this.#options.host.root, file, name))
   }
 
   history(): HistoryState {
@@ -153,7 +147,7 @@ export class EngineService {
 
   /** contract-sync's manifest, and whether its spec changed since the code was generated. */
   async manifest(): Promise<ManifestState> {
-    const file = path.join(this.#options.root, this.#options.manifestPath ?? 'trivia.manifest.json')
+    const file = path.join(this.#options.host.root, this.#options.manifestPath ?? 'trivia.manifest.json')
     let text: string
     try {
       text = await fsp.readFile(file, 'utf8')
@@ -177,7 +171,7 @@ export class EngineService {
    */
   async syncContract(options: SyncOptions = {}): Promise<SyncResult> {
     return this.#queue.run(async () => {
-      const root = this.#options.root
+      const root = this.#options.host.root
       const { manifest } = await this.manifest()
       const current = manifest as {
         schemaHash?: unknown
@@ -257,7 +251,7 @@ export class EngineService {
     try {
       // Loaded on first use: contract-sync brings hey-api, which the dev server needs only here.
       const { loadSpec, schemaHash } = await import('@trivia/contract-sync')
-      const specHash = schemaHash((await loadSpec(source, { cwd: this.#options.root })).spec)
+      const specHash = schemaHash((await loadSpec(source, { cwd: this.#options.host.root })).spec)
       return { status: specHash === manifestHash ? 'current' : 'changed', source, manifestHash, specHash }
     } catch {
       return unknown
@@ -300,7 +294,7 @@ export class EngineService {
 
   /** Apply ops as one transaction (the engine writes all files or none) and record it. */
   #transact(ops: Json[], label: string, source: EditSource): ApplyResult {
-    const { engine, root } = this.#options
+    const { engine, host: { root } } = this.#options
     const result = unwrap<OpsResult>(engine.applyOps(root, JSON.stringify(ops)))
     if (result.changes.length > 0) this.#history.record({ label, changes: result.changes })
     if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
@@ -319,7 +313,7 @@ export class EngineService {
     let next = ops.length === 1 && only ? rebase(current.locator, only, resultLocator) : current.locator
     if (next !== null) {
       try {
-        const details = unwrap<{ name: string }>(this.#options.engine.inspect(this.#options.root, next))
+        const details = unwrap<{ name: string }>(this.#options.engine.inspect(this.#options.host.root, next))
         if (details.name !== current.name) next = null
       } catch {
         next = null
@@ -338,7 +332,7 @@ export class EngineService {
         ? entry.changes.toReversed().map((c) => ({ file: c.file, expected: c.after, content: c.before }))
         : entry.changes.map((c) => ({ file: c.file, expected: c.before, content: c.after }))
     try {
-      unwrap<null>(this.#options.engine.restoreFiles(this.#options.root, JSON.stringify(writes)))
+      unwrap<null>(this.#options.engine.restoreFiles(this.#options.host.root, JSON.stringify(writes)))
     } catch (error) {
       if (error instanceof ApiError) throw new ApiError(error.code, `${direction} "${entry.label}" failed: ${error.message}`)
       throw error

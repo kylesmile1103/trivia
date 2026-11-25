@@ -74,9 +74,9 @@ interface DevHost {
   uiDir: string
   importBase: string
   resolveModule(specifier: string, from: string): Promise<string | null>
-  readRoutes(): Promise<AppRoute[]>                 // host-specific
+  readRoutes(source: RouteSource): Promise<RouteEntry[]> // host-specific
   preview: PreviewHost                              // virtual modules (Vite) or files (Next.js)
-  allowedHosts: string[] | true
+  allowedHosts: readonly string[] | true
 }
 ```
 
@@ -94,6 +94,10 @@ assertions and stay where their Vite servers run.
 ⚑ The Vite gate exposed a Data panel race when a field moved before the next row action
 could be clicked. Rows use their field keys and keep actions laid out through a refresh.
 Hover and keyboard focus reveal the controls.
+
+⚑ `readRoutes` receives the service's read-only engine helpers. The service merges Refine
+labels into the host's `RouteEntry` results, so each host uses the same `AppRoute` contract.
+`PreviewHost.publish` receives the compiled page and returns the URL the host made available.
 
 `standalone.ts` listens on `127.0.0.1` only, on a port chosen by the launcher, and applies the
 same guard. It serves nothing but `/@trivia/api` and `/@trivia/mcp`.

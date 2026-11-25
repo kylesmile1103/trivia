@@ -10,6 +10,7 @@ import path from 'node:path'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { ApiError } from '../engine.js'
+import type { PreviewHost } from '../host.js'
 import { type ColumnContext, columnFor, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
@@ -187,6 +188,7 @@ export interface RefineHost {
   /** shadcn's ui folder (project-relative) and its import prefix: `src/components/ui`, `@/components/ui`. */
   uiDir: string
   importBase: string
+  preview: PreviewHost
   describeValues(file: string): unknown
   manifest(): Promise<{ manifest: unknown; drift?: unknown }>
   /** The JSX trees of a file (engine outline). */
@@ -713,8 +715,9 @@ export class RefineAdapter {
     // Keyed by the contract's name: `customers` and `Customer` are one page.
     const key = normalized({ ...request, resource: page.resource })
     const id = createHash('sha256').update(JSON.stringify(key)).digest('hex').slice(0, 16)
+    const module = await this.#host.preview.publish(id, page)
     this.#previews.set(id, key)
-    return { ...page, module: `${PREVIEW_PREFIX}${id}.tsx` }
+    return { ...page, module }
   }
 
   /**

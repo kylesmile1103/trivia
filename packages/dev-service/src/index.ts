@@ -4,3 +4,6 @@ export { loadEngine, unwrap, type EngineBinding, type Insertion } from './engine
 export { MCP_PATH, createMcpMiddleware } from './mcp/server.js'
 export { PREVIEW_PREFIX } from './refine/index.js'
 export type * from './types.js'
+export type { DevHost, PreviewHost, RouteSource } from './host.js'
+export { createDevMiddleware } from './middleware.js'
+export { discoverRoutes, fileResolver, type RouteEntry } from './routes/index.js'
