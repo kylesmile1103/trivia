@@ -26,7 +26,7 @@ export function nextBoundaryCheck(context: Pick<CompileContext, 'engine' | 'mani
 
 export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks: RefineHookMap): LoweredCustomPage {
   const { plan, analysis, connections, diagnostics, server } = boundaryFacts(page, context)
-  if (diagnostics.length) throw new CompileError('invalid_result', 'Invalid client boundary in ' + page.name, { diagnostics })
+  if (diagnostics.length) throw new CompileError('invalid_result', 'Invalid Next.js page ' + page.name, { diagnostics })
 
   const { facts } = context
   const { style } = facts
@@ -67,7 +67,7 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
   }
   aliases['data'] = '({ ' + server.map(({ key }) => key + ': ' + aliases['data.' + key]).join(', ') + ' })'
   const expression = emitPageExpressions(page, context.engine, aliases, ui)
-  const data = printServerQueries(server, context, expression)
+  const data = printServerQueries(page, server, context, expression)
   for (const { key } of server) {
     for (const { id } of analysis) if (id.startsWith('/queries/' + key + '/')) readServer(id)
   }

@@ -4,6 +4,7 @@ import ts from 'typescript'
 import type { CompileContext } from '../../compile.js'
 import { analyzePageExpressions } from '../../lower/scope.js'
 import { compareBytes } from '../../print/style.js'
+import { publicDataChecks } from './caching.js'
 import { planBoundaries } from './boundaries.js'
 import { serverQueries } from './server-data.js'
 
@@ -113,6 +114,7 @@ export function boundaryFacts(page: CustomPage, context: Pick<CompileContext, 'e
     doc: pageDocPath(page.name), pointer, severity: 'error', code: 'boundary_not_serializable',
     message: 'The value on ' + page.nodes[node]!.name + ' cannot cross into a Next.js client component.',
   }))
+  diagnostics.push(...publicDataChecks(page, analysis, server))
   return { plan, analysis, connections, diagnostics, server }
 }
 

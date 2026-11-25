@@ -38,3 +38,42 @@ it('FR-NX-04 forwards only the request credentials and lets Next handle 404s', (
   expect(helper).toContain('notFound()')
   expect(helper).toContain('throw new Error(')
 })
+
+it('FR-NX-05 keeps private queries uncached and emits an anonymous 30-second cache only for public data', async () => {
+  const docs = fixture()
+  const doc = pageDocPath('KitTable')
+  const source = JSON.parse(docs[doc]!)
+  source.route = '/people/:id'
+  for (const id of Object.keys(source.nodes)) if (id !== source.root && id !== label) delete source.nodes[id]
+  delete source.props
+  source.queries = { customer: { kind: 'one', resource: 'Customer', params: { id: 'params.id' } } }
+  source.bindings = { [label]: { children: 'data.customer.record?.fullName' } }
+  docs['app.blueprint.json'] = docs['app.blueprint.json']!.replace('vite-refine', 'next-refine')
+  const context = await kitServiceContext()
+  const facts = { ...context.facts, target: 'next-refine', pagesDir: projectFacts({ target: 'next-refine' }).pagesDir } as const
+  docs[doc] = JSON.stringify(source)
+  const privateView = compilePage(loadBlueprint(docs), 'KitTable', { ...context, facts })
+  expect(privateView.code).toContain('await apiRequest()')
+  expect(privateView.code).not.toContain('unstable_cache')
+  source.public = true
+  docs[doc] = JSON.stringify(source)
+  const publicView = compilePage(loadBlueprint(docs), 'KitTable', { ...context, facts })
+  expect(publicView.code).toContain('unstable_cache')
+  expect(publicView.code).toContain('revalidate: 30')
+  expect(publicView.code).toContain('publicApiRequest()')
+  expect(publicView.code).not.toContain('await apiRequest()')
+  for (const [file, output] of [['private.tsx', privateView], ['public.tsx', publicView]] as const) {
+    const golden = new URL('../fixtures/next/caching/' + file, import.meta.url)
+    expect(output.code).toBe(readFileSync(golden, 'utf8'))
+  }
+
+  source.queries.customer.params.id = 'user.id'
+  docs[doc] = JSON.stringify(source)
+  expect(() => compilePage(loadBlueprint(docs), 'KitTable', { ...context, facts })).toThrow(expect.objectContaining({
+    details: { diagnostics: expect.arrayContaining([expect.objectContaining({
+      code: 'public_page_uses_user', doc, pointer: '/queries/customer/params/id',
+    })]) },
+  }))
+  docs['app.blueprint.json'] = docs['app.blueprint.json']!.replace('next-refine', 'vite-refine')
+  expect(() => compilePage(loadBlueprint(docs), 'KitTable', context)).not.toThrow()
+})

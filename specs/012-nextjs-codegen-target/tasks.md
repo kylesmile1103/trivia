@@ -38,7 +38,7 @@
 
 ## Phase 7: User Story 5 - Caching (P2)
 
-- [ ] T016 [US5] `public_page_uses_user` validation, then `next-refine/caching.ts` for public pages only. Golden files with and without
+- [x] T016 [US5] `public_page_uses_user` validation, then `next-refine/caching.ts` for public pages only. Golden files with and without
 
 ## Phase 8: User Story 6 - Preview (P2)
 

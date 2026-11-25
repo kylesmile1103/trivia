@@ -163,11 +163,15 @@ it when running the web resource. For an independent production build, set
 
 ## 5. Caching (FR-NX-05)
 
-Nothing is cached by default: internal tools show live, per-user data. A page with
-`"public": true` whose server part has no dependency on `user` or cookies gets its data
-function marked for caching with a short default lifetime, and the template then enables Cache
-Components. A `public` page that does depend on the user is a validation error,
-`public_page_uses_user`. This is the only place the compiler emits a caching directive.
+Nothing is cached by default. A page with `"public": true` whose server part has no
+dependency on `user` or credentials gets a short-lived cache around its data functions.
+A public page that depends on identity is refused with `public_page_uses_user`.
+
+⚑ Use the pinned Next.js `unstable_cache` API with a 30-second revalidation window.
+Cache Components would require a Suspense fallback around request-time Refine and data
+bindings. The existing Data Cache API keeps the single awaited HTML response, including
+the HTTP status from `notFound()`. The cached SDK calls use anonymous request options.
+[Next.js Data Cache API](https://nextjs.org/docs/app/api-reference/functions/unstable_cache).
 
 ## 6. Preview
 

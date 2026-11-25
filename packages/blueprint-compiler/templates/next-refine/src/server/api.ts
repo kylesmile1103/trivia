@@ -3,16 +3,20 @@ import { notFound } from 'next/navigation'
 
 import { apiOrigin } from './api-origin'
 
-export async function apiRequest() {
+export function publicApiRequest() {
   const baseUrl = apiOrigin()
   if (!baseUrl) throw new Error('The API address is missing. Start the AppHost or set TRIVIA_API_ORIGIN.')
+  return { baseUrl, cache: 'no-store' as const, redirect: 'error' as const }
+}
+
+export async function apiRequest() {
   const incoming = await headers()
   const forwarded: Record<string, string> = {}
   for (const name of ['cookie', 'authorization']) {
     const value = incoming.get(name)
     if (value !== null) forwarded[name] = value
   }
-  return { baseUrl, headers: forwarded, cache: 'no-store' as const, redirect: 'error' as const }
+  return { ...publicApiRequest(), headers: forwarded }
 }
 
 export function apiData<T>({ data, response }: { data: T | undefined; response?: Response }): T {

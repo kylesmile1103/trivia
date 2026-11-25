@@ -6,6 +6,7 @@ import type { ProjectFacts } from '../../facts.js'
 import type { ImportIR } from '../../ir.js'
 import type { ExpressionAnalysis } from '../../lower/scope.js'
 import { compareBytes, property, quote, statement } from '../../print/style.js'
+import { cachedFunction } from './caching.js'
 
 export interface ServerQuery {
   key: string
@@ -40,7 +41,7 @@ export function serverQueries(page: CustomPage, analysis: readonly ExpressionAna
     const deps = [...new Set(sites.flatMap(({ deps }) => deps))]
     return [{ key, query, operation, deps, sites, name: '__bpQuery_' + key, loader: '__bpLoad_' + key }]
   })
-  const wanted = new Set(candidates.filter(({ sites }) => sites.some(({ tier }) => tier === 'server')).map(({ key }) => key))
+  const wanted = new Set(candidates.filter(({ sites }) => page.public || sites.some(({ tier }) => tier === 'server')).map(({ key }) => key))
   const all = Object.keys(page.queries)
   const dependsOn = (candidate: ServerQuery) => candidate.deps.flatMap((dep) => dep === 'data.*' ? all
     : dep.startsWith('data.') ? [dep.slice(5)] : [])
@@ -80,18 +81,19 @@ export function printServerLoader(
 }
 
 export function printServerQueries(
-  descriptors: readonly ServerQuery[], context: CompileContext, expression: (pointer: string) => string,
+  page: CustomPage, descriptors: readonly ServerQuery[], context: CompileContext, expression: (pointer: string) => string,
 ): { imports: ImportIR[]; preamble: string[]; declarations: string[] } {
   if (!descriptors.length) return { imports: [], preamble: [], declarations: [] }
   const source = context.contract?.modules.sdk?.importPath
   if (!source) throw new CompileError('invalid_result', 'Server queries require the generated SDK.')
   const { style } = context.facts
   const imports: ImportIR[] = [
-    { name: 'apiRequest', source: '@/server/api' },
+    { name: page.public ? 'publicApiRequest' : 'apiRequest', source: '@/server/api' },
     { name: 'apiData', source: '@/server/api' },
   ]
   const preamble: string[] = []
-  const declarations = [statement('const __bpApi = await apiRequest()', style)]
+  if (page.public) imports.push({ name: 'unstable_cache', source: 'next/cache' })
+  const declarations = [statement('const __bpApi = ' + (page.public ? 'publicApiRequest()' : 'await apiRequest()'), style)]
   const imported = new Map<string, string>()
   for (const { key, query, operation, name, loader } of descriptors) {
     const existing = imported.get(operation.sdkFn)
@@ -102,7 +104,9 @@ export function printServerQueries(
     }
     preamble.push(printServerLoader(operation, query.kind, loader, sdk))
     const options = [...parameterOptions(key, query, operation, expression, style)]
-    const call = 'await ' + loader + '({ ...__bpApi' + (options.length ? ', ' + options.join(', ') : '') + ' })'
+    const callable = page.public ? loader + 'Cached' : loader
+    if (page.public) preamble.push(cachedFunction(callable, loader, [page.route, key, operation.sdkFn], style))
+    const call = 'await ' + callable + '({ ...__bpApi' + (options.length ? ', ' + options.join(', ') : '') + ' })'
     const value = query.enabled === undefined ? call
       : 'Boolean(' + expression(toPointer(['queries', key, 'enabled'])) + ') ? ' + call + ' : undefined'
     declarations.push(statement('const ' + name + ' = ' + value, style))
@@ -138,6 +142,7 @@ export interface ContractRecord {
   operation: ManifestItemOperation
   routeParam: string
   sdk: string
+  public: boolean
 }
 
 export function contractRecord(page: ContractPage, resource: ManifestResource, contract?: TriviaManifest | null): ContractRecord | undefined {
@@ -148,7 +153,7 @@ export function contractRecord(page: ContractPage, resource: ManifestResource, c
   const params = page.route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1)] : [])
   const routeParam = params.find((name) => name === operation.idParam) ?? params.find((name) => name === 'id') ??
     (params.length === 1 ? params[0] : undefined)
-  if (routeParam !== undefined) return { operation, routeParam, sdk }
+  if (routeParam !== undefined) return { operation, routeParam, sdk, public: page.public }
 }
 
 export function printContractEntry(component: string, route: string, prefetch: ContractRecord, facts: ProjectFacts): string {
@@ -156,15 +161,23 @@ export function printContractEntry(component: string, route: string, prefetch: C
   const { sdk, operation, routeParam } = prefetch
   const params = route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1) + ': string'] : [])
   const line = (code: string) => statement(code, style)
+  const args = '{ ...request, path: { ' + property(operation.idParam, style) + ': recordId } }'
+  const request = prefetch.public ? 'publicApiRequest()' : 'await apiRequest()'
+  const read = prefetch.public ? 'await readPublicRecord(' + args + ')'
+    : '{ data: apiData(await ' + operation.sdkFn + '(' + args + ')) }'
   return [
+    ...(prefetch.public ? [line('import { unstable_cache } from ' + quote('next/cache', style))] : []),
     line('import { ' + operation.sdkFn + ' } from ' + quote(sdk, style)),
-    line('import { apiData, apiRequest } from ' + quote('@/server/api', style)),
+    line('import { apiData, ' + (prefetch.public ? 'publicApiRequest' : 'apiRequest') + ' } from ' + quote('@/server/api', style)),
     line('import { ' + component + ' as View } from ' + quote('./view', style)), '',
+    ...(prefetch.public ? [
+      printServerLoader(operation, 'one', 'readRecord', operation.sdkFn),
+      cachedFunction('readPublicRecord', 'readRecord', [route, operation.sdkFn], style), '',
+    ] : []),
     'export default async function Page({ params }: { params: Promise<{ ' + params.join('; ') + ' }> }) {',
     '  ' + line('const { ' + routeParam + ': recordId } = await params'),
-    '  ' + line('const request = await apiRequest()'),
-    '  ' + line('const initialRecord = { data: apiData(await ' + operation.sdkFn + '({ ...request, path: { ' +
-      property(operation.idParam, style) + ': recordId } })) }'),
+    '  ' + line('const request = ' + request),
+    '  ' + line('const initialRecord = ' + read),
     '  ' + line('return <View recordId={recordId} initialRecord={initialRecord} />'),
     '}', '',
   ].join('\n')
