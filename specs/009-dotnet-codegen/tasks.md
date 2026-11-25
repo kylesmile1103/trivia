@@ -24,7 +24,7 @@
 - [x] T011 [US1] Build test: write the bank fixture to a temp folder, `dotnet build -warnaserror`
 - [x] T012 [US1] Snapshot tests, then `ContractsEmitter` (records with validation attributes) and `EndpointsEmitter` for get, create, update, delete with typed results
 - [x] T013 [US1] `ApiProblemEmitter` and `ApiRegistrationEmitter` (context, validation, OpenAPI, problem details, exception handler, group mapping)
-- [ ] T014 [US1] Integration suite with PostgreSQL in a container: CRUD statuses and bodies, validation 400 with `errors`, 404, unique 409
+- [x] T014 [US1] Integration suite with PostgreSQL in a container: CRUD statuses and bodies, validation 400 with `errors`, 404, unique 409
 
 ## Phase 4: User Story 2 - Lists (P1)
 
