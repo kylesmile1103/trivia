@@ -26,8 +26,9 @@ export function prepareQueries(
   context: CompileContext,
   names: Names,
   analysis: readonly ExpressionAnalysis[],
-  { queries: queryHooks, queryStatus }: RefineHookMap,
+  { queries: queryHooks, queryStatus, initialOptions }: RefineHookMap,
   provided?: ReadonlyMap<string, Record<string, string>>,
+  initial?: ReadonlyMap<string, string>,
 ) {
   const { style } = context.facts
   const rename: Record<string, string> = {}
@@ -77,7 +78,10 @@ export function prepareQueries(
         if (id !== undefined) args.push('id: ' + id)
         if (params.size) args.push('meta: { query: ' + object(properties(params, style)) + ' }')
       }
-      if (query.enabled !== undefined) args.push('queryOptions: { enabled: ' + expression(toPointer([...path, 'enabled'])) + ' }')
+      const seeded = initial?.get(key)
+      const options = seeded ? initialOptions?.(seeded) ?? [] : []
+      if (query.enabled !== undefined) options.unshift('enabled: ' + expression(toPointer([...path, 'enabled'])))
+      if (options.length) args.push('queryOptions: ' + object(options))
 
       const typeName = query.kind === 'custom' ? undefined : resource.entity?.typeName
       const source = context.contract?.modules.types?.importPath

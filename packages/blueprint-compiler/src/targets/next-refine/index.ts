@@ -9,6 +9,9 @@ export const nextRefine: Target = {
   lower: (page, context) => lowerNextCustom(page, context, nextRefine.hooks),
   files,
   routeOps,
-  hooks: { queries: queryHooks, queryStatus, router: { source: 'next/navigation', searchTuple: false } },
+  hooks: {
+    queries: queryHooks, queryStatus, router: { source: 'next/navigation', searchTuple: false },
+    initialOptions: (value) => ['initialData: ' + value, 'refetchOnMount: false'],
+  },
   preview: (page) => ({ route: '/__blueprint/' + page, id: page }),
 }

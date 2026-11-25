@@ -33,7 +33,7 @@ export interface ScaffoldContext {
   style?: FormStyle
 }
 
-type RenderContext = ScaffoldContext & NonNullable<ScaffoldRequest['options']> & Pick<ScaffoldRequest, 'actions'>
+type RenderContext = ScaffoldContext & NonNullable<ScaffoldRequest['options']> & Pick<ScaffoldRequest, 'actions' | 'initialRecord'>
 
 export interface ScaffoldRequest {
   resource: ManifestResource
@@ -41,6 +41,7 @@ export interface ScaffoldRequest {
   project: ScaffoldContext
   options?: Pick<ContractOptions, 'fields' | 'hideFields' | 'title' | 'filters'>
   actions?: ContractPageInput['actions']
+  initialRecord?: ContractPageInput['initialRecord']
 }
 
 export type RefinePageGenerator = (request: ScaffoldRequest) => PageFile
@@ -159,7 +160,7 @@ export function generateRefineSnippets(
 }
 
 /** The same generator is used by the new-resource plan, inferencer and blueprint compiler. */
-export const generateRefinePage: RefinePageGenerator = ({ resource: contract, kind, project, options, actions }) => {
+export const generateRefinePage: RefinePageGenerator = ({ resource: contract, kind, project, options, actions, initialRecord }) => {
   const name = refineName(contract)
   const typeName = contract.entity?.typeName ?? null
   const supported = supportedKinds(contract)
@@ -167,7 +168,7 @@ export const generateRefinePage: RefinePageGenerator = ({ resource: contract, ki
     throw new Error(`${contract.name} has no ${kind === 'edit' ? 'update' : kind === 'show' ? 'get' : kind} operation in the contract`)
   }
   const resource = withoutFields(contract, options?.hideFields ?? [])
-  const context: RenderContext = { ...project, ...options, actions }
+  const context: RenderContext = { ...project, ...options, actions, initialRecord }
   const component = `${resource.name}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
   const route = routeOf(name, kind)
   const file = context.appRouter
@@ -292,6 +293,17 @@ ${columns.map((c) => `${indent(c, 6)},`).join('\n')}
 `
 }
 
+function recordProps(context: RenderContext, typeName: string | null): string {
+  return context.initialRecord ? '{ recordId, initialRecord }: { recordId: string; initialRecord: { data: ' +
+    (typeName ?? 'Record<string, unknown>') + ' } }' : ''
+}
+
+function recordOptions(context: RenderContext, spaces: string): string {
+  return context.initialRecord
+    ? '\n' + spaces + 'id: recordId,\n' + spaces + 'queryOptions: { ' + context.initialRecord + ' },'
+    : ''
+}
+
 function formPage(
   resource: ManifestResource,
   name: string,
@@ -362,19 +374,21 @@ ${pieces.map((p) => `  ${key(p.name)}: ${p.rule},`).join('\n')}
 
 type ${values} = z.infer<typeof ${schema}>;
 
-export function ${component}() {${setup}
+export function ${component}(${recordProps(context, typeName)}) {${setup}${context.initialRecord
+    ? '\n  const initialValues = ' + schema + '.partial().safeParse(initialRecord.data);' : ''}
   const {
     refineCore: { onFinish, formLoading },
     ...form
   } = useForm<${typeName ?? 'Record<string, unknown>'}, HttpError, ${values}>({
     resolver: zodResolver(${schema}),
     defaultValues: {
-${pieces.map((p) => `      ${key(p.name)}: ${p.defaultValue},`).join('\n')}
+${pieces.map((p) => `      ${key(p.name)}: ${p.defaultValue},`).join('\n')}${context.initialRecord
+    ? '\n      ...(initialValues.success ? initialValues.data : {}),' : ''}
     },
     refineCoreProps: {
       resource: "${name}",
       action: "${kind}",
-      redirect: "list",
+      redirect: "list",${recordOptions(context, "      ")}
     },
   });
 
@@ -428,9 +442,9 @@ function showPage(resource: ManifestResource, name: string, component: string, t
   const setup = actionSetup(context, imports)
   return `${imports.render()}
 
-export function ${component}() {${setup}
+export function ${component}(${recordProps(context, typeName)}) {${setup}
   const { result: record } = useShow<${typeName ?? 'Record<string, unknown>'}>({
-    resource: "${name}",
+    resource: "${name}",${recordOptions(context, "    ")}
   });
 
   return (

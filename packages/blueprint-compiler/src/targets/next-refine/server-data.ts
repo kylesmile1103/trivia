@@ -1,11 +1,11 @@
-import { toPointer, type CustomPage, type Query } from '@trivia/blueprint'
-import type { ManifestOperation, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
+import { toPointer, type ContractPage, type CustomPage, type Query } from '@trivia/blueprint'
+import type { ManifestItemOperation, ManifestOperation, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import { CompileError, type CompileContext } from '../../compile.js'
 import type { ProjectFacts } from '../../facts.js'
 import type { ImportIR } from '../../ir.js'
 import type { ExpressionAnalysis } from '../../lower/scope.js'
-import { compareBytes, property, statement } from '../../print/style.js'
+import { compareBytes, property, quote, statement } from '../../print/style.js'
 
 export interface ServerQuery {
   key: string
@@ -32,13 +32,11 @@ function operationFor(query: Query, resource: ManifestResource): ManifestOperati
 }
 
 export function serverQueries(page: CustomPage, analysis: readonly ExpressionAnalysis[], contract?: TriviaManifest | null): ServerQuery[] {
-  const manual = new Set(Object.values(page.actions).flatMap((steps) =>
-    steps.flatMap((step) => step.do === 'refetch' ? [step.query] : [])))
   const candidates = Object.entries(page.queries).sort(([a], [b]) => compareBytes(a, b)).flatMap(([key, query]) => {
     const resource = contract?.resources.find(({ name }) => name === query.resource)
     const operation = resource && operationFor(query, resource)
     const sites = analysis.filter(({ id }) => id.startsWith('/queries/' + key + '/'))
-    if (!operation || operation.method !== 'GET' || manual.has(key) || sites.some(({ tier }) => tier === 'client')) return []
+    if (!operation || operation.method !== 'GET' || sites.some(({ tier }) => tier === 'client')) return []
     const deps = [...new Set(sites.flatMap(({ deps }) => deps))]
     return [{ key, query, operation, deps, sites, name: '__bpQuery_' + key, loader: '__bpLoad_' + key }]
   })
@@ -134,4 +132,40 @@ function parameterOptions(
   }
   return [...groups].map(([group, fields]) =>
     group + ': { ' + fields.join(', ') + (group === 'headers' ? ', ...__bpApi.headers' : '') + ' }')
+}
+
+export interface ContractRecord {
+  operation: ManifestItemOperation
+  routeParam: string
+  sdk: string
+}
+
+export function contractRecord(page: ContractPage, resource: ManifestResource, contract?: TriviaManifest | null): ContractRecord | undefined {
+  if (page.kind !== 'show' && page.kind !== 'edit') return
+  const operation = resource.operations.get
+  const sdk = contract?.modules.sdk?.importPath
+  if (!operation || !sdk || !operation.parameters.some(({ in: place, name }) => place === 'path' && name === operation.idParam)) return
+  const params = page.route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1)] : [])
+  const routeParam = params.find((name) => name === operation.idParam) ?? params.find((name) => name === 'id') ??
+    (params.length === 1 ? params[0] : undefined)
+  if (routeParam !== undefined) return { operation, routeParam, sdk }
+}
+
+export function printContractEntry(component: string, route: string, prefetch: ContractRecord, facts: ProjectFacts): string {
+  const { style } = facts
+  const { sdk, operation, routeParam } = prefetch
+  const params = route.split('/').flatMap((segment) => segment.startsWith(':') ? [segment.slice(1) + ': string'] : [])
+  const line = (code: string) => statement(code, style)
+  return [
+    line('import { ' + operation.sdkFn + ' } from ' + quote(sdk, style)),
+    line('import { apiData, apiRequest } from ' + quote('@/server/api', style)),
+    line('import { ' + component + ' as View } from ' + quote('./view', style)), '',
+    'export default async function Page({ params }: { params: Promise<{ ' + params.join('; ') + ' }> }) {',
+    '  ' + line('const { ' + routeParam + ': recordId } = await params'),
+    '  ' + line('const request = await apiRequest()'),
+    '  ' + line('const initialRecord = { data: apiData(await ' + operation.sdkFn + '({ ...request, path: { ' +
+      property(operation.idParam, style) + ': recordId } })) }'),
+    '  ' + line('return <View recordId={recordId} initialRecord={initialRecord} />'),
+    '}', '',
+  ].join('\n')
 }

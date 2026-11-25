@@ -81,7 +81,8 @@ export function lowerNextCustom(page: CustomPage, context: CompileContext, hooks
     const rootNeeds = new Set(props.flatMap(({ pointer }) => readServer(pointer)))
     const part = pagePart(page, root, new Set(), connections)
     const initial = server.filter(({ key }) => Object.hasOwn(part.queries, key))
-    const lower = lowerCustom(part, context, hooks, { file: view, name, values, queryValues })
+    const initialQueries = new Map(initial.map(({ key, name }) => [key, name]))
+    const lower = lowerCustom(part, context, hooks, { file: view, name, values, initialQueries })
     const { ir } = lower
     const spread: string[] = []
     if (values.size || initial.length) {

@@ -33,7 +33,8 @@ const customerSchema = z.object({
 
 type CustomerFormValues = z.infer<typeof customerSchema>;
 
-export function CustomerEdit() {
+export function CustomerEdit({ recordId, initialRecord }: { recordId: string; initialRecord: { data: CustomerResponse } }) {
+  const initialValues = customerSchema.partial().safeParse(initialRecord.data);
   const {
     refineCore: { onFinish, formLoading },
     ...form
@@ -44,11 +45,14 @@ export function CustomerEdit() {
       email: "",
       status: "pending",
       creditLimit: 0,
+      ...(initialValues.success ? initialValues.data : {}),
     },
     refineCoreProps: {
       resource: "customers",
       action: "edit",
       redirect: "list",
+      id: recordId,
+      queryOptions: { initialData: initialRecord, refetchOnMount: false },
     },
   });
 

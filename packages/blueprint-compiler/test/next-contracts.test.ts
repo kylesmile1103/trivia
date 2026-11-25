@@ -32,3 +32,25 @@ it.skipIf(!dotnetAvailable)('FR-NX-01 emits the five MVP contract pages with a s
     fs.rmSync(root, { recursive: true, force: true })
   }
 }, 180_000)
+
+it.skipIf(!dotnetAvailable)('FR-NX-03 seeds the show and edit Refine queries from the server (requires .NET SDK)', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-next-seed-')))
+  try {
+    const web = prepareMvp(root)
+    await mvpContract(root, web)
+    const { blueprint, context } = await serviceContext(web)
+    for (const name of ['CustomerShow', 'CustomerEdit']) {
+      const output = compilePage(blueprint, name, context)
+      expect(output.code).toContain('await params')
+      expect(output.code).toContain('await apiRequest()')
+      expect(output.code).toContain('initialRecord={initialRecord}')
+      const [view] = output.additional!
+      expect(view!.code).toContain('id: recordId')
+      expect(view!.code).toContain('initialData: initialRecord')
+      expect(view!.code).toContain('refetchOnMount: false')
+    }
+    expect(compilePage(blueprint, 'CustomerList', context).code).not.toContain('apiRequest')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 180_000)

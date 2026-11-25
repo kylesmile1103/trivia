@@ -152,6 +152,11 @@ Errors from a server fetch: a 404 calls `notFound()`. Anything else is thrown to
 server fetching. The template resolves the Aspire API origin or `TRIVIA_API_ORIGIN`
 and forwards credentials only to that origin.
 
+⚑ Show and edit entries pass the route id and `{ data: record }` into Refine.
+`refetchOnMount: false` prevents a hydration fetch while leaving invalidation and explicit
+refetch available. Edit also checks the initial record against the partial form schema
+before using it as form defaults.
+
 ## 5. Caching (FR-NX-05)
 
 Nothing is cached by default: internal tools show live, per-user data. A page with

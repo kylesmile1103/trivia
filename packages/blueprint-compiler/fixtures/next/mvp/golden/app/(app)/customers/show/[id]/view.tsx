@@ -6,9 +6,11 @@ import type { CustomerResponse } from "@/api/generated/types.gen";
 import { ShowView, ShowViewHeader } from "@/components/refine-ui/views/show-view";
 import { Badge } from "@/components/ui/badge";
 
-export function CustomerShow() {
+export function CustomerShow({ recordId, initialRecord }: { recordId: string; initialRecord: { data: CustomerResponse } }) {
   const { result: record } = useShow<CustomerResponse>({
     resource: "customers",
+    id: recordId,
+    queryOptions: { initialData: initialRecord, refetchOnMount: false },
   });
 
   return (

@@ -6,19 +6,20 @@ import type { RouteAnchor, RouteRegistration, resourceOps, routeOps } from './vi
 import type { queryHooks, queryStatus } from './vite-refine/refine-hooks.js'
 import type { CompileContext, EmittedModule, PageSource, RegistryItem } from '../compile.js'
 import type { ProjectFacts } from '../facts.js'
-import type { ContractPageGenerator } from '../contract-pages.js'
+import type { generateContract } from '../contract-pages.js'
 import type { PageIR } from '../ir.js'
 
 export type LoweredCustomPage = { kind: 'custom'; ir: PageIR; views?: PageIR[]; requires: RegistryItem[] } & Pick<EmittedModule, 'handler'>
 
 export type LoweredPage =
   | LoweredCustomPage
-  | ({ kind: 'contract'; page: ContractPage; generated: ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> })
+  | { kind: 'contract'; page: ContractPage; generated: ReturnType<typeof generateContract> }
 
 export interface RefineHookMap {
   queries: typeof queryHooks
   queryStatus: typeof queryStatus
   router: { source: string; searchTuple: boolean }
+  initialOptions?(value: string): string[]
 }
 
 export interface ResourceRegistration {

@@ -2,6 +2,7 @@ import { CompileError, type EmittedModule, type PageSource } from '../../compile
 import type { ProjectFacts } from '../../facts.js'
 import { printModule } from '../../print/module.js'
 import { quote, restyleModule, statement } from '../../print/style.js'
+import { printContractEntry, type ContractRecord } from './server-data.js'
 import type { LoweredPage } from '../target.js'
 
 export function nextPageFile(route: string, facts: ProjectFacts, file = 'page.tsx'): string {
@@ -15,8 +16,8 @@ export function nextPageFile(route: string, facts: ProjectFacts, file = 'page.ts
 
 export function files(lowered: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]] {
   if (lowered.kind === 'contract') {
-    const { page: { route }, generated: { component, content, handler } } = lowered
-    return withView({ ...entry(route, facts), ...(handler && { handler }) }, component, content, facts)
+    const { page: { route }, generated: { component, content, handler, prefetch } } = lowered
+    return withView({ ...entry(route, facts), ...(handler && { handler }) }, component, content, facts, prefetch)
   }
   const { ir, handler, requires, views = [] } = lowered
   const page = { ...entry(ir.route, facts), requires, ...(handler && { handler }) }
@@ -32,9 +33,11 @@ function entry(route: string, facts: ProjectFacts): EmittedModule {
   return { file, code: '', route, component: 'Page', importPath: file.slice(0, -4), requires: [] }
 }
 
-function withView(page: EmittedModule, component: string, content: string, facts: ProjectFacts): [EmittedModule, PageSource] {
+function withView(
+  page: EmittedModule, component: string, content: string, facts: ProjectFacts, prefetch?: ContractRecord,
+): [EmittedModule, PageSource] {
   const { style } = facts
-  const code = [
+  const code = prefetch ? printContractEntry(component, page.route, prefetch, facts) : [
     statement('import { ' + component + ' as View } from ' + quote('./view', style), style), '',
     'export default function Page() {',
     '  ' + statement('return <View />', style),

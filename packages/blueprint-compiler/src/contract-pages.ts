@@ -10,6 +10,7 @@ import { analyzePageExpressions, emitPageExpressions, routeScope } from './lower
 import { printHook } from './print/module.js'
 import { quote, statement } from './print/style.js'
 import { nextPageFile } from './targets/next-refine/files.js'
+import { contractRecord, type ContractRecord } from './targets/next-refine/server-data.js'
 import type { RefineHookMap } from './targets/target.js'
 
 export interface ContractPageInput {
@@ -18,6 +19,7 @@ export interface ContractPageInput {
   facts: ProjectFacts
   options: ContractOptions
   actions?: ContractActionContent
+  initialRecord?: string
 }
 
 export interface ContractActionContent {
@@ -56,11 +58,17 @@ export function generateContract(
   context: CompileContext,
   generator: ContractPageGenerator,
   hooks: RefineHookMap,
-): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> {
+): ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> & { prefetch?: ContractRecord } {
   const { facts } = context
+  const initial = hooks.initialOptions?.('initialRecord')
+  const prefetch = initial && contractRecord(page, resource, context.contract)
+  const input = {
+    resource, kind: page.kind, facts, options: page.options,
+    ...(prefetch && { initialRecord: initial.join(', ') }),
+  }
   const { rowActions = [], headerActions = [] } = page.options
   if (!rowActions.length && !headerActions.length) {
-    return generator({ resource, kind: page.kind, facts, options: page.options })
+    return { ...generator(input), ...(prefetch && { prefetch }) }
   }
   if (rowActions.length && page.kind !== 'list') {
     throw new CompileError('invalid_result', 'Row actions require a list page.')
@@ -113,7 +121,7 @@ export function generateContract(
     return '<Button type="button" onClick={' + callback + '}>' + text + '</Button>'
   }
   const output = generator({
-    resource, kind: page.kind, facts, options: page.options,
+    ...input,
     actions: {
       imports: [
         ...route.imports, ...lower.imports, { source: 'react', name: 'MouseEvent', kind: 'type' },
@@ -130,5 +138,5 @@ export function generateContract(
     },
   })
   const handler = handlerStub(page.name, lower.calls.keys(), {}, style)
-  return { ...output, ...(handler && { handler }) }
+  return { ...output, ...(handler && { handler }), ...(prefetch && { prefetch }) }
 }
