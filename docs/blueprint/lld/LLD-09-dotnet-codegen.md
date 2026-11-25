@@ -147,6 +147,12 @@ This section is the contract with the data provider (LLD-10). Change both or nei
 Tags are the plural in PascalCase. Schema names are `<Entity>Response`,
 `Create<Entity>Request`, `Update<Entity>Request` and `<Entity>Page`. JSON is camelCase.
 
+⚑ Preserve the framework's component IDs for the generated record names. Override the
+  enum and JSON schema types through a schema transformer, and apply input defaults,
+  nullability and formats to the resolved components through a document transformer.
+  Paging binds as text for field-specific validation and is described as bounded integers
+  in the document.
+
 List parameters:
 
 - `page` (from 1, default 1) and `pageSize` (default 20, at most 200).

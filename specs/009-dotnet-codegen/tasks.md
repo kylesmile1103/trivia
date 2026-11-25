@@ -43,7 +43,7 @@
 
 ## Phase 7: User Story 6 - Contract (P1)
 
-- [ ] T021 [US6] Operation ids, tags and schema names per LLD-09 section 4. A test that builds the document twice and compares, and a snapshot of the bank fixture's document
+- [x] T021 [US6] Operation ids, tags and schema names per LLD-09 section 4. A test that builds the document twice and compares, and a snapshot of the bank fixture's document
 
 ## Phase 8: User Story 7 - Migrations (P2)
 
