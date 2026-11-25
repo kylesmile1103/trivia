@@ -309,6 +309,7 @@ The owner delegated the review of these decisions, and it was done on 2026-11-26
 - Spec 007. The live DevHost plan includes the lock as the final op in that source transaction. [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
 - Spec 007. A refused hasMany and its suggested belongsTo are applied together against the revision the editor read, after the user presses Apply fix. [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
 - Spec 007. The table includes the DevHost's delete action. [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
+- Spec 007. The backend dialog sends one request with the optional migration name, lists its renames and syncs history afterwards (decided 2026-11-26). [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
 - Spec 007. A successful patch asks the shared engine session to sync history immediately so the toolbar takes up its entry. [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
 - Spec 007. Initialization uses `App` as the initial document name and selects the web target from the designer's existing health response (`next-refine` for Next, `vite-refine` for Vite). [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)
 - Spec 007. A finding focuses the closest field matching its JSON pointer, opening its page first when needed. [LLD-07](lld/LLD-07-designer-blueprint-panel.md#2-behaviour)

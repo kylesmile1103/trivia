@@ -103,9 +103,12 @@ custom API operations use JSON fields. The entity form defaults to a UUID key na
 optional migration name. Confirm runs `mode: "write"`. Backend writes are outside the
 undo history, and the dialog says so. The solution's git status is the safety net.
 ⚑ The table includes the DevHost's delete action. Confirmation checks the app and model
-revisions before calling the generator. It writes the API before requesting a named
-migration, because DevHost runs migration as a separate CLI command. The dialog reports
-generation and migration outcomes and points to sync and drift in the Data tab.
+revisions before calling the generator. The dialog reports generation and migration
+outcomes and points to sync and drift in the Data tab.
+⚑ (decided 2026-11-26) Confirmation sends one request, with the migration name when one is
+given, because the service now writes the API before it migrates (LLD-04 section 5). The
+dialog lists the migration's renames and syncs history afterwards, since clearing the
+migrated rename markers is an undo entry and the model editor must reload with it.
 
 **Undo and redo.** Patches are entries of the shared history, so the toolbar's undo works. The
 panel re-reads the summary after every history change. ⚑ A successful patch asks the
