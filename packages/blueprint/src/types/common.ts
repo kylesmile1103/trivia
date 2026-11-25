@@ -36,8 +36,11 @@ export const PAGE_NAME = /^[A-Z][A-Za-z0-9]*$/
 export const NODE_TYPE = /^(?:[A-Z][A-Za-z0-9]*|[a-z][a-z0-9]*)$/
 /** A slot of the parent's manifest. Checked against the manifest in layer 3. */
 export const SLOT = /^[a-z][A-Za-z0-9]*$/
-/** A component prop: an identifier, or a hyphenated attribute such as `aria-label`. */
-export const PROP = /^[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$/
+/**
+ * A component prop: an identifier, or a hyphenated attribute such as `aria-label`. Never
+ * `__proto__`, which a JavaScript object cannot hold as a plain key.
+ */
+export const PROP = /^(?!__proto__$)[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$/
 /** An event prop of a component: `onClick`, `onValueChange`. */
 export const EVENT = /^on[A-Z][A-Za-z0-9]*$/
 /** A key of `actions`: `<nodeId>.<event>`. */

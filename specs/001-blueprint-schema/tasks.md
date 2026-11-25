@@ -22,7 +22,7 @@ Tests come before the code they cover and must fail first.
 ## Phase 3: User Story 1 - Describe a page (P1)
 
 - [x] T010 [US1] `src/store.ts` `read()`: load every document, tolerate a broken file, compute revs. Tests on the fixture and on a directory with one malformed file
-- [ ] T011 [US1] Schema validation (`src/validate/schema.ts`) with pointer-accurate diagnostics. One fixture per violation kind in `fixtures/invalid/schema_violation/`
+- [x] T011 [US1] Schema validation (`src/validate/schema.ts`) with pointer-accurate diagnostics. One fixture per violation kind in `fixtures/invalid/schema_violation/`
 
 ## Phase 4: User Story 2 - Guarded operations (P1)
 
