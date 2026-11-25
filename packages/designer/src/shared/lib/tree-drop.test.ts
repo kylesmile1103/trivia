@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { dropPlacement } from './drop'
+import { dropPlacement } from './tree-drop'
 
 const H = 28
 const leaf = { root: false, hasChildren: false, expanded: false }

@@ -180,7 +180,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
     }
   }
 
-  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats)
+  const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, context.previewNodeIds)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))

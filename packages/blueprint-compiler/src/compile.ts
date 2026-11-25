@@ -25,6 +25,8 @@ export interface CompileContext {
   manifests?: ResolvedManifests
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
+  /** Add node ids for selection in a virtual draft preview. Never set for eject. */
+  previewNodeIds?: boolean
 }
 
 export class CompileError extends Error {

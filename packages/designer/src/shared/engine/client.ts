@@ -5,6 +5,15 @@ import type {
   ApiErrorPayload,
   AppRoute,
   ApplyResult,
+  BlueprintBackendRequest,
+  BlueprintBackendResult,
+  BlueprintComponents,
+  BlueprintDocument,
+  BlueprintEjectPlan,
+  BlueprintOp,
+  BlueprintPatchResult,
+  BlueprintPreview,
+  BlueprintSummary,
   ColumnChange,
   ColumnPlan,
   ContractDrift,
@@ -28,12 +37,14 @@ const BASE = '/@trivia/api'
 export class ApiError extends Error {
   readonly code: ApiErrorPayload['code']
   readonly status: number
+  readonly details?: Record<string, unknown>
 
   constructor(payload: ApiErrorPayload, status: number) {
     super(payload.message)
     this.name = 'ApiError'
     this.code = payload.code
     this.status = status
+    this.details = payload.details
   }
 }
 
@@ -65,7 +76,20 @@ function post<T>(path: string, body: unknown): Promise<T> {
   })
 }
 
+const blueprint = {
+  summary: () => request<BlueprintSummary>('/blueprint'),
+  doc: (path: string, projection = false) =>
+    request<BlueprintDocument>(`/blueprint/doc?path=${encodeURIComponent(path)}${projection ? '&projection=1' : ''}`),
+  components: () => request<BlueprintComponents>('/blueprint/components'),
+  patch: (ops: BlueprintOp[], label: string) => post<BlueprintPatchResult>('/blueprint/patch', { ops, label }),
+  preview: (page: string) => post<BlueprintPreview>('/blueprint/preview', { page }),
+  plan: (pages?: string[]) => post<BlueprintEjectPlan>('/blueprint/plan', { pages }),
+  ejected: (pages: string[], entry: string) => post<{ lockRev: string }>('/blueprint/ejected', { pages, entry }),
+  backend: (body: BlueprintBackendRequest) => post<BlueprintBackendResult>('/blueprint/backend', body),
+}
+
 export const engine = {
+  blueprint,
   health: () => request<Health>('/health'),
   components: () => request<ComponentSchema[]>('/components'),
   inspect: (locator: string) => request<NodeDetails>(`/inspect?locator=${encodeURIComponent(locator)}`),

@@ -72,6 +72,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: Set up .NET (the backend dialog's test runs this checkout's trivia-dotnet)
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
       - name: Install Chromium and its system libraries
         run: pnpm exec playwright install --with-deps chromium
       - name: End-to-end tests

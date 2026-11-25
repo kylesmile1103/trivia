@@ -1,0 +1,4 @@
+#!/bin/sh
+# The .NET backend generator from this checkout, for the e2e apps' dev services (playwright.config.ts
+# puts this directory first on their PATH). `nx run dotnet:tool` publishes it; `pnpm e2e` runs that.
+exec dotnet "$(dirname "$0")/../../dist/trivia-dotnet/Trivia.Blueprint.Codegen.dll" "$@"
