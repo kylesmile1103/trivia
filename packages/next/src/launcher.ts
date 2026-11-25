@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util'
 
 import { loadEngine, parsePort, startDevService } from '@trivia/dev-service'
 
-import { createNextHost } from './host.js'
+import { appDirectory, createNextHost } from './host.js'
 
 export async function runLauncher(args: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -26,6 +26,7 @@ export async function runLauncher(args: string[]): Promise<number> {
   }
   const port = parsePort(values.port, '--port')
   const servicePort = parsePort(values['service-port'], '--service-port')
+  if (port !== 0 && port === servicePort) throw new Error('Next and the Trivia dev service must use different ports')
   const root = fs.realpathSync(process.cwd())
   const next = createRequire(path.join(root, 'package.json')).resolve('next/dist/bin/next')
   const engine = await loadEngine()
@@ -35,6 +36,9 @@ export async function runLauncher(args: string[]): Promise<number> {
   })
   const service = await startDevService(host, { port: servicePort, engine })
   try {
+    if (!appDirectory(root) && ['pages', 'src/pages'].some((dir) => fs.statSync(path.join(root, dir), { throwIfNoEntry: false })?.isDirectory())) {
+      console.warn('[trivia] Pages Router is unsupported. The Pages tab shows App Router pages.')
+    }
     const child = spawn(process.execPath, [next, 'dev', '--hostname', '127.0.0.1', '--port', String(port), ...(values.webpack ? ['--webpack'] : [])], {
       cwd: root,
       env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' },

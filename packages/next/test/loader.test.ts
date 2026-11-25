@@ -19,12 +19,12 @@ type Loader = (this: {
   async(): (error: Error | null, code?: string, map?: RawMap) => void
 }, code: string, inputMap?: RawMap) => void
 
-function load(input: string, file: string, inputMap?: RawMap): Promise<{ code: string; map?: RawMap }> {
+function load(input: string, file: string, inputMap?: RawMap, appRoot = root): Promise<{ code: string; map?: RawMap }> {
   const loader = createRequire(import.meta.url)('@trivia/next/loader') as Loader
   return new Promise((resolve, reject) => loader.call({
     rootContext: root,
     resourcePath: file,
-    getOptions: () => ({ root }),
+    getOptions: () => ({ root: appRoot }),
     async: () => (error, code, map) => error ? reject(error) : resolve({ code: code!, ...(map ? { map } : {}) }),
   }, input, inputMap))
 }
@@ -62,5 +62,13 @@ describe('FR-TN-01 and SC-003: the Next webpack-style loader', () => {
     const entry = new SourceMap(result.map!).findEntry(1, result.code.split('\n')[1]!.indexOf('id='))
     expect(entry).toMatchObject({ originalSource: expect.stringMatching(/original\.tsx$/), originalLine: 0 })
     expect(await load('export const empty = 1', file, prior)).toEqual({ code: 'export const empty = 1', map: prior })
+  })
+
+  it('normalizes mixed Windows separators and rejects another drive', async () => {
+    const input = 'export function Page() { return <h1>Hello</h1> }'
+    const appRoot = 'C:\\workspace\\app'
+    expect((await load(input, 'C:/workspace/app/src\\page.tsx', undefined, appRoot)).code)
+      .toContain('data-ast-node="src/page.tsx#Page#0"')
+    expect((await load(input, 'D:/workspace/app/src/page.tsx', undefined, appRoot)).code).toBe(input)
   })
 })

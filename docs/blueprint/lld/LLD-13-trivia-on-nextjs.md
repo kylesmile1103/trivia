@@ -243,6 +243,11 @@ The engine edits files. It does not care which kind of component a file holds. W
 
 ## 8. Open points
 
-- Windows paths in locators under Turbopack. Normalize to forward slashes at the loader.
+- ⚑ The loader uses Windows-relative path rules for drive and UNC roots and keeps forward
+  slashes in locators. The tests cover mixed separators and a different drive.
+- ⚑ The launcher reports a Pages Router-only project and rejects a shared explicit app and
+  API port up front. An occupied app port exits with Next's error and closes the new service.
+- The built integration was checked in the scratch app with webpack and with React Compiler
+  on Turbopack. Both stamped client and server JSX and preserved usage-site attribute order.
 - Whether the dev service should also host the designer's static files, so one process serves
   everything for Next.js apps. Later.

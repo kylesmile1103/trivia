@@ -4,10 +4,11 @@ export const APP_DIRECTORIES = ['app', 'src/app'] as const
 export const PREVIEW_GROUP = '(blueprint-preview)'
 
 export function projectPath(root: string, absolute: string): string | null {
-  const relative = path.relative(root, absolute)
-  return path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)
+  const platform = /^[a-z]:[\\/]|^\\\\/i.test(root) ? path.win32 : path
+  const relative = platform.relative(root, absolute)
+  return platform.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${platform.sep}`)
     ? null
-    : relative.split(path.sep).join('/')
+    : relative.split(platform.sep).join('/')
 }
 
 /** App-relative locator path. The loader may run in a workspace with a wider bundler root. */

@@ -295,9 +295,13 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const routes = await service.routes()
         const lines = routes.map((r) => {
           const label = r.resource ? ` (${r.resource.name} ${r.resource.action})` : ''
-          return `${r.path}${label}  <${r.component ?? 'lazy'}> ${r.file ?? '(module not resolved)'}`
+          const component = r.router === 'next-app-router' ? '' : `<${r.component ?? 'lazy'}> `
+          return `${r.path}${label}  ${component}${r.file ?? '(module not resolved)'}`
         })
-        return { data: { routes }, summary: lines.join('\n') || 'No routes found: the app has no React Router or TanStack Router routes under src/.' }
+        const empty = service.health().host === 'next'
+          ? 'No App Router routes found. The Pages Router is unsupported.'
+          : 'No routes found: the app has no React Router or TanStack Router routes under src/.'
+        return { data: { routes }, summary: lines.join('\n') || empty }
       }),
   )
 
