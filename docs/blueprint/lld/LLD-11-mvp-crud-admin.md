@@ -8,7 +8,15 @@
 
 - ⚑ The example uses the bank contract's `fullName` field and the Vite/Refine conventions
   `/customers/edit/:id` and `/customers/show/:id`. Only the customer and account lists
-  appear in the main navigation.
+  appear in the main navigation. The KYC action uses the synced OpenAPI operation ID
+  `approveKycCustomer` for the model operation `approveKyc`.
 - ⚑ Explicit edit fields start without `notes` so the designer can add it as a single
   edit. The model retains it until the drift scenario. The customer list starts without
   `creditLimit` for the same reason.
+
+## Scripted checks
+
+- ⚑ The Node test and browser harness share a disposable solution setup. It copies only
+  the committed Radix kit's UI, hooks, utilities and CSS, and merges its dependencies into
+  the generated package. The provider and routes come from the scaffold, and the API
+  contract comes from the generated backend. The kit's mock API and contract are unused.

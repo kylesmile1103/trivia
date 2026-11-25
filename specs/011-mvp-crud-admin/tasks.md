@@ -10,7 +10,7 @@
 
 ## Phase 2: User Story 1 - Blueprint to running solution (P1)
 
-- [ ] T003 [US1] `tools/blueprint/mvp.test.mjs`: temp folder, `new`, copy the blueprint and the committed kit, `backend --migration Initial`, `eject`, `dotnet build -warnaserror`, `tsc`. Skips with a message when the .NET SDK or a container runtime is missing
+- [x] T003 [US1] `tools/blueprint/mvp.test.mjs`: temp folder, `new`, copy the blueprint and the committed kit, `backend --migration Initial`, `eject`, `dotnet build -warnaserror`, `tsc`. Skips with a message when the .NET SDK or a container runtime is missing
 - [ ] T004 [US1] Fix each failure in its owning spec with a regression test there. List them in this file under "Found by the slice"
 - [ ] T005 [US1] Extend the script: start the AppHost through the Aspire testing host, create a customer through the API, read it back from the list
 - [ ] T006 [US1] `e2e/blueprint-mvp.spec.ts` and a Playwright project: list, filter by status, create, a field error from the API, the Approve KYC action answering 501

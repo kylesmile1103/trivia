@@ -35,6 +35,7 @@ examples/blueprint-mvp/
   PROMPT.md            the agent prompt for story 4
   README.md            the commands, by hand
 tools/blueprint/mvp.test.mjs       story 1 and 3, scripted
+tools/blueprint/mvp-project.mjs    shared disposable project setup
 e2e/blueprint-mvp.spec.ts          stories 1 to 3 in a browser, a fourth Playwright project
 ```
 

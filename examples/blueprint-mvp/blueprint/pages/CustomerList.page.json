@@ -27,7 +27,7 @@
           {
             "do": "mutate",
             "resource": "Customer",
-            "operation": "approveKyc",
+            "operation": "approveKycCustomer",
             "input": "{}",
             "id": "row.id"
           }
