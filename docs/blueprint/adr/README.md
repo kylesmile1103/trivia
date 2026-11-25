@@ -21,5 +21,6 @@ that supersedes the old one. Records are not edited after acceptance, except the
 | [0012](0012-aspire-and-the-openapi-contract-loop.md) | Aspire for orchestration; OpenAPI closes the loop | Accepted |
 | [0013](0013-guarded-blueprint-ops-for-agents.md) | Agents write blueprints through guarded ops over MCP | Accepted |
 | [0014](0014-hosted-runtime-deferred.md) | The hosted runtime and its dependencies are deferred | Accepted |
-| [0015](0015-trivia-on-nextjs-loader-and-dev-service.md) | Trivia on Next.js: a stamping loader and a dev service | Proposed ⚑ |
+| [0015](0015-trivia-on-nextjs-loader-and-dev-service.md) | Trivia on Next.js: a stamping loader and a dev service | Superseded by 0017 |
 | [0016](0016-styling-with-tokens.md) | Styling: theme tokens as CSS variables, classes as written | Accepted |
+| [0017](0017-nextjs-stamping-and-preview-path.md) | Next.js stamping and the escaped preview path | Proposed ⚑ |

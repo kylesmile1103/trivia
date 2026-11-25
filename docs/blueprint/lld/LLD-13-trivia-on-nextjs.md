@@ -1,6 +1,6 @@
 # LLD-13: Trivia on Next.js
 
-- Spec: `specs/013-trivia-on-nextjs` · Requirements: FR-TN-01 to FR-TN-07 · ADR-0015
+- Spec: `specs/013-trivia-on-nextjs` · Requirements: FR-TN-01 to FR-TN-07 · ADR-0017
 - Code: `packages/dev-service` (`@trivia/dev-service`, extracted), `packages/next`
   (`@trivia/next`), small changes in `packages/designer/server/` and
   `packages/vite-plugin-ast-locator`.
@@ -44,8 +44,9 @@ rendered page, watched it through atomic renames, and fetched the map for a clie
    `/__blueprint/Lead` render an unstamped heading, and deleting the group restored 404
    without a restart.
 
-If 1 or 2 fails with Turbopack: fall back to a Babel-based loader, then to an SWC plugin built
-from the same Rust crate, and record the choice as a new ADR that supersedes ADR-0015.
+⚑ ADR-0017 supersedes ADR-0015. Keep the verified Turbopack loader and use
+`app/(blueprint-preview)/%5F_blueprint/<Name>/` on disk when spec 012 adds blueprint previews.
+Its public URL is still `/__blueprint/<Name>`.
 
 ## 2. The dev service (FR-TN-02, FR-TN-07)
 
