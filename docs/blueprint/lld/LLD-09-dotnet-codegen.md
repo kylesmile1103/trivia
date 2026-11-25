@@ -3,9 +3,29 @@
 - Spec: `specs/009-dotnet-codegen` · Requirements: FR-NC-01 to FR-NC-13 · ADR-0010, ADR-0011
 - Code: `dotnet/` at the repository root, its own solution, wrapped as the Nx project `dotnet`.
 
-API names below (minimal API validation, OpenAPI, EF Core, Npgsql) are what .NET 10 offered
-when this was written. Verify each against the current documentation before coding, and pin
-package versions in `Directory.Packages.props`.
+## Verified .NET 10 APIs
+
+- Minimal API validation uses `builder.Services.AddValidation()` and DataAnnotations in the
+  endpoint assembly. `Microsoft.NET.Sdk.Web` supplies validation through the ASP.NET Core
+  shared framework. [Validation in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/validation?view=aspnetcore-10.0)
+- `TypedResults` with a `Results<T1, T2>` return type contributes response metadata. Use
+  `ProducesValidationProblem()` for 400 validation responses from the filter.
+  [Minimal API responses](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/responses?view=aspnetcore-10.0)
+- Runtime generation uses `AddOpenApi` with `OpenApiSpecVersion.OpenApi3_1` and `MapOpenApi`.
+  MSBuild uses `Microsoft.Extensions.ApiDescription.Server`, `OpenApiGenerateDocumentsOnBuild`
+  and `OpenApiGenerateDocumentsOptions` with `--openapi-version OpenApi3_1`.
+  [OpenAPI document generation](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0)
+- Npgsql's `UseNpgsql(..., options => options.MapEnum<T>(...))` is for native PostgreSQL enum
+  types. LLD-08 instead specifies text with a check constraint, so configure an EF Core
+  `HasConversion` to the literal string. A `uint` property with `IsRowVersion()` maps to
+  PostgreSQL's built-in `xmin`.
+  [Npgsql enum mapping](https://www.npgsql.org/efcore/mapping/enum.html),
+  [Npgsql concurrency](https://www.npgsql.org/efcore/modeling/concurrency.html)
+
+The build probe used SDK 10.0.100, OpenAPI and EF Core 10.0.12, and Npgsql EF Core 10.0.3.
+It built with warnings as errors, generated a 3.1 document with typed and validation
+statuses, and verified the provider's create script uses a text column and omits the
+system-managed version column.
 
 ## 1. The tool
 

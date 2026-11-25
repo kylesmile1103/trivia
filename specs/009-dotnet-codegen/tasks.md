@@ -6,7 +6,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Create `dotnet/` with `Trivia.Blueprint.slnx`, `Directory.Packages.props`, the tool project (packed as `trivia-dotnet`) and the test project. Add `dotnet/project.json` so Nx runs `dotnet build` and `dotnet test`
-- [ ] T002 Verify against current documentation and note in LLD-09: minimal API validation setup, build-time OpenAPI document generation properties, typed results and OpenAPI, Npgsql enum and `xmin` mappings
+- [x] T002 Verify against current documentation and note in LLD-09: minimal API validation setup, build-time OpenAPI document generation properties, typed results and OpenAPI, Npgsql enum and `xmin` mappings
 - [ ] T003 A build step that copies `packages/blueprint/fixtures/model/` into the test project's `Fixtures/`
 
 ## Phase 2: Foundational
