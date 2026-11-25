@@ -15,7 +15,7 @@
 
 ## Phase 3: User Story 1 - Entities and fields (P1)
 
-- [ ] T005 [US1] Fixtures and checks for `duplicate_name`, `reserved_name`, `invalid_default`, `invalid_constraint` in `src/model/validate.ts`
+- [x] T005 [US1] Fixtures and checks for `duplicate_name`, `reserved_name`, `invalid_default`, `invalid_constraint` in `src/model/validate.ts`
 
 ## Phase 4: User Story 2 - Relations (P1)
 

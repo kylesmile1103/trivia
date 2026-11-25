@@ -142,6 +142,19 @@ Model diagnostics, on top of the schema layer:
 entries in PostgreSQL 19's own keyword column, and the generator's key and paging member
 names (`Id`, `Items`, `Total`, `Page`, `PageSize`).
 
+⚑ Enums and entities share a case-insensitive type namespace. Fields and relations share a
+case-insensitive member namespace within an entity, and custom operation inputs use the same
+name and constraint checks in their own scope. Enum wire values are compared exactly.
+
+⚑ Reserved checks fold identifier case and compare SQL names in their emitted snake_case.
+The conventional `id` is available for a key, and any member using the declared key name is
+diagnosed as reserved.
+
+⚑ Explicit null defaults require a nullable field. String defaults check Unicode character
+length, ECMAScript Unicode patterns and email or absolute URI formats. Date-time defaults
+require an offset. Decimal defaults must fit both bounds and the precision and scale of the
+column using the digits that JSON serialization emits.
+
 ## 6. Pages and the model
 
 Pages do not reference the model. They reference contract resources (LLD-01), and the

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/model.v1.json",
+  "blueprintVersion": 1,
+  "namespace": "Bank",
+  "enums": [
+    {
+      "name": "CustomerStatus",
+      "values": [
+        "pending",
+        "active"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "Customer",
+      "plural": "customers",
+      "key": {
+        "name": "id",
+        "type": "uuid"
+      },
+      "fields": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "default": "yes"
+        },
+        {
+          "name": "balance",
+          "type": "decimal",
+          "default": -1,
+          "precision": 18,
+          "scale": 2,
+          "minimum": 0
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "enum": "CustomerStatus",
+          "default": "deleted"
+        },
+        {
+          "name": "opened",
+          "type": "date",
+          "default": "2025-02-29"
+        },
+        {
+          "name": "amount",
+          "type": "decimal",
+          "default": 0.001,
+          "precision": 4,
+          "scale": 2
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "default": "no-at-sign",
+          "format": "email"
+        },
+        {
+          "name": "fullName",
+          "type": "string",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "countedAt",
+          "type": "datetime",
+          "default": "2026-11-25T00:00:00"
+        }
+      ],
+      "relations": [],
+      "indexes": [],
+      "api": {
+        "operations": [
+          "list"
+        ]
+      }
+    }
+  ]
+}
