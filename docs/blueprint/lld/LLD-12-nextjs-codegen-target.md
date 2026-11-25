@@ -157,6 +157,10 @@ and forwards credentials only to that origin.
 refetch available. Edit also checks the initial record against the partial form schema
 before using it as form defaults.
 
+⚑ Next reads the API origin when it loads the rewrite configuration. Aspire supplies
+it when running the web resource. For an independent production build, set
+`TRIVIA_API_ORIGIN` at build time if the browser will use the rewrite.
+
 ## 5. Caching (FR-NX-05)
 
 Nothing is cached by default: internal tools show live, per-user data. A page with
@@ -205,6 +209,8 @@ Playwright uses preinstalled fixture dependencies, fixed web and API test ports,
 ephemeral dashboard ports. Aspire's isolated mode reallocates explicit service ports.
 The Next resolver accepts Aspire's service discovery variables and its simple
 `API_HTTP` / `API_HTTPS` aliases. [Aspire service discovery](https://learn.microsoft.com/en-us/dotnet/aspire/service-discovery/overview).
+The resource explicitly runs `dev`, and the template supplies standalone output
+and a `public/` directory for Aspire's Node container build.
 
 ## 8. One blueprint, two targets (FR-NX-07)
 

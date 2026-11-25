@@ -22,7 +22,7 @@ var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.Exc
 
 if (builder.Configuration.GetValue("Trivia:StartWeb", true))
 {
-{{NextAppDiagnostic}}    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}")
+{{NextAppDiagnostic}}    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}"{{RunScript}})
         .WithPnpm({{InstallOptions}})
         .WithReference(api)
         .WaitFor(api);{{NextRunOptions}}

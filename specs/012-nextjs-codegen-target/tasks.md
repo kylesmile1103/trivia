@@ -34,7 +34,7 @@
 
 ## Phase 6: User Story 4 - One origin (P1)
 
-- [ ] T015 [US4] Rewrites for `/api` in the template's `next.config.ts` from the service discovery variables. The AppHost scaffold's JavaScript app branch. Test under the AppHost
+- [x] T015 [US4] Rewrites for `/api` in the template's `next.config.ts` from the service discovery variables. The AppHost scaffold's JavaScript app branch. Test under the AppHost
 
 ## Phase 7: User Story 5 - Caching (P2)
 

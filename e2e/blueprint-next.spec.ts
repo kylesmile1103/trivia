@@ -32,3 +32,18 @@ test('FR-NX-03 returns the record in HTML, hydrates without a fetch, and returns
   expect(missing.status()).toBe(404)
   expect(await missing.text()).toContain('Page not found')
 })
+
+test('FR-NX-04 sends browser API paths through Next to the AppHost API', async ({ request }, info) => {
+  test.skip(Boolean(info.project.metadata.blueprintNextUnavailable), String(info.project.metadata.blueprintNextUnavailable))
+  const fullName = 'Same Origin Record'
+  const created = await request.post('/api/v1/customers', {
+    data: { fullName, email: 'next-rewrite@example.test', status: 'active', creditLimit: 200 },
+  })
+  expect(created.status(), await created.text()).toBe(201)
+  const { id } = await created.json()
+  const proxied = await request.get('/api/v1/customers/' + id)
+  expect(proxied.status()).toBe(200)
+  expect(await proxied.json()).toMatchObject({ id, fullName })
+  const direct = await request.get(customers + '/' + id)
+  expect(await direct.json()).toEqual(await proxied.json())
+})

@@ -52,3 +52,13 @@ it('FR-NX-06 ships an App Router shell with the validated pins and the shared AP
   expect(JSON.parse(read('components.json'))).toMatchObject({ rsc: true, aliases: { ui: '@/components/ui' } })
   expect(read('src/providers/data-provider.ts')).toBe(readFileSync(new URL('vite-refine/src/providers/data-provider.ts', templates), 'utf8'))
 })
+
+it('FR-NX-04 rewrites the same-origin API under Aspire and builds standalone output', () => {
+  const template = new URL('../templates/next-refine/', import.meta.url)
+  const config = readFileSync(new URL('next.config.ts.template', template), 'utf8')
+  expect(config).toContain('const origin = apiOrigin()')
+  expect(config).toContain("source: '/api/:path*'")
+  expect(config).toContain("destination: origin + '/api/:path*'")
+  expect(config).toContain("output: 'standalone'")
+  expect(existsSync(new URL('public/', template))).toBe(true)
+})
