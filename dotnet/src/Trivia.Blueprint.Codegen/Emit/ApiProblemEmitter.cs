@@ -8,7 +8,26 @@ public static class ApiProblemEmitter
 {
     public static CompilationUnitSyntax Emit(ModelDocument model)
         => Unit($"{model.Namespace}.Generated",
-            ["System.Text.Json", "Microsoft.AspNetCore.Diagnostics", "Microsoft.EntityFrameworkCore", "Npgsql"],
+            ["System.ComponentModel.DataAnnotations", "System.Globalization", "System.Text.Json",
+                "Microsoft.AspNetCore.Diagnostics", "Microsoft.EntityFrameworkCore", "Npgsql"],
+            """
+            [AttributeUsage(AttributeTargets.Property)]
+            internal sealed class DecimalPrecisionAttribute(int precision, int scale)
+                : ValidationAttribute("The field {0} exceeds its decimal precision or scale.")
+            {
+                public override bool IsValid(object? value)
+                {
+                    if (value is not decimal number)
+                        return value is null;
+                    if (number != decimal.Round(number, Math.Min(scale, 28)))
+                        return false;
+
+                    decimal integral = decimal.Truncate(decimal.Abs(number));
+                    int digits = integral == 0 ? 0 : integral.ToString("0", CultureInfo.InvariantCulture).Length;
+                    return digits <= precision - scale;
+                }
+            }
+            """,
             """
             public sealed class ApiProblemException(int status, string title, string? code = null,
                 IReadOnlyDictionary<string, string[]>? errors = null) : Exception(title)

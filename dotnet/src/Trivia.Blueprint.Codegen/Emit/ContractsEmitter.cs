@@ -74,6 +74,8 @@ public static class ContractsEmitter
                 annotations.Add($"global::System.ComponentModel.Description({Literal(description)})");
             if (field.Minimum is not null || field.Maximum is not null)
                 annotations.Add(Range(field));
+            if (field.Precision is int precision)
+                annotations.Add($"global::{model.Namespace}.Generated.DecimalPrecision({Number(precision)}, {Number(field.Scale!.Value)})");
             if (field.Default.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
                 initial = $" = {DefaultValue(model, field)};";
         }

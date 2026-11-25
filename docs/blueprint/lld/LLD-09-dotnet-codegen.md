@@ -201,6 +201,8 @@ namespaces, nullable enabled, no `var` in generated code.
   values from zero or false. An omitted property with a blueprint default gets that value.
   Route keys use `{id}` independently of the model key's JSON name. Writes normalize
   date-time offsets to UTC and assign on-update timestamps on generated updates.
+⚑ Validate decimal precision and scale at the request boundary so storage cannot silently
+  round or overflow a value that passed request validation.
 
 - **Entity.** A partial class with the key, the fields in order, foreign keys and navigation
   properties. Required strings are `required string`.

@@ -16,7 +16,7 @@ public sealed record CreateCustomerRequest
     [JsonPropertyName("status"), Required(AllowEmptyStrings = true)]
     public global::BackOffice.Enums.CustomerStatus? Status { get; init; } = global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending");
 
-    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
+    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true), global::BackOffice.Generated.DecimalPrecision(18, 2)]
     public decimal? CreditLimit { get; init; } = 0m;
 
     [JsonPropertyName("notes"), MaxLength(1000)]
@@ -40,7 +40,7 @@ public sealed record UpdateCustomerRequest
     [JsonPropertyName("status"), Required(AllowEmptyStrings = true)]
     public global::BackOffice.Enums.CustomerStatus? Status { get; init; } = global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending");
 
-    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
+    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true), global::BackOffice.Generated.DecimalPrecision(18, 2)]
     public decimal? CreditLimit { get; init; } = 0m;
 
     [JsonPropertyName("notes"), MaxLength(1000)]
