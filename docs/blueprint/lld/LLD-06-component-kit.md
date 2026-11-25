@@ -59,6 +59,10 @@ Expansion, in `composites/data-table.ts`:
   (`src/refine/columns.ts`): a sorter header per field, the filter by field type, the cell by
   field type (a `Badge` for enums, a formatted date, Yes/No). Those builders move behind the
   generator interface of LLD-05 so both callers share them.
+
+  ⚑ LLD-13 puts these builders in `packages/dev-service/src/refine/`. The service injects
+  the existing snippets and their imports through `CompileContext.refineSnippets` so the
+  compiler can stay independent of the service.
 - The refine-ui `DataTable` element, bound to the table.
 - With `selectable`, the table exposes `selectedRow` (and `selectedRows` for `multiple`),
   backed by page state, so `ui.customers.selectedRow.id` works in bindings.

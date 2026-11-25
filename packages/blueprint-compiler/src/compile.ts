@@ -1,7 +1,7 @@
 import { hasErrors, pageDocPath, validate, type Blueprint, type ComponentManifest, type Diagnostic, type ResolvedManifests, type ValidationContext } from '@trivia/blueprint'
 import type { TriviaManifest } from '@trivia/contract-sync'
 
-import { generateContract, type ContractPageGenerator } from './contract-pages.js'
+import { generateContract, type ContractPageGenerator, type RefineSnippetGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
 import { lowerCustom } from './lower/index.js'
 import { compareBytes, moduleImports, restyleModule } from './print/style.js'
@@ -25,6 +25,7 @@ export interface CompileContext {
   manifests?: ResolvedManifests
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
+  refineSnippets?: RefineSnippetGenerator
 }
 
 export class CompileError extends Error {

@@ -16,7 +16,7 @@ import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.
 import { BlueprintWorkspace } from '../blueprint/store.js'
 import { readSummary, summarize, type PatchResult } from '../blueprint/summary.js'
 import { commitDocuments } from '../blueprint/writes.js'
-import { generateRefinePage } from '../refine/scaffold.js'
+import { generateRefinePage, generateRefineSnippets } from '../refine/scaffold.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
 import type { ApplyResult, Drift, FileChange, Health, HistoryResult, HistoryState, ManifestState } from '../types.js'
@@ -127,6 +127,7 @@ export class EngineService {
       facts, contract, manifests: resolution.manifests, engine: this.#options.engine,
       validation: this.blueprint.context(resolution, contract),
       generateContractPage: (input) => generateRefinePage({ ...input, project }),
+      refineSnippets: generateRefineSnippets(project),
     }
     return { blueprint, context }
   }

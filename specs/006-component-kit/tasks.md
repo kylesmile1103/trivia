@@ -11,7 +11,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T004 Expose the column snippet builders (`src/refine/columns.ts`) and the field, rule and default builders (`fields.ts`, `rules.ts`) through the generator interface. Plugin suite unchanged
+- [x] T004 Expose the column snippet builders (`src/refine/columns.ts`) and the field, rule and default builders (`fields.ts`, `rules.ts`) through the generator interface. Plugin suite unchanged
 
 ## Phase 3: User Story 1 - The 25 components (P1)
 
