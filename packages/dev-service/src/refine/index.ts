@@ -17,7 +17,7 @@ import { type PageDrift, pageDrift } from './drift.js'
 import { type FormStyle, formFieldFor, kebab } from './fields.js'
 import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
 import { alignOps, hasDiff, ruleDiff } from './rules.js'
-import { PAGE_KINDS, type PageFile, type PageKind, type ScaffoldContext, pageFiles, supportedKinds, withoutFields } from './scaffold.js'
+import { PAGE_KINDS, type PageKind, type ScaffoldContext, generateRefinePage, supportedKinds } from './scaffold.js'
 import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
@@ -298,7 +298,8 @@ export class RefineAdapter {
 
     const { root } = this.#host
     const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
-    const files = pageFiles(resource, wanted, await this.#scaffoldContext(name, nextRoutes))
+    const project = await this.#scaffoldContext(name, nextRoutes)
+    const files = wanted.map((kind) => generateRefinePage({ resource, kind, project }))
     const claimed = new Set(nextRoutes?.map((route) => routePattern(route.path)))
     for (const file of files) {
       if (claimed.has(routePattern(file.route))) throw new ApiError('conflict', `${file.route} already has an App Router page`)
@@ -831,8 +832,11 @@ export class RefineAdapter {
       throw new ApiError('unsupported', `${resource.name}'s contract has no operation for a ${request.kind} page`)
     }
     const nextRoutes = this.#host.kind === 'next' ? await this.#host.routes() : undefined
-    const context = await this.#scaffoldContext(refineName(resource), nextRoutes)
-    const [page] = pageFiles(withoutFields(resource, request.hide ?? []), [request.kind], { ...context, ...(request.title ? { title: request.title } : {}) }) as [PageFile]
+    const project = await this.#scaffoldContext(refineName(resource), nextRoutes)
+    const page = generateRefinePage({
+      resource, kind: request.kind, project,
+      options: { ...(request.hide && { hideFields: request.hide }), ...(request.title && { title: request.title }) },
+    })
     let { file, importPath } = page
     if (request.file !== undefined) {
       if (!/^src\/(?:[\w.@-]+\/)*[\w.@-]+\.tsx$/.test(request.file) || request.file.split('/').some((p) => p === '..' || p === '.')) {

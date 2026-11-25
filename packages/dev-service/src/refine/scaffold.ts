@@ -29,12 +29,25 @@ export interface ScaffoldContext {
   textarea?: boolean
   /** How forms write fields (`fields.ts` FormStyle); default `field`. */
   style?: FormStyle
-  /** The view header's title; default: the resource's (lists) or Refine's own (the rest). */
-  title?: string
 }
 
+type RenderContext = ScaffoldContext & { title?: string }
+
+export interface ScaffoldRequest {
+  resource: ManifestResource
+  kind: PageKind
+  project: ScaffoldContext
+  options?: {
+    hideFields?: readonly string[]
+    /** The view header's title; defaults to the resource or Refine's own title. */
+    title?: string
+  }
+}
+
+export type RefinePageGenerator = (request: ScaffoldRequest) => PageFile
+
 /** `resource` without the fields named in `hide`: in its entity and in its request bodies. */
-export function withoutFields(resource: ManifestResource, hide: readonly string[]): ManifestResource {
+function withoutFields(resource: ManifestResource, hide: readonly string[]): ManifestResource {
   if (hide.length === 0) return resource
   const keep = <T extends { name: string }>(fields: T[]): T[] => fields.filter((f) => !hide.includes(f.name))
   const body = <O extends { requestBody: { fields: ManifestField[] | null } | null } | null>(op: O): O =>
@@ -126,37 +139,37 @@ const attr = (text: string) => (/^[^"\\\n{}<>&]*$/.test(text) ? `"${text}"` : `{
 
 const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
 
-/** Every page kind asked for, as files. */
-export function pageFiles(resource: ManifestResource, kinds: PageKind[], context: ScaffoldContext): PageFile[] {
-  const name = refineName(resource)
-  const typeName = resource.entity?.typeName ?? null
-  const supported = supportedKinds(resource)
-  return kinds.map((kind) => {
-    if (!supported.includes(kind)) {
-      throw new Error(`${resource.name} has no ${kind === 'edit' ? 'update' : kind === 'show' ? 'get' : kind} operation in the contract`)
-    }
-    const component = `${resource.name}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
-    const route = routeOf(name, kind)
-    const file = context.appRouter
-      ? `${context.pagesDir}${route.replace('/:id', '/[id]')}/page.tsx`
-      : `${context.pagesDir}/${name}/${kind}.tsx`
-    const importPath = context.appRouter ? file.slice(0, -'.tsx'.length) : `${context.pagesImport}/${name}/${kind}`
-    let content: string
-    switch (kind) {
-      case 'list':
-        content = listPage(resource, name, component, typeName, supported, context)
-        break
-      case 'create':
-      case 'edit':
-        content = formPage(resource, name, component, typeName, kind, context)
-        break
-      case 'show':
-        content = showPage(resource, name, component, typeName, context)
-        break
-    }
-    if (context.appRouter) content = `"use client";\n\n${content.replace(`export function ${component}`, `export default function ${component}`)}`
-    return { kind, file, importPath, component, route, content }
-  })
+/** The same generator is used by the new-resource plan, inferencer and blueprint compiler. */
+export const generateRefinePage: RefinePageGenerator = ({ resource: contract, kind, project, options }) => {
+  const name = refineName(contract)
+  const typeName = contract.entity?.typeName ?? null
+  const supported = supportedKinds(contract)
+  if (!supported.includes(kind)) {
+    throw new Error(`${contract.name} has no ${kind === 'edit' ? 'update' : kind === 'show' ? 'get' : kind} operation in the contract`)
+  }
+  const resource = withoutFields(contract, options?.hideFields ?? [])
+  const context: RenderContext = { ...project, ...(options?.title !== undefined && { title: options.title }) }
+  const component = `${resource.name}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
+  const route = routeOf(name, kind)
+  const file = context.appRouter
+    ? `${context.pagesDir}${route.replace('/:id', '/[id]')}/page.tsx`
+    : `${context.pagesDir}/${name}/${kind}.tsx`
+  const importPath = context.appRouter ? file.slice(0, -'.tsx'.length) : `${context.pagesImport}/${name}/${kind}`
+  let content: string
+  switch (kind) {
+    case 'list':
+      content = listPage(resource, name, component, typeName, supported, context)
+      break
+    case 'create':
+    case 'edit':
+      content = formPage(resource, name, component, typeName, kind, context)
+      break
+    case 'show':
+      content = showPage(resource, name, component, typeName, context)
+      break
+  }
+  if (context.appRouter) content = `"use client";\n\n${content.replace(`export function ${component}`, `export default function ${component}`)}`
+  return { kind, file, importPath, component, route, content }
 }
 
 function listPage(
@@ -165,7 +178,7 @@ function listPage(
   component: string,
   typeName: string | null,
   supported: PageKind[],
-  context: ScaffoldContext,
+  context: RenderContext,
 ): string {
   const imports = new Imports()
   const row = typeName ?? 'Record<string, unknown>'
@@ -243,7 +256,7 @@ function formPage(
   component: string,
   typeName: string | null,
   kind: 'create' | 'edit',
-  context: ScaffoldContext,
+  context: RenderContext,
 ): string {
   const imports = new Imports()
   const body = (bodyFields(resource, kind === 'create' ? 'create' : 'update') ?? []).filter((f) => !f.readOnly)
@@ -332,7 +345,7 @@ ${formJsx}
 `
 }
 
-function showPage(resource: ManifestResource, name: string, component: string, typeName: string | null, context: ScaffoldContext): string {
+function showPage(resource: ManifestResource, name: string, component: string, typeName: string | null, context: RenderContext): string {
   const imports = new Imports()
   const refineUi = context.refineUi ?? '@/components/refine-ui'
   imports.add({ name: 'useShow', source: '@refinedev/core' })

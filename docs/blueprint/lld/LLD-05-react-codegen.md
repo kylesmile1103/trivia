@@ -4,7 +4,7 @@
   ADR-0003, ADR-0004, ADR-0007, ADR-0009, ADR-0016
 - Code: `packages/blueprint-compiler` (`@trivia/blueprint-compiler`); one engine op in
   `crates/trivia_oxc_engine/src/ops/replace_file.rs`; shared pieces of
-  `packages/vite-plugin-ast-locator/src/refine/scaffold.ts`.
+  `packages/dev-service/src/refine/scaffold.ts`.
 
 ## 1. Pipeline
 
@@ -35,8 +35,13 @@ function planEject(bp: Blueprint, pages: string[], ctx: CompileContext, lock: Lo
 
 For `list`, `create`, `edit` and `show`, `compilePage` calls the Refine adapter's generator
 with `{ resource, kind, fields, hideFields, title }`. The generator moves behind a small
-interface in the plugin, taking the contract and the project facts and returning the page's
-code, so the compiler does not import the plugin. The adapter passes it in.
+interface in the dev service, taking the contract and the project facts and returning the page's
+code, so the compiler does not import either host or service. The adapter passes it in.
+
+⚑ LLD-13 moved the Refine adapter and the blueprint HTTP and MCP surfaces to
+`packages/dev-service`. The generator takes one `ScaffoldRequest` and the service passes
+it to the compiler. Both the existing Vite and Next hosts use the same Refine adapter.
+Spec 012 owns the Next blueprint target.
 
 `filters`, `rowActions` and `headerActions` are new generator inputs:
 
