@@ -138,6 +138,12 @@ the top level is wrapped in parentheses only when the caller asks for an arrow b
 `renameReferences` uses the same splice to rewrite `ui.<old>` to `ui.<new>` in stored sources,
 for the `renameNode` op (LLD-01).
 
+- ⚑ Reference renaming edits only the property name of a free `ui` access, preserving optional
+  chaining, comments and string delimiters. It can rewrite parseable drafts even if their
+  syntax is outside the binding subset. An ambiguous scope or parse error with a possible
+  `ui` reference returns a diagnostic so the guarded op can refuse the rename atomically.
+  `from` and `to` must have the blueprint node-name character shape.
+
 - ⚑ Emit accepts a batch-wide `arrowBody` flag. `renameReferences` accepts `{ expressions, from, to }`
   with unqualified node names. Both responses label spans with `unit: "utf16"` and return either
   `ts` or `diagnostics` for each input, preserving the rest of the batch when one input fails.

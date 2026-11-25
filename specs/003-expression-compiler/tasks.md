@@ -34,7 +34,7 @@
 
 - [x] T013 [US4] `tests/emit.rs`: identity round trips over every accepted expression, rename cases, CRLF
 - [x] T014 [US4] `src/emit.rs`: longest-prefix rename by splice, re-parse check
-- [ ] T015 [US4] `rename_references` for the `renameNode` op, with tests
+- [x] T015 [US4] `rename_references` for the `renameNode` op, with tests
 
 ## Phase 7: Binding and integration
 

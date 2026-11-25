@@ -12,7 +12,7 @@ mod deps;
 mod graph;
 mod emit;
 
-pub use emit::emit;
+pub use emit::{InvalidNodeName, emit, rename_references};
 
 use std::{collections::BTreeMap, sync::Arc};
 

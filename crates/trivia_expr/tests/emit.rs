@@ -72,3 +72,48 @@ fn fr_ex_06_refuses_sources_outside_the_expression_subset() {
         assert!(result.ts.is_none() && result.diagnostics.iter().any(|d| d.code == code), "{source}: {result:?}");
     }
 }
+
+#[test]
+fn fr_ex_06_rename_references_changes_only_free_ui_property_names() {
+    let sources = [
+        "ui /* keep */ .search.value + ui?.search.value + ui[ 'search' ].value",
+        "ui[\"s\\u0065arch\"].value + ui[`search`].value + (ui as Ui).search.value",
+        "'ui.search' + (item.ui.search ?? ui.searchElse) // ui.search",
+        "[1].map(({ui}) => ui.search.value) && ui.search.value",
+        "ui.search.value = 1",
+        "bad +",
+        "ui.search +",
+        "() => { const ui = something; return ui.search.value }",
+    ];
+    let input = request(sources, &[]);
+    let mut expressions = input.expressions;
+    expressions.push(serde_json::from_str(r#"{"id":"local", "source":"ui.search.value", "locals":["ui"]}"#).unwrap());
+    let results = trivia_expr::rename_references(trivia_expr::RenameRequest {
+        expressions, from: "search".into(), to: "query".into(),
+    }).unwrap().results;
+    let expected = [
+        "ui /* keep */ .query.value + ui?.query.value + ui[ 'query' ].value",
+        "ui[\"query\"].value + ui[`query`].value + (ui as Ui).query.value",
+        sources[2],
+        "[1].map(({ui}) => ui.search.value) && ui.query.value",
+        "ui.query.value = 1",
+        sources[5],
+    ];
+    for (result, expected) in results.iter().zip(expected) {
+        assert_eq!(result.ts.as_deref(), Some(expected), "{:?}", result.diagnostics);
+    }
+    for result in &results[6..8] {
+        assert!(result.ts.is_none());
+        assert_eq!(result.diagnostics[0].code, "expr_unsupported_syntax");
+    }
+    assert_eq!(results[8].ts.as_deref(), Some("ui.search.value"));
+}
+
+#[test]
+fn rename_references_rejects_source_code_as_a_node_name() {
+    let input = request(["ui.search.value"], &[]);
+    let result = trivia_expr::rename_references(trivia_expr::RenameRequest {
+        expressions: input.expressions, from: "search".into(), to: "query + anotherName".into(),
+    });
+    assert!(result.is_err());
+}
