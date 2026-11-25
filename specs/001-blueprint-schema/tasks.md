@@ -14,7 +14,7 @@ Tests come before the code they cover and must fail first.
 
 - [x] T004 [P] Zod schemas and types in `src/types/app.ts` and `src/types/page.ts`, with id and name patterns
 - [x] T005 [P] `src/types/diagnostics.ts` and `src/types/ops.ts` (the op union, without model ops)
-- [ ] T006 Round-trip tests in `src/serialize.test.ts` (canonical fixture, shuffled keys, defaults omitted, final newline)
+- [x] T006 Round-trip tests in `src/serialize.test.ts` (canonical fixture, shuffled keys, defaults omitted, final newline)
 - [ ] T007 `src/serialize.ts`: canonical JSON and `rev()`
 - [x] T008 [P] `src/ids.ts` with an injectable source, and tests
 - [x] T009 [P] `src/order.ts` fractional keys, with the 1 000-insert test
