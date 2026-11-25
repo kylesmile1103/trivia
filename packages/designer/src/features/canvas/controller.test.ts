@@ -286,6 +286,7 @@ function mountCanvas(engine: FakeEngine) {
   return {
     view: (): CanvasView => views.at(-1) ?? EMPTY_VIEW,
     doc: () => app.doc,
+    renderFromSource: () => render(app, engine.children),
     /** HMR: Vite re-imports the page's module, and React re-renders the app from the source as it is now. */
     hmr() {
       this.hotUpdate(FILE)
@@ -653,6 +654,19 @@ describe('a click while the app updates is deferred, not dropped', () => {
 })
 
 describe('the canvas is busy for a bounded time after an edit', () => {
+  it('FR-TN-05 settles a Next edit after the edited file renders without a Vite resource request', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    designer.getState().setHealth({ ...designer.getState().health!, host: 'next' })
+    await c.click(pointOf(2))
+    await c.press('Delete')
+    c.doc().body.setAttribute('data-clock', '12:00')
+    await quiet()
+    expect(c.view().updating).toBe(true)
+    c.renderFromSource()
+    expect(await untilSettled(c, 600)).toBeLessThan(600)
+    expect(engine.children).toEqual(['h2', 'button'])
+  })
+
   it('settles at a deadline when the app never stops changing its DOM', async () => {
     const c = await open(['h2', 'button', 'p'])
     // A ticker: the app changes its DOM every 20 ms (an animation library, a clock).

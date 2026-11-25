@@ -91,8 +91,8 @@ export class EngineService {
   }
 
   health(): Health {
-    const { host: { root, uiDir, importBase }, version } = this.#options
-    return { root, uiDir, importBase, version }
+    const { host: { root, uiDir, importBase, kind }, version } = this.#options
+    return { root, uiDir, importBase, version, ...(kind === 'next' ? { host: kind } : {}) }
   }
 
   components(): unknown[] {

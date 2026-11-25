@@ -11,6 +11,8 @@
 //   when its hot update arrived; otherwise the trigger), and MAX_WAIT_MS after the trigger in
 //   any case (a no-op edit, or a hot update slower than that).
 
+import { locatorFile } from '@/shared/lib/locator'
+
 /** Mutations must pause this long before an update counts as rendered. */
 const QUIET_MS = 120
 /** Resource timing is delivered late: mutations this long before such a trigger still count. */
@@ -78,13 +80,17 @@ export class FrameSession {
   private edit: SentEdit | null = null
   /** Recent hot updates, oldest first. */
   private hot: HotModule[] = []
+  /** Most recent mutation of stamped nodes in each source file in this document. */
+  private fileRenders = new Map<string, number>()
 
   private readonly iframe: HTMLIFrameElement
   private readonly listener: FrameListener
+  private readonly usesResourceTiming: () => boolean
 
-  constructor(iframe: HTMLIFrameElement, listener: FrameListener) {
+  constructor(iframe: HTMLIFrameElement, listener: FrameListener, usesResourceTiming: () => boolean = () => true) {
     this.iframe = iframe
     this.listener = listener
+    this.usesResourceTiming = usesResourceTiming
   }
 
   /** Attach now if the document already loaded, and on every later load. Returns the stop function. */
@@ -192,6 +198,7 @@ export class FrameSession {
     // Resource timing is in the frame's clock; the canvas (and the action bus) use the designer's.
     const offset = win.performance.timeOrigin - performance.timeOrigin
     const hot = new win.PerformanceObserver((list) => {
+      if (!this.usesResourceTiming()) return
       const modules: HotModule[] = []
       for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
         const path = hotUpdatePath(entry.name, win.location.origin)
@@ -222,6 +229,7 @@ export class FrameSession {
     this.pending = false
     this.edit = null
     this.hot = []
+    this.fileRenders.clear()
     this.doc = null
     this.tracked = []
     if (this.state === 'attached') this.state = 'loading'
@@ -255,9 +263,13 @@ export class FrameSession {
     if (!edit || edit.files.length === 0) return null
     let latest = -Infinity
     for (const file of edit.files) {
-      let arrived: number | null = null
-      for (const m of this.hot) if (m.requestedAt >= edit.sentAt && m.path === `/${file}`) arrived = m.arrivedAt
-      if (arrived === null) return null
+      let arrived = -Infinity
+      if (this.usesResourceTiming()) {
+        for (const m of this.hot) if (m.requestedAt >= edit.sentAt && m.path === `/${file}`) arrived = m.arrivedAt
+      } else {
+        arrived = this.fileRenders.get(file) ?? -Infinity
+      }
+      if (arrived < edit.sentAt) return null
       latest = Math.max(latest, arrived)
     }
     return latest
@@ -269,7 +281,20 @@ export class FrameSession {
     // module that re-renders the DOM, so <head> changes don't count as an update's render.
     // They still move boxes, hence the layout either way. The armed check reads the time; a
     // mutation must not re-arm it, or an app that never stops changing would never settle.
-    if (records.some((r) => !this.isOwnMutation(r) && !inHead(r.target))) this.lastMutationAt = performance.now()
+    const counts = (r: MutationRecord) => !this.isOwnMutation(r) && !inHead(r.target)
+    if (this.usesResourceTiming()) {
+      if (records.some(counts)) this.lastMutationAt = performance.now()
+    } else {
+      const now = performance.now()
+      for (const record of records) {
+        if (!counts(record)) continue
+        this.lastMutationAt = now
+        for (const element of affectedElements(record)) {
+          const file = locatorFile(element.getAttribute('data-ast-node') ?? '')
+          if (file) this.fileRenders.set(file, now)
+        }
+      }
+    }
     this.scheduleLayout()
   }
 
@@ -320,6 +345,20 @@ export class FrameSession {
           : latest
     }
     return Math.max(this.floorAt, Math.min(latest, at))
+  }
+}
+
+/** Stamped elements a render changed or replaced (including a removed subtree). */
+function* affectedElements(record: MutationRecord): Iterable<Element> {
+  const selector = '[data-ast-node]'
+  const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target as Element : record.target.parentElement
+  const owner = target?.closest(selector)
+  if (owner) yield owner
+  for (const node of [...record.addedNodes, ...record.removedNodes]) {
+    if (node.nodeType !== Node.ELEMENT_NODE) continue
+    const element = node as Element
+    if (element.matches(selector)) yield element
+    yield* element.querySelectorAll(selector)
   }
 }
 

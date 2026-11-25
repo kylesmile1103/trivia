@@ -204,7 +204,7 @@ export class CanvasController {
       attached: () => this.onAttached(),
       layout: () => this.measure(),
       settled: () => this.onSettled(),
-    })
+    }, () => designer.getState().health?.host !== 'next')
     this.session.isOwnMutation = (r) => this.isOwnMutation(r)
     this.previews = new Previews(
       () => this.session.doc,

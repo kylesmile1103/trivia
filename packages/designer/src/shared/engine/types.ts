@@ -92,6 +92,7 @@ export interface Health {
   uiDir: string
   importBase: string
   version: string
+  host?: 'next'
 }
 
 export type AttrKind = 'string' | 'expression' | 'shorthand' | 'element' | 'spread'

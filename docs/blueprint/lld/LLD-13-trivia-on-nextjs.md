@@ -196,9 +196,10 @@ The engine edits files. It does not care which kind of component a file holds. W
   loads and observes DOM mutations. It does not subscribe to Vite's HMR socket. Its resource
   observer does depend on Vite's `?t=<timestamp>` module requests to match an edit to its
   render; on Next.js it would fall back to a timeout. ⚑ Keep this correlation for Vite.
-  For Next.js, use the edit response as the signal and wait for the DOM to settle before
-  re-resolving the selection. The iframe still receives its own HMR connection through the
-  app proxy.
+  For Next.js, `/health` identifies the host and the edit response supplies the files. The
+  frame watches their stamped nodes for mutations since the edit was sent, then waits for
+  the DOM to settle before re-resolving the selection, with the existing bounded wait.
+  The iframe still receives its own HMR connection through the app proxy.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`

@@ -29,6 +29,7 @@ export interface Health {
   uiDir: string
   importBase: string
   version: string
+  host?: 'next'
 }
 
 export interface HistoryState {
