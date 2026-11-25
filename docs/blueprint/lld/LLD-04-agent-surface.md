@@ -39,6 +39,9 @@ them through the guarded document writer. ⚑ The native `restoreFiles` prefligh
 through `Workspace::restore`. JSON snapshots use a guarded writer in `blueprint/`; the shared
 history dispatches document entries to it and source entries to the native engine.
 
+⚑ Vite's `blueprintDir` option resolves to a child directory of the project root, default
+`blueprint`. Blueprint paths refuse symlink segments to prevent redirection and aliasing.
+
 ## 2. HTTP (FR-AG-01)
 
 All under `/@trivia/api/blueprint`, with the envelope and the caller guard of `docs/api.md`.

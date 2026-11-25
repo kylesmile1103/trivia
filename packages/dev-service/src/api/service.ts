@@ -24,6 +24,8 @@ export interface ServiceOptions {
   host: DevHost
   version: string
   engine: EngineBinding
+  /** Directory under the project root. Default: blueprint. */
+  blueprintDir?: string
   /** Undo entries kept (docs/api.md: 100). */
   historyLimit?: number
   /** Project-relative path of contract-sync's manifest. Default "trivia.manifest.json". */

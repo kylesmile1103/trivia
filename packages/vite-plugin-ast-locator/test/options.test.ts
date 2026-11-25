@@ -32,6 +32,7 @@ describe('resolveProjectPaths', () => {
     expect(resolveProjectPaths(root, aliases, {})).toEqual({
       uiDir: 'src/components/ui',
       importBase: '@/components/ui',
+      blueprintDir: 'blueprint',
       warnings: [],
     })
   })
@@ -86,8 +87,21 @@ describe('resolveProjectPaths', () => {
     expect(resolveProjectPaths(root, [], { uiDir: './lib/ui/', importBase: '#ui' })).toEqual({
       uiDir: 'lib/ui',
       importBase: '#ui',
+      blueprintDir: 'blueprint',
       warnings: [],
     })
+  })
+
+  it('resolves a custom blueprint directory relative to the project', () => {
+    expect(resolveProjectPaths(root, [], { blueprintDir: './design/drafts/' }).blueprintDir).toBe('design/drafts')
+    expect(resolveProjectPaths(root, [], { blueprintDir: path.join(root, 'drafts') }).blueprintDir).toBe('drafts')
+  })
+
+  it('refuses a blueprint directory outside the project or through a symlink', () => {
+    fs.symlinkSync(os.tmpdir(), path.join(root, 'linked'), 'dir')
+    for (const blueprintDir of ['../outside', '.', 'linked/drafts']) {
+      expect(() => resolveProjectPaths(root, [], { blueprintDir })).toThrow(expect.objectContaining({ code: 'path_outside_root' }))
+    }
   })
 
   it('flags a library outside the project root', () => {
