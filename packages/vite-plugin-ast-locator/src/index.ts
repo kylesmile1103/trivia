@@ -7,17 +7,17 @@ import path from 'node:path'
 
 import type { Plugin } from 'vite'
 
-import { createApiMiddleware } from './api/http.js'
-import { EngineService } from './api/service.js'
-import { createMcpMiddleware } from './mcp/server.js'
-import { type EngineBinding, loadEngine } from './engine.js'
-import { type ProjectPaths, resolveProjectPaths } from './options.js'
-import { PREVIEW_PREFIX } from './refine/index.js'
-import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
+import {
+  type EngineBinding, EngineService, PREVIEW_PREFIX, createDevMiddleware, loadEngine,
+} from '@trivia/dev-service'
+import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
-export { API_BASE } from './api/http.js'
-export { MCP_PATH } from './mcp/server.js'
-export type * from './types.js'
+import { createViteHost } from './host.js'
+import { type ProjectPaths, resolveProjectPaths } from './options.js'
+import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
+
+export { API_BASE, MCP_PATH } from '@trivia/dev-service'
+export type * from '@trivia/dev-service'
 
 export interface AstLocatorOptions {
   /**
@@ -124,24 +124,14 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       }
       // Registered directly (not returned as a post hook), so it runs before Vite's own
       // transform and SPA-fallback middlewares.
+      const host = createViteHost(server, paths)
       service = new EngineService({
-        root: server.config.root,
-        uiDir: paths.uiDir,
-        importBase: paths.importBase,
+        host,
         version: pkg.version,
         engine,
-        // Routes name their pages' modules as the app's own imports resolve (aliases included).
-        resolve: async (specifier, importer) => {
-          const resolved = await server.pluginContainer.resolveId(specifier, path.join(server.config.root, importer))
-          if (!resolved || resolved.external) return null
-          const rel = path.relative(server.config.root, resolved.id.split('?')[0]!)
-          return rel.startsWith('..') || path.isAbsolute(rel) || rel.split(path.sep).includes('node_modules') ? null : rel.split(path.sep).join('/')
-        },
         ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),
       })
-      const rules = { logger: server.config.logger, allowRemote, allowedHosts: server.config.server.allowedHosts }
-      server.middlewares.use(createApiMiddleware({ service, ...rules }))
-      if (options.mcp !== false) server.middlewares.use(createMcpMiddleware({ service, ...rules }))
+      server.middlewares.use(createDevMiddleware(host, { service, logger: server.config.logger, allowRemote, mcp: options.mcp !== false }))
       // A sync rewrites the manifest: previews generated from the old one are stale.
       const manifestFile = path.join(server.config.root, 'trivia.manifest.json')
       server.watcher.on('change', (file) => {

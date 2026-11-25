@@ -24,9 +24,8 @@ Where code goes:
 
 - **Engine:** pure Rust. Each write op is one module under `crates/trivia_oxc_engine/src/ops/`. A new op
   is a new module, an `Op` variant and a `docs/api.md` example (`tests/errors.rs` pins one per variant).
-- **Plugin:** `transform.ts` (locators), `api/` (routes, edit queue, undo history, caller guard), `mcp/`
-  (tools), `refine/` (the Refine adapter). Anything that edits code goes through `EngineService`, so
-  every client shares one queue and one history.
+- **Dev service:** `api/` (routes, edit queue, undo history, caller guard), `mcp/` (tools) and
+  `refine/` (the Refine adapter). Both the Vite and Next.js hosts use `EngineService` for edits.
 - **Designer:** `app/` -> `features/<name>/` (public API in `index.ts`) -> `shared/`. A feature never
   imports another feature.
 - **OXC:** every OXC crate is pinned to one exact version (`=0.153.0`). The API moves quickly, so check
@@ -44,13 +43,13 @@ the project are in [`docs/HANDOFF.md`](HANDOFF.md).
 | Engine | `nx test oxc-engine` | Acceptance, round-trip, formatting, guards, imports, locators, scope checks, outline, error codes, stack budget. |
 | Binding | `nx test engine` | Its Rust tests, then the napi crash suite (deep files, bounded memory). |
 | Lint | `pnpm lint` | Clippy with `-D warnings` on every crate, oxlint on the designer and the examples. |
-| Plugin | `nx test plugin` | HTTP API, MCP tools, Refine adapter (including `tsc` on generated pages). |
+| Dev hosts | `nx run-many -t test -p dev-service plugin next` | HTTP API, MCP, Refine adapter, App Router routes and loader parity. |
 | Designer | `nx test designer` | Unit tests plus architecture rules. |
 | Contract sync | `nx test contract-sync` | The whole pipeline and the CLI. |
 | Inferencer | `nx test inferencer` | The package's hooks and eject requests. |
 | Types | `pnpm typecheck` | All TypeScript packages. |
 | Builds | `pnpm build` | Every package, plus production builds of the designer and the examples. |
-| End to end | `pnpm e2e` | Playwright: two projects, `playground` and `refine`, which start their own servers. |
+| End to end | `pnpm e2e` | Playwright projects `playground`, `refine` and `next`, each with its own servers. |
 | Desktop shell | `nx test shell` | The shell's own Cargo workspace. |
 | Tooling | `nx test tools` | The generator, the release version actions and changelog rules. |
 
@@ -59,11 +58,12 @@ Playwright ports come from the environment so you can run beside a live session:
 ```sh
 TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 \
 TRIVIA_REFINE_APP_PORT=5312 TRIVIA_REFINE_PORT=4412 \
-  pnpm exec playwright test
+TRIVIA_NEXT_APP_PORT=5313 TRIVIA_NEXT_PORT=4413 TRIVIA_NEXT_API_PORT=4513 \
+  pnpm e2e
 ```
 
-`pnpm e2e` builds the plugin first; the examples run its built output. CI runs the same gate on
-every pull request: [CI/CD](ci.md).
+`pnpm e2e` builds the Vite and Next.js packages first. CI runs the same gate on every pull
+request: [CI/CD](ci.md).
 
 ## Contributing
 

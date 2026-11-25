@@ -4,10 +4,10 @@
 
 Stated plainly so you can judge fit before investing time.
 
-- **Not yet validated on third-party code.** The two examples are the only apps exercised end to end.
+- **Not yet validated on third-party code.** The three examples are the only apps exercised end to end.
   What breaks on a real codebase is the next input to the roadmap.
-- **Vite and React only.** Next.js and other bundlers are not supported. Refine knowledge lives in the
-  plugin, so other UI kits (Ant Design, MUI) would be new adapters, not engine changes.
+- **React dev hosts.** Supported hosts are Vite and Next.js App Router. The Refine adapter is built
+  around shadcn/ui.
 - **No type checker.** OXC has none, so prop schemas come from syntactic analysis of your
   `src/components/ui` (variants from `cva(...)`, curated props for intrinsic tags). Unusual component
   patterns may yield partial schemas.
@@ -27,7 +27,7 @@ Stated plainly so you can judge fit before investing time.
 In priority order (see [`docs/HANDOFF.md`](HANDOFF.md) section 7 for the live list):
 
 1. Use Trivia on a real internal tool and fix what breaks: pages whose shape the adapter does not read,
-   other UI kits, Next.js, selection that follows JSX renumbered by a value op.
+   other UI kits, selection that follows JSX renumbered by a value op.
 2. Narrower drift fixes for changed enum options (update in place instead of rebuilding).
 3. Edit forms and nested-object fields in generated forms.
 

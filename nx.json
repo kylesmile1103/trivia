@@ -44,7 +44,7 @@
     }
   },
   "release": {
-    "projects": ["engine", "oxc-engine", "plugin", "contract-sync", "inferencer", "designer", "shell", "blueprint", "expression-compiler"],
+    "projects": ["engine", "oxc-engine", "plugin", "contract-sync", "inferencer", "designer", "shell", "blueprint", "expression-compiler", "dev-service", "next"],
     "projectsRelationship": "fixed",
     "releaseTag": { "pattern": "v{version}" },
     "version": {

@@ -1,6 +1,6 @@
 # ADR-0015: Trivia on Next.js: a stamping loader and a dev service
 
-- Status: Proposed ⚑ (the agent's call, for Kyle's review; the loader needs a spike)
+- Status: Superseded by [ADR-0017](0017-nextjs-stamping-and-preview-path.md)
 - Date: 2026-11-25
 - Requirements: BR-11, FR-TN-01 to FR-TN-07
 

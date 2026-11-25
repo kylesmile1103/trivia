@@ -28,8 +28,9 @@ Stop everything with Ctrl-C.
 | `pnpm dev:playground` | the plain shadcn playground and the designer |
 | `pnpm dev:desktop` | the Refine example, the designer and the desktop window |
 
-Both examples use port 5173, so run one at a time. The engine has no server of its own: it is a napi
-addon loaded by the app's Vite dev server, which serves the engine API at `/@trivia/api`.
+Both Vite examples default to port 5173. The Vite plugin loads the native engine through the dev
+service and mounts `/@trivia/api` on the app's dev server. For the Next.js example, use the launcher
+in [the Next.js setup](#using-trivia-in-your-own-nextjs-app).
 
 To run the pieces by hand instead: `pnpm build:plugin`, then `pnpm --filter refine-admin dev` and
 `TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev` in two terminals.
@@ -87,10 +88,52 @@ It will not start without the native engine; `pnpm build:engine` first.
 
 Full reference: [`packages/vite-plugin-ast-locator/README.md`](../packages/vite-plugin-ast-locator/README.md).
 
+## Using Trivia in your own Next.js app
+
+The integration supports the App Router on Next.js **16.4.6**. Build Trivia in its workspace,
+then link the integration into your app.
+
+```sh
+cd /path/to/trivia
+pnpm install
+pnpm exec nx build next
+cd /path/to/next-app
+pnpm link /path/to/trivia/packages/next
+```
+
+Wrap your existing Next.js config.
+
+```ts
+// next.config.ts
+import { withTrivia } from '@trivia/next'
+
+export default withTrivia({})
+```
+
+Start Next.js and the local dev service from the app directory. Add `--webpack` to use webpack.
+
+```sh
+pnpm exec trivia-next dev --port 3000 --service-port 4403
+```
+
+The launcher prints the API and MCP URLs. In the Trivia workspace, start the designer with both
+targets and open `http://localhost:4400/__trivia/`.
+
+```sh
+TRIVIA_TARGET=http://127.0.0.1:3000 TRIVIA_API_TARGET=http://127.0.0.1:4403 \
+  pnpm --filter @trivia/designer dev
+```
+
+The designer keeps the canvas on its own origin and sends the API and MCP requests to the service.
+The Next loader runs only in development. Production builds use the app's normal bundler config
+and refuse a leftover `app/(blueprint-preview)/` folder. See [Engine API](api.md) and the
+[Next.js example](../examples/next-admin/).
+
 ## Working with AI agents (MCP)
 
-The plugin serves a Model Context Protocol endpoint on your dev server at `/@trivia/mcp` (Streamable
-HTTP, stateless, built on the official SDK pinned at 1.30.1). No extra process is needed.
+The dev service serves a Model Context Protocol endpoint at `/@trivia/mcp` (stateless Streamable
+HTTP, official SDK 1.32.2). For Vite, use the app's dev-server URL. For Next.js, use the MCP URL
+printed by `trivia-next dev`.
 
 ```sh
 claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp

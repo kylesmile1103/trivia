@@ -1,8 +1,10 @@
 # Engine API (contract)
 
-The designer talks to the engine over HTTP. `vite-plugin-ast-locator` serves these endpoints
-from the **user's** Vite dev server under `/@trivia/api/`, calling the Rust engine through the
-napi binding (`@trivia/engine`). The designer reaches them through its same-origin proxy.
+`@trivia/dev-service` serves `/@trivia/api/` and calls the Rust engine through `@trivia/engine`.
+On Vite, `vite-plugin-ast-locator` mounts it in the user's dev server. On Next.js,
+`trivia-next dev` runs the service alongside the app on `127.0.0.1` and prints its URL.
+The designer's same-origin proxy uses `TRIVIA_TARGET` for the app and `TRIVIA_API_TARGET`
+for the separate service when configured. The same service also handles `/@trivia/mcp`.
 
 TypeScript mirror of every shape: `packages/designer/src/shared/engine/types.ts`.
 Rust source of truth: `crates/trivia_oxc_engine/src/{ops/mod,ops/bind_query,inspect,prop_analyzer,error}.rs`.
@@ -25,7 +27,8 @@ read or write, is refused with 403 `forbidden` unless all three hold:
   An unknown address (a Unix socket, a closed connection) is refused. This is what stops other
   machines when the dev server listens beyond loopback (`vite --host`, Docker): a non-browser
   client sends no `Origin`. The plugin option `allowRemote: true` lifts this check alone. It is
-  dangerous: every client that can reach the server can then rewrite source files.
+  dangerous: every client that can reach the server can then rewrite source files. The
+  standalone service binds to `127.0.0.1` and always requires a loopback peer.
 - **Host** (HTTP/2: `:authority`) names this machine: `localhost`, `*.localhost`, an IP literal,
   or an entry of Vite's resolved `server.allowedHosts` (`.example.com` also matches subdomains;
   `true` matches anything). These are Vite's own rules. This stops DNS rebinding, whose
@@ -46,7 +49,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 
 | Method | Path | Body / query | `data` |
 | --- | --- | --- | --- |
-| GET | `/@trivia/api/health` | — | `{ root, uiDir, importBase, version }` |
+| GET | `/@trivia/api/health` | — | `{ root, uiDir, importBase, version, host?: "next" }` |
 | GET | `/@trivia/api/components` | — | `ComponentSchema[]` |
 | GET | `/@trivia/api/inspect` | `?locator=` | `NodeDetails` |
 | GET | `/@trivia/api/outline` | `?file=` (project-relative) | `OutlineNode[]` |
@@ -60,7 +63,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/selection` | — | `SelectionState` |
 | POST | `/@trivia/api/selection` | `{ locator, name }` or `{ locator: null }` | `SelectionState` |
 | POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
-| GET | `/@trivia/api/refine/pages` | — | `(ListPage \| FormPage)[]` (every Refine page under `src/`) |
+| GET | `/@trivia/api/refine/pages` | — | `(ListPage \| FormPage)[]` (discovered Refine pages) |
 | GET | `/@trivia/api/refine/page` | `?file=` | `(ListPage \| FormPage)[]` (that file's) |
 | POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
 | POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label }` |
@@ -75,7 +78,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   Unchanged results (`changed: false`) create no entry. A new entry clears the redo stack.
 - History entries store `{ file, before, after }` per changed file. Undo writes `before` only if
   the file still equals `after` (else 409 `conflict`, history untouched); redo is symmetric. All
-  writes go through the engine's atomic, parse-validated write. History lives in the dev-server
+  writes go through the engine's atomic, parse-validated write. History lives in the dev-service
   process (lost on restart) and is capped at 100 entries.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
@@ -88,20 +91,24 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - `OutlineNode = { locator, name, line, isDirect, text?, children: OutlineNode[] }`: every JSX
   tree of the file, component by component in source order (`text` as in `NodeDetails`).
 - `AppRoute = { path, params, index, catchAll, router, component, file, declared: { file, line },
-  locator, resource }`: one per page a URL reaches, read from the source under `src/`
-  (`packages/vite-plugin-ast-locator/src/routes/`).
+  locator, resource }`: one entry per page, read from the app's source.
   - React Router: `<Route>` trees (in `<Routes>` or alone) and route objects
     (`createBrowserRouter`/`createHashRouter`/`createMemoryRouter`, `useRoutes`, also in
     `return useRoutes([...])`). A splat route's page that renders its own `<Routes>` or
     `useRoutes` has those joined onto the splat's base (`settings/*` + `profile` →
     `/settings/profile`). TanStack Router: `createFileRoute("<id>")` files and code-based
     `createRoute({ getParentRoute, path })`.
+  - `router: "next-app-router"` identifies `page.tsx` and `page.jsx` modules under `app/`
+    or `src/app/`. `file` and `declared.file` name the page module. Groups are omitted from
+    the URL, `[id]` becomes `:id`, and `[...slug]` and `[[...slug]]` become `*`. Parallel,
+    intercepted, private and preview routes are omitted.
   - `path` keeps its router's syntax (`/customers/edit/:id`, `/posts/$postId`); `params` lists
     what a URL needs (a splat is `*`). A pathless layout, and a route whose index child serves
     the same URL, are not listed; one entry per URL.
-  - `component` is as named where the route is declared (null for a `lazy` route module);
-    `file` is that component's module as the app's imports resolve it (Vite's resolver), null
-    for a package. `locator` is the `<Route>` element's (JSX routes only).
+  - On Vite, `component` is the name in the route declaration, or null for a lazy route.
+    `file` is the component's module as the app's imports resolve it, or null for a package.
+    `locator` is the `<Route>` element's (JSX routes only). On Next, both `component` and
+    `locator` are null.
   - `resource` is `{ name, action }` when `<Refine resources>` declares that path, else null.
 - `SelectionState = { selection: { locator, name } | null, version, by: "designer" | "agent" | null }`:
   what the designer has selected, for agents (`docs/mcp.md`). The designer posts every change
@@ -119,7 +126,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   `contractChanged` is false when the spec's `schemaHash` is the one the manifest already had,
   and `git` says what the guard found: `"clean"`, `"forced: replaced uncommitted changes in …"` or
   `"not a git work tree: nothing was guarded"`. A contract-sync failure is 422 `unsupported`.
-- `refine/*` is the Refine adapter (`docs/product.md`, `packages/vite-plugin-ast-locator/src/refine`).
+- `refine/*` is the Refine adapter (`docs/product.md`, `packages/dev-service/src/refine`).
   A **list page** is a component calling `useTable` (`@refinedev/react-table`) with a `columns`
   array. `ListPage = { file, component, columnsPath, resource, rowType, contract, columns,
   available }`:
@@ -246,11 +253,13 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `possible` are the kinds its operations support: `list` (list), `create` (create with a
     body), `edit` (update with a body), `show` (get).
 
-  The app is the `src/` file that renders `<Refine resources={[…]}>`. A plan for `resource`
+  The app's Refine registration is the file that renders `<Refine resources={[…]}>`. A plan for `resource`
   (manifest or Refine name) adds the `pages` kinds asked for, by default every possible one it
   lacks:
-  - one `createFile` per page, `<pagesDir>/<name>/<kind>.tsx`, beside the existing list pages
-    (else `src/pages`), written as the other pages are:
+  - one `createFile` per page. On Vite it goes beside the existing list pages as
+    `<pagesDir>/<name>/<kind>.tsx`, defaulting to `src/pages`. On Next it goes under the App
+    Router directory as a client `page.tsx`, using the resource's route group when available.
+    The page uses the same column and form generators on both hosts.
     - a list: `useTable`, columns for up to six scalar fields (as slice 1 writes them), and an
       Edit/Show actions column;
     - create and edit: a zod schema, `useForm` and a Controller per scalar body field (as
@@ -259,8 +268,9 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `setProperty` on the resource's entry (`<Refine>.resources[name=…]`) for each new route
     (`/name`, `/name/create`, `/name/edit/:id`, `/name/show/:id`), or an `insertElement` of a
     new entry;
-  - an `insert` of each `<Route path element>`, before the catch-all `<Route path="*">` beside
-    the resource routes (else after the last of them), with the page's import.
+  - on Vite, an `insert` of each `<Route path element>`, before the catch-all `<Route path="*">`
+    beside the resource routes (else after the last of them), with the page's import. On
+    Next, the file registers the route.
 
   It is one undo entry, and undo deletes the files. Refused: an unknown resource (404), a kind
   its contract can't support (422), a page it already has or an existing file (409; nothing is
@@ -272,20 +282,22 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `refine/preview` answers `InferredPage = { resource, name, kind, component, importPath,
     file, exists, route, module, code }`.
     - `code` is what `refine/pages/plan` would write for that page, from the contract alone.
-    - `module` (`/@trivia/preview/<id>.tsx`) is the same code as a module of the app's dev
+    - On Vite, `module` (`/@trivia/preview/<id>.tsx`) is the same code as a module of the app's dev
       server, generated afresh on each load. Vite compiles it like a file of the project's
       `src/`, with its aliases, components and React refresh, so the inferencer imports and
       renders it. Its elements get no locators: they belong to no file yet.
-    - When the manifest changes, previews are invalidated and the page reloads.
-    - In a Tailwind v4 app (a CSS under `src/` that imports `"tailwindcss"`), the module also
+    - On Vite, a manifest change invalidates previews and reloads the page.
+    - With Vite and Tailwind v4 (a CSS under `src/` that imports `"tailwindcss"`), the module also
       imports `/@trivia/preview/<id>.css`. That stylesheet `@reference`s the app's entry CSS and
       emits the utilities the page's `className`s need. Tailwind only finds classes in files on
       disk, so without it the preview would miss the ones no file uses yet. That import is the
       only line the module has beyond `code`.
+    - On Next, `module` is an App Router preview URL under `/__blueprint/`. The host writes
+      `code` to the preview group and removes those files on launcher shutdown.
   - `refine/eject` also takes `locator`, the inferencer element's own locator, and returns a plan:
     - a `createFile` of `code`;
     - a `replaceElement` that puts `<Component />` and its import where the inferencer was.
-    - Without a locator, it returns the `createFile` and a `warnings` line saying what to swap.
+    - Without a locator, it returns the `createFile`, with a swap warning for Vite callers.
     - Refused: an existing file (409; pass another `file`), an unknown resource (404), a kind
       the contract can't support (422).
 

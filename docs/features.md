@@ -11,7 +11,7 @@ around the opposite rule.
   probe of OXC's code generator showed it adds semicolons, converts indentation to tabs and drops the
   parentheses in `return ( ... )`, so it is not used for writes.
 - **Your source stays the source of truth.** Edit in the designer, in your IDE, or through an agent.
-  All three act on the same files, and Vite HMR keeps the canvas in sync.
+  All three act on the same files, and Vite HMR or Next.js Fast Refresh keeps the canvas in sync.
 - **Guarded, reviewable operations.** Every change is one serializable `Op` with a stale-locator guard.
   Each is atomic, lands in an undo history as one entry, and is refused (never guessed) when the
   source no longer matches what the caller expected.
@@ -28,7 +28,7 @@ around the opposite rule.
 | **Visual canvas** | Your running app in a same-origin iframe with a hit-testing overlay, hover and selection boxes, drag to move, drop zones, zoom to fit, and a right-click menu for structure edits. |
 | **Inspector** | Prop editors built from your own `src/components/ui/*` (variants from `cva(...)`, defaults, enum options), a Tailwind class manager and a style panel with two-phase editing (live CSS preview during a gesture, Tailwind classes written on commit). |
 | **Palette and Layers** | Insert any component from your library; a Layers tree of the rendered app, rearranged by dragging rows (before, after, inside) or with Alt+↑/↓; move elements across files with imports carried along. |
-| **Pages** | The app's routes, read from its source (React Router, TanStack Router, Refine labels), each with its page file: click one to load it in the canvas (params asked for, prefilled from the URL), or type any path. |
+| **Pages** | The app's routes, read from its source (React Router, TanStack Router, or Next.js App Router), with Refine labels and page files. Click a route to load it in the canvas or type a path. |
 | **Engine ops** | `insert`, `insertChild`, `updateProp`, `setText`, `remove`, `move`, `moveNode`, `bindQuery`, `createFile`, plus value ops (`insertElement`, `removeElement`, `moveElement`, `setProperty`, `removeProperty`) for object and array literals. |
 | **Undo / redo** | Guarded before/after snapshots. Byte-exact; refuses with `409 conflict` if a file changed elsewhere. |
 | **Data tab** | Bound tables and create forms from an OpenAPI contract (TanStack Query, react-hook-form, zod, shadcn `Field`). |

@@ -19,9 +19,12 @@ the sections below record what was verified against the reference code on 2026-1
 
 - `crates/trivia_oxc_engine` — the engine (pure Rust, no I/O except `workspace.rs`).
 - `crates/trivia_napi` — napi-rs binding, npm package `@trivia/engine` (JSON envelope API).
-- `packages/vite-plugin-ast-locator` — dev-only Vite plugin: injects `data-ast-node` and serves
-  the engine HTTP API at `/@trivia/api` (contract: `docs/api.md`) and the MCP endpoint for
-  agents at `/@trivia/mcp` (`docs/mcp.md`, point and ask).
+- `packages/vite-plugin-ast-locator` — dev-only Vite host that injects `data-ast-node` and
+  mounts the dev service in Vite.
+- `packages/dev-service` — shared stamping, engine HTTP API (`docs/api.md`), MCP (`docs/mcp.md`),
+  edit history and Refine adapter. The standalone server listens on `127.0.0.1`.
+- `packages/next` (`@trivia/next`) — Next.js App Router host, development loader, `withTrivia` and
+  `trivia-next dev`.
 - `packages/designer` — React designer (`@trivia/designer`), served at
   `http://localhost:4400/__trivia/`; proxies everything else to the user's dev server.
 - `packages/contract-sync` — OpenAPI → hey-api TanStack Query code + `trivia.manifest.json`
@@ -31,6 +34,7 @@ the sections below record what was verified against the reference code on 2026-1
 - `examples/playground` — a stock create-vite + shadcn (radix, nova) app used as the "user app".
 - `examples/refine-admin` — a Refine + shadcn back office on an OpenAPI mock: the user app for
   the product direction in `docs/product.md` (day 2 for Refine apps on OpenAPI backends).
+- `examples/next-admin` — the Refine example on App Router, with server and client edit coverage.
 - `e2e/` — Playwright across all of the above.
 - `tools/` — `@trivia/tools`: the package generator (`nx g @trivia/tools:package <name>`) and
   the release helpers (`tools/release/`, run by `pnpm release`). Plain CommonJS: Nx loads `.ts`
@@ -41,8 +45,8 @@ the sections below record what was verified against the reference code on 2026-1
 
 Nx 23.2.1 runs the tasks (`nx.json`). Each package's `package.json` scripts stay the source of
 truth, and Nx adds caching, `dependsOn: ["^build"]` and long-running `dev` targets. Projects have
-short names (`nx.name`): `engine`, `oxc-engine`, `plugin`, `contract-sync`, `inferencer`,
-`designer`, `playground`, `refine-admin`, `shell`, `e2e`, `tools`. A test's cache key includes
+short names (`nx.name`): `engine`, `oxc-engine`, `plugin`, `dev-service`, `next`, `contract-sync`,
+`inferencer`, `designer`, `playground`, `refine-admin`, `next-admin`, `shell`, `e2e`, `tools`. A test's cache key includes
 `examples/**` and `docs/**` (the suites read them). When a test starts reading another file
 outside its project, add it to that input, or the cache serves a stale pass.
 

@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import type { AppRoute } from '../src/api/service.js'
+import type { AppRoute } from '@trivia/dev-service'
 import { copyPlayground, copyRefineAdmin, get, socketFetch, startServer, type TestServer } from './helpers.js'
 
 let root: string

@@ -25,6 +25,7 @@ type Loaded = { routes: AppRoute[] } | { error: string } | null
 export function PagesPanel() {
   const revision = useDesigner((s) => s.revision)
   const canvasPath = useDesigner((s) => s.canvasPath)
+  const next = useDesigner((s) => s.health?.host === 'next')
   const [loaded, setLoaded] = useState<Loaded>(null)
   /** The route whose params are being asked for. */
   const [asking, setAsking] = useState<string | null>(null)
@@ -95,8 +96,9 @@ export function PagesPanel() {
           <p className="px-1 py-2 text-xs text-destructive">Couldn't read the routes: {loaded.error}</p>
         ) : routes.length === 0 ? (
           <p className="px-1 py-2 text-xs text-muted-foreground">
-            No routes found under src/. React Router and TanStack Router routes show here; type a path above to open
-            any other.
+            {next
+              ? 'No App Router routes found. The Pages Router is unsupported.'
+              : 'No routes found under src/. React Router and TanStack Router routes show here; type a path above to open any other.'}
           </p>
         ) : (
           <ul aria-label="Routes" className="m-0 list-none p-0">

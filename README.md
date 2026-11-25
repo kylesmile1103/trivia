@@ -44,11 +44,12 @@ pnpm dev        # the example app on :5173 and the designer on :4400
 
 Open <http://localhost:4400/__trivia/> and click anything.
 
-**In your own Vite app**, add the plugin before React's, then run the designer against your dev
-server ([Getting started](docs/getting-started.md)):
+**In your own app**, add one line to its config, then run the designer against your dev server
+([Getting started](docs/getting-started.md)):
 
 ```ts
-plugins: [astLocator(), react()]
+plugins: [astLocator(), react()]   // Vite: the locator before React's plugin
+export default withTrivia({})      // Next.js (App Router): wrap your next.config
 ```
 
 **With an AI agent**, select an element and ask for the change ([MCP](docs/mcp.md)):
@@ -71,8 +72,8 @@ claude mcp add --transport http trivia http://localhost:5173/@trivia/mcp
 
 ## Status
 
-Pre-1.0. It runs the two example apps in this repository end to end and has not yet been proven on
-a third-party codebase: [what that means](docs/status.md).
+Pre-1.0. It runs this repository's Vite and Next.js examples end to end and has not yet been
+proven on a third-party codebase: [what that means](docs/status.md).
 
 ## Contributing
 

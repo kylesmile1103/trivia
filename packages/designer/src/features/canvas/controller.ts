@@ -168,6 +168,7 @@ export class CanvasController {
    */
   private epoch = 0
   private attachedAt = 0
+  private waitingForFirstRender = false
   private view: CanvasView = EMPTY_VIEW
   private menu: Menu | null = null
   /** Bumped per right-click; a menu still loading for an older one is dropped. */
@@ -204,7 +205,7 @@ export class CanvasController {
       attached: () => this.onAttached(),
       layout: () => this.measure(),
       settled: () => this.onSettled(),
-    })
+    }, () => designer.getState().health?.host !== 'next')
     this.session.isOwnMutation = (r) => this.isOwnMutation(r)
     this.previews = new Previews(
       () => this.session.doc,
@@ -283,7 +284,9 @@ export class CanvasController {
     this.previews.reset()
     this.info.clear()
     this.notePath()
-    designer.getState().bumpRevision()
+    const state = designer.getState()
+    this.waitingForFirstRender = this.status(state, this.session.doc) !== 'ready'
+    state.bumpRevision()
   }
 
   /** HMR re-rendered the app: locators may have shifted, previews are stale. */
@@ -811,6 +814,11 @@ export class CanvasController {
     const t = this.session.transform()
     const bounds = { width: o.width, height: o.height }
     const status = this.status(s, doc)
+    if (status === 'ready' && this.waitingForFirstRender) {
+      // A client app can mount after the iframe load event and its first Layers snapshot.
+      this.waitingForFirstRender = false
+      s.bumpRevision()
+    }
     if (!doc || !t) {
       this.publish({ ...EMPTY_VIEW, status, bounds })
       return

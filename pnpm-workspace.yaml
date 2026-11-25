@@ -6,3 +6,7 @@ packages:
 # nx's install script only updates the Nx Cloud client, which this repo never uses.
 allowBuilds:
   nx: false
+# One MCP SDK everywhere, the shadcn CLI's copy included: below 1.32.0 it has three
+# high-severity advisories (GHSA-6qxp-vccf-f47h, GHSA-22jm-h49p-29qw, GHSA-46jr-4wx8-v453).
+overrides:
+  '@modelcontextprotocol/sdk': 1.32.2
