@@ -33,6 +33,10 @@ container runtime, run `aspire doctor` for its status and start the selected run
 [Aspire troubleshooting](https://aspire.dev/get-started/troubleshooting/) ·
 [Solution and contract loop](lld/LLD-10-aspire-solution-and-contract-loop.md).
 
+For a nested web folder such as `clients/admin`, pass `--web-dir clients/admin` to
+`new` and `backend` from the solution directory. You can also run `backend` and
+`eject` from the web folder.
+
 ## Reading order
 
 1. [BRD.md](BRD.md): why, for whom, what is in and out, success measures.

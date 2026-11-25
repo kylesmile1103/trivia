@@ -9,7 +9,7 @@ internal static class ScaffoldEmitter
 {
     private static readonly string[] Projects = ["AppHost", "ServiceDefaults", "MigrationService"];
 
-    internal static IEnumerable<EmittedFile> Emit(LoadedBlueprint input, string api)
+    internal static IEnumerable<EmittedFile> Emit(LoadedBlueprint input, string api, string webDirectory)
     {
         string app = input.AppName;
         string space = input.Model.Namespace;
@@ -17,7 +17,8 @@ internal static class ScaffoldEmitter
         yield return new($"{app}.slnx", FileKind.Scaffold, Render("Solution.slnx", space, app));
         yield return new(".config/dotnet-tools.json", FileKind.Scaffold, Render("dotnet-tools.json", space, app));
         yield return new("Directory.Packages.props", FileKind.Scaffold, DependencyVersions());
-        yield return new($"{api}/{app}.Api.csproj", FileKind.Scaffold, Render("Api.csproj", space, app));
+        yield return new($"{api}/{app}.Api.csproj", FileKind.Scaffold,
+            Render("Api.csproj", space, app).Replace("{{WebDirectory}}", webDirectory, StringComparison.Ordinal));
         yield return new($"{api}/Program.cs", FileKind.Scaffold, Render("Program.cs", space, app));
         yield return new($"{api}/Data/AppDbContext.cs", FileKind.Scaffold, Render("AppDbContext.cs", space, app));
         foreach (string project in Projects)
@@ -25,6 +26,7 @@ internal static class ScaffoldEmitter
                 Render($"{project}/{project}.csproj", space, app));
         yield return new($"src/{app}.AppHost/Program.cs", FileKind.Scaffold,
             Render("AppHost/Program.cs", space, app)
+                .Replace("{{WebDirectory}}", webDirectory, StringComparison.Ordinal)
                 .Replace("{{WebResource}}", next ? "AddNextJsApp" : "AddViteApp", StringComparison.Ordinal)
                 .Replace("{{WebPublishing}}", next ? "" : ".PublishAsStaticWebsite(\"/api\", api)", StringComparison.Ordinal));
         yield return new($"src/{app}.AppHost/Properties/launchSettings.json", FileKind.Scaffold,

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
+// Fail with Aspire's runtime diagnosis if the container engine does not become ready.
+builder.Configuration["DcpPublisher:ContainerRuntimeInitializationTimeout"] ??= "00:00:10";
 builder.AddDockerComposeEnvironment("compose").WithDashboard(false);
 
 var postgres = builder.AddPostgres("postgres");
@@ -20,7 +22,7 @@ var api = builder.AddProject<Projects.{{App}}_Api>("api", options => options.Exc
 
 if (builder.Configuration.GetValue("Trivia:StartWeb", true))
 {
-    var web = builder.{{WebResource}}("web", "../../web")
+    var web = builder.{{WebResource}}("web", "../../{{WebDirectory}}")
         .WithPnpm()
         .WithReference(api)
         .WaitFor(api);

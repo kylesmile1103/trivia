@@ -44,7 +44,7 @@
 ## Phase 8: Polish
 
 - [x] T018 A getting-started section in `docs/blueprint/README.md` with the five commands of LLD-10 section 4
-- [ ] T019 Edge cases: no container runtime (a clear message), irregular plurals, a web folder elsewhere
+- [x] T019 Edge cases: no container runtime (a clear message), irregular plurals, a web folder elsewhere
 - [ ] T020 Run `dotnet test` (all traits), `pnpm check`
 
 ## Dependencies

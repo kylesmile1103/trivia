@@ -118,3 +118,30 @@ it('keeps the existing lock when sync fails', async () => {
   expect(await run(['backend'], 'test', executables('run'))).toBe(1)
   expect(fs.readFileSync(file, 'utf8')).toBe(original)
 })
+
+it('uses a frontend nested elsewhere inside the solution', async () => {
+  const target = path.join(root, 'CustomPortal')
+  const relative = 'clients/admin portal'
+  expect(await run(['new', target, '--api', 'dotnet-minimal', '--web-dir', relative], 'test')).toBe(0)
+  const web = path.join(target, relative)
+  fs.writeFileSync(path.join(web, 'blueprint', MODEL_DOC), model)
+  const pkg = JSON.parse(fs.readFileSync(path.join(web, 'package.json'), 'utf8'))
+  expect(pkg.trivia).toEqual({ solutionRoot: '../..' })
+
+  vi.mocked(process.cwd).mockReturnValue(target)
+  expect(await run(['backend', '--web-dir', relative], 'test', executables())).toBe(0)
+  expect(steps()[0]).toEqual({
+    name: 'trivia-dotnet',
+    args: ['write', '--blueprint', path.join(web, 'blueprint'), '--root', target, '--web-dir', relative],
+    cwd: target,
+  })
+  expect(steps().at(-1)).toEqual({ name: 'pnpm', args: ['run', 'sync'], cwd: web })
+  vi.mocked(process.cwd).mockReturnValue(web)
+  expect(await run(['backend'], 'test', executables())).toBe(0)
+  expect(steps().at(-1)).toEqual({ name: 'pnpm', args: ['run', 'sync'], cwd: web })
+})
+
+it('refuses a frontend path that escapes the solution before running commands', async () => {
+  expect(await run(['backend', '--web-dir', '../outside'], 'test', executables())).toBe(2)
+  expect(fs.existsSync(log)).toBe(false)
+})

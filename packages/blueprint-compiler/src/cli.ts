@@ -8,20 +8,21 @@ import { parseArgs } from 'node:util'
 import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint } from '@trivia/blueprint'
 
 import { compilePage, type CompileContext } from './compile.js'
+import { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
 
 const usage = `Usage: trivia-blueprint <command>
-  new <dir> [--target vite-refine] [--api dotnet-minimal]
+  new <dir> [--target vite-refine] [--api dotnet-minimal] [--web-dir <dir>]
   validate [--json]
   compile <Page> [--out file]
   eject [pages…] [--dry-run]
-  backend [--migration <Name>]`
+  backend [--migration <Name>] [--web-dir <dir>]`
 
 const options = {
-  new: { target: { type: 'string' }, api: { type: 'string' } },
+  new: { target: { type: 'string' }, api: { type: 'string' }, 'web-dir': { type: 'string' } },
   validate: { json: { type: 'boolean' } },
   compile: { out: { type: 'string' } },
   eject: { 'dry-run': { type: 'boolean' } },
-  backend: { migration: { type: 'string' } },
+  backend: { migration: { type: 'string' }, 'web-dir': { type: 'string' } },
 } as const
 
 const contractSync = '@trivia/contract-sync'
@@ -64,14 +65,14 @@ async function openProject(root: string): Promise<Project> {
   return new EngineService({ host: createStandaloneHost(root), engine: await loadEngine(), version }) as Project
 }
 
-function createProject(root: string, dest: string, version: string, dotnet: boolean): void {
+function createProject(root: string, dest: string, version: string, dotnet: boolean, webDirectory = DEFAULT_WEB_DIRECTORY): void {
   const destination = path.resolve(root, dest)
   const stat = fs.lstatSync(destination, { throwIfNoEntry: false })
   if (stat && (!stat.isDirectory() || fs.readdirSync(destination).length > 0)) throw new Error(destination + ' must be an empty directory.')
-  const dir = dotnet ? path.join(destination, 'web') : destination
+  const dir = dotnet ? path.join(destination, webDirectory) : destination
   const template = fileURLToPath(new URL('../templates/vite-refine/', import.meta.url))
   const manifest = JSON.parse(fs.readFileSync(path.join(template, 'package.json.template'), 'utf8'))
-  if (dotnet) manifest.trivia = { solutionRoot: '..' }
+  if (dotnet) manifest.trivia = { solutionRoot: path.relative(dir, destination).split(path.sep).join('/') }
   const localPlugin = resolveManifest(root, plugin) ?? checkoutManifest('vite-plugin-ast-locator')
   manifest.devDependencies[plugin] = localPlugin ? 'link:' + path.dirname(localPlugin) : version
   const localSync = resolveManifest(root, contractSync) ?? checkoutManifest('contract-sync')
@@ -123,21 +124,31 @@ function step(label: string, { executable, prefix = [] }: Command, args: string[
 }
 
 function webProject(directory: string): string {
-  const nested = path.join(directory, 'web')
+  const nested = path.join(directory, DEFAULT_WEB_DIRECTORY)
   return !fs.existsSync(path.join(directory, 'blueprint', APP_DOC)) &&
     fs.existsSync(path.join(nested, 'blueprint', APP_DOC)) ? nested : directory
 }
 
-async function backend(web: string, migration: string | undefined, commands: BackendCommands): Promise<void> {
-  web = fs.realpathSync(web)
+async function backend(directory: string, migration: string | undefined, commands: BackendCommands, requested?: string): Promise<void> {
+  directory = fs.realpathSync(directory)
+  const web = requested === undefined ? webProject(directory) : path.join(directory, requested)
   const blueprint = path.join(web, 'blueprint')
+  if (fs.realpathSync(blueprint) !== blueprint) throw new Error('The web blueprint must use real directories within the solution.')
   const entry = loadDocument(APP_DOC, fs.readFileSync(path.join(blueprint, APP_DOC), 'utf8'))
-  if (entry.kind !== 'app' || !entry.doc || entry.doc.targets.api !== 'dotnet-minimal' || path.basename(web) !== 'web') {
+  if (entry.kind !== 'app' || !entry.doc || entry.doc.targets.api !== 'dotnet-minimal') {
     throw new Error('Use a .NET solution created by trivia-blueprint new <dir> --api dotnet-minimal.')
   }
-  const solution = path.dirname(web)
+  const packagePath = path.join(web, 'package.json')
+  const manifest: unknown = fs.existsSync(packagePath) ? JSON.parse(fs.readFileSync(packagePath, 'utf8')) : null
+  const layout = requested === undefined
+    ? solutionFromWeb(web, manifest) ?? (path.basename(web) === DEFAULT_WEB_DIRECTORY
+      ? { root: path.dirname(web), webDirectory: DEFAULT_WEB_DIRECTORY } : null)
+    : { root: directory, webDirectory: requested }
+  if (!layout) throw new Error('Pass --web-dir from the solution root to locate the web app.')
+  const { root: solution, webDirectory } = layout
   const args = ['--blueprint', blueprint, '--root', solution]
-  const generated = step('Generate the backend', commands['trivia-dotnet'], ['write', ...args], solution)
+  const location = webDirectory === DEFAULT_WEB_DIRECTORY ? [] : ['--web-dir', webDirectory]
+  const generated = step('Generate the backend', commands['trivia-dotnet'], ['write', ...args, ...location], solution)
   const { modelRev } = JSON.parse(generated) as { modelRev?: string }
   if (typeof modelRev !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(modelRev)) {
     throw new Error('Backend generation returned no model revision.')
@@ -166,6 +177,7 @@ export async function run(argv: string[], version: string, commands = backendCom
   const [command, ...args] = argv
   let values: Record<string, unknown>
   let positionals: string[]
+  let webDirectory: string | undefined
   try {
     if (!command || !Object.hasOwn(options, command)) throw new Error('Choose a command.')
     const parsed = parseArgs({ args, allowPositionals: true, options: options[command as keyof typeof options] })
@@ -175,6 +187,10 @@ export async function run(argv: string[], version: string, commands = backendCom
     if ((command === 'new' || command === 'compile') && (positionals.length !== 1 || !positionals[0])) throw new Error('Provide exactly one directory or page name.')
     if (values.target !== undefined && values.target !== 'vite-refine') throw new Error('The supported target is vite-refine.')
     if (values.api !== undefined && values.api !== 'dotnet-minimal') throw new Error('The supported API target is dotnet-minimal.')
+    if (typeof values['web-dir'] === 'string') {
+      if (command === 'new' && values.api !== 'dotnet-minimal') throw new Error('--web-dir requires --api dotnet-minimal.')
+      webDirectory = checkedWebDirectory(values['web-dir'])
+    }
     if (typeof values.migration === 'string' && !values.migration.trim()) throw new Error('Provide a migration name.')
     if (values.out === '') throw new Error('Provide an output filename.')
   } catch (error) {
@@ -185,15 +201,14 @@ export async function run(argv: string[], version: string, commands = backendCom
   const root = process.cwd()
   try {
     if (command === 'new') {
-      createProject(root, positionals[0]!, version, values.api === 'dotnet-minimal')
+      createProject(root, positionals[0]!, version, values.api === 'dotnet-minimal', webDirectory)
       return 0
     }
-    const web = webProject(root)
     if (command === 'backend') {
-      await backend(web, typeof values.migration === 'string' ? values.migration : undefined, commands)
+      await backend(root, typeof values.migration === 'string' ? values.migration : undefined, commands, webDirectory)
       return 0
     }
-    const project = await openProject(web)
+    const project = await openProject(webProject(root))
     if (command === 'eject') {
       const pages = positionals.length ? positionals : undefined
       const result = values['dry-run'] ? await project.planBlueprintEject(pages) : await project.ejectBlueprint(pages)

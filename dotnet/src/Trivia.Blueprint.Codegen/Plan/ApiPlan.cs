@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Trivia.Blueprint.Codegen.Emit;
 using Trivia.Blueprint.Codegen.Model;
 using Trivia.Blueprint.Codegen.Scaffold;
@@ -6,19 +7,23 @@ namespace Trivia.Blueprint.Codegen.Plan;
 
 public static class ApiPlan
 {
-    public static FilePlan Create(string root, LoadedBlueprint input, bool force = false)
+    public static FilePlan Create(string root, LoadedBlueprint input, bool force = false, string webDirectory = "web")
     {
+        if (webDirectory.Split('/').Any(part =>
+            !Regex.IsMatch(part, @"\A[A-Za-z0-9._ -]+\z") || part.Trim() != part || part is "." or ".."))
+            throw new IOException("The web directory must be a solution-relative path with no parent segments.");
+        _ = Ownership.Resolve(Path.GetFullPath(root), $"{webDirectory}/openapi", directory: true);
         string api = $"src/{input.AppName}.Api";
         ModelDocument model = input.Model;
-        return PlanWriter.Plan(root, input.ModelRev, api, EmitFiles(api, model).Concat(EmitProject(api, input)), force);
+        return PlanWriter.Plan(root, input.ModelRev, api, EmitFiles(api, model).Concat(EmitProject(api, input, webDirectory)), force);
     }
 
-    private static IEnumerable<EmittedFile> EmitProject(string api, LoadedBlueprint input)
+    private static IEnumerable<EmittedFile> EmitProject(string api, LoadedBlueprint input, string webDirectory)
     {
         yield return new($"{api}/Generated/ApiRegistration.g.cs", FileKind.Generated, CSharp.Print(ApiRegistrationEmitter.Emit(input)));
         yield return new($"{api}/Generated/ApiProblem.g.cs", FileKind.Generated, CSharp.Print(ApiProblemEmitter.Emit(input.Model)));
         yield return new($"{api}/Generated/ListQuery.g.cs", FileKind.Generated, CSharp.Print(ListQueryEmitter.Emit(input.Model)));
-        foreach (EmittedFile file in ScaffoldEmitter.Emit(input, api))
+        foreach (EmittedFile file in ScaffoldEmitter.Emit(input, api, webDirectory))
             yield return file;
     }
 

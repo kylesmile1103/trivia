@@ -14,3 +14,4 @@ export {
 } from './eject.js'
 export { relativeModule } from './targets/vite-refine/files.js'
 export { resourceOps, routeOps, type RouteRegistration } from './targets/vite-refine/routes.js'
+export { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'

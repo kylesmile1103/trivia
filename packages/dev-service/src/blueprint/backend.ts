@@ -1,8 +1,8 @@
 import { execFile, type ExecFileException } from 'node:child_process'
 import fs from 'node:fs'
-import path from 'node:path'
 
 import { APP_DOC, loadDocument, MODEL_DOC, type Diagnostic } from '@trivia/blueprint'
+import { DEFAULT_WEB_DIRECTORY, solutionFromWeb } from '@trivia/blueprint-compiler'
 import { z } from 'zod'
 
 import { ApiError } from '../engine.js'
@@ -98,11 +98,12 @@ export async function runBackend(workspace: BlueprintWorkspace, { mode, migratio
   const source = workspace.readDocumentText(APP_DOC)
   const entry = source === null ? null : loadDocument(APP_DOC, source)
   const app = entry?.kind === 'app' ? entry.doc : null
-  const root = app?.targets.api === 'dotnet-minimal' && path.basename(web) === 'web' && usesSolutionRoot(web)
-    ? path.dirname(web) : web
+  const layout = app?.targets.api === 'dotnet-minimal' ? configuredSolution(web) : null
+  const root = layout?.root ?? web
   const shared = ['--blueprint', blueprint, '--root', root]
+  const location = layout && layout.webDirectory !== DEFAULT_WEB_DIRECTORY ? ['--web-dir', layout.webDirectory] : []
   const args = migration === undefined
-    ? [mode, ...shared, ...(force ? ['--force'] : [])]
+    ? [mode, ...shared, ...location, ...(force ? ['--force'] : [])]
     : ['migrate', migration, ...shared]
   const timeout = migration === undefined ? 120_000 : 300_000
   const { error, stdout, stderr } = await execute(TOOL, args, root, timeout)
@@ -141,13 +142,14 @@ export async function runBackend(workspace: BlueprintWorkspace, { mode, migratio
   }
 }
 
-function usesSolutionRoot(web: string): boolean {
+function configuredSolution(web: string): ReturnType<typeof solutionFromWeb> {
   const bytes = readBytes(web, 'package.json')
-  if (bytes === null) return false
+  if (bytes === null) return null
   try {
-    const manifest = JSON.parse(bytes.toString('utf8')) as { trivia?: { solutionRoot?: string } } | null
-    return manifest?.trivia?.solutionRoot === '..'
-  } catch {
-    throw new ApiError('invalid_result', 'Could not read the web app package.json.')
+    return solutionFromWeb(web, JSON.parse(bytes.toString('utf8')))
+  } catch (error) {
+    throw new ApiError('invalid_result', 'Could not read the solution configuration from package.json.', {
+      hint: (error as Error).message,
+    })
   }
 }

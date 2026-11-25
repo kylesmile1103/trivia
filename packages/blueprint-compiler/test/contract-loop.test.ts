@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 
 import { APP_DOC, appSchema, MODEL_DOC, modelSchema, pageSchema, SCHEMA_URL, serialize } from '@trivia/blueprint'
 import { syncContract } from '@trivia/contract-sync'
+import { refineName } from '../src/index.js'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
 const workspace = path.resolve(import.meta.dirname, '../../..')
@@ -93,11 +94,7 @@ it('FR-AS-08 reports a fix on every ejected page that used a removed model field
     const customer = model.entities.find(({ name }) => name === 'Customer')!
     customer.fields = customer.fields.filter(({ name }) => name !== 'birthDate')
     fs.writeFileSync(path.join(blueprint, MODEL_DOC), serialize(model))
-    const generator = path.join(workspace, 'dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj')
-    const options = { cwd: root, encoding: 'utf8', timeout: 90_000 } as const
-    execFileSync('dotnet', ['run', '--project', generator, '--configuration', 'Release', '--disable-build-servers', '--',
-      'write', '--blueprint', blueprint, '--root', root], options)
-    execFileSync('dotnet', ['build', 'src/BackOffice.Api/BackOffice.Api.csproj', '-warnaserror', '--disable-build-servers'], options)
+    buildContract(blueprint)
     await syncContract({ cwd: web, input, zod: true })
 
     expect(await drift()).toEqual([
@@ -111,4 +108,32 @@ it('FR-AS-08 reports a fix on every ejected page that used a removed model field
   } finally {
     await server.close()
   }
+}, 120_000)
+
+
+function buildContract(blueprint: string, webDirectory?: string) {
+  const generator = path.join(workspace, 'dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj')
+  const options = { cwd: root, encoding: 'utf8', timeout: 90_000 } as const
+  execFileSync('dotnet', ['run', '--project', generator, '--configuration', 'Release', '--disable-build-servers', '--',
+    'write', '--blueprint', blueprint, '--root', root, ...(webDirectory ? ['--web-dir', webDirectory] : [])], options)
+  execFileSync('dotnet', ['build', 'src/BackOffice.Api/BackOffice.Api.csproj', '-warnaserror', '--disable-build-servers'], options)
+}
+
+it('writes the contract to an alternate web directory and keeps the irregular collection plural', async () => {
+  const relative = 'clients/admin portal'
+  const web = path.join(root, relative)
+  const blueprint = path.join(web, 'blueprint')
+  fs.mkdirSync(blueprint, { recursive: true })
+  const model = modelSchema.parse(JSON.parse(fs.readFileSync(bank, 'utf8')))
+  model.entities.find(({ name }) => name === 'Customer')!.plural = 'people'
+  fs.writeFileSync(path.join(blueprint, MODEL_DOC), serialize(model))
+
+  buildContract(blueprint, relative)
+  expect(fs.readFileSync(path.join(root, 'src/BackOffice.AppHost/Program.cs'), 'utf8')).toContain('AddViteApp("web", "../../clients/admin portal")')
+  const { manifest } = await syncContract({ cwd: web, input, zod: true })
+  const resource = manifest.resources.find(({ name }) => name === 'Customer')!
+  expect(resource.basePath).toBe('/api/v1/people')
+  expect(refineName(resource)).toBe('people')
+  expect(resource.operations.list?.operationId).toBe('listPeople')
+  expect(fs.existsSync(path.join(root, 'web'))).toBe(false)
 }, 120_000)

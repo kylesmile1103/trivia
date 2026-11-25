@@ -127,6 +127,12 @@ Aspire passes the API's address to the web app as service discovery variables
 variables (the web app started alone) it falls back to `API_URL`, then to a clear error on the
 first request.
 
+⚑ Allow HTTP explicitly in the AppHost's loopback development profile. Give Aspire's
+container runtime check ten seconds by default, then surface its missing or unhealthy
+runtime diagnosis in the CLI. The integration test points Docker at an unavailable
+socket without stopping the machine's runtime.
+[Runtime check](https://github.com/microsoft/aspire/blob/v13.6.5/src/Aspire.Hosting/Dcp/DcpHost.cs).
+
 ⚑ The Vite config accepts `API_URL` from the process or the mode's `.env` files. When
 Aspire supplies `PORT`, Vite binds that exact port. The unconfigured proxy returns a 503
 problem response for `/api` requests, leaving routes such as `/apiary` to the app.
@@ -272,5 +278,12 @@ Other direct hosting dependencies stay pinned centrally.
 
 - A C# AppHost or the TypeScript AppHost that Aspire 13.4 made generally available. C# for
   now, since the solution is .NET anyway.
-- Where the committed OpenAPI document should live if the web app is not a sibling folder.
-  It can become a setting of the app document later.
+- ⚑ Use `--web-dir <solution-relative directory>` on `new --api dotnet-minimal`
+  and `backend` to place the web app elsewhere in the solution. The web package's
+  `trivia.solutionRoot` points back to its solution ancestor, so the CLI and MCP can also
+  run from the web folder. The generator uses the same path for AppHost and OpenAPI output.
+  Relative path segments support letters, numbers, spaces, dots, underscores and hyphens.
+  Path traversal and symlinked output folders are refused.
+- ⚑ Keep Refine resource keys tied to the contract collection path. The contract-loop test
+  verifies that an entity named Customer with plural `people` produces `/api/v1/people` and
+  the Refine key `people`.

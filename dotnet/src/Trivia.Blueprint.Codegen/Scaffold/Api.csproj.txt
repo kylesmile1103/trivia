@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
-    <TriviaOpenApiFile>$(MSBuildProjectDirectory)/../../web/openapi/api.openapi.json</TriviaOpenApiFile>
+    <TriviaOpenApiFile>$(MSBuildProjectDirectory)/../../{{WebDirectory}}/openapi/api.openapi.json</TriviaOpenApiFile>
     <OpenApiGenerateDocumentsOptions>--openapi-version OpenApi3_1 --file-name openapi</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
   <ItemGroup>
