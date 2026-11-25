@@ -10,6 +10,7 @@ import { createStandaloneHost } from '../src/standalone.js'
 
 let root: string
 let service: EngineService
+const app = { op: 'setApp', doc: 'app.blueprint.json', baseRev: null, name: 'Bank', targets: { web: 'vite-refine' } } as const
 
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-blueprint-context-'))
@@ -38,6 +39,35 @@ it('FR-AG-04 reports contract diagnostics and names the known resources', async 
     },
   })
   expect(fs.existsSync(path.join(root, 'drafts'))).toBe(false)
+})
+
+it('FR-RC-02 accepts the implicit list query in row and header actions', async () => {
+  const action = { name: 'refresh', label: 'Refresh', steps: [{ do: 'refetch' as const, query: 'list' }] }
+  const result = await service.blueprint.apply([app, {
+    op: 'createPage', doc: 'pages/Customers.page.json', baseRev: null, name: 'Customers', route: '/customers',
+    kind: 'list', resource: 'Customer', options: { rowActions: [action], headerActions: [action] },
+  }])
+  expect(result).toMatchObject({ ok: true, result: { diagnostics: [] } })
+})
+
+it.each([
+  ['list', '/customers', 'rowActions', 'customers'],
+  ['list', '/customers', 'headerActions', 'customers'],
+  ['create', '/customers/new', 'rowActions', 'list'],
+  ['create', '/customers/new', 'headerActions', 'list'],
+  ['edit', '/customers/:id/edit', 'headerActions', 'list'],
+  ['show', '/customers/:id', 'headerActions', 'list'],
+] as const)('FR-RC-02 refuses %s refetch at %s in %s for query %s', async (kind, route, group, query) => {
+  const doc = 'pages/Customers.page.json'
+  const result = await service.blueprint.apply([app, {
+    op: 'createPage', doc, baseRev: null, name: 'Customers', route, kind, resource: 'Customer',
+    options: { [group]: [{ name: 'refresh', label: 'Refresh', steps: [{ do: 'refetch', query }] }] },
+  }])
+  expect(result).toMatchObject({ ok: true, result: { diagnostics: [{
+    code: 'unsupported_operation', severity: 'error', doc, pointer: `/options/${group}/0/steps/0/query`,
+    message: `No query "${query}" to refetch here`,
+    hint: { text: 'Use query "list" in row or header actions on a list page.' },
+  }] } })
 })
 
 it('uses the native analyzer and validates binding expressions from the configured directory', async () => {
