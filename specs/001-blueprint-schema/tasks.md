@@ -45,7 +45,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 6: User Story 4 - Migrations (P2)
 
-- [ ] T025 [US4] `src/migrate/index.ts` with a test-only `v0-to-v1` migration and the `unsupported_version` refusal
+- [x] T025 [US4] `src/migrate/index.ts` with a test-only `v0-to-v1` migration and the `unsupported_version` refusal
 
 ## Phase 7: User Story 5 - Projection (P3)
 

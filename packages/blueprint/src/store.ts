@@ -6,6 +6,7 @@ import path from 'node:path'
 
 import { apply, type ApplyOptions, type ApplyResult, type FileWrite } from './apply/index.js'
 import { ulidSource } from './ids.js'
+import { MIGRATIONS, migrate, type MigrationTable } from './migrate/index.js'
 import { compareBytes, revOfText, type BlueprintDoc } from './serialize.js'
 import type { AppDoc } from './types/app.js'
 import type { ApplyError, Diagnostic } from './types/diagnostics.js'
@@ -28,6 +29,8 @@ interface Loaded<K extends string, D> {
   doc: D | null
   /** What reading the file found: malformed JSON, schema violations, an unknown file. */
   diagnostics: Diagnostic[]
+  /** The version the file was written at, when it was migrated forward on load. */
+  migratedFrom?: number
 }
 export type AppEntry = Loaded<'app', AppDoc>
 export type PageEntry = Loaded<'page', PageDoc>
@@ -53,8 +56,12 @@ export function kindOf(file: string): DocEntry['kind'] {
 const diagnostic = (code: string, doc: string, message: string, severity: Diagnostic['severity'] = 'error'): Diagnostic =>
   ({ code, severity, doc, pointer: '', message })
 
-/** Loads one file. Never throws: what is wrong with it is in its diagnostics. */
-export function loadDocument(file: string, text: string): DocEntry {
+/**
+ * Loads one file: parse, migrate forward (FR-BP-06), then the schema. Never throws: what is
+ * wrong with it is in its diagnostics. A migrated document keeps the bytes and rev it was read
+ * with, so the next write that touches it saves it at the current version.
+ */
+export function loadDocument(file: string, text: string, migrations: MigrationTable = MIGRATIONS): DocEntry {
   const base = { path: file, text, rev: revOfText(text), doc: null, diagnostics: [] as Diagnostic[] }
   const kind = kindOf(file)
   if (kind === 'unknown') {
@@ -66,15 +73,30 @@ export function loadDocument(file: string, text: string): DocEntry {
   } catch (error) {
     return { ...base, kind, diagnostics: [diagnostic('invalid_json', file, `Not valid JSON: ${(error as Error).message}`)] } as DocEntry
   }
-  const checked = checkSchema(kind, value, file)
-  return { ...base, kind, value, doc: checked.doc, diagnostics: checked.diagnostics } as DocEntry
+  const migrated = migrate(kind, value, { table: migrations })
+  if (!migrated.ok && migrated.code === 'unsupported_version') {
+    return { ...base, kind, value, diagnostics: [{ ...diagnostic('unsupported_version', file, migrated.message), pointer: '/blueprintVersion' }] } as DocEntry
+  }
+  // A version that is not a version at all is the schema's to report, with its pointer.
+  const current = migrated.ok ? migrated.doc : value
+  const checked = checkSchema(kind, current, file)
+  const entry = { ...base, kind, value: current, doc: checked.doc, diagnostics: checked.diagnostics } as DocEntry
+  if (migrated.ok && migrated.migrated) entry.migratedFrom = migrated.from
+  return entry
+}
+
+export interface LoadOptions {
+  /** Whether the directory exists (false: an empty blueprint not created yet). */
+  exists?: boolean
+  /** The migrations to run on older documents; the shipped ones by default. */
+  migrations?: MigrationTable
 }
 
 /** Loads a blueprint from its files' text, keyed by path under the blueprint directory. */
-export function loadBlueprint(files: Readonly<Record<string, string>>, exists = true): Blueprint {
+export function loadBlueprint(files: Readonly<Record<string, string>>, options: LoadOptions = {}): Blueprint {
   const docs: Record<string, DocEntry> = {}
-  for (const file of Object.keys(files).sort(compareBytes)) docs[file] = loadDocument(file, files[file] as string)
-  return { exists, docs }
+  for (const file of Object.keys(files).sort(compareBytes)) docs[file] = loadDocument(file, files[file] as string, options.migrations)
+  return { exists: options.exists ?? true, docs }
 }
 
 async function readIfFile(file: string): Promise<string | null> {
@@ -118,6 +140,8 @@ export async function readBlueprintFiles(dir: string): Promise<Record<string, st
 export interface StoreOptions extends Partial<ApplyOptions> {
   /** The blueprint directory, `<root>/blueprint` by default (LLD-01 section 1). */
   dir: string
+  /** The migrations to run on older documents; the shipped ones by default. */
+  migrations?: MigrationTable
 }
 
 /** The LLD's `ApplyResult & { writes }`, or the refusal: nothing to write. */
@@ -139,7 +163,7 @@ export function createStore(options: StoreOptions): BlueprintStore {
   const ids = options.ids ?? ulidSource()
   const read = async (): Promise<Blueprint> => {
     const files = await readBlueprintFiles(options.dir)
-    return files === null ? { exists: false, docs: {} } : loadBlueprint(files)
+    return files === null ? { exists: false, docs: {} } : loadBlueprint(files, options.migrations ? { migrations: options.migrations } : {})
   }
   return {
     read,

@@ -32,6 +32,10 @@ export function createPage(draft: Draft, op: OpOf<'createPage'>): void {
 
 export function deletePage(draft: Draft, op: OpOf<'deletePage'>): void {
   if (!draft.has(op.doc)) refuse('invalid_op', `${op.doc} does not exist`)
+  // A document from a newer version is never written, and deleting it is a write (FR-BP-06).
+  if (draft.base.docs[op.doc]?.diagnostics.some((d) => d.code === 'unsupported_version')) {
+    refuse('invalid_op', `${op.doc} was written by a newer version; it is left as it is`)
+  }
   draft.remove(op.doc)
 }
 
