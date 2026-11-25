@@ -4,9 +4,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+import { apply, type ApplyOptions, type ApplyResult, type FileWrite } from './apply/index.js'
+import { ulidSource } from './ids.js'
 import { compareBytes, revOfText, type BlueprintDoc } from './serialize.js'
 import type { AppDoc } from './types/app.js'
-import type { Diagnostic } from './types/diagnostics.js'
+import type { ApplyError, Diagnostic } from './types/diagnostics.js'
 import type { ModelDoc } from './types/model.js'
 import { APP_DOC, MODEL_DOC } from './types/ops.js'
 import type { PageDoc } from './types/page.js'
@@ -113,20 +115,40 @@ export async function readBlueprintFiles(dir: string): Promise<Record<string, st
   return files
 }
 
-export interface StoreOptions {
+export interface StoreOptions extends Partial<ApplyOptions> {
   /** The blueprint directory, `<root>/blueprint` by default (LLD-01 section 1). */
   dir: string
 }
 
+/** The LLD's `ApplyResult & { writes }`, or the refusal: nothing to write. */
+export type StoreApplyOutcome =
+  | { ok: true; result: ApplyResult; writes: FileWrite[] }
+  | { ok: false; error: ApplyError }
+
 export interface BlueprintStore {
   read(): Promise<Blueprint>
+  /**
+   * Applies a batch to the documents as they are on disk now and returns the writes without
+   * performing them. The caller writes them atomically and records one history entry; each
+   * write's `before` is what it must still find, or the write is stale.
+   */
+  apply(ops: readonly unknown[]): Promise<StoreApplyOutcome>
 }
 
 export function createStore(options: StoreOptions): BlueprintStore {
+  const ids = options.ids ?? ulidSource()
+  const read = async (): Promise<Blueprint> => {
+    const files = await readBlueprintFiles(options.dir)
+    return files === null ? { exists: false, docs: {} } : loadBlueprint(files)
+  }
   return {
-    async read() {
-      const files = await readBlueprintFiles(options.dir)
-      return files === null ? { exists: false, docs: {} } : loadBlueprint(files)
+    read,
+    async apply(ops) {
+      const applyOptions: ApplyOptions = { ids }
+      if (options.expressions) applyOptions.expressions = options.expressions
+      if (options.ctx) applyOptions.ctx = options.ctx
+      const outcome = apply(await read(), ops, applyOptions)
+      return outcome.ok ? { ok: true, result: outcome.result, writes: outcome.writes } : outcome
     },
   }
 }
