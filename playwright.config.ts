@@ -10,6 +10,8 @@ const refineDesignerPort = Number(process.env.TRIVIA_REFINE_PORT ?? 4401)
 const nextAppPort = Number(process.env.TRIVIA_NEXT_APP_PORT ?? 5175)
 const nextDesignerPort = Number(process.env.TRIVIA_NEXT_PORT ?? 4402)
 const nextApiPort = Number(process.env.TRIVIA_NEXT_API_PORT ?? 4403)
+const kitAppPort = Number(process.env.TRIVIA_KIT_APP_PORT ?? 5176)
+const kitDesignerPort = Number(process.env.TRIVIA_KIT_PORT ?? 4404)
 
 const designer = (port: number, target: number, cache: string, apiPort?: number) => ({
   command: `pnpm --filter @trivia/designer exec vite`,
@@ -34,8 +36,9 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
     { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
+    { name: 'blueprint-kit', testMatch: /blueprint-kit\.spec\.ts$/, use: { baseURL: `http://localhost:${kitDesignerPort}` } },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [
@@ -61,5 +64,12 @@ export default defineConfig({
       gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
     },
     designer(nextDesignerPort, nextAppPort, 'node_modules/.vite-next', nextApiPort),
+    {
+      command: `pnpm --filter blueprint-kit exec vite --port ${kitAppPort} --strictPort`,
+      url: `http://localhost:${kitAppPort}/`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    designer(kitDesignerPort, kitAppPort, 'node_modules/.vite-kit'),
   ],
 })

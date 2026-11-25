@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { loadBlueprint } from '@trivia/blueprint'
 import { expect, it } from 'vitest'
 
-import { checkDataTable, compilePage } from '../src/index.js'
+import { checkDataTable, compilePage, pageDiagnostics } from '../src/index.js'
 import { compileKitPage, fixture, fixtureDir, kitBaseContext, kitFormFieldContext, kitManifests, kitServiceContext } from './kit-fixture.js'
 
 it('FR-KT-01 compiles the action and display kit with the installed slot parts', async () => {
@@ -133,10 +133,33 @@ it('FR-KT-03 compiles forms with matching inputs, defaults and rules in both pro
 it('SC-002 compiles the same component pages against the Base UI registry', async () => {
   const context = await kitBaseContext()
   expect(context.manifests?.['Checkbox']?.exposes[0]?.via.changeArg).toBe('value')
-  for (const page of ['KitDisplay', 'KitInputs', 'KitContainers', 'KitTable', 'KitForm']) {
+  for (const page of ['KitDisplay', 'KitInputs', 'KitContainers', 'KitTable', 'KitForm', 'KitVirtualTable']) {
     const emitted = compileKitPage(page, context)
     expect(emitted.requires).toEqual([])
     expect(emitted.code).toContain('from "@base/components/ui/')
     await expect(emitted.code).toMatchFileSnapshot(fileURLToPath(new URL('golden/base-ui/' + page + '.tsx', fixtureDir)))
   }
+})
+
+it('FR-KT-05 warns about virtual rows with server paging and emits the registry table', async () => {
+  const context = await kitServiceContext()
+  const files = fixture()
+  const file = 'pages/KitTable.page.json'
+  const input = JSON.parse(files[file]!)
+  const id = Object.keys(input.props).find((key) => input.props[key].resource === 'Customer')!
+  input.props[id].virtual = true
+  const blueprint = loadBlueprint({ ...files, [file]: JSON.stringify(input) })
+  expect(pageDiagnostics(blueprint, 'KitTable', context)).toEqual([expect.objectContaining({
+    code: 'virtual_with_server_paging', severity: 'warning', pointer: `/props/${id}/virtual`,
+  })])
+  expect(compilePage(blueprint, 'KitTable', context).code).toContain('<DataTable table={table} />')
+})
+
+it('FR-KT-05 emits virtual row windows for an unpaged table', async () => {
+  const { code } = compileKitPage('KitVirtualTable', await kitServiceContext())
+  expect(code).toContain('mode: "off"')
+  expect(code).toContain('useVirtualizer({')
+  expect(code).toContain('aria-rowcount={tableRows.length + 1}')
+  expect(code).toContain('visibleRows.map')
+  await expect(code).toMatchFileSnapshot(fileURLToPath(new URL('golden/KitVirtualTable.tsx', fixtureDir)))
 })

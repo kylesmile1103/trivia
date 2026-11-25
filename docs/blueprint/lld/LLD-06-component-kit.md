@@ -96,6 +96,12 @@ Expansion, in `composites/data-table.ts`:
 - With `virtual: true`, the body renders through TanStack Virtual. This applies to client-side
   row sets (`pagination: "off"`). With server paging it is ignored, with a warning.
 
+  ⚑ The installed refine-ui DataTable accepts a table and has no configurable body slot.
+  The virtual variant emits a semantic table using the same TanStack column definitions,
+  virtualizes 40-pixel rows inside a scrollable region, and keeps the headers and edit
+  anchors. It requires `@tanstack/react-virtual` (the fixture pins 3.14.28). The server
+  paging warning is available in validation, preview and eject planning.
+
 ⚑ The table requires an explicit nonempty column list. It preserves the first occurrence of
 each field, defaults to ten rows per server page, and allows filters on visible columns.
 

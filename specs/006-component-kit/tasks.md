@@ -41,7 +41,7 @@
 
 ## Phase 8: User Story 5 - Virtual rows (P3)
 
-- [ ] T016 [US5] `virtual` with TanStack Virtual for client-side sets, the warning with server paging, a render test with 5 000 rows
+- [x] T016 [US5] `virtual` with TanStack Virtual for client-side sets, the warning with server paging, a render test with 5 000 rows
 
 ## Phase 9: Polish
 

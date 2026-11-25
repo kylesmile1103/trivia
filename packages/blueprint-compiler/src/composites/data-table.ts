@@ -1,4 +1,4 @@
-import { pageDocPath, toPointer, type CustomPage, type Diagnostic, type ResolvedManifest } from '@trivia/blueprint'
+import { hasErrors, pageDocPath, toPointer, type CustomPage, type Diagnostic, type ResolvedManifest } from '@trivia/blueprint'
 import type { ManifestField, TriviaManifest } from '@trivia/contract-sync'
 
 import { CompileError } from '../compile.js'
@@ -6,6 +6,7 @@ import type { JsxIR, StateIR } from '../ir.js'
 import { quote, statement } from '../print/style.js'
 import { refineName } from '../targets/vite-refine/files.js'
 import { indent, resourceRowType, snippet, withNodeAttributes, type CompositeScope } from './source.js'
+import { lowerVirtualTable } from './virtual-table.js'
 
 type Element = Extract<JsxIR, { kind: 'element' }>
 
@@ -87,15 +88,24 @@ export function checkDataTable(page: CustomPage, id: string, contract: TriviaMan
   } else if (selectable && resource && !resource.primaryKey) {
     report('invalid_prop_value', 'selectable', 'DataTable selection requires a contract primary key.')
   }
-  return { diagnostics, resource, columns, filters, pageSize, mode, selectable }
+  const virtual = props['virtual'] === true && mode === 'off'
+  if (props['virtual'] !== undefined && typeof props['virtual'] !== 'boolean') {
+    report('invalid_prop_value', 'virtual', 'DataTable.virtual expects a boolean.')
+  } else if (props['virtual'] === true && mode === 'server') {
+    diagnostics.push({
+      code: 'virtual_with_server_paging', doc: pageDocPath(page.name), pointer: toPointer(['props', id, 'virtual']),
+      severity: 'warning', message: 'DataTable virtual rows require pagination: off. Server paging stays active.',
+    })
+  }
+  return { diagnostics, resource, columns, filters, pageSize, mode, selectable, virtual }
 }
 
 export function lowerDataTable(
   page: CustomPage, id: string, manifest: ResolvedManifest, root: Element, scope: CompositeScope, selection?: TableSelection,
 ): Element {
   const { context } = scope
-  const { diagnostics, resource, columns, filters, pageSize, mode } = checkDataTable(page, id, context.contract)
-  if (diagnostics.length || !resource) throw new CompileError('invalid_result', 'Cannot compile DataTable.', { diagnostics })
+  const { diagnostics, resource, columns, filters, pageSize, mode, virtual } = checkDataTable(page, id, context.contract)
+  if (hasErrors(diagnostics) || !resource) throw new CompileError('invalid_result', 'Cannot compile DataTable.', { diagnostics })
   const builders = context.refineSnippets
   if (!builders) throw new CompileError('unsupported', 'The Refine column builder is unavailable.')
   const useMemo = scope.import({ name: 'useMemo', source: 'react' })
@@ -104,7 +114,6 @@ export function lowerDataTable(
   const row = selection?.rowType ?? resourceRowType(resource, scope)
   const columnList = scope.name('columns')
   const table = scope.name('table')
-  const tag = scope.component(manifest)
   const definitions = columns.map((field) => {
     const definition = builders.column(field, filters.has(field.name))
     return indent(snippet(definition.value, definition.imports, scope), 2) + ','
@@ -151,7 +160,8 @@ export function lowerDataTable(
   },
 });`,
   )
+  if (virtual) return withNodeAttributes(root, lowerVirtualTable(table, resource.name + ' rows', scope))
   return withNodeAttributes(root, {
-    kind: 'element', tag, props: [{ name: 'table', value: { kind: 'expr', code: table } }], children: [],
+    kind: 'element', tag: scope.component(manifest), props: [{ name: 'table', value: { kind: 'expr', code: table } }], children: [],
   })
 }

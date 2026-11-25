@@ -16,6 +16,7 @@ export interface EmittedModule {
   importPath: string
   route: string
   handler?: { file: string; code: string }
+  warnings?: string[]
 }
 
 export interface CompileContext {
@@ -80,6 +81,8 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   } catch (error) {
     throw new CompileError('internal', 'Generated ' + emitted.file + ' did not parse: ' + (error as Error).message)
   }
+  const warnings = diagnostics.filter(({ severity }) => severity === 'warning').map(({ message }) => message)
+  if (warnings.length) emitted.warnings = warnings
   return emitted
 }
 

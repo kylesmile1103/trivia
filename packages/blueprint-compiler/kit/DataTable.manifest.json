@@ -81,6 +81,12 @@
         "single",
         "multiple"
       ]
+    },
+    {
+      "name": "virtual",
+      "kind": "boolean",
+      "optional": true,
+      "source": "declared"
     }
   ],
   "template": {},

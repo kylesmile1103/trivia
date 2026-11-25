@@ -211,8 +211,8 @@ export function lowerCustom(page: CustomPage, context: CompileContext): EmittedM
   }
 
   const jsx = lowerJsx(page, manifestOf, component, expression, wire, repeats, facts.style, (id, manifest, root) => {
-    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     client = true
+    if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     return lowerForm(page, id, root, composite)
   })
   const hooks = [...action.hooks.values()]
