@@ -24,7 +24,7 @@
 
 - [x] T009 [US2] Golden for a `DataTable` page, then `src/composites/data-table.ts`: `useTable`, columns from the shared builders, the refine-ui table element
 - [x] T010 [US2] `selectable` with `selectedRow` and `selectedRows` exposure, and a binding test
-- [ ] T011 [US2] Plugin test: the columns tool adds, reorders and removes a column on the emitted page (SC-004)
+- [x] T011 [US2] Plugin test: the columns tool adds, reorders and removes a column on the emitted page (SC-004)
 
 ## Phase 5: User Story 3 - Form (P1)
 
