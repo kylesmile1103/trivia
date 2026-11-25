@@ -264,6 +264,13 @@ the tool rewrites that pair into a rename with a Roslyn rewriter and reports it.
 only the migration file this run created. The Node side then clears the markers with a model
 op. Migrations are applied by the migration service at start (LLD-10), never by the tool.
 
+⚑ `migrate` uses an installed `dotnet ef` and fixes the destination to `Data/Migrations`.
+  Use `--blueprint <dir>` for input outside `<root>/blueprint`. With no model, the command
+  requires one API project under `src` and adds the migration without rename hints.
+  Build the project with warnings as errors before invoking EF, which expects restored
+  project metadata. EF maintains its model snapshot. Earlier migration and designer files
+  remain untouched.
+
 ## 7. Auth (FR-NC-13, should)
 
 With `auth.mode: "oidc"`, `AddGeneratedServices` adds JWT bearer authentication configured

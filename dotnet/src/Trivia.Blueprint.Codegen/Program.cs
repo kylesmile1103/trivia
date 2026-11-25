@@ -18,6 +18,7 @@ public static class Program
         command.Subcommands.Add(PlanCommand.Create(configuration.Output));
         command.Subcommands.Add(WriteCommand.Create(configuration.Output));
         command.Subcommands.Add(CheckCommand.Create(configuration.Output));
+        command.Subcommands.Add(MigrateCommand.Create(configuration.Output));
         return command.Parse(args).InvokeAsync(configuration);
     }
 }
