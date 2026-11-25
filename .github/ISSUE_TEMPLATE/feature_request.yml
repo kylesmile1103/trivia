@@ -1,0 +1,21 @@
+name: Feature request
+description: A job you want Trivia to do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: The job
+      description: What you are trying to get done in your codebase, and how you do it today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How Trivia could do it. A sketch of the code before and after is welcome.
+  - type: textarea
+    id: context
+    attributes:
+      label: Your stack
+      description: Framework, UI kit, data layer (for example Refine + shadcn on an OpenAPI backend).
