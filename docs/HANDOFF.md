@@ -200,7 +200,10 @@ TRIVIA_APP_PORT=5311 TRIVIA_PORT=4411 TRIVIA_REFINE_APP_PORT=5312 TRIVIA_REFINE_
 ```
 
 E2E tests and manual checks edit `examples/playground/src/**` on disk. Restore afterwards with
-`git checkout -- examples/` and check that `git status` is clean before committing.
+`git checkout -- examples/` and check that `git status` is clean before committing. Specs write
+and restore example files through `e2e/files.ts` (`writeWhole`, `restore`, `restoreAll`), which
+wait until the dev server serves what they wrote; `writeInPlace` is for a test about an editor's
+in-place save.
 
 ## 3. How the pieces fit (one paragraph)
 
@@ -295,6 +298,13 @@ writes `useQuery` hooks against it.
 - **The examples run the *built* plugin.** After changing `packages/vite-plugin-ast-locator`,
   run `pnpm build:plugin` before Playwright, or the dev servers serve the old routes (an e2e run
   saw `unknown endpoint /refine/drift`).
+- **Vite's watcher drops a file's second change within 50 ms.** The chokidar in Vite 8.3
+  reports a file's first change and drops the next ones for 50 ms without replaying them. A
+  `writeFileSync` in a spec (truncate, then write) left Vite serving an empty `Dashboard.tsx` to
+  every later test on Linux CI ("does not provide an export named 'Dashboard'"). The plugin now
+  replays a dropped change (`src/watch.ts`), and specs write through `e2e/files.ts`. To ask what
+  Vite serves for a file, GET `/<path>` from the app's server and read `sourcesContent` in the
+  module's inline source map: that is the exact text it transformed.
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
   per `Op` variant.
 - **Never run `cargo fmt`.** The repo isn't rustfmt-formatted: it uses long lines, and the

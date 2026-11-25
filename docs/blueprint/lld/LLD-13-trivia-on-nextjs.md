@@ -211,6 +211,13 @@ The engine edits files. It does not care which kind of component a file holds. W
   The iframe still receives its own HMR connection through the app proxy.
   ⚑ If a document attaches before its first stamped render, the canvas bumps its revision
   once that render is available so the Layers panel can replace its initial empty tree.
+  ⚑ (decided 2026-11-26) The Vite host replays a change its file watcher dropped: 100 ms after
+  a project file's last `change` event it stats the file again and, when its mtime, size or
+  inode moved, emits the change on `server.watcher` (`vite-plugin-ast-locator/src/watch.ts`),
+  which takes it through Vite's whole update path, plugins' hooks included. The chokidar in
+  Vite 8.3 drops further changes to a file for 50 ms after it reports one, so an editor's
+  in-place save (truncate, then write) could leave the canvas on the module transformed from
+  the empty file. Next.js has its own watcher and is left alone.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
@@ -238,6 +245,23 @@ The engine edits files. It does not care which kind of component a file holds. W
   Its root server page embeds a small client component so both edit paths are testable.
   ⚑ The `next` Playwright project defaults to app/designer/service ports 5175/4402/4403,
   configurable through `TRIVIA_NEXT_APP_PORT`, `TRIVIA_NEXT_PORT` and `TRIVIA_NEXT_API_PORT`.
+  ⚑ (decided 2026-11-26) Specs write and restore example files through `e2e/files.ts`: a
+  whole temporary file renamed over the target, then a wait until the dev server serves it.
+  For a TypeScript or JSX module of a Vite example, the source in the served module's inline
+  source map must equal the bytes written; a file still stale after a second is rewritten,
+  five tries, and then the test fails naming it. A restore checks an unchanged file too. A
+  fixed wait was all there was before, and a write the watcher dropped left the next test on
+  a stale module.
+  ⚑ (decided 2026-11-26) The Next.js example's files and files that are not modules keep a
+  60 ms wait before the rename and no check, because Next keeps no per-file module to ask
+  for and Vite serves no transform of a JSON document the dev service reads from disk.
+  ⚑ (decided 2026-11-26) The inspector's "Element not found" test edits `Dashboard.tsx` in
+  place with `writeFileSync` and checks without rewriting, because VS Code and Cursor save
+  that way and the test is then the replay's end-to-end proof.
+  ⚑ (decided 2026-11-26) A checked write has no wait before it, because the check makes it
+  redundant: on macOS, the playground and refine projects ran 102 checks with the 60 ms wait
+  and 102 without, both times 22 polled for 50 to 170 ms and none needed a rewrite, and a
+  write inside the watcher's 50 ms window is the replay's to fix and the check's to prove.
 - The dev service: the plugin's API and MCP suites run unchanged through the Vite host, and a
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a
