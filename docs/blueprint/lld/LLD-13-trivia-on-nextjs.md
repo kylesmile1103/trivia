@@ -10,18 +10,39 @@ by hand or emitted.
 
 ## 1. Spike first
 
-Before any refactor, a throwaway app answers these. Each answer is recorded in this file.
+⚑ Pin Next.js **16.4.6**, verified with Node 22.23.3 and React/React DOM 19.2.7.
+The scratch App Router app ran on Turbopack with a `*.tsx` rule, a webpack-style loader
+calling the built native `annotate` binding, and a MagicString map. Chromium probed the
+rendered page, watched it through atomic renames, and fetched the map for a client stack frame.
 
 1. Does a loader registered under `turbopack.rules` for `*.tsx` receive the original TSX,
    before the compiler? Can it return TSX that is then compiled normally?
+   **Yes.** The loader checked for `title: string` in the raw input. The rule declared a
+   loader with no `as` override, and Next compiled the returned TSX with its original suffix.
 2. Does its source map survive, so stack traces and the debugger still point at user lines?
+   **Yes with the default compiler configuration.** A callback map with the original path
+   and `sourcesContent` mapped the browser stack from its JS chunk to the error at
+   `app/source-map/page.tsx:4:17` and supplied the original TSX to the debugger. With React
+   Compiler enabled, Next still mapped to the right file and line, but used the stamped TSX as
+   `sourcesContent`, so columns after a locator moved. An inline map reproduced that caveat.
 3. Do `data-ast-node` attributes on host elements in server components reach the DOM?
+   **Yes.** The server `<h1>` was `app/page.tsx#Page#0.0` and the client button was
+   `app/client.tsx#Client#0` in Chromium.
 4. After the engine's atomic write (temp file and rename), does Fast Refresh pick the change
    up, for a client component and for a server component?
+   **Yes.** Both text changes reached the same open document after a sibling temporary
+   file was renamed over its source. The client counter kept its state through its refresh.
 5. Does the React Compiler, when on, change anything about the first-attribute rule
    (`CLAUDE.md` rule 5)?
+   **No.** With `babel-plugin-react-compiler` 1.0.0 enabled, the compiled client bundle used
+   the compiler runtime and a button with `{...props}` still received the locator of its
+   use in the server page, `app/page.tsx#Page#0.2`.
 6. Can a file under `app/(blueprint-preview)/` be added and removed while `next dev` runs
    (LLD-12 section 6)?
+   **Yes, using Next's escaped underscore convention.** The literal `__blueprint`
+   directory under the group returned 404. Renaming it to `%5F_blueprint` made
+   `/__blueprint/Lead` render an unstamped heading, and deleting the group restored 404
+   without a restart.
 
 If 1 or 2 fails with Turbopack: fall back to a Babel-based loader, then to an SWC plugin built
 from the same Rust crate, and record the choice as a new ADR that supersedes ADR-0015.
