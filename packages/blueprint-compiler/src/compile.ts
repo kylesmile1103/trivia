@@ -17,7 +17,7 @@ export interface EmittedModule {
 
 export interface CompileContext {
   facts: ProjectFacts
-  engine: { annotate(code: string, file: string): unknown }
+  engine: { annotate(code: string, file: string): unknown; emitExpressions(requestJson: string): string }
   validation?: ValidationContext
   contract?: TriviaManifest | null
   generateContractPage?: ContractPageGenerator
@@ -52,7 +52,7 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
   if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)
   if (!context.generateContractPage) throw new CompileError('unsupported', 'The Refine generator is unavailable.')
-  const { content, ...generated } = generateContract(page, resource, context.facts, context.generateContractPage)
+  const { content, ...generated } = generateContract(page, resource, context, context.generateContractPage)
   try {
     context.engine.annotate(content, generated.file)
   } catch (error) {

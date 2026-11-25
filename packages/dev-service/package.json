@@ -29,6 +29,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "@trivia/blueprint": "workspace:*",
+    "@trivia/blueprint-compiler": "workspace:*",
     "@trivia/contract-sync": "workspace:*",
     "@trivia/engine": "workspace:*",
     "magic-string": "^1.4.3",

@@ -2,6 +2,7 @@
 // source has them, the Refine resource, and the contract resource it shows. Read from the
 // engine's value descriptions (describeValues), never by re-parsing here.
 
+import { refineName } from '@trivia/blueprint-compiler'
 import type { ManifestField, ManifestFieldConstraints, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import { fieldShape, type FieldShape } from './columns.js'
@@ -183,11 +184,7 @@ function resourceOf(
   return folder && folder !== 'pages' && folder !== 'src' ? { name: folder, from: 'folder' } : null
 }
 
-/** The Refine resource name a contract resource conventionally has: its collection path's last segment. */
-export function refineName(resource: ManifestResource): string {
-  const last = resource.basePath?.split('/').filter(Boolean).pop()
-  return last ?? `${resource.name.charAt(0).toLowerCase()}${resource.name.slice(1)}s`
-}
+export { refineName }
 
 /** The contract resource for a Refine resource name, or for the row type. */
 export function contractResource(manifest: TriviaManifest | null, name: string | null, rowType: string | null): ManifestResource | null {

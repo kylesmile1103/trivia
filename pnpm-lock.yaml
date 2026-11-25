@@ -693,6 +693,9 @@ importers:
       '@trivia/blueprint':
         specifier: workspace:*
         version: link:../blueprint
+      '@trivia/blueprint-compiler':
+        specifier: workspace:*
+        version: link:../blueprint-compiler
       '@trivia/contract-sync':
         specifier: workspace:*
         version: link:../contract-sync

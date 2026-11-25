@@ -20,7 +20,7 @@
 
 - [x] T008 [US1] Equality test: `compilePage` for a default `list`, `create`, `edit`, `show` equals `refine/pages/plan` output
 - [x] T009 [US1] `src/contract-pages.ts`: call the generator with the blueprint's options
-- [ ] T010 [US1] Generator options `filters`, `rowActions`, `headerActions`, with plugin tests and `tsc`
+- [x] T010 [US1] Generator options `filters`, `rowActions`, `headerActions`, with plugin tests and `tsc`
 
 ## Phase 4: User Story 2 - Custom pages (P1)
 

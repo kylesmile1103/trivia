@@ -5,3 +5,4 @@ export {
   type CompileContext, type EmittedModule, type RegistryItem,
 } from './compile.js'
 export type { ContractPageGenerator, ContractPageInput } from './contract-pages.js'
+export { refineName } from './targets/vite-refine/files.js'

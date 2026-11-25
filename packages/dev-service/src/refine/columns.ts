@@ -18,6 +18,7 @@ export interface ColumnContext {
   badge: string
   /** Module prefix of refine-ui's data table, e.g. `@/components/refine-ui/data-table`; null when the project has none. */
   dataTable: string | null
+  filter?: boolean
 }
 
 export interface ColumnSnippet {
@@ -92,7 +93,7 @@ export function columnFor(field: ColumnField, context: ColumnContext, label = hu
   // The header: a label, a sorter, and a filter for the field's type (refine-ui's data table).
   const table = context.dataTable
   const filter: string[] = []
-  if (table) {
+  if (table && context.filter !== false) {
     const filters = `${table}/data-table-filter`
     if (shape === 'text') {
       use('DataTableFilterDropdownText', filters)

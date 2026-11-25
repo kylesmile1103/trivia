@@ -56,6 +56,15 @@ fields keeps the existing generator's default selection.
 - An action is a button whose handler is compiled from its steps (section 4). Row actions go
   in the actions column, header actions in the page header.
 
+⚑ A row handler receives the data record, and confirmation uses the browser's confirm dialog.
+The generator puts header actions just below the Refine header, whose implementation may
+ignore children. An explicit filter list controls filter widgets while preserving sorters.
+Refine's notification hook supports success, error and progress. Blueprint error uses error,
+and the other blueprint variants use success.
+
+⚑ The compiler and the Refine adapter share the resource key derived from the collection
+path, so hooks and registered Refine routes name the same resource.
+
 A test runs `refine/pages/plan` and `compilePage` for the same resource with default options
 and asserts equal bytes.
 

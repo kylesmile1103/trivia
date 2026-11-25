@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -85,3 +86,33 @@ it('FR-RC-02: sends the blueprint field selection, exclusions and title to the s
   expect(show).toContain('record?.id')
   expect(show).not.toContain('record?.currency')
 })
+
+it('FR-RC-02: filters selected columns and puts typed action buttons in rows and headers', async () => {
+  const context = await contextFor(REFINE_ADMIN)
+  const emitted = compilePage(accountPage('list', {
+    fields: ['iban', 'type'],
+    filters: ['type'],
+    rowActions: [{ name: 'applyCurrency', label: 'Apply currency', confirm: 'Apply it?', steps: [
+      { do: 'mutate', resource: 'Account', operation: 'update', id: 'row.id', input: '{ currency: row.currency }' },
+    ] }],
+    headerActions: [{ name: 'help', label: 'Help', steps: [
+      { do: 'toast', message: '"About accounts"', variant: 'success' },
+    ] }],
+  }), 'Account', context)
+  expect(emitted.code).toContain('DataTableFilterCombobox')
+  expect(emitted.code).not.toContain('DataTableFilterDropdownText')
+  expect(emitted.code).toContain('>Apply currency</Button>')
+  expect(emitted.code).toContain('>Help</Button>')
+  expect(emitted.code).toContain('window.confirm("Apply it?")')
+  expect(emitted.code).toMatch(/await .*mutateAsync\(\{ resource: "accounts", id: .*\.id, values: \{ currency: .*\.currency \} \}\)/)
+
+  const root = copyRefineAdmin()
+  try {
+    fs.writeFileSync(path.join(root, emitted.file), emitted.code)
+    execFileSync(process.execPath, [path.join(REFINE_ADMIN, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.app.json', '--noEmit'], {
+      cwd: root, encoding: 'utf8',
+    })
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)
