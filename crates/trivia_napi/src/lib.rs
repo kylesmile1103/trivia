@@ -8,6 +8,8 @@
 //! of stack (see there), and a panic in the engine comes back as an `internal` error (thrown
 //! by `annotate`) instead of aborting Node.
 
+mod expr;
+
 use std::thread;
 
 use napi_derive::napi;
@@ -403,6 +405,28 @@ mod tests {
         let op = json!({ "op": "updateProp", "target": "src/App.tsx#App#0", "expectedName": "div", "prop": "id", "value": "x" });
         assert_eq!(data(&apply_ops(project.root(), json!([op]).to_string()))["changed"], true);
         assert_eq!(data(&inspect(project.root(), "src/App.tsx#App#0".into()))["name"], "div");
+    }
+
+    #[test]
+    fn fr_ex_08_expression_batches_use_the_engine_envelope() {
+        let valid = r#"{"expressions":[{"id":"/a","source":"ui.search.value"}]}"#;
+        let response = data(&expr::analyze_expressions(valid.into()));
+        assert_eq!(response["unit"], "utf16");
+        assert_eq!(response["results"][0]["diagnostics"][0]["code"], "expr_unknown_root");
+        assert_eq!(data(&expr::emit_expressions(valid.into()))["results"][0]["ts"], "ui.search.value");
+        let request = r#"{"from":"search","to":"query","expressions":[{"id":"/a","source":"ui.search.value"}]}"#;
+        assert_eq!(data(&expr::rename_references(request.into()))["results"][0]["ts"], "ui.query.value");
+        for call in [expr::analyze_expressions, expr::emit_expressions, expr::rename_references] {
+            for malformed in ["[", "{}", r#"{"expressions":[{"id":"x","source":42}]}"#] {
+                let response: Value = serde_json::from_str(&call(malformed.into())).unwrap();
+                assert_eq!(response["ok"], false);
+                assert_eq!(response["error"]["code"], "invalid_op");
+            }
+        }
+        let bad_name: Value = serde_json::from_str(&expr::rename_references(
+            r#"{"from":"ui.search","to":"query","expressions":[]}"#.into(),
+        )).unwrap();
+        assert_eq!(bad_name["error"]["code"], "invalid_op");
     }
 
     #[test]

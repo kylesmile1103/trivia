@@ -941,6 +941,7 @@ dependencies = [
  "napi-derive",
  "serde",
  "serde_json",
+ "trivia_expr",
  "trivia_oxc_engine",
 ]
 

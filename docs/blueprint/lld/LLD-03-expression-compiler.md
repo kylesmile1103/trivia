@@ -160,6 +160,9 @@ Strings in, strings out, the JSON envelope of the other engine calls. A malforme
 `invalid_op`. A panic is caught at the binding and returned as `internal`. The napi crash suite
 gains cases for all three, with the existing RSS bound.
 
+- The binding uses the existing engine thread and envelope. `napi build` regenerates the
+  three declarations in `crates/trivia_napi/index.d.ts` with the other exports.
+
 ## 6. Limits
 
 An expression is at most 4 096 bytes and 64 levels deep. A batch is at most 10 000
