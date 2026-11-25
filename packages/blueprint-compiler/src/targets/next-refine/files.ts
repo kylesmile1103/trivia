@@ -18,11 +18,13 @@ export function files(lowered: LoweredPage, facts: ProjectFacts): [EmittedModule
     const { page: { route }, generated: { component, content, handler } } = lowered
     return withView({ ...entry(route, facts), ...(handler && { handler }) }, component, content, facts)
   }
-  const { ir, handler, requires } = lowered
+  const { ir, handler, requires, views = [] } = lowered
   const page = { ...entry(ir.route, facts), requires, ...(handler && { handler }) }
-  const content = printModule(ir, facts)
-  if (ir.client || ir.hooks.length || ir.queries.length) return withView(page, ir.name, content, facts)
-  return [{ ...page, component: ir.name, code: content.replace('export function ' + ir.name, 'export default function ' + ir.name) }]
+  const code = printModule(ir, facts)
+  const siblings = views.map((view) => ({
+    file: view.file, code: clientView(printModule(view, facts), facts),
+  }))
+  return [{ ...page, component: ir.name, code }, ...siblings]
 }
 
 function entry(route: string, facts: ProjectFacts): EmittedModule {
@@ -38,6 +40,11 @@ function withView(page: EmittedModule, component: string, content: string, facts
     '  ' + statement('return <View />', style),
     '}', '',
   ].join('\n')
-  const view = statement(quote('use client', style), style) + '\n\n' + restyleModule(content, style)
-  return [{ ...page, code }, { file: nextPageFile(page.route, facts, 'view.tsx'), code: view }]
+  return [{ ...page, code }, {
+    file: nextPageFile(page.route, facts, 'view.tsx'), code: clientView(content, facts),
+  }]
+}
+
+function clientView(content: string, { style }: ProjectFacts): string {
+  return statement(quote('use client', style), style) + '\n\n' + restyleModule(content, style)
 }

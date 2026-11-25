@@ -3,7 +3,6 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 
 import { generateContract, type ContractPageGenerator, type RefineSnippetGenerator } from './contract-pages.js'
 import type { ProjectFacts } from './facts.js'
-import { lowerCustom } from './lower/index.js'
 import { compareBytes, moduleImports } from './print/style.js'
 import { targetFor, type LoweredPage } from './targets/target.js'
 
@@ -63,7 +62,7 @@ export function compilePage(blueprint: Blueprint, name: string, context: Compile
   }
   let lowered: LoweredPage
   if (page.kind === 'custom') {
-    lowered = lowerCustom(page, context, target.hooks)
+    lowered = target.lower(page, context)
   } else {
     const resource = context.contract?.resources.find((candidate) => candidate.name === page.resource)
     if (!resource) throw new CompileError('invalid_result', 'No contract resource named ' + page.resource)

@@ -107,6 +107,11 @@ inside a client subtree is evaluated on the server and passed down under a gener
 name. A function-valued prop that would cross is a compiler error at lowering,
 `boundary_not_serializable`, with the node named.
 
+⚑ Boundary planning runs on the parent tree and analyzed expression sites before shared
+lowering so each module contains only the state, handlers and dependencies it needs.
+A client node inside a repeat stays with the loop that owns its aliases. Server values
+without repeat locals cross through generated props whose types are inferred on the server.
+
 Contract pages (`list`, `create`, `edit`, `show`) are one client region: Refine's hooks run on
 the client. Their `page.tsx` is a thin server entry.
 

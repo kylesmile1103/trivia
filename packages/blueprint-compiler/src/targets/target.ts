@@ -1,16 +1,18 @@
-import type { ContractPage } from '@trivia/blueprint'
+import type { ContractPage, CustomPage } from '@trivia/blueprint'
 
 import { nextRefine } from './next-refine/index.js'
 import { viteRefine } from './vite-refine/index.js'
 import type { RouteAnchor, RouteRegistration, resourceOps, routeOps } from './vite-refine/routes.js'
 import type { queryHooks, queryStatus } from './vite-refine/refine-hooks.js'
-import type { EmittedModule, PageSource, RegistryItem } from '../compile.js'
+import type { CompileContext, EmittedModule, PageSource, RegistryItem } from '../compile.js'
 import type { ProjectFacts } from '../facts.js'
 import type { ContractPageGenerator } from '../contract-pages.js'
 import type { PageIR } from '../ir.js'
 
+export type LoweredCustomPage = { kind: 'custom'; ir: PageIR; views?: PageIR[]; requires: RegistryItem[] } & Pick<EmittedModule, 'handler'>
+
 export type LoweredPage =
-  | ({ kind: 'custom'; ir: PageIR; requires: RegistryItem[] } & Pick<EmittedModule, 'handler'>)
+  | LoweredCustomPage
   | ({ kind: 'contract'; page: ContractPage; generated: ReturnType<ContractPageGenerator> & Pick<EmittedModule, 'handler'> })
 
 export interface RefineHookMap {
@@ -34,6 +36,7 @@ export interface RoutePlan {
 
 export interface Target {
   name: ProjectFacts['target']
+  lower(page: CustomPage, context: CompileContext): LoweredCustomPage
   files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
   routeOps(plan: RoutePlan): Array<ReturnType<typeof routeOps>[number] | ReturnType<typeof resourceOps>[number]>
   hooks: RefineHookMap

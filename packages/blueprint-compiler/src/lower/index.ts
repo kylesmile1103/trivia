@@ -4,12 +4,12 @@ import { CompileError, type CompileContext, type RegistryItem } from '../compile
 import { lowerDataTable, prepareTableSelection, type TableSelection } from '../composites/data-table.js'
 import { lowerForm } from '../composites/form.js'
 import type { CompositeScope } from '../composites/source.js'
-import type { AttributeIR, HandlerIR, ImportIR, PageIR, StateIR, StepIR } from '../ir.js'
+import type { AttributeIR, HandlerIR, ImportIR, JsxIR, PageIR, StateIR, StepIR } from '../ir.js'
 import { printHandler } from '../print/module.js'
 import { compareBytes, literal, property, quote, statement } from '../print/style.js'
 import { refineName } from '../targets/paths.js'
 import { nextPageFile } from '../targets/next-refine/files.js'
-import type { LoweredPage, RefineHookMap } from '../targets/target.js'
+import type { LoweredCustomPage, RefineHookMap } from '../targets/target.js'
 import { actionLowerer, capitalize, handlerStub } from './actions.js'
 import { lowerJsx, type RepeatLocal } from './jsx.js'
 import { Names } from './names.js'
@@ -18,16 +18,26 @@ import { analyzePageExpressions, emitPageExpressions, routeScope } from './scope
 
 const intrinsic = resolveManifests({ kit: [], components: [] }).manifests
 
-export function lowerCustom(page: CustomPage, context: CompileContext, targetHooks: RefineHookMap): LoweredPage {
+interface PartOptions {
+  file: string
+  name: string
+  replacements?: ReadonlyMap<string, JsxIR>
+  values?: ReadonlyMap<string, string>
+  routeValues?: Record<string, string>
+}
+
+export function lowerCustom(
+  page: CustomPage, context: CompileContext, targetHooks: RefineHookMap, part?: PartOptions,
+): LoweredCustomPage {
   const { facts } = context
   const resource = context.contract?.resources.find(({ name }) => name === page.resource)
   const dir = resource ? refineName(resource) : page.resource ?? page.name
-  const file = facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx')
-    : facts.pagesDir + '/' + dir + '/' + page.name + '.tsx'
+  const file = part?.file ?? (facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx')
+    : facts.pagesDir + '/' + dir + '/' + page.name + '.tsx')
   const imports: ImportIR[] = []
   const missing = new Map<string, RegistryItem>()
   const names = new Names([
-    page.name, 'useState', 'event', 'value', 'useList', 'useOne', 'useCustom', 'useParams', 'useSearchParams', 'useGetIdentity',
+    page.name, part?.name ?? page.name, 'useState', 'event', 'value', 'useList', 'useOne', 'useCustom', 'useParams', 'useSearchParams', 'useGetIdentity',
     'useCreate', 'useUpdate', 'useDelete', 'useCustomMutation', 'useGo', 'useNotification',
   ])
   const identifiers = new Map<string, string>()
@@ -69,7 +79,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
 
   const ui = exposedScope(page, context.manifests ?? {})
   const analysis = analyzePageExpressions(page, context.engine, ui)
-  const deps = new Set(analysis.flatMap(({ deps }) => deps))
+  const deps = new Set(analysis.flatMap(({ id, deps }) => part?.values?.has(id) ? [] : deps))
   const actions = Object.entries(page.actions).sort(([a], [b]) => compareBytes(a, b))
   const steps = actions.flatMap(([, items]) => items)
   const followsCall = steps.some((step) => step.do === 'call')
@@ -108,6 +118,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
   const selections = new Map<string, TableSelection>()
   const exposed = new Map<string, Array<{ valueProp: string; changeProp: string; name: string; update: string; arg: string }>>()
   for (const [id, node] of Object.entries(page.nodes).sort(([a], [b]) => compareBytes(a, b))) {
+    if (part?.replacements?.has(id)) continue
     const manifest = manifestOf(node.type)
     if (manifest.composite === 'DataTable') {
       const selection = prepareTableSelection(page, id, deps, composite, state, rename, afterState)
@@ -136,7 +147,7 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
     exposed.set(id, values)
   }
   if (state.length) imports.push({ name: 'useState', source: 'react' })
-  const route = routeScope(deps, names, targetHooks.router)
+  const route = part?.routeValues ? { rename: part.routeValues, imports: [], hooks: [] } : routeScope(deps, names, targetHooks.router)
   const query = prepareQueries(page, context, names, analysis, targetHooks)
   const repeats = new Map<string, RepeatLocal>()
   const byExpression = new Map<string, RepeatLocal>()
@@ -151,13 +162,14 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
     byExpression.set(toPointer(['control', id, 'each']), repeat)
   }
   const localAliases = actions.length ? { event: '_event', value: '_value' } : {}
-  const expression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename, ...localAliases },
+  const emittedExpression = emitPageExpressions(page, context.engine, { ...rename, ...route.rename, ...query.rename, ...localAliases },
     ui, new Set(actions.length ? ['event', 'value'] : []), ({ locals }) => Object.fromEntries(
       Object.entries(locals ?? {}).flatMap(([local, tier]) => {
         const repeat = typeof tier === 'object' ? byExpression.get(tier.from) : undefined
         return repeat ? [[local, local === repeat.alias ? repeat.item : repeat.index!]] : []
       }),
     ))
+  const expression = (pointer: string) => part?.values?.get(pointer) ?? emittedExpression(pointer)
   const queries = query.lower(expression)
   imports.push(...route.imports, ...query.imports)
   const handlers: HandlerIR[] = []
@@ -220,14 +232,14 @@ export function lowerCustom(page: CustomPage, context: CompileContext, targetHoo
     client = true
     if (manifest.composite === 'DataTable') return lowerDataTable(page, id, manifest, root, composite, selections.get(id))
     return lowerForm(page, id, root, composite)
-  }, context.previewNodeIds)
+  }, context.previewNodeIds, part?.replacements)
   const hooks = [...action.hooks.values()]
   const rank = (hook: string) => hook === 'useNotification' ? 2 : hook === 'useGo' ? 1 : 0
   hooks.sort((a, b) => rank(a.hook) - rank(b.hook))
   imports.push(...action.imports)
   const handler = handlerStub(page.name, action.calls.keys(), page.state, facts.style)
   const ir: PageIR = {
-    name: page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
+    name: part?.name ?? page.name, file, route: page.route, client: client || state.length > 0 || actions.length > 0 || analysis.some(({ tier }) => tier === 'client'),
     imports, jsx, state, queries, mutations: hooks, hooks: route.hooks, handlers, declarations, afterState,
   }
   return {
