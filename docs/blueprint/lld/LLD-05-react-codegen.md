@@ -157,6 +157,8 @@ The compiler uses a relative import for a custom page's route registration.
 ⚑ The fixture app uses the banking mock API, contract and Refine UI from
 `examples/refine-admin`, and the installed Card from `examples/playground`. Its TypeScript
 aliases resolve the real components and generated contract types without duplicating them.
+Its typecheck stages goldens at their emitted paths in a temporary directory so relative
+handler imports get the same check as ejected files.
 
 ## 5. Preview (FR-RC-06)
 
