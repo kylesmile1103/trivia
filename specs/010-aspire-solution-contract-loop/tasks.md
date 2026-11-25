@@ -34,7 +34,7 @@
 ## Phase 6: User Story 4 - One command for the loop (P2)
 
 - [x] T014 [US4] `trivia-blueprint backend [--migration <Name>]`: write, migrate, build, sync, drift summary, stopping at the first failure. Child processes with argument arrays. Tests with fake executables
-- [ ] T015 [US4] Write the last generated model revision and field summary into the lock (spec 008 T011)
+- [x] T015 [US4] Write the last generated model revision and field summary into the lock (spec 008 T011)
 - [ ] T016 [US4] `trivia_blueprint_backend`'s `next` field names build, `trivia_sync_openapi` and `trivia_contract_drift`
 
 ## Phase 7: User Story 5 - Publish (P3)

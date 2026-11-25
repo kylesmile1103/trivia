@@ -32,6 +32,7 @@ interface Project {
   blueprintInputs(): Promise<{ blueprint: Blueprint; context: CompileContext }>
   planBlueprintEject(pages?: string[]): Promise<unknown>
   ejectBlueprint(pages?: string[]): Promise<unknown>
+  recordGeneratedModel(modelRev: string): Promise<void>
   refine: {
     drift(): Promise<{ pages: Array<{ file: string; issues: Array<{ message: string }> }> }>
   }
@@ -135,7 +136,11 @@ async function backend(web: string, migration: string | undefined, commands: Bac
   }
   const solution = path.dirname(web)
   const args = ['--blueprint', blueprint, '--root', solution]
-  step('Generate the backend', commands['trivia-dotnet'], ['write', ...args], solution)
+  const generated = step('Generate the backend', commands['trivia-dotnet'], ['write', ...args], solution)
+  const { modelRev } = JSON.parse(generated) as { modelRev?: string }
+  if (typeof modelRev !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(modelRev)) {
+    throw new Error('Backend generation returned no model revision.')
+  }
   if (migration !== undefined) {
     step('Add the migration', commands['trivia-dotnet'], ['migrate', migration, ...args], solution)
   }
@@ -144,7 +149,9 @@ async function backend(web: string, migration: string | undefined, commands: Bac
   const sync = step('Sync the API contract', commands.pnpm, ['run', 'sync'], web)
   if (sync) process.stdout.write(sync)
 
-  const { pages } = await (await openProject(web)).refine.drift()
+  const project = await openProject(web)
+  const { pages } = await project.refine.drift()
+  await project.recordGeneratedModel(modelRev)
   if (!pages.length) console.log('No contract drift.')
   else {
     console.log(`Contract drift affects ${pages.length} page(s).`)

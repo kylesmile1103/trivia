@@ -1,3 +1,5 @@
+import { modelBaselineSchema, type ModelBaseline } from '@trivia/blueprint'
+
 import { CompileError } from './compile.js'
 import { compareBytes } from './print/style.js'
 
@@ -15,6 +17,7 @@ export interface LockedPage {
 export interface Lock {
   lockVersion: 1
   compiler?: string
+  model?: ModelBaseline
   pages: Record<string, LockedPage>
 }
 
@@ -43,7 +46,12 @@ export function readLock(text: string | null): Lock {
         ...(route !== undefined && { route }), ...(component !== undefined && { component }),
       }]
     })
-    return { lockVersion: 1, ...(value.compiler !== undefined && { compiler: value.compiler }), pages: Object.fromEntries(entries) }
+    return {
+      lockVersion: 1,
+      ...(value.compiler !== undefined && { compiler: value.compiler }),
+      ...(value.model !== undefined && { model: modelBaselineSchema.parse(value.model) }),
+      pages: Object.fromEntries(entries),
+    }
   } catch (error) {
     throw new CompileError('conflict', 'Invalid blueprint lock: ' + (error as Error).message)
   }
@@ -53,6 +61,7 @@ export function serializeLock(lock: Lock): string {
   return JSON.stringify({
     lockVersion: 1,
     ...(lock.compiler !== undefined && { compiler: lock.compiler }),
+    ...(lock.model !== undefined && { model: lock.model }),
     pages: Object.fromEntries(Object.entries(lock.pages).sort(([a], [b]) => compareBytes(a, b))),
   }, null, 2) + '\n'
 }

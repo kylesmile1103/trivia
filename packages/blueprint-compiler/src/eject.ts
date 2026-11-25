@@ -122,7 +122,7 @@ export function planCompiledEject(prepared: readonly EjectPage[], snapshot: Ejec
   }
   return {
     ops, files, registrations, requires: [], warnings: [],
-    lock: { lockVersion: 1, compiler: snapshot.compiler, pages: records },
+    lock: { ...lock, compiler: snapshot.compiler, pages: records },
     label: 'Eject ' + prepared.map(({ page }) => page.name).join(', '),
   }
 }

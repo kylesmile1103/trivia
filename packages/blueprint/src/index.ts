@@ -11,6 +11,7 @@ export {
   customOperationSchema, entityApiSchema, entitySchema, enumSchema, fieldSchema, keySchema, modelIndexSchema, modelSchema, relationSchema,
   type ModelDoc, type ModelEntity, type ModelField, type ModelFieldType, type ModelKey, type ModelRelation,
 } from './model/types.js'
+export { modelBaselineSchema, summarizeModel, type ModelBaseline } from './model/baseline.js'
 export { modelOpSchema, type ModelOp } from './model/apply.js'
 export { MODEL_MAPPING, modelMappingJson } from './model/mapping.js'
 export { modelFieldTypes, validateModel } from './model/validate.js'

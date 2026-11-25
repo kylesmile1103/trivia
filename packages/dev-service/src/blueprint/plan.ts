@@ -69,6 +69,9 @@ export function validateEjectLock(workspace: BlueprintWorkspace, ops: readonly J
   try {
     const before = readLock(workspace.readDocumentText(LOCK_FILE))
     const after = readLock(lock.content)
+    if (JSON.stringify(before.model) !== JSON.stringify(after.model)) {
+      throw new ApiError('invalid_op', 'An eject cannot change the generated model baseline.')
+    }
     const revs: Record<string, string | null> = {}
     for (const name of Object.keys(before.pages)) {
       if (!Object.hasOwn(after.pages, name)) throw new ApiError('conflict', 'An eject cannot remove the lock record for ' + name)
