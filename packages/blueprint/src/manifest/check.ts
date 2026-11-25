@@ -1,7 +1,7 @@
 import { compareBytes } from '../serialize.js'
 import type { Blueprint } from '../store.js'
 import { toPointer, type Diagnostic } from '../types/diagnostics.js'
-import type { CustomPage } from '../types/page.js'
+import type { CustomPage, PageDoc } from '../types/page.js'
 import type { LayerCheck } from '../validate/context.js'
 import type { ResolvedManifests } from './resolve.js'
 import { manifestProps, type ComponentManifest, type PropSchema } from './types.js'
@@ -118,4 +118,25 @@ export function checkManifests(blueprint: Blueprint, manifests: ResolvedManifest
 /** Supply this check as `ctx.manifests` to validate() and to guarded ops. */
 export function manifestCheck(manifests: ResolvedManifests): LayerCheck {
   return (blueprint) => checkManifests(blueprint, manifests)
+}
+
+export interface ExposedScope {
+  tier: 'client'
+  members: Record<string, string[]>
+  types: Record<string, Record<string, string>>
+}
+
+/** The ui root for the expression compiler and the TypeScript types of its exposed values. */
+export function exposedScope(page: PageDoc, manifests: ResolvedManifests): ExposedScope {
+  const members: Array<[string, string[]]> = []
+  const types: Array<[string, Record<string, string>]> = []
+  if (page.kind === 'custom') {
+    for (const [, node] of byKey(page.nodes)) {
+      const manifest = lookup(manifests, node.type)
+      if (!manifest?.installed || !manifest.exposes.length) continue
+      members.push([node.name, manifest.exposes.map(({ name }) => name)])
+      types.push([node.name, Object.fromEntries(manifest.exposes.map(({ name, type }) => [name, type]))])
+    }
+  }
+  return { tier: 'client', members: Object.fromEntries(members), types: Object.fromEntries(types) }
 }

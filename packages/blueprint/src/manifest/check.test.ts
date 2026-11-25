@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 
 import { loadBlueprint } from '../store.js'
 import { SCHEMA_URL } from '../types/common.js'
-import { checkManifests } from './check.js'
+import { checkManifests, exposedScope } from './check.js'
 import type { ResolvedManifest, ResolvedManifests } from './resolve.js'
 
 const doc = 'pages/Example.page.json'
@@ -150,4 +150,16 @@ it('uses the public event name when it refuses a direct change-prop binding', ()
     code: 'controlled_change_binding', doc, severity: 'error', pointer: `/bindings/${child}/onValueChange`,
     hint: { text: expect.stringContaining(`actions["${child}.onChange"]`) },
   }])
+})
+
+it('builds a client ui root with declared member names and their TypeScript types', () => {
+  const blueprint = page({ bindings: { [root]: { children: 'ui.search.value' } } }, inputNode)
+  const entry = blueprint.docs[doc]
+  if (entry?.kind !== 'page' || !entry.doc) throw new Error('Invalid test page')
+  expect(exposedScope(entry.doc, formManifests)).toEqual({
+    tier: 'client', members: { search: ['value'] }, types: { search: { value: 'string' } },
+  })
+  expect(exposedScope(entry.doc, { ...formManifests, Input: { ...input, installed: false } })).toEqual({
+    tier: 'client', members: {}, types: {},
+  })
 })

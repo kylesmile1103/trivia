@@ -118,6 +118,10 @@ Nothing is installed during resolution (FR-MF-03).
   no analyzer prop is checked for `string`, `number` and `boolean` types. Other TypeScript
   types are left to the compiler.
 
+⚑ `exposedScope(page, manifests)` produces the client `ui` root described in LLD-03.
+It includes a `types` map (`types[nodeName][valueName]`) for the TypeScript consumer.
+Only installed types with exposed values contribute members.
+
 ## 5. JSON Schema for agents (FR-MF-07, should)
 
 `manifestsToJsonSchema(manifests)` returns one schema per type for the node's props, plus an

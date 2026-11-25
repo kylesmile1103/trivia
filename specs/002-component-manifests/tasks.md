@@ -27,7 +27,7 @@
 ## Phase 5: User Story 3 - Events and exposed values (P1)
 
 - [x] T010 [US3] `unknown_event` and the change-prop binding refusal, with fixtures
-- [ ] T011 [US3] Export `exposedScope(page, manifests)`: the `ui` root for spec 003's scope
+- [x] T011 [US3] Export `exposedScope(page, manifests)`: the `ui` root for spec 003's scope
 
 ## Phase 6: User Story 4 - Local components and HTML (P2)
 
