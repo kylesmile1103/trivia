@@ -31,6 +31,9 @@ function compilePage(bp: Blueprint, page: string, ctx: CompileContext): EmittedM
 function planEject(bp: Blueprint, pages: string[], ctx: CompileContext, lock: Lock): EjectPlan
 ```
 
+⚑ Project facts take the majority quote and semicolon style of static imports in the entry
+source. With no evidence or a tie, they use double quotes and semicolons.
+
 ## 2. Contract pages (FR-RC-02)
 
 For `list`, `create`, `edit` and `show`, `compilePage` calls the Refine adapter's generator

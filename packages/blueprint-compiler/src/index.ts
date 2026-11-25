@@ -1,2 +1,2 @@
-/** The package's npm name. A placeholder: replace it with the package's API. */
-export const packageName = '@trivia/blueprint-compiler'
+export { projectFacts, type FactInputs, type PrintStyle, type ProjectFacts } from './facts.js'
+export type { AttributeIR, HandlerIR, HookIR, ImportIR, JsxIR, PageIR, QueryIR, StateIR, StepIR } from './ir.js'
