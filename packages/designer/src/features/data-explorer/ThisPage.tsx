@@ -190,13 +190,13 @@ function PageCard({
       </p>
       <ul className="mt-1.5 grid gap-0.5" aria-label={listLabel}>
         {items.map((item, i) => (
-          <li key={`${item.key ?? 'item'}-${i}`} className="group flex h-6 items-center gap-1 rounded px-1 text-xs hover:bg-muted" aria-label={item.name}>
+          <li key={item.key ?? `item-${i}`} className="group flex h-6 items-center gap-1 rounded px-1 text-xs hover:bg-muted" aria-label={item.name}>
             <span className="min-w-0 flex-1 truncate" title={item.key ?? undefined}>
               {item.name}
             </span>
-            {item.shape && <span className="text-[10px] text-muted-foreground group-hover:hidden">{SHAPE[item.shape]}</span>}
+            {item.shape && <span className="text-[10px] text-muted-foreground group-focus-within:invisible group-hover:invisible">{SHAPE[item.shape]}</span>}
             {item.key !== null && (
-              <span className="hidden group-focus-within:flex group-hover:flex">
+              <span className="flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon-xs"
