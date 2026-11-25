@@ -119,8 +119,14 @@ export function fileResolver(root: string): RoutesHost['resolve'] {
         ? path.posix.join(path.posix.dirname(importer), specifier)
         : null
     if (base === null) return null
+    const realRoot = await fsp.realpath(root)
     for (const candidate of EXTENSIONS.map((e) => base + e)) {
-      const stat = await fsp.stat(path.join(root, candidate)).catch(() => null)
+      if (path.isAbsolute(candidate) || candidate === '..' || candidate.startsWith('../')) return null
+      const file = await fsp.realpath(path.join(realRoot, candidate)).catch(() => null)
+      if (file === null) continue
+      const relative = path.relative(realRoot, file)
+      if (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)) continue
+      const stat = await fsp.stat(file).catch(() => null)
       if (stat?.isFile()) return candidate
     }
     return null

@@ -102,6 +102,10 @@ labels into the host's `RouteEntry` results, so each host uses the same `AppRout
 `standalone.ts` listens on `127.0.0.1` only, on a port chosen by the launcher, and applies the
 same guard. It serves nothing but `/@trivia/api` and `/@trivia/mcp`.
 
+⚑ The `trivia-dev` CLI can run without an app process. It takes `--root`, `--port`,
+`--ui-dir` and `--import-base`. Port zero lets the OS allocate a loopback port. Its static
+resolver confines imports to the real project root. Compiling a preview requires an app host.
+
 ## 3. Stamping (FR-TN-01, FR-TN-06)
 
 `@trivia/next/loader` is a webpack-style loader:

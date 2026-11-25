@@ -14,7 +14,7 @@
 - [x] T004 [US2] Generate `packages/dev-service`. Move `api/`, `mcp/`, `refine/`, `blueprint/`, `routes/`, `engine.ts` and their tests with `git mv`, content unchanged, imports fixed. `pnpm check` and `pnpm e2e` green
 - [x] T005 [US2] `src/host.ts`: the `DevHost` interface. The Vite plugin implements it (module resolution, routes, virtual-module previews) and mounts the handlers. Suites green without changed assertions (SC-002)
 - [x] T006 [US2] `src/stamp.ts`: the insertion and source-map code out of `transform.ts`, used by the plugin
-- [ ] T007 [US2] `src/standalone.ts` and `bin/trivia-dev.js`: loopback only, a chosen port, the same guard. Guard tests and a smoke subset of the API and MCP suites through it
+- [x] T007 [US2] `src/standalone.ts` and `bin/trivia-dev.js`: loopback only, a chosen port, the same guard. Guard tests and a smoke subset of the API and MCP suites through it
 
 ## Phase 3: User Story 3 - Stamp and edit (P1)
 

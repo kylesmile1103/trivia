@@ -18,7 +18,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -39,5 +40,8 @@
   },
   "nx": {
     "name": "dev-service"
+  },
+  "bin": {
+    "trivia-dev": "./bin/trivia-dev.js"
   }
 }
