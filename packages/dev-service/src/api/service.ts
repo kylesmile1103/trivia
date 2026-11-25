@@ -8,6 +8,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { resolveBlueprintDir } from '../blueprint/paths.js'
+import { BlueprintWorkspace } from '../blueprint/store.js'
 import { commitDocuments } from '../blueprint/writes.js'
 import { ApiError, type EngineBinding, type GuardedWrite, type OpsResult, unwrap } from '../engine.js'
 import type { DevHost } from '../host.js'
@@ -72,7 +73,7 @@ export interface EditSource {
 export class EngineService {
   readonly #options: ServiceOptions
   readonly #history: History
-  readonly #blueprintDir: string
+  readonly blueprint: BlueprintWorkspace
   readonly #queue = new SerialQueue()
   readonly #selection = new SelectionStore()
   readonly #screenshots = new ScreenshotRelay()
@@ -81,7 +82,10 @@ export class EngineService {
 
   constructor(options: ServiceOptions) {
     this.#options = options
-    this.#blueprintDir = resolveBlueprintDir(options.host.root, options.blueprintDir)
+    this.blueprint = new BlueprintWorkspace(
+      options.host, resolveBlueprintDir(options.host.root, options.blueprintDir), options.engine,
+      () => this.components(), options.manifestPath,
+    )
     this.#history = new History(options.historyLimit ?? 100)
     this.refine = new RefineAdapter({
       root: options.host.root,
@@ -296,9 +300,9 @@ export class EngineService {
   /** Commit guarded writes relative to the blueprint directory in the shared edit queue. */
   writeDocuments(writes: readonly FileChange[], label: string): Promise<string | null> {
     return this.#queue.run(() => {
-      commitDocuments(fs.realpathSync(this.#options.host.root), this.#blueprintDir, writes)
+      commitDocuments(fs.realpathSync(this.#options.host.root), this.blueprint.dir, writes)
       const changes = writes.filter(({ before, after }) => before !== after)
-        .map((write) => ({ ...write, file: `${this.#blueprintDir}/${write.file}` }))
+        .map((write) => ({ ...write, file: `${this.blueprint.dir}/${write.file}` }))
       if (changes.length === 0) return null
       this.#history.record({ label, changes, documents: true })
       return label
@@ -361,8 +365,8 @@ export class EngineService {
     try {
       const { engine, host } = this.#options
       if (entry.documents) {
-        commitDocuments(fs.realpathSync(host.root), this.#blueprintDir, writes.map(({ file, expected, content }) => ({
-          file: file.slice(this.#blueprintDir.length + 1), before: expected, after: content,
+        commitDocuments(fs.realpathSync(host.root), this.blueprint.dir, writes.map(({ file, expected, content }) => ({
+          file: file.slice(this.blueprint.dir.length + 1), before: expected, after: content,
         })))
       } else {
         unwrap<null>(engine.restoreFiles(host.root, JSON.stringify(writes)))

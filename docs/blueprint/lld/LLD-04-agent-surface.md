@@ -44,6 +44,10 @@ and adds no undo entry.
 ⚑ Vite's `blueprintDir` option resolves to a child directory of the project root, default
 `blueprint`. Blueprint paths refuse symlink segments to prevent redirection and aliasing.
 
+⚑ Use the blueprint package's pure loader and reducer with checked reads in the service store.
+The live catalog combines intrinsic types, analyzer exports and project manifest overrides.
+Spec 006 supplies the kit. The contract manifest is read locally without drift detection.
+
 ## 2. HTTP (FR-AG-01)
 
 All under `/@trivia/api/blueprint`, with the envelope and the caller guard of `docs/api.md`.

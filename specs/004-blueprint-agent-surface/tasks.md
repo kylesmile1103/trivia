@@ -12,7 +12,7 @@
 
 - [x] T003 Tests for `writeDocuments` in `test/blueprint-service.test.ts`: writes inside the queue, `before` mismatch is 409, a failure writes nothing, one history entry, undo and redo restore bytes, undo after a hand edit is refused
 - [x] T004 `EngineService.writeDocuments` in `src/api/service.ts` (and `history.ts` per T001)
-- [ ] T005 `src/blueprint/store.ts` and `context.ts`: the store over the directory, the validation context from `components()`, the contract manifest and the napi expression functions
+- [x] T005 `src/blueprint/store.ts` and `context.ts`: the store over the directory, the validation context from `components()`, the contract manifest and the napi expression functions
 
 ## Phase 3: User Story 1 - Authoring (P1)
 
