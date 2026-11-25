@@ -48,7 +48,7 @@ Contract pages use the shared Refine scaffolder. A target supplies:
 interface Target {
   name: 'vite-refine' | 'next-refine'
   files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
-  routeOps(files: readonly RouteRegistration[], anchor: RouteAnchor): Op[]
+  routeOps(plan: RoutePlan): Op[]
   hooks: RefineHookMap                                         // router binding differences
   preview(page: string): PreviewPlan
 }
@@ -77,6 +77,10 @@ web/
 Routes are files, so `routeOps` returns no `<Route>` insert. It still registers the resource:
 a value op on the `resources` array in `app/providers.tsx`, with the same guards as the Vite
 target.
+
+⚑ The Refine adapter resolves the array and checks occupied actions before either target
+plans operations. The target receives those guarded registrations and Vite's optional JSX
+anchor. Next emits the shared resource value operations for the discovered provider file.
 
 ## 3. Splitting server and client (FR-NX-02)
 

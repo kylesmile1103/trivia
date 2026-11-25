@@ -19,7 +19,7 @@ it('SC-004 dispatches Vite files, route registration and preview through one tar
     file, code: 'export function Report() {\n  return (\n    <main />\n  );\n}\n',
     importPath: './pages/Report/Report',
   })
-  expect(target.routeOps([output], { parent: 'src/App.tsx#App#0', index: 1, placement: 'before' })).toEqual([{
+  expect(target.routeOps({ files: [output], resources: [], anchor: { parent: 'src/App.tsx#App#0', index: 1, placement: 'before' } })).toEqual([{
     op: 'insert',
     target: 'src/App.tsx#App#0.1',
     expectedName: 'Route',

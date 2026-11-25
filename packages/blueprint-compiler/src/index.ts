@@ -15,8 +15,6 @@ export {
   type EjectContext, type EjectPage, type EjectPlan, type EjectRoute, type EjectSnapshot, type SourceOp,
 } from './eject.js'
 export { relativeModule } from './targets/paths.js'
-export { resourceOps, type RouteRegistration } from './targets/vite-refine/routes.js'
-export { targetFor, type Target, type RefineHookMap } from './targets/target.js'
-import { viteRefine } from './targets/vite-refine/index.js'
-export const routeOps = viteRefine.routeOps
+export { resourceOps, routeOps, type RouteRegistration } from './targets/vite-refine/routes.js'
+export { targetFor, type Target, type RefineHookMap, type ResourceRegistration } from './targets/target.js'
 export { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'

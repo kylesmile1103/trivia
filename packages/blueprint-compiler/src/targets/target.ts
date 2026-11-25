@@ -2,7 +2,7 @@ import type { ContractPage } from '@trivia/blueprint'
 
 import { nextRefine } from './next-refine/index.js'
 import { viteRefine } from './vite-refine/index.js'
-import type { RouteAnchor, RouteRegistration, routeOps } from './vite-refine/routes.js'
+import type { RouteAnchor, RouteRegistration, resourceOps, routeOps } from './vite-refine/routes.js'
 import type { queryHooks, queryStatus } from './vite-refine/refine-hooks.js'
 import type { EmittedModule, PageSource, RegistryItem } from '../compile.js'
 import type { ProjectFacts } from '../facts.js'
@@ -19,10 +19,23 @@ export interface RefineHookMap {
   router: { source: string; searchTuple: boolean }
 }
 
+export interface ResourceRegistration {
+  path: string
+  name: string
+  routes: Partial<Record<ContractPage['kind'], string>>
+  exists: boolean
+}
+
+export interface RoutePlan {
+  files: readonly RouteRegistration[]
+  resources: readonly ResourceRegistration[]
+  anchor?: RouteAnchor
+}
+
 export interface Target {
   name: ProjectFacts['target']
   files(page: LoweredPage, facts: ProjectFacts): [EmittedModule, ...PageSource[]]
-  routeOps(files: readonly RouteRegistration[], anchor: RouteAnchor): ReturnType<typeof routeOps>
+  routeOps(plan: RoutePlan): Array<ReturnType<typeof routeOps>[number] | ReturnType<typeof resourceOps>[number]>
   hooks: RefineHookMap
   preview(page: string): { route: string; id: string }
 }
