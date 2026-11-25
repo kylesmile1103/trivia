@@ -28,7 +28,7 @@ export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onIn
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold">Blueprint pages</h2>
-        {onAdd && <Button size="sm" variant="outline" disabled={busy} onClick={onAdd}>Add page</Button>}
+        {onAdd && <Button size="sm" variant="outline" disabled={busy} data-blueprint-add="" onClick={onAdd}>Add page</Button>}
       </div>
       {summary.pages.length === 0 ? (
         <p className="text-muted-foreground">No pages yet.</p>
@@ -40,7 +40,7 @@ export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onIn
                 {page.status === 'draft' ? (
                   <Button
                     size="sm" variant="ghost" disabled={busy} aria-label={`Edit ${page.name}`} aria-pressed={openPath === page.path}
-                    className="-ml-1 h-auto min-w-0 whitespace-normal px-1 py-0.5 text-left [overflow-wrap:anywhere]"
+                    className="-ml-1 h-auto min-w-0 shrink whitespace-normal px-1 py-0.5 text-left [overflow-wrap:anywhere]"
                     onClick={() => onOpen(page.path)}
                   >
                     {page.name}

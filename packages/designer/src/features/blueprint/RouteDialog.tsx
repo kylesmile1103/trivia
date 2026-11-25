@@ -12,13 +12,13 @@ export function RouteDialog({ route, params, onClose }: { route: string; params:
       <form className="space-y-3" onSubmit={(event) => {
         event.preventDefault()
         const fields = new FormData(event.currentTarget)
-        const url = fillRoute(route, Object.fromEntries(params.map((param) => [param, String(fields.get(param) ?? '')])))
+        const url = fillRoute(route, Object.fromEntries(params.map((param) => [param, String(fields.get('param-' + param) ?? '')])))
         if (url) {
           canvas.navigate(url)
           onClose()
         }
       }}>
-        {params.map((param) => <Field key={param} label={param}>{(id) => <Input id={id} name={param} required />}</Field>)}
+        {params.map((param) => <Field key={param} label={param}>{(id) => <Input id={id} name={'param-' + param} required />}</Field>)}
         <div className="flex justify-end gap-2">
           <Button type="button" size="sm" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" size="sm">Open route</Button>

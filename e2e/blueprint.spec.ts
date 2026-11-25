@@ -105,7 +105,8 @@ test.describe('Blueprint panel', () => {
   const appFile = path.join(appRoot, 'src/App.tsx')
   const generated = path.join(appRoot, 'src/pages/accounts/create.tsx')
   const lock = path.join(blueprint, 'blueprint.lock.json')
-  const pages = ['AccountIntake', 'SearchDraft', 'ConcurrentDraft']
+  const longName = 'Keyboard' + 'BlueprintPage'.repeat(6)
+  const pages = ['AccountIntake', 'SearchDraft', 'ConcurrentDraft', longName]
   const files = [
     appFile, generated, lock, path.join(blueprint, 'app.blueprint.json'),
     ...pages.map((name) => path.join(blueprint, 'pages', `${name}.page.json`)),
@@ -245,5 +246,39 @@ test.describe('Blueprint panel', () => {
     await expect(route).toHaveValue('/blueprint-agent')
     expect(read(path.join(blueprint, doc))?.toString('utf8')).toContain('/blueprint-agent')
     expect(saves).toBe(1)
+  })
+
+  test('SC-004 opens, fills and closes the page editor with labelled keyboard controls at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto('/__trivia/')
+    await expect(canvas(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 35_000 })
+    const dataTab = page.getByRole('tab', { name: 'Data', exact: true })
+    await dataTab.focus()
+    await dataTab.press('ArrowRight')
+    const blueprintTab = page.getByRole('tab', { name: 'Blueprint', exact: true })
+    await expect(blueprintTab).toBeFocused()
+    await expect(blueprintTab).toHaveAttribute('aria-selected', 'true')
+    await expect(blueprintTab).toHaveCSS('visibility', 'visible')
+
+    const initialize = panel(page).getByRole('button', { name: 'Create blueprint' })
+    await initialize.focus()
+    await initialize.press('Enter')
+    const add = panel(page).getByRole('button', { name: 'Add page' })
+    await add.focus()
+    await add.press('Enter')
+    const name = editor(page).getByLabel('Name', { exact: true })
+    await expect(name).toBeFocused()
+    await name.fill(longName)
+    await name.press('Tab')
+    const route = editor(page).getByLabel('Route', { exact: true })
+    await expect(route).toBeFocused()
+    await route.fill('/' + 'long-blueprint-route-'.repeat(6) + 'end')
+    await route.press('Enter')
+    await expect(editor(page).getByRole('heading', { name: longName, exact: true })).toBeVisible()
+    expect(await panel(page).evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const close = editor(page).getByRole('button', { name: 'Close editor' })
+    await close.focus()
+    await close.press('Enter')
+    await expect(add).toBeFocused()
   })
 })

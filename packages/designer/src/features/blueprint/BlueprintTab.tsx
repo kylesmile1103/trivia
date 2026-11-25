@@ -25,6 +25,9 @@ export function BlueprintTab() {
   const { summary, refresh, loadError, problem, pending, path, document, open, patch } = useStore(store)
   const root = useRef<HTMLElement>(null)
   const editor = useRef<HTMLElement>(null)
+  const editorOpener = useRef<HTMLElement | null>(null)
+  const focusName = useRef(false)
+  const focusAdd = useRef(false)
   const [focusRequest, setFocusRequest] = useState<BlueprintDiagnostic | null>(null)
   const [routeDialog, setRouteDialog] = useState<{ route: string; params: string[] } | null>(null)
   const [openingRoute, setOpeningRoute] = useState(false)
@@ -55,10 +58,43 @@ export function BlueprintTab() {
     return result !== null
   }
   const host = useDesigner((state) => state.health?.host)
-  const initialize = () => void commit([{
-    op: 'setApp', doc: APP_DOC, baseRev: null, name: 'App',
-    targets: { web: host === 'next' ? 'next-refine' : 'vite-refine' },
-  }], 'Blueprint: create app')
+  function initialize() {
+    focusAdd.current = true
+    void commit([{
+      op: 'setApp', doc: APP_DOC, baseRev: null, name: 'App',
+      targets: { web: host === 'next' ? 'next-refine' : 'vite-refine' },
+    }], 'Blueprint: create app')
+  }
+
+  function openEditor(pagePath: string | null) {
+    const active = globalThis.document.activeElement
+    editorOpener.current = active instanceof HTMLElement ? active : null
+    focusName.current = true
+    setAdding(pagePath === null)
+    void open(pagePath)
+  }
+
+  function closeEditor() {
+    focusName.current = false
+    setAdding(false)
+    void open(null)
+    editorOpener.current?.focus()
+  }
+
+  useEffect(() => {
+    if (pending || loadError) return
+    if (focusAdd.current && summary?.exists) {
+      focusAdd.current = false
+      root.current?.querySelector<HTMLElement>('[data-blueprint-add]')?.focus()
+    }
+    if (focusName.current && (adding || document)) {
+      const field = editor.current?.querySelector<HTMLElement>('[data-pointer="/name"]')
+      if (field) {
+        focusName.current = false
+        field.focus()
+      }
+    }
+  }, [adding, document, loadError, pending, summary?.exists])
 
   useEffect(() => {
     let manifestRequest = 0
@@ -149,6 +185,7 @@ export function BlueprintTab() {
 
   useEffect(() => {
     if (!focusRequest || pending || (focusRequest.doc === path && !document && !loadError)) return
+    if (document?.path === focusRequest.doc && 'nodes' in document.doc && !catalog && !catalogError) return
     const [, map, key] = focusRequest.pointer.split('/')
     const node = map === 'actions' ? key?.split('.')[0] : key
     if (document?.path === focusRequest.doc && document.doc && 'nodes' in document.doc && node && document.doc.nodes[node] && selectedNode !== node) {
@@ -158,7 +195,7 @@ export function BlueprintTab() {
     const region = editor.current ?? root.current
     if (region && !focusDiagnosticField(region, focusRequest.pointer)) region.focus()
     setFocusRequest(null)
-  }, [focusRequest, pending, path, document, loadError, selectedNode])
+  }, [focusRequest, pending, path, document, loadError, selectedNode, catalog, catalogError])
 
   return (
     <section ref={root} tabIndex={-1} aria-label="Blueprint pages" className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -175,15 +212,15 @@ export function BlueprintTab() {
           onEject={setEject}
           onOpenRoute={(item) => { void openRoute(item) }}
           onPreview={(item) => { void preview(item) }}
-          onOpen={(doc) => { setAdding(false); void open(doc) }}
-          onAdd={() => { void open(null); setAdding(true) }} onInitialize={initialize}
+          onOpen={openEditor}
+          onAdd={() => openEditor(null)} onInitialize={initialize}
         />
       )}
       {(adding || (path !== null && pageStatus === 'draft')) && (
         <section ref={editor} tabIndex={-1} aria-label="Page editor" className="mt-3 space-y-3 border-t pt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="min-w-0 text-xs font-semibold [overflow-wrap:anywhere]">{adding ? 'New page' : page?.doc.name ?? 'Page'}</h3>
-            <Button size="xs" variant="ghost" disabled={pending !== null} onClick={() => { setAdding(false); void open(null) }}>Close editor</Button>
+            <Button size="xs" variant="ghost" disabled={pending !== null} onClick={closeEditor}>Close editor</Button>
           </div>
           {manifestError && <p role="alert" className="text-xs text-destructive">{manifestError}</p>}
           {adding || page

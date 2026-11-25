@@ -27,9 +27,11 @@ export function LeftPanel() {
           {tabs.map(({ value, label, Icon }) => (
             <Tooltip key={value}>
               <TooltipTrigger asChild>
-                <TabsTrigger value={value} aria-label={label}><Icon aria-hidden="true" /></TabsTrigger>
+                <TabsTrigger value={value} aria-label={label} className="aria-selected:text-foreground aria-selected:after:opacity-100 dark:aria-selected:text-foreground">
+                  <Icon aria-hidden="true" />
+                </TabsTrigger>
               </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
+              <TooltipContent side="bottom">{label}</TooltipContent>
             </Tooltip>
           ))}
         </TabsList>

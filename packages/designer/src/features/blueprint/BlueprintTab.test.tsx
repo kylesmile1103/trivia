@@ -62,7 +62,7 @@ it('FR-DS-01 opens the real route and only offers re-eject while source matches 
     expect(ui.host.textContent).toContain('the code is now the truth')
     await act(async () => find<HTMLButtonElement>(ui.host, 'button[aria-label="Open Accounts"]').click())
     const form = find<HTMLFormElement>(document.body, '[role="dialog"] form')
-    find<HTMLInputElement>(form, 'input[name="id"]').value = 'A B'
+    find<HTMLInputElement>(form, 'input[name="param-id"]').value = 'A B'
     await act(async () => form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })))
     expect(navigate).toHaveBeenCalledExactlyOnceWith('/accounts/A%20B')
   } finally {

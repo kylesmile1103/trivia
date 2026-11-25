@@ -12,7 +12,9 @@ the left column, **Blueprint**. The rules of `docs/architecture.md` apply and
 canvas through `shared/canvas.ts` (`canvas.navigate` for previews).
 
 The left column holds four tabs at 272 px today. A fifth needs either icons with tooltips or
-an overflow menu. ⚑ Icons with tooltips, decided here so the layout work is not a surprise.
+an overflow menu. ⚑ Icons with tooltips and accessible names. Opening the editor focuses
+its Name field and closing it returns focus to the opening control. The 1280 px keyboard test
+also checks that long names and routes fit the sidebar.
 
 ```
 features/blueprint/
