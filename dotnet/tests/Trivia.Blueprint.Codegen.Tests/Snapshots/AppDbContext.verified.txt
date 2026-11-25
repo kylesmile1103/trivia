@@ -1,0 +1,68 @@
+﻿using System;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+
+namespace BackOffice.Data;
+public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+{
+    public DbSet<global::BackOffice.Features.Customer.Customer> CustomerSet => Set<global::BackOffice.Features.Customer.Customer>();
+    public DbSet<global::BackOffice.Features.Account.Account> AccountSet => Set<global::BackOffice.Features.Account.Account>();
+    public DbSet<global::BackOffice.Features.Transaction.Transaction> TransactionSet => Set<global::BackOffice.Features.Transaction.Transaction>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<global::BackOffice.Features.Customer.Customer>(entity =>
+        {
+            entity.ToTable("customers", table =>
+            {
+                table.HasCheckConstraint("ck_customers_status_enum", "\"status\" IN (E'pending', E'active', E'suspended')");
+                table.HasCheckConstraint("ck_customers_credit_limit_min", "\"credit_limit\" >= 0");
+                table.HasCheckConstraint("ck_customers_credit_limit_max", "\"credit_limit\" <= 1000000");
+            });
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(row => row.FullName).HasColumnName("full_name").HasColumnType("varchar(120)").IsRequired().HasMaxLength(120);
+            entity.Property(row => row.Email).HasColumnName("email").HasColumnType("text").IsRequired();
+            entity.HasIndex(row => row.Email).IsUnique();
+            entity.Property(row => row.Status).HasColumnName("status").HasColumnType("text").IsRequired().HasConversion(value => global::BackOffice.Enums.CustomerStatusValues.ToLiteral(value), value => global::BackOffice.Enums.CustomerStatusValues.FromLiteral(value)).HasDefaultValue(global::BackOffice.Enums.CustomerStatusValues.FromLiteral("pending")).ValueGeneratedNever();
+            entity.Property(row => row.CreditLimit).HasColumnName("credit_limit").HasColumnType("numeric(18,2)").HasPrecision(18, 2).HasDefaultValue(0m).ValueGeneratedNever();
+            entity.Property(row => row.Notes).HasColumnName("notes").HasColumnType("text").HasMaxLength(1000);
+            entity.Property(row => row.CreatedAt).HasColumnName("created_at").HasColumnType("timestamptz").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(row => row.BirthDate).HasColumnName("birth_date").HasColumnType("date");
+            entity.Property(row => row.ExternalRef).HasColumnName("external_ref").HasColumnType("uuid");
+            entity.HasIndex(row => row.Status);
+        });
+        modelBuilder.Entity<global::BackOffice.Features.Account.Account>(entity =>
+        {
+            entity.ToTable("accounts", table =>
+            {
+                table.HasCheckConstraint("ck_accounts_sequence_number_min", "\"sequence_number\" >= 1");
+            });
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Id).HasColumnName("id").UseIdentityByDefaultColumn();
+            entity.Property(row => row.AccountNumber).HasColumnName("account_number").HasColumnType("text").IsRequired();
+            entity.Property(row => row.SequenceNumber).HasColumnName("sequence_number").HasColumnType("integer");
+            entity.Property(row => row.Frozen).HasColumnName("frozen").HasColumnType("boolean").IsRequired().HasDefaultValue(false).ValueGeneratedNever();
+            entity.Property(row => row.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamptz");
+            entity.Property(row => row.CustomerId).HasColumnName("customer_id");
+            entity.HasOne(row => row.Customer).WithMany(row => row.Accounts).HasForeignKey(row => row.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(row => new { row.CustomerId, row.AccountNumber }).IsUnique();
+        });
+        modelBuilder.Entity<global::BackOffice.Features.Transaction.Transaction>(entity =>
+        {
+            entity.ToTable("transactions");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Id).HasColumnName("id").UseIdentityByDefaultColumn();
+            entity.Property(row => row.LedgerSequence).HasColumnName("ledger_sequence").HasColumnType("bigint").IsRequired();
+            entity.Property(row => row.Details).HasColumnName("details").HasColumnType("jsonb");
+            entity.Property(row => row.AccountId).HasColumnName("account_id");
+            entity.HasOne(row => row.Account).WithMany(row => row.Transactions).HasForeignKey(row => row.AccountId).OnDelete(DeleteBehavior.Cascade);
+            entity.Property(row => row.ReviewerId).HasColumnName("reviewer_id");
+            entity.HasOne(row => row.Reviewer).WithMany().HasForeignKey(row => row.ReviewerId).OnDelete(DeleteBehavior.SetNull);
+        });
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}

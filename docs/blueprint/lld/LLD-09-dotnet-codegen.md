@@ -174,6 +174,15 @@ Each emitter is a pure function from the model to a syntax tree, built with `Syn
 and printed with `NormalizeWhitespace()`. Members are emitted in model order. File-scoped
 namespaces, nullable enabled, no `var` in generated code.
 
+⚑ Each entity uses a feature namespace under the model namespace. Related entity references
+  use fully qualified names to disambiguate them. Table names come from the plural route token,
+  and the snake-case conversion matches LLD-08. If multiple inverse navigations name the
+  same foreign key, the first is mapped and the rest expose the same collection.
+⚑ Enum member names derive from ASCII words in the literal, with a prefix for empty or numeric
+  names and numeric suffixes for collisions. Both converters retain exact wire values.
+⚑ UUID keys are created with `Guid.CreateVersion7()` in the entity; integer keys use PostgreSQL
+  identity columns. Explicit non-null defaults initialize the entity and the database column.
+
 - **Entity.** A partial class with the key, the fields in order, foreign keys and navigation
   properties. Required strings are `required string`.
 - **Enum.** A C# enum plus a generated converter pair, so the database and JSON hold the

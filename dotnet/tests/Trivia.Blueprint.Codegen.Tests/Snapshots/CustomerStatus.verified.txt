@@ -1,0 +1,34 @@
+﻿using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace BackOffice.Enums;
+[JsonConverter(typeof(CustomerStatusJsonConverter))]
+public enum CustomerStatus
+{
+    Pending,
+    Active,
+    Suspended
+}
+
+public static class CustomerStatusValues
+{
+    public static CustomerStatus FromLiteral(string? value) => value switch
+    {
+        "pending" => CustomerStatus.Pending,
+        "active" => CustomerStatus.Active,
+        "suspended" => CustomerStatus.Suspended,
+        _ => throw new JsonException("Invalid CustomerStatus value.")};
+    public static string ToLiteral(CustomerStatus value) => value switch
+    {
+        CustomerStatus.Pending => "pending",
+        CustomerStatus.Active => "active",
+        CustomerStatus.Suspended => "suspended",
+        _ => throw new JsonException("Invalid CustomerStatus value.")};
+}
+
+public sealed class CustomerStatusJsonConverter : JsonConverter<CustomerStatus>
+{
+    public override CustomerStatus Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType == JsonTokenType.String ? CustomerStatusValues.FromLiteral(reader.GetString()) : throw new JsonException("Expected a CustomerStatus string.");
+    public override void Write(Utf8JsonWriter writer, CustomerStatus value, JsonSerializerOptions options) => writer.WriteStringValue(CustomerStatusValues.ToLiteral(value));
+}
