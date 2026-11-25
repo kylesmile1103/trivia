@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import MagicString, { type SourceMap } from 'magic-string'
 
-import type { Insertion } from './engine.js'
+import type { Insertion } from '@trivia/dev-service'
 
 /** Module ids offered to the transform hook (its filter); `moduleFile` re-checks each one. */
 export const JSX_ID = /\.[jt]sx(?:$|\?)/

@@ -7,17 +7,15 @@ import path from 'node:path'
 
 import type { Plugin } from 'vite'
 
-import { createApiMiddleware } from './api/http.js'
-import { EngineService } from './api/service.js'
-import { createMcpMiddleware } from './mcp/server.js'
-import { type EngineBinding, loadEngine } from './engine.js'
+import {
+  type EngineBinding, EngineService, PREVIEW_PREFIX, createApiMiddleware, createMcpMiddleware, loadEngine,
+} from '@trivia/dev-service'
+
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
-import { PREVIEW_PREFIX } from './refine/index.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, annotateModule, isSyntaxError, moduleFile } from './transform.js'
 
-export { API_BASE } from './api/http.js'
-export { MCP_PATH } from './mcp/server.js'
-export type * from './types.js'
+export { API_BASE, MCP_PATH } from '@trivia/dev-service'
+export type * from '@trivia/dev-service'
 
 export interface AstLocatorOptions {
   /**

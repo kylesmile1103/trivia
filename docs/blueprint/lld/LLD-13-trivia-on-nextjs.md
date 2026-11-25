@@ -56,11 +56,12 @@ routes reader, and soon the blueprint adapter. Only the transform and a few look
 
 ```
 packages/dev-service/
-  src/service.ts        EngineService (moved)
-  src/http.ts           a Node (req, res, next) handler for /@trivia/api
-  src/guard.ts          the loopback, Host and Origin checks (moved)
+  src/api/service.ts    EngineService (moved)
+  src/api/http.ts       a Node (req, res, next) handler for /@trivia/api
+  src/api/guard.ts      the loopback, Host and Origin checks (moved)
   src/mcp/              the MCP server and tools (moved)
-  src/refine/, src/blueprint/, src/routes/        the adapters (moved)
+  src/refine/, src/routes/                        the adapters (moved)
+  src/engine.ts, src/types.ts                     the native binding and API types (moved)
   src/host.ts           what a host must provide
   src/standalone.ts     a local HTTP server around http.ts and mcp
   bin/trivia-dev.js
@@ -84,6 +85,15 @@ The Vite plugin keeps `transform.ts` and becomes a `DevHost` plus one line that 
 change. The move is done as pure file moves first (so `git log --follow` works, as in the
 earlier reorganization), then the interface is introduced. The plugin's suite and the e2e suite
 are the proof of FR-TN-07, and must pass after each of the two steps.
+
+⚑ Lead ordering decision: spec 004 is built on top of this branch and adds its blueprint
+routes under `packages/dev-service`. This extraction has no `blueprint/` directory to move.
+⚑ Preserve the `api/` directory so all service modules can move byte for byte.
+⚑ Unit tests move with their modules. The HTTP and MCP integration tests keep their
+assertions and stay where their Vite servers run.
+⚑ The Vite gate exposed a Data panel race when a field moved before the next row action
+could be clicked. Rows use their field keys and keep actions laid out through a refresh.
+Hover and keyboard focus reveal the controls.
 
 `standalone.ts` listens on `127.0.0.1` only, on a port chosen by the launcher, and applies the
 same guard. It serves nothing but `/@trivia/api` and `/@trivia/mcp`.

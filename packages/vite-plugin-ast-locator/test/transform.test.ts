@@ -5,7 +5,7 @@ import path from 'node:path'
 import { parseSync, Visitor, type ESTree, type ResolvedConfig } from 'vite'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { type EngineBinding, loadEngine, unwrap } from '../src/engine.js'
+import { type EngineBinding, loadEngine, unwrap } from '@trivia/dev-service'
 import astLocator from '../src/index.js'
 import { annotateModule, isSyntaxError, moduleFile } from '../src/transform.js'
 import { PLAYGROUND, copyPlayground, startServer, type TestServer } from './helpers.js'
