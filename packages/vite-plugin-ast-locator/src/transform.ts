@@ -29,6 +29,11 @@ export function moduleFile(id: string, roots: readonly string[]): string | null 
     }
   }
   if (!/\.[jt]sx$/.test(file) || !path.isAbsolute(file)) return null
+  return relativeToRoots(file, roots)
+}
+
+/** The forward-slash path of absolute `file` from the first of `roots` it is under, or `null`. */
+export function relativeToRoots(file: string, roots: readonly string[]): string | null {
   for (const root of roots) {
     const rel = path.relative(root, file)
     if (rel !== '' && !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${path.sep}`)) {
