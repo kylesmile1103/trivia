@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { expect, test, type Page } from '@playwright/test'
 
+import { restore } from './files'
+
 const DOC = 'pages/BlueprintE2e.page.json'
 
 async function rpc<T>(page: Page, method: string, params?: Record<string, unknown>, notification = false): Promise<T> {
@@ -130,8 +132,8 @@ test('FR-AG-06 previews, screenshots and ejects a draft through the Vite MCP end
     expect(fs.existsSync(source)).toBe(false)
     expect(fs.existsSync(lock) ? fs.readFileSync(lock) : null).toEqual(priorLock)
   } finally {
-    if (!fs.readFileSync(app).equals(original)) fs.writeFileSync(app, original)
-    if (priorLock) fs.writeFileSync(lock, priorLock)
+    restore(app, original)
+    if (priorLock) restore(lock, priorLock)
     else fs.rmSync(lock, { force: true })
     fs.rmSync(source, { force: true })
     fs.rmSync(draft, { force: true })

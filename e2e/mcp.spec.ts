@@ -9,6 +9,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
+import { restore } from './files'
+
 const DASHBOARD_FILE = fileURLToPath(new URL('../examples/playground/src/pages/Dashboard.tsx', import.meta.url))
 const original = fs.readFileSync(DASHBOARD_FILE, 'utf8')
 const DASHBOARD = 'src/pages/Dashboard.tsx'
@@ -20,7 +22,7 @@ let agent: Client | null = null
 test.afterEach(async () => {
   await agent?.close()
   agent = null
-  if (fs.readFileSync(DASHBOARD_FILE, 'utf8') !== original) fs.writeFileSync(DASHBOARD_FILE, original)
+  restore(DASHBOARD_FILE, original)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')

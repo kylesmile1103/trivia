@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
+import { restore } from '../files'
+
 const LIST = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/list.tsx', import.meta.url))
 const original = fs.readFileSync(LIST, 'utf8')
 
 test.afterEach(() => {
-  if (fs.readFileSync(LIST, 'utf8') !== original) fs.writeFileSync(LIST, original)
+  restore(LIST, original)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
