@@ -12,7 +12,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 2: Foundational
 
-- [ ] T004 [P] Zod schemas and types in `src/types/app.ts` and `src/types/page.ts`, with id and name patterns
+- [x] T004 [P] Zod schemas and types in `src/types/app.ts` and `src/types/page.ts`, with id and name patterns
 - [ ] T005 [P] `src/types/diagnostics.ts` and `src/types/ops.ts` (the op union, without model ops)
 - [ ] T006 Round-trip tests in `src/serialize.test.ts` (canonical fixture, shuffled keys, defaults omitted, final newline)
 - [ ] T007 `src/serialize.ts`: canonical JSON and `rev()`
