@@ -6,7 +6,7 @@
 // It never publishes to npm (nothing is published yet). Before Nx runs, it checks:
 // - a clean `main` (so the release commit holds only the release);
 // - that every commit type since the last release tag is one Nx knows;
-// - for a real run, a GitHub token: GH_TOKEN, GITHUB_TOKEN, or git's credential helper.
+// - for a real run, a GitHub token and the scripted BankAdmin MVP acceptance check.
 // Use this (or `nx release`), not `nx release version`/`changelog`: those subcommands refuse
 // nx.json's "release.git", which holds the commit and tag messages.
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -16,7 +16,7 @@ import path from 'node:path'
 
 import { attachDesktopApp } from './desktop.mjs'
 import { githubToken } from './github.mjs'
-import { unknownCommitTypes } from './preflight.mjs'
+import { checkMvpBeforeRelease, unknownCommitTypes } from './preflight.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const args = process.argv.slice(2)
@@ -62,6 +62,18 @@ if (!dryRun) {
 }
 if (!dryRun && process.platform !== 'darwin') {
   fail('the desktop app is bundled on macOS only; release from a Mac.')
+}
+
+if (dryRun) {
+  console.log('release: a real release runs the BankAdmin MVP acceptance slice before tagging.')
+} else {
+  try {
+    if (checkMvpBeforeRelease(root, process.env) === 'gate') {
+      console.log('release: the BankAdmin MVP slice passed in this workflow\'s gate job (ci.yml, integration).')
+    }
+  } catch (error) {
+    fail(error.message)
+  }
 }
 
 const nx = spawnSync(path.join(root, 'node_modules', '.bin', 'nx'), ['release', ...args, '--skip-publish'], {

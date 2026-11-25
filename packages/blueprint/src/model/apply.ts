@@ -72,7 +72,13 @@ function keepFieldOrigin(field: ModelField, previous: readonly ModelField[]): Mo
 function setEntity(model: ModelDoc, patch: z.output<typeof entityPatchSchema>): void {
   const existing = model.entities.find((entity) => entity.name === patch.name)
   if (!existing && (patch.plural === undefined || patch.key === undefined)) {
-    refuse('invalid_op', `Creating ${patch.name} requires a plural and key`, { entity: patch.name })
+    // Name exactly what is missing, with an example: agents sent a key alone and had to guess.
+    const example = patch.name.toLowerCase().replace(/(?:s|x|z|ch|sh)$/, '$&e') + 's'
+    const missing = [
+      ...(patch.plural === undefined ? [`plural (its route segment, for example "${example}")`] : []),
+      ...(patch.key === undefined ? ['key (its primary key, for example {"name":"id","type":"uuid","generated":"v7"})'] : []),
+    ]
+    refuse('invalid_op', `Creating ${patch.name} requires ${missing.join(' and ')}`, { entity: patch.name })
   }
   const { fields, ...rest } = patch
   const defined = Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined))

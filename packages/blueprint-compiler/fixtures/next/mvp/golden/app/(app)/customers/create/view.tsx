@@ -57,7 +57,7 @@ export function CustomerCreate() {
       <CreateViewHeader />
       <form
         noValidate
-        onSubmit={form.handleSubmit(onFinish)}
+        onSubmit={form.handleSubmit((values) => onFinish(values).catch(console.error))}
         className="grid max-w-xl gap-6"
       >
         <FieldGroup>

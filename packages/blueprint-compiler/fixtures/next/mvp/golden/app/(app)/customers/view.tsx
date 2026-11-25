@@ -93,7 +93,7 @@ export function CustomerList() {
         header: "",
         enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
+          <div className="flex flex-wrap justify-end gap-1">
             <Button type="button" onClick={(event) => void handleApproveKyc(event, row.original).catch(console.error)}>Approve KYC</Button>
             <EditButton recordItemId={row.original.id} size="sm" variant="ghost" />
             <ShowButton recordItemId={row.original.id} size="sm" variant="ghost" />

@@ -267,3 +267,31 @@ summary read and two patches with zero refused calls. The draft's
 `unknown_resource` hint listed Account, Customer and Transaction. Claude Code used the
 returned revision to change `Client` to `Customer`. An independent HTTP read verified
 two draft pages with zero errors and zero warnings.
+
+### BankAdmin action diagnostics
+
+The MVP test exercised a model operation named `approveKyc`. Contract sync publishes it
+as `approveKycCustomer`. Use the synced operation ID in a mutation step. The
+`unsupported_operation` diagnostic now offers the names accepted for the action in
+`diagnostics[].hint.text`. An invalid list-header refetch points at its `query` and suggests
+`"list"`, the current Refine table query.
+
+The MCP SDK regression exercises both corrections through guarded patches. Use the BankAdmin
+exercise for the server, project setup and exact prompt.
+[BankAdmin exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise).
+
+### BankAdmin with two fresh Claude Code sessions (2026-11-26)
+
+Both sessions built the app from the one-paragraph prompt with only this server: 14 tool calls
+each, two stops (the `dotnet build`, then the migration name), five pages ejected, and the
+result validated, built with `-warnaserror` and type-checked
+([tool-call lists](../examples/blueprint-mvp/sessions/README.md)). Both made the same two
+refused model patches, and the messages changed for them:
+
+- A new entity needs `plural` and `key`. The refusal names only what is missing, with an
+  example of each, instead of "requires a plural and key" to a patch that had a key.
+- A field named like the foreign key a `belongsTo` relation implies is a collision. The
+  diagnostic says the relation declares it, and `hint.ops` holds the guarded `removeField`.
+
+Both also wanted a `refetch` after the Approve KYC mutation in the row action, which LLD-05
+allows in header actions only; that one is the owner's call.

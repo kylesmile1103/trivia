@@ -148,7 +148,7 @@ public static class ApiRegistrationEmitter
         return $$"""
             private static Task DescribeSchema(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken cancellationToken)
             {
-                Type type = context.JsonTypeInfo.Type;
+                Type type = Nullable.GetUnderlyingType(context.JsonTypeInfo.Type) ?? context.JsonTypeInfo.Type;
                 if (type == typeof(JsonDocument))
                     schema.Type = JsonSchemaType.Object;
                 {{string.Join("\n", statements)}}

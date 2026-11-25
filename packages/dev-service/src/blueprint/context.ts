@@ -9,6 +9,7 @@ import type { EngineBinding } from '../engine.js'
 import { bodyFields } from '../refine/form.js'
 
 const pageOperation = { list: 'list', show: 'get', create: 'create', edit: 'update' } as const
+const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManifests): LayerCheck {
   const resources = new Map(manifest?.resources.map((resource) => [resource.name, resource]))
@@ -27,13 +28,18 @@ function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManif
         return resource
       }
       const checkOperation = (resource: ManifestResource, operation: string, at: PropertyKey[], kind: 'crud' | 'custom' | 'mutation') => {
-        const crud = Object.entries(resource.operations).some(([name, op]) => op !== null && (
-          kind === 'crud' ? name === operation : kind === 'mutation' && op.method !== 'GET' &&
-            [name, op.operationId, op.sdkFn].includes(operation)
-        ))
-        const custom = kind !== 'crud' && resource.customOperations.some((op) =>
-          (kind !== 'mutation' || op.method !== 'GET') && [op.operationId, op.sdkFn].includes(operation))
-        if (!crud && !custom) report('unsupported_operation', at, `${resource.name} has no supported ${operation} operation`)
+        const crud = kind === 'custom' ? [] : Object.entries(resource.operations).flatMap(([name, op]) => {
+          if (!op || (kind === 'mutation' && !mutationMethods.has(op.method))) return []
+          return [kind === 'crud' ? [name] : [name, op.operationId, op.sdkFn]]
+        })
+        const custom = kind === 'crud' ? [] : resource.customOperations
+          .filter((op) => kind !== 'mutation' || mutationMethods.has(op.method))
+          .map((op) => [op.operationId ?? op.sdkFn, op.sdkFn])
+        const available = [...crud, ...custom]
+        if (available.some((aliases) => aliases.includes(operation))) return
+        const choices = [...new Set(available.map(([name]) => name))].sort().join(', ')
+        report('unsupported_operation', at, `${resource.name} has no supported ${operation} operation`,
+          choices ? `Use one of the synced operation names: ${choices}.` : undefined)
       }
       const resource = page.resource === undefined ? undefined : resourceOf(page.resource, ['resource'])
       if (page.kind !== 'custom') {
@@ -63,6 +69,13 @@ function contractCheck(manifest: TriviaManifest | null, manifests: ResolvedManif
         }
       }
       for (const { step, at } of actions(page)) {
+        if (step.do === 'refetch' && page.kind !== 'custom') {
+          const listHeader = page.kind === 'list' && at[1] === 'headerActions'
+          if (!listHeader || step.query !== 'list') {
+            report('unsupported_operation', [...at, 'query'], `No query "${step.query}" to refetch here`,
+              listHeader ? 'Use query "list" to refetch the table.' : 'Contract pages support refetch in list header actions.')
+          }
+        }
         if (step.do !== 'mutate') continue
         const source = resourceOf(step.resource, [...at, 'resource'])
         if (source) checkOperation(source, step.operation, [...at, 'operation'], 'mutation')

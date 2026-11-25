@@ -152,6 +152,10 @@ Codes come from `docs/api.md`. New in `error.details`:
 | `dotnet` or `trivia-dotnet` not found | 422 `unsupported` | `{ hint }` |
 | Blueprint from a newer version | 422 `unsupported` | `{ found, supported }` |
 
+⚑ Contract action diagnostics put the available synced operation names in the patch
+response's structured hint. A mistyped list-header refetch points at `query` and offers
+the implicit `list` query. The patch tool description also names both conventions.
+
 ## 5. Security
 
 - ⚑ Blueprint routes and tools require loopback even when Vite enables `allowRemote` for

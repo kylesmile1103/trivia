@@ -8,9 +8,10 @@ reviews them afterwards.
 ## Who it is for
 
 Developers who maintain **internal tools and admin consoles** built with **Refine + shadcn/ui**
-against **OpenAPI backends**. The codebase already exists (day 2): scaffolded by Refine or
-written by hand, then grown for months. Day 1 (scaffolding a new app) is out of scope. It may
-join a larger ecosystem later.
+against **OpenAPI backends**. For an existing app, Trivia edits the project's source against
+its contract. On day 1, an authored blueprint can generate a .NET Aspire solution on
+PostgreSQL and a Refine + shadcn web app. The generated OpenAPI document feeds the same
+day-2 editing tools. [Blueprint product requirements](./blueprint/BRD.md).
 
 The user is the first of these developers. Success in the first month: **they use Trivia on one
 of their real internal tools for real tasks**, not a demo.
@@ -27,10 +28,8 @@ them does is connect the **API contract** to the pages. Refine's own shadcn page
 - every form hand-writes its zod schema;
 - Refine's Inferencer guesses pages from live responses and has no shadcn target.
 
-So Trivia is **the contract-aware day-2 tool for Refine apps**:
-- open source (MIT);
-- local;
-- works with any agent that speaks MCP.
+Trivia is **the contract-aware editor for Refine apps**. It runs locally, is MIT-licensed,
+and works with agents that speak MCP.
 
 The canvas is where a human points and reviews. Agents and the panels do the edits, through
 the same guarded, byte-preserving operations.
@@ -53,8 +52,8 @@ features, until the jobs above are in use. The user lifted the freeze on 2026-10
 them, after trying the designer on refine-admin (see "Editor: layers and pages" below):
 moving elements from the Layers tab, and a Pages tab to go between routes. The Data tab's raw TanStack-hooks path
 (`bindQuery`) stays as is. In a Refine app, data goes through Refine's hooks, so Trivia writes
-`useTable`/`useForm` code, never raw TanStack hooks. Generating a Refine data provider from
-OpenAPI is day 1, so it's out.
+`useTable`/`useForm` code, never raw TanStack hooks. The day-1 scaffold includes a Refine data provider for the generated .NET API.
+Existing Refine projects continue to use their own provider.
 
 ## Architecture (⚑ the shape is the agent's call)
 

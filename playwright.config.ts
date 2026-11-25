@@ -3,6 +3,7 @@ import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
 import { blueprintNextUnavailable } from './e2e/blueprint-next-prerequisites.mjs'
+import { missingMvpPrerequisite } from './tools/blueprint/mvp-project.mjs'
 
 // End-to-end tests drive the real stack: an example app (the user's Vite dev server with
 // vite-plugin-ast-locator or Next App Router) and the designer proxying it. Ports are
@@ -18,6 +19,9 @@ const kitAppPort = Number(process.env.TRIVIA_KIT_APP_PORT ?? 5176)
 const kitDesignerPort = Number(process.env.TRIVIA_KIT_PORT ?? 4404)
 const blueprintNextAppPort = Number(process.env.TRIVIA_BLUEPRINT_NEXT_APP_PORT ?? 5486)
 const blueprintNextReason = blueprintNextUnavailable()
+const mvpAppPort = Number(process.env.TRIVIA_MVP_APP_PORT ?? 5476)
+const mvpDesignerPort = Number(process.env.TRIVIA_MVP_PORT ?? 4576)
+const missingMvp = missingMvpPrerequisite()
 
 // The dev service runs `trivia-dotnet` for the backend routes. The apps' servers find this
 // checkout's build of it first: `e2e/bin` holds a shim for what `nx run dotnet:tool` publishes.
@@ -46,11 +50,17 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   projects: [
-    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit|-next)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
+    { name: 'playground', testIgnore: /(?:refine|next)\/|blueprint(?:-kit|-mvp|-next)?\.spec\.ts$/, use: { baseURL: `http://localhost:${designerPort}` } },
     { name: 'refine', testMatch: /(?:refine\/.*|blueprint)\.spec\.ts$/, use: { baseURL: `http://localhost:${refineDesignerPort}` } },
     { name: 'blueprint-kit', testMatch: /blueprint-kit\.spec\.ts$/, use: { baseURL: `http://localhost:${kitDesignerPort}` } },
     { name: 'blueprint-next', testMatch: /blueprint-next\.spec\.ts$/, metadata: { blueprintNextUnavailable: blueprintNextReason },
       use: { baseURL: `http://127.0.0.1:${blueprintNextAppPort}` } },
+    {
+      name: 'blueprint-mvp',
+      testMatch: /blueprint-mvp\.spec\.ts$/,
+      metadata: { missingMvp },
+      use: { baseURL: `http://localhost:${mvpDesignerPort}` },
+    },
     { name: 'next', testMatch: /next\/.*\.spec\.ts$/, use: { baseURL: `http://localhost:${nextDesignerPort}` } },
   ],
   webServer: [
@@ -96,5 +106,16 @@ export default defineConfig({
       timeout: 300_000,
       gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 20_000 },
     }]),
+    ...(missingMvp ? [] : [
+      {
+        command: `node tools/blueprint/mvp-serve.mjs ${mvpAppPort}`,
+        url: `http://localhost:${mvpAppPort}/api/v1/customers`,
+        env: appEnv,
+        reuseExistingServer: false,
+        timeout: 480_000,
+        gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },
+      },
+      designer(mvpDesignerPort, mvpAppPort, 'node_modules/.vite-mvp'),
+    ]),
   ],
 })

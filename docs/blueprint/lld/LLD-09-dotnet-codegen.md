@@ -164,6 +164,10 @@ Tags are the plural in PascalCase. Schema names are `<Entity>Response`,
   Paging binds as text for field-specific validation and is described as bounded integers
   in the document.
 
+⚑ The enum schema transformer unwraps `Nullable<T>` before looking up wire values.
+  ASP.NET passes the nullable CLR type when populating the referenced enum schema and
+  adds the null alternative around that reference.
+
 List parameters:
 
 - `page` (from 1, default 1) and `pageSize` (default 20, at most 200).

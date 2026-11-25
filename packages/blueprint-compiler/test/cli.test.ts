@@ -92,4 +92,4 @@ it('validates, compiles, plans and ejects offline using the shared project adapt
   fs.appendFileSync(file, '// hand edit\n')
   expect(cli('eject', 'CliList')).toMatchObject({ status: 1, stderr: expect.stringContaining('conflict') })
   expect(fs.readFileSync(file, 'utf8')).toBe(compiled.stdout + '// hand edit\n')
-}, 30_000)
+}, 120_000) // nine CLI processes: 4 s here, 39 s on an uncached nightly runner compiling Rust beside it

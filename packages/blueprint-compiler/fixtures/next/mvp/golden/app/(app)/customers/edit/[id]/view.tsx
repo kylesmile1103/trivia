@@ -61,7 +61,7 @@ export function CustomerEdit({ recordId, initialRecord }: { recordId: string; in
       <EditViewHeader />
       <form
         noValidate
-        onSubmit={form.handleSubmit(onFinish)}
+        onSubmit={form.handleSubmit((values) => onFinish(values).catch(console.error))}
         className="grid max-w-xl gap-6"
       >
         <FieldGroup>

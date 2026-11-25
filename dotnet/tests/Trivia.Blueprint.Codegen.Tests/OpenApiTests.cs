@@ -55,4 +55,39 @@ public sealed class OpenApiTests
             Assert.True(schemas.TryGetProperty(name, out _));
         await Verifier.Verify(File.ReadAllText(first.DocumentPath)).UseDirectory("Snapshots").UseFileName("BankOpenApi").DisableDiff();
     }
+    [Fact]
+    [Trait("Category", "Build")]
+    public async Task FR_NC_09_EnumUsedOnlyOnNullableFieldsRetainsItsWireValues()
+    {
+        LoadedBlueprint bank = ModelLoader.Load(FixtureTests.Bank);
+        ModelEntity customer = bank.Model.Entities.Single(entity => entity.Name == "Customer");
+        ModelField segment = customer.Fields.Single(field => field.Name == "status") with
+        {
+            Name = "segment", Enum = "CustomerSegment", Required = false, Default = default
+        };
+        ModelDocument model = bank.Model with
+        {
+            Enums = [.. bank.Model.Enums, new("CustomerSegment", ["retail", "business"])],
+            Entities = bank.Model.Entities.Select(entity => entity == customer
+                ? entity with { Fields = [.. entity.Fields, segment] }
+                : entity).ToArray()
+        };
+        using GeneratedProject project = new(bank with { Model = model });
+        await project.BuildAsync();
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(project.DocumentPath));
+        JsonElement schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        JsonElement enumeration = schemas.GetProperty("CustomerSegment");
+        Assert.Equal("string", enumeration.GetProperty("type").GetString());
+        Assert.Equal(new[] { "retail", "business" }, enumeration.GetProperty("enum")
+            .EnumerateArray().Select(value => value.GetString()));
+        foreach (string record in new[] { "CustomerResponse", "CreateCustomerRequest", "UpdateCustomerRequest" })
+        {
+            JsonElement alternatives = schemas.GetProperty(record).GetProperty("properties")
+                .GetProperty("segment").GetProperty("oneOf");
+            Assert.Collection(alternatives.EnumerateArray(),
+                nil => Assert.Equal("null", nil.GetProperty("type").GetString()),
+                value => Assert.Equal("#/components/schemas/CustomerSegment", value.GetProperty("$ref").GetString()));
+        }
+    }
 }

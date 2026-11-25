@@ -2,9 +2,9 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { commitType, unknownCommitTypes } from '../release/preflight.mjs'
+import { checkMvpBeforeRelease, commitType, unknownCommitTypes } from '../release/preflight.mjs'
 
 const require = createRequire(import.meta.url)
 const { canonicalTypes } = require('../release/changelog-renderer.cjs')
@@ -47,5 +47,43 @@ describe('changelog sections', () => {
       MCP: { changelog: { title: 'MCP' } },
     })
     expect(canonical).toEqual({ plugin: 'plugin', mcp: 'mcp', Plugin: 'plugin', MCP: 'mcp' })
+  })
+})
+
+describe('the release MVP check', () => {
+  const root = path.resolve('checkout')
+
+  it.each(['The MVP slice needs the .NET 10 SDK.', 'The MVP slice needs a running container runtime.'])(
+    'refuses to continue when %s', (message) => {
+      const run = vi.fn()
+      expect(() => checkMvpBeforeRelease(root, {}, () => message, run)).toThrow(message)
+      expect(run).not.toHaveBeenCalled()
+    },
+  )
+
+  it('requires the scripted slice to run to completion under Nx', () => {
+    const run = vi.fn().mockReturnValue({ status: 0 })
+    checkMvpBeforeRelease(root, { PATH: 'test-path' }, () => undefined, run)
+    expect(run).toHaveBeenCalledWith(path.join(root, 'node_modules', '.bin', 'nx'), ['run', 'tools:mvp'], {
+      cwd: root, env: { PATH: 'test-path', TRIVIA_MVP_REQUIRED: '1' }, stdio: 'inherit',
+    })
+    run.mockReturnValue({ status: 3 })
+    expect(() => checkMvpBeforeRelease(root, {}, () => undefined, run)).toThrow('MVP acceptance failed (exit 3).')
+  })
+
+  it('trusts the release workflow, whose gate job ran the slice on this commit with Docker', () => {
+    const prerequisite = vi.fn(() => 'The MVP slice needs a running container runtime.')
+    const run = vi.fn()
+    expect(checkMvpBeforeRelease(root, { GITHUB_ACTIONS: 'true', TRIVIA_MVP_GATE_PASSED: '1' }, prerequisite, run))
+      .toBe('gate')
+    expect(prerequisite).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('ignores that flag outside GitHub Actions: a local release runs the slice itself', () => {
+    const run = vi.fn().mockReturnValue({ status: 0 })
+    expect(checkMvpBeforeRelease(root, { TRIVIA_MVP_GATE_PASSED: '1' }, () => undefined, run)).toBe('ran')
+    expect(run).toHaveBeenCalledOnce()
+    expect(() => checkMvpBeforeRelease(root, { TRIVIA_MVP_GATE_PASSED: '1' }, () => 'no Docker', run)).toThrow('no Docker')
   })
 })

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://trivia.dev/schemas/blueprint/page.v1.json",
+  "blueprintVersion": 1,
+  "id": "pg_00000000000000000000000005",
+  "name": "CustomerShow",
+  "route": "/customers/show/:id",
+  "kind": "show",
+  "resource": "Customer",
+  "options": {
+    "fields": [
+      "fullName",
+      "email",
+      "status",
+      "creditLimit",
+      "createdAt"
+    ]
+  }
+}
