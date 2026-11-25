@@ -39,7 +39,7 @@
 
 - [x] T015 `e2e/blueprint.spec.ts`: create a contract page, preview, eject, undo, a custom page with a bound input, a conflict from a concurrent patch
 - [x] T016 Keyboard and label pass (SC-004)
-- [ ] T017 Run `pnpm check` and `pnpm e2e`
+- [x] T017 Run `pnpm check` and `pnpm e2e`
 
 ## Phase 8: User Story 5 - Model editor (Phase 2)
 
