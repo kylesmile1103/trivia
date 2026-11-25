@@ -39,6 +39,9 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
+      - name: dotnet-ef, which the migration tests run (the EF Core version dotnet/ pins)
+        if: hashFiles('dotnet/**/*.slnx') != ''
+        run: dotnet tool install --global dotnet-ef --version 10.0.12
       - name: Build, typecheck, lint and test
         # The desktop shell is the `desktop` job's: on Linux it needs WebKitGTK headers.
         run: pnpm exec nx run-many -t build typecheck lint test --exclude shell --output-style=static

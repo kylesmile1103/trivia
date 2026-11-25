@@ -18,7 +18,8 @@
       "command": "dotnet test dotnet/Trivia.Blueprint.slnx",
       "dependsOn": ["build"],
       "inputs": ["dotnet", "{workspaceRoot}/packages/blueprint/fixtures/model/**/*"],
-      "cache": true
+      "cache": true,
+      "parallelism": false
     }
   }
 }

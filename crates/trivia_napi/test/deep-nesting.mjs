@@ -87,7 +87,10 @@ async function child(fn, construct, depth) {
     const update = { op: 'updateProp', target: `${FILE}#App#0`, expectedName: 'div', prop: 'title', value: 'deep' }
     const envelope = (json) => {
       const e = JSON.parse(json)
-      return e.ok ? `ok ${JSON.stringify(e.data).length} bytes of data` : `error ${e.error.code}: ${e.error.message.slice(0, 80)}`
+      // The size of the engine's answer as it arrived. Re-serializing `e.data` (a 2 800-level tree
+      // for outline) is recursive in V8 and overflowed its stack on Linux x64, failing the harness
+      // rather than the engine.
+      return e.ok ? `ok ${json.length} bytes of data` : `error ${e.error.code}: ${e.error.message.slice(0, 80)}`
     }
     switch (fn) {
       case 'annotate':

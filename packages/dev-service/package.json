@@ -31,7 +31,7 @@
     "@trivia/contract-sync": "workspace:*",
     "@trivia/engine": "workspace:*",
     "magic-string": "^1.4.3",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
