@@ -91,7 +91,11 @@ to the real route, where every element is now selectable.
 
 **Model editor (Phase 2).** A list of entities, and for the selected one a grid of fields
 (name, type, required, constraints, default) with relations and API options below. Each cell
-edit is a model op (LLD-08). Reserved names and dangling relations show inline.
+edit is a model op (LLD-08). Reserved names and dangling relations show inline. ⚑ A refused hasMany and its suggested belongsTo
+are applied together against the revision the editor read, after the user presses Apply fix.
+Findings on a saved model use their supplied guarded fixes. Constraints, defaults and
+custom API operations use JSON fields. The entity form defaults to a UUID key named
+`id` and derives a plural route segment when the user leaves it blank.
 
 **Generate backend (Phase 2).** `mode: "plan"` first: a table of files with create, update,
 unchanged or refused, and an optional migration name. Confirm runs `mode: "write"`. Backend

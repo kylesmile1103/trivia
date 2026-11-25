@@ -8,13 +8,14 @@ interface PagesListProps {
   busy?: boolean
   onOpen(path: string): void
   onAdd?(): void
+  onModel?(): void
   onInitialize(): void
   onPreview?(page: BlueprintPageSummary): void
   onEject?(page: BlueprintPageSummary): void
   onOpenRoute?(page: BlueprintPageSummary): void
 }
 
-export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onInitialize, onPreview, onEject, onOpenRoute }: PagesListProps) {
+export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onModel, onInitialize, onPreview, onEject, onOpenRoute }: PagesListProps) {
   if (!summary.exists) {
     return (
       <div className="space-y-2">
@@ -28,7 +29,10 @@ export function PagesList({ summary, openPath, busy = false, onOpen, onAdd, onIn
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold">Blueprint pages</h2>
-        {onAdd && <Button size="sm" variant="outline" disabled={busy} data-blueprint-add="" onClick={onAdd}>Add page</Button>}
+        <div className="flex gap-1">
+          {onAdd && <Button size="xs" variant="outline" disabled={busy} data-blueprint-add="" onClick={onAdd}>Add page</Button>}
+          {onModel && <Button size="xs" variant="outline" disabled={busy} data-blueprint-model="" onClick={onModel}>Model</Button>}
+        </div>
       </div>
       {summary.pages.length === 0 ? (
         <p className="text-muted-foreground">No pages yet.</p>

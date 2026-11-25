@@ -43,7 +43,7 @@
 
 ## Phase 8: User Story 5 - Model editor (Phase 2)
 
-- [ ] T018 [US5] `ModelEditor.tsx`: entity list, field grid, relations, API options, each edit a model op, inline diagnostics with fix buttons. Tests
+- [x] T018 [US5] `ModelEditor.tsx`: entity list, field grid, relations, API options, each edit a model op, inline diagnostics with fix buttons. Tests
 
 ## Phase 9: User Story 6 - Backend (Phase 2)
 

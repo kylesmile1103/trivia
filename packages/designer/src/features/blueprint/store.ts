@@ -10,7 +10,7 @@ interface BlueprintState {
   path: string | null
   document: BlueprintDocument | null
   pending: { ops: BlueprintOp[]; label: string } | null
-  problem: ReturnType<typeof problemOf> | null
+  problem: (ReturnType<typeof problemOf> & { ops?: BlueprintOp[] }) | null
   loadError: string | null
   refresh(): Promise<void>
   open(path: string | null): Promise<void>
@@ -100,7 +100,7 @@ export function createBlueprintStore(client: BlueprintClient = blueprintApi) {
             set({ problem: { message: 'Your change was not applied because the blueprint changed.', diagnostics: [] } })
             await refreshNow()
           } else {
-            set({ problem: problemOf(error) })
+            set({ problem: { ...problemOf(error), ops } })
           }
           return null
         } finally {

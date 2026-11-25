@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { canvas } from '@/shared/canvas'
-import { APP_DOC } from '@/shared/engine/blueprint-types'
+import { APP_DOC, MODEL_DOC } from '@/shared/engine/blueprint-types'
 import { engine } from '@/shared/engine/client'
 import { syncHistory } from '@/shared/engine/session'
 import type { BlueprintComponents, BlueprintDiagnostic, BlueprintOp, BlueprintPageSummary, ManifestResource } from '@/shared/engine/types'
@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { blueprintApi, problemOf } from './api'
 import { Diagnostics, focusDiagnosticField } from './Diagnostics'
 import { EjectDialog } from './EjectDialog'
+import { ModelEditor } from './ModelEditor'
 import { NodeProps } from './NodeProps'
 import { NodeTree } from './NodeTree'
 import { PageForm, type SaveBlueprintOp } from './PageForm'
@@ -28,17 +29,21 @@ export function BlueprintTab() {
   const editorOpener = useRef<HTMLElement | null>(null)
   const focusName = useRef(false)
   const focusAdd = useRef(false)
+  const focusModelButton = useRef(false)
   const [focusRequest, setFocusRequest] = useState<BlueprintDiagnostic | null>(null)
   const [routeDialog, setRouteDialog] = useState<{ route: string; params: string[] } | null>(null)
   const [openingRoute, setOpeningRoute] = useState(false)
   const [eject, setEject] = useState<BlueprintPageSummary | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [modelOpen, setModelOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [resources, setResources] = useState<ManifestResource[]>([])
   const [catalog, setCatalog] = useState<BlueprintComponents | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [nodeSelection, setNodeSelection] = useState<{ page: string; node: string } | null>(null)
   const [manifestError, setManifestError] = useState<string | null>(null)
+  const model = document && 'namespace' in document.doc ? { ...document, doc: document.doc } : undefined
+  const modelRev = summary?.model?.rev
   const page = document && 'kind' in document.doc ? { ...document, doc: document.doc } : undefined
   const custom = page?.doc.kind === 'custom' ? { ...page, doc: page.doc } : null
   const customId = custom?.doc.id
@@ -66,6 +71,17 @@ export function BlueprintTab() {
     }], 'Blueprint: create app')
   }
 
+  useEffect(() => {
+    if (modelOpen && modelRev && path !== MODEL_DOC) void open(MODEL_DOC)
+  }, [modelOpen, modelRev, open, path])
+
+  function openModel() {
+    focusName.current = true
+    setAdding(false)
+    setModelOpen(true)
+    void open(modelRev ? MODEL_DOC : null)
+  }
+
   function openEditor(pagePath: string | null) {
     const active = globalThis.document.activeElement
     editorOpener.current = active instanceof HTMLElement ? active : null
@@ -87,14 +103,20 @@ export function BlueprintTab() {
       focusAdd.current = false
       root.current?.querySelector<HTMLElement>('[data-blueprint-add]')?.focus()
     }
-    if (focusName.current && (adding || document)) {
-      const field = editor.current?.querySelector<HTMLElement>('[data-pointer="/name"]')
+    if (focusModelButton.current && !modelOpen) {
+      focusModelButton.current = false
+      root.current?.querySelector<HTMLElement>('[data-blueprint-model]')?.focus()
+    }
+    if (focusName.current && (modelOpen || adding || document)) {
+      const field = modelOpen
+        ? root.current?.querySelector<HTMLElement>('[data-pointer="/namespace"]')
+        : editor.current?.querySelector<HTMLElement>('[data-pointer="/name"]')
       if (field) {
         focusName.current = false
         field.focus()
       }
     }
-  }, [adding, document, loadError, pending, summary?.exists])
+  }, [adding, document, loadError, modelOpen, pending, summary?.exists])
 
   useEffect(() => {
     let manifestRequest = 0
@@ -206,17 +228,18 @@ export function BlueprintTab() {
         </div>
       )}
       {problem && <p role="alert" className="mb-2 text-destructive">{problem.message}</p>}
-      {summary && (
+      {summary && !modelOpen && (
         <PagesList
           summary={summary} openPath={path} busy={pending !== null || previewing || openingRoute}
           onEject={setEject}
           onOpenRoute={(item) => { void openRoute(item) }}
           onPreview={(item) => { void preview(item) }}
           onOpen={openEditor}
+          onModel={openModel}
           onAdd={() => openEditor(null)} onInitialize={initialize}
         />
       )}
-      {(adding || (path !== null && pageStatus === 'draft')) && (
+      {!modelOpen && (adding || (path !== null && pageStatus === 'draft')) && (
         <section ref={editor} tabIndex={-1} aria-label="Page editor" className="mt-3 space-y-3 border-t pt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="min-w-0 text-xs font-semibold [overflow-wrap:anywhere]">{adding ? 'New page' : page?.doc.name ?? 'Page'}</h3>
@@ -240,9 +263,26 @@ export function BlueprintTab() {
           ) : <p role="status">Loading component manifests…</p>)}
         </section>
       )}
+      {modelOpen && (
+        <div className="space-y-3">
+          <Button type="button" size="xs" variant="ghost" disabled={pending !== null} onClick={() => {
+            focusName.current = false
+            focusModelButton.current = true
+            setModelOpen(false)
+            void open(null)
+          }}>Back to pages</Button>
+          {modelRev && !model
+            ? !loadError && <p role="status">Loading model…</p>
+            : <ModelEditor
+                document={model} appName={summary?.app?.name ?? 'App'} diagnostics={summary?.diagnostics ?? []}
+                rejected={problem?.ops ? { ops: problem.ops, diagnostics: problem.diagnostics } : undefined}
+                busy={pending !== null || loadError !== null} commit={commit}
+              />}
+        </div>
+      )}
       {eject && <EjectDialog page={eject} onClose={() => setEject(null)} onRefresh={() => { void refresh() }} onNavigate={navigate} />}
       {routeDialog && <RouteDialog {...routeDialog} onClose={() => setRouteDialog(null)} />}
-      <Diagnostics diagnostics={findings} onActivate={activateDiagnostic} showPath={path === null && !adding} />
+      {!modelOpen && <Diagnostics diagnostics={findings} onActivate={activateDiagnostic} showPath={path === null && !adding} />}
       {!summary && !loadError && <p role="status" className="text-muted-foreground">Loading blueprint…</p>}
     </section>
   )

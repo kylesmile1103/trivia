@@ -33,14 +33,15 @@ export function CommitInput({ value, commit, ...props }: Omit<ComponentProps<typ
   )
 }
 
-export function JsonField({ label, pointer, value, array = false, save }: {
+export function JsonField({ label, pointer, value, array = false, object = false, save }: {
   label: string
   pointer: string
-  value: JsonValue
+  value?: JsonValue
   array?: boolean
+  object?: boolean
   save(value: JsonValue): void
 }) {
-  const source = JSON.stringify(value, null, 2)
+  const source = value === undefined ? '' : JSON.stringify(value, null, 2)
   const [edited, setEdited] = useState<{ source: string; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const text = edited?.source === source ? edited.text : source
@@ -54,6 +55,10 @@ export function JsonField({ label, pointer, value, array = false, save }: {
     }
     if (array && !Array.isArray(parsed)) {
       setError('Enter a JSON array.')
+      return
+    }
+    if (object && (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))) {
+      setError('Enter a JSON object.')
       return
     }
     setError(null)
