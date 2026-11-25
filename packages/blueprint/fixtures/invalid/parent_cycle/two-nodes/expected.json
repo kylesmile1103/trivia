@@ -1,0 +1,14 @@
+[
+  {
+    "code": "parent_cycle",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/nodes/n_01JDK3M8A00000000000000002/parent"
+  },
+  {
+    "code": "parent_cycle",
+    "severity": "error",
+    "doc": "pages/Home.page.json",
+    "pointer": "/nodes/n_01JDK3M8A00000000000000003/parent"
+  }
+]

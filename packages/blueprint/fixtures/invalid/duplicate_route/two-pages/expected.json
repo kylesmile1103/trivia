@@ -1,0 +1,8 @@
+[
+  {
+    "code": "duplicate_route",
+    "severity": "error",
+    "doc": "pages/Other.page.json",
+    "pointer": "/route"
+  }
+]

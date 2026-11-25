@@ -38,7 +38,7 @@ Tests come before the code they cover and must fail first.
 
 ## Phase 5: User Story 3 - Diagnostics (P1)
 
-- [ ] T021 [US3] Fixtures per code under `fixtures/invalid/<code>/` for the reference layer
+- [x] T021 [US3] Fixtures per code under `fixtures/invalid/<code>/` for the reference layer
 - [ ] T022 [US3] `src/validate/references.ts`: parents, root, cycles, slots present, prop in one map, action keys, nav, routes
 - [ ] T023 [US3] `src/validate/context.ts`: the interface for manifest, contract and expression checks, and `validate()` composing all layers with layer skipping
 - [ ] T024 [US3] Hints: attach fixing ops where one exists (duplicate prop, dangling nav entry)
