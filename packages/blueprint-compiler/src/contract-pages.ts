@@ -25,6 +25,7 @@ export interface ContractPageInput {
 export interface ContractActionContent {
   imports: ImportIR[]
   setup: string
+  afterTable?: string
   row: string[]
   header: string[]
   dependencies: string[]
@@ -82,13 +83,22 @@ export function generateContract(
   const route = routeScope(depsOfExpressions, names, hooks.router, page.route)
   const expression = emitPageExpressions(page, context.engine, { ...route.rename, event: '_event', row: '_row' },
     undefined, new Set(['event', 'row']))
+  // The memoized columns need their callbacks before useTable creates the query.
+  const rowRefetch = rowActions.some(({ steps }) => steps.some((step) => step.do === 'refetch' && step.query === 'list'))
+  const tableRefetch = 'table.refineCore.tableQuery.refetch'
   const lower = actionLowerer({
     contract: context.contract, page: page.name,
     file: facts.target === 'next-refine' ? nextPageFile(page.route, facts, 'view.tsx') : facts.pagesDir + '/resource/' + page.kind + '.tsx',
     style, expression, name,
     ...(facts.previewDirectory && { handlerPath: facts.previewDirectory + '/handler.ts' }),
-    refetch: (key, path) => page.kind === 'list' && path[1] === 'headerActions' && key === 'list'
-      ? 'table.refineCore.tableQuery.refetch' : undefined,
+    refetch: (key, path) => {
+      if (page.kind !== 'list' || key !== 'list') {
+        throw new CompileError('invalid_result', 'Unknown query ' + key, {
+          hint: 'Use query "list" in row or header actions on a list page.',
+        })
+      }
+      return path[1] === 'rowActions' ? 'refetchList.current!' : tableRefetch
+    },
   })
   const definitions = (group: 'rowActions' | 'headerActions', actions: typeof rowActions) => actions.map((action, index) => {
     const confirm = action.confirm
@@ -127,12 +137,20 @@ export function generateContract(
       imports: [
         ...route.imports, ...lower.imports, { source: 'react', name: 'MouseEvent', kind: 'type' },
         ...(row.length ? [{ source: 'react', name: 'useCallback' }] : []),
+        ...(rowRefetch ? [{ source: 'react', name: 'useLayoutEffect' }, { source: 'react', name: 'useRef' }] : []),
       ],
       setup: [
+        ...(rowRefetch ? ['const refetchList = useRef<() => Promise<unknown>>(null);'] : []),
         ...[...route.hooks, ...actionHooks].map((hook) => printHook(hook, style)),
         ...row.map((action) => print(action, true)),
         ...header.map((action) => print(action, false)),
       ].join('\n\n'),
+      ...(rowRefetch && { afterTable: [
+        'const refetchTable = ' + tableRefetch + ';',
+        'useLayoutEffect(() => {',
+        '  refetchList.current = () => refetchTable({ throwOnError: true });',
+        '}, [refetchTable]);',
+      ].join('\n') }),
       row: row.map((action) => button(action, true)),
       header: header.map((action) => button(action, false)),
       dependencies: row.map(({ name }) => name),

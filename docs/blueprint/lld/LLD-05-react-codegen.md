@@ -61,8 +61,12 @@ fields keeps the existing generator's default selection.
   field's type, as the columns tool decides it.
 - An action is a button whose handler is compiled from its steps (section 4). Row actions go
   in the actions column, header actions in the page header.
-- ⚑ A list header can use `{ "do": "refetch", "query": "list" }` to refetch the
-  existing Refine table query with its current filters and pagination.
+- **2026-11-26.** A list page accepts `{ "do": "refetch", "query": "list" }` in row
+  and header actions. Both targets refetch the current Refine table query with its
+  filters, sorters and pagination. Both spec 011 authoring sessions tried to refresh
+  the list after Approve KYC and had to rely on the separate Refresh button. The row
+  handler awaits the mutation before refetching. A rejected mutation stops the handler.
+  [BankAdmin agent sessions](../../../examples/blueprint-mvp/sessions/README.md#what-the-agents-tripped-on-t012).
 
 ⚑ A row handler receives the data record, and confirmation uses the browser's confirm dialog.
 The generator puts header actions just below the Refine header, whose implementation may

@@ -21,7 +21,7 @@ Decisions made without the owner are marked ⚑.
 | File | Runs on | Jobs |
 | --- | --- | --- |
 | `ci.yml` | pull requests, pushes to `main` and `ci/**`, manual, called by `release.yml` | `gate`, `integration`, `e2e`, `desktop`, `workflows`, `ci-ok` |
-| `nightly.yml` | daily 03:17 UTC, manual, pushes that change it | `full` (4 OS), `integration`, `e2e` |
+| `nightly.yml` | daily 03:17 UTC, manual, pushes that change it | `full` (3 OS, Windows on request), `integration`, `e2e` |
 | `release.yml` | manual, `main` only | `gate` (calls `ci.yml`), `release` |
 | `codeql.yml` | pull requests and pushes to `main`, weekly | `analyze` (JavaScript/TypeScript, Rust, Actions) |
 | `dependency-review.yml` | pull requests | `review` |
@@ -71,13 +71,26 @@ It is only as correct as each target's `inputs` (`CLAUDE.md`: a test that reads 
 its project must list it). The nightly run uses `--skip-nx-cache`, so a missing input shows up
 there within a day instead of hiding behind a stale pass.
 
-### `nightly.yml`: everything, uncached, everywhere
+### `nightly.yml`: everything, uncached, on Linux and macOS
 
-`pnpm check --skip-nx-cache` on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` and
-`windows-2025`, the shell and the .NET tests included (Linux installs the WebKitGTK headers
-first), and the container tests and `pnpm e2e` on Linux. `fail-fast` is off, so one broken platform does not hide the others. Windows checks
-out with `core.autocrlf false`: the byte-exact fixtures must stay byte-exact. A nightly failure
-does not block anyone; it is a signal to look.
+`pnpm check --skip-nx-cache` on `ubuntu-24.04`, `ubuntu-24.04-arm` and `macos-15`, the shell and
+the .NET tests included (Linux installs the WebKitGTK headers first), and the container tests and
+`pnpm e2e` on Linux. `fail-fast` is off, so one broken platform does not hide the others. A
+nightly failure does not block anyone; it is a signal to look.
+
+⚑ Windows is not supported yet (2026-11-26). Nobody uses Trivia on Windows, and the leg never
+passed. It runs only when the nightly is dispatched with `windows: true` (it checks out with
+`core.autocrlf false`, so the byte-exact fixtures stay byte-exact). Known failures:
+
+1. `engine:build`: `napi build` (@napi-rs/cli 3.10.8 and 3.10.12) times out after 120 s on its
+   own "filesystem reconciliation lock", repeating `…candidate.<uuid>.swp changed before
+   retirement`. Every other project depends on this build.
+2. `designer:test`, `codegen.node.test.ts`: `node <tmp>\node_modules\typescript\bin\tsc` is not
+   found through the junction from the temp directory on `C:` to the checkout on `D:`.
+
+Revisit when a Windows user appears, the desktop shell targets Windows, or a napi-rs CLI release
+fixes (1): after the next `@napi-rs/cli` bump, dispatch the nightly once with `windows: true`, and
+put Windows back on the schedule only when the whole leg is green.
 
 ### `release.yml`: continuous delivery
 
@@ -135,6 +148,7 @@ clippy and CI clippy could disagree about the same code.
 ## Running it
 
 - Every pull request: automatic. Re-run a failed job from the Checks tab.
-- The nightly run on demand: Actions → Nightly → Run workflow.
+- The nightly run on demand: Actions → Nightly → Run workflow (tick `windows` to add the
+  unsupported Windows leg).
 - A release: Actions → Release → Run workflow on `main`, `version: 0.3.0`, first with
   `dry-run` on, then off.

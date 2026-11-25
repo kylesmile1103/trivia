@@ -117,9 +117,10 @@ the client. Their `page.tsx` is a thin server entry.
 
 ⚑ The compiler keeps the primary module API and returns sibling views in `additional`.
 Each sibling passes the same parser and import checks as the entry. The MVP golden inputs
-are the five spec 011 pages and model from commit `a460060`; the fixture changes only the
-app target in its temporary test copy. Its list Refresh action uses Refine's existing
-table query, matching the change in the sibling spec.
+are the five spec 011 pages and model from commit `a460060`, with the Approve KYC row
+refetch added to `CustomerList`. The fixture selects Next in its temporary test copy.
+The shared scaffolder wires Approve KYC and Refresh to the same Refine table query in
+the client view. [LLD-05](LLD-05-react-codegen.md#2-contract-pages-fr-rc-02).
 
 ⚑ Eject writes and locks every sibling in the same transaction as the entry and registration.
 A hand edit in any of those modules makes the page edited. Removing a generated module
