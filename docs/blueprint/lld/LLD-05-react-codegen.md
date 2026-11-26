@@ -197,6 +197,14 @@ canvas showed (`App.tsx` imports the entry). A failed preview (a compile error, 
 written yet) loaded no module to invalidate, so every document change also sends the hot event
 `trivia:blueprints-changed`, and the entry reloads the page on it only after its preview
 request failed: the next write retries it.
+⚑ (decided 2026-11-26) A blueprint file that a stylesheet scans becomes that stylesheet's CSS
+update, never a reload, because the dev service reads blueprint files from disk and no page
+imports them. Tailwind's plugin scans `blueprint/*.json` and reloads the page when a scanned
+file that is not a module changes; the plugin's pre `hotUpdate` hook hands Vite the importing
+stylesheets instead (`isCSSRequest` on their file: `index.css` imported from JavaScript is a `js`
+node), so Tailwind rebuilds the CSS, a class written only in a document included, and the
+canvas stays. A blueprint file a module imports, and every file outside the directory, keep the
+usual path.
 
 ⚑ Spec 005 used the three spec 002 sample manifests. Spec 006 replaces that catalog with
 the full kit shipped by `@trivia/blueprint-compiler`. The dev service reads the same files

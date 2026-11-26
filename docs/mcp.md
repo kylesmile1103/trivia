@@ -68,6 +68,9 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   working from a stale read is refused instead of editing the wrong element. One call is one
   undo entry, labelled `Agent: <label>`. With several ops, each op's locators must hold after
   the ops before it.
+- Once `trivia_apply` or `trivia_undo` has answered, a page the dev server serves from then on
+  shows the files as written (on Vite, `docs/api.md`, read-after-write): a route opened in the
+  canvas right after it shows the edit. The open canvas re-renders on the hot update that follows.
 - `trivia_undo` undoes the newest entry of the shared history only if its label is the one
   given (the agent passes `history.undoLabel` from its last result or from
   `trivia_get_selection`). The user's own edits are never undone by mistake.

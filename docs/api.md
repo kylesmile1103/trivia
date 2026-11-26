@@ -81,6 +81,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   guard. Source restores go through the engine's atomic, parse-validated write. Blueprint
   restores use guarded JSON snapshots in the same history. History lives in the dev-service
   process (lost on restart) and is capped at 100 entries.
+- Read-after-write, on Vite: once `apply`, `batch`, `undo` or `redo` has answered, every new
+  request to the dev server gets the files as written (the plugin drops their transformed modules
+  before answering). Pages already open get the change as one hot update from Vite's watcher. A
+  page that fetched a module before the write and had not run it when that update came can miss
+  it, as with any hand edit. The Next.js host makes no such promise.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null }`.
