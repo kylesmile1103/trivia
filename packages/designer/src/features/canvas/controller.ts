@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 
 import { blueprintPreviewPage, type CanvasApi, type MovePlacement } from '@/shared/canvas'
 import { ApiError } from '@/shared/engine/client'
+import { syncHistory } from '@/shared/engine/session'
 import type { ImportSpec, NodeDetails, Op, Placement } from '@/shared/engine/types'
 import { dispatch, dispatchBatch, isApplying, onIdle } from '@/shared/state/actions'
 import { ZOOM_MIN } from '@/shared/state/zoom'
@@ -201,11 +202,19 @@ export class CanvasController {
     this.iframe = iframe
     this.overlay = overlay
     this.onView = onView
+    const isNext = () => designer.getState().health?.host === 'next'
     this.session = new FrameSession(iframe, {
       attached: () => this.onAttached(),
       layout: () => this.measure(),
       settled: () => this.onSettled(),
-    }, () => designer.getState().health?.host !== 'next')
+      // Fresh, while the canvas is busy: an edit written meanwhile starts its wait before the
+      // catch-up ends, so the two leave no idle moment between them.
+      lastWrite: async () => {
+        await syncHistory()
+        return designer.getState().history.lastWriteAt ?? null
+      },
+      loadTimedOut: () => this.dropPress(),
+    }, () => !isNext(), isNext)
     this.session.isOwnMutation = (r) => this.isOwnMutation(r)
     this.previews = new Previews(
       () => this.session.doc,
@@ -438,12 +447,20 @@ export class CanvasController {
 
   /** Remember a press made while stale (a later one replaces it); `settlePress` selects with it. */
   private deferPress(client: Point): void {
-    const doc = this.session.doc
     const point = this.toFrame(client)
-    const view = doc?.defaultView
-    if (!point || !view) return
-    this.press = { x: point.x + view.scrollX, y: point.y + view.scrollY }
+    const view = this.session.doc?.defaultView
+    // A Next document is on screen (server-rendered) before the canvas has attached it: the
+    // press is kept, at that document's top (it has not scrolled yet). Vite: as before.
+    if (!point || (!view && designer.getState().health?.host !== 'next')) return
+    this.press = { x: point.x + (view?.scrollX ?? 0), y: point.y + (view?.scrollY ?? 0) }
     designer.getState().setPressPending(true)
+  }
+
+  /** No document came to settle a waiting press on: it is dropped. */
+  private dropPress(): void {
+    if (!this.press) return
+    this.press = null
+    designer.getState().setPressPending(false)
   }
 
   /**
@@ -835,7 +852,8 @@ export class CanvasController {
       s.bumpRevision()
     }
     if (!doc || !t) {
-      this.publish({ ...EMPTY_VIEW, status, bounds })
+      // Busy only while a Next document is still to come (FrameSession.updating); Vite as before.
+      this.publish({ ...EMPTY_VIEW, status, bounds, updating: this.session.updating })
       return
     }
     this.rehover()

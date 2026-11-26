@@ -75,6 +75,8 @@ export interface HistoryState {
   canRedo: boolean
   undoLabel: string | null
   redoLabel: string | null
+  /** When the dev service last wrote the project (ms since the epoch); absent from an older one. */
+  lastWriteAt?: number | null
 }
 
 export interface ApplyResult {
