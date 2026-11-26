@@ -5,7 +5,9 @@
 // vite/dist/node/chunks/node.js). An editor that saves in place (VS Code, Cursor) truncates the
 // file, then writes it: when Vite hears only the truncation, the open canvas fetches the module
 // while the file is empty, and Vite keeps serving that empty module. An engine edit and its undo
-// a few milliseconds apart lose the undo the same way.
+// a few milliseconds apart lose the undo the same way. Engine writes reach Vite only through this
+// watcher, like any other write: each is a temporary file renamed over the target, so its inode
+// moves and the recheck below always sees it.
 
 import fs from 'node:fs'
 import path from 'node:path'

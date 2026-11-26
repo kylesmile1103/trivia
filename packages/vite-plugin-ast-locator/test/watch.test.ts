@@ -7,7 +7,7 @@ import type { FSWatcher } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RECHECK_MS, replayDroppedChanges, timing } from '../src/watch.js'
-import { copyPlayground, request, startServer } from './helpers.js'
+import { copyPlayground, post, request, startServer } from './helpers.js'
 
 let root: string
 let stop: () => void = () => {}
@@ -207,6 +207,29 @@ describe('in a Vite dev server', () => {
       await server.close()
     }
   }, 30_000)
+
+  it('sends one update for an engine edit: the watcher\'s', async () => {
+    root = copyPlayground()
+    // A module that accepts its own updates, as React Refresh makes a component module (this
+    // server has no React plugin): an update then reaches the client as `update`.
+    fs.writeFileSync(path.join(root, 'src/Hot.tsx'), 'export function Hot() {\n  return <p title="a">hot</p>\n}\n\nif (import.meta.hot) import.meta.hot.accept()\n')
+    const server = await startServer(root)
+    try {
+      const file = fs.realpathSync(path.join(root, 'src/Hot.tsx'))
+      expect((await request(server.socket, '/src/Hot.tsx')).status).toBe(200)
+      const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+      const edit = await post(server.socket, '/apply', { op: { op: 'updateProp', target: 'src/Hot.tsx#Hot#0', expectedName: 'p', prop: 'title', value: 'b' } })
+      expect(edit.body.ok).toBe(true)
+      // What chokidar emits for the engine's rename: one change, with the stats it read.
+      server.vite.watcher.emit('change', file, fs.statSync(file))
+      await vi.waitFor(() => expect(send).toHaveBeenCalled())
+      // Past the replay's recheck, which finds the file as the event left it.
+      await new Promise((resolve) => setTimeout(resolve, 3 * RECHECK_MS))
+      expect(send.mock.calls).toEqual([[{ type: 'update', updates: [expect.objectContaining({ type: 'js-update', path: '/src/Hot.tsx' })] }]])
+    } finally {
+      await server.close()
+    }
+  })
 
   it('clears its pending check when the server closes', async () => {
     root = copyPlayground()
