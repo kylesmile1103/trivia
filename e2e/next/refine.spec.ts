@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { type Page, expect, test } from '@playwright/test'
@@ -16,6 +17,10 @@ test.afterEach(async () => {
     await restoreAll(originals)
   } finally {
     fs.rmSync(CREATE, { force: true })
+    // A test that fails before its undo leaves the route folder the create made: the host
+    // removes it only on undo. Left there, it fails every later run (playwright.config.ts).
+    const folder = path.dirname(CREATE)
+    if (fs.existsSync(folder) && fs.readdirSync(folder).length === 0) fs.rmdirSync(folder)
   }
 })
 
