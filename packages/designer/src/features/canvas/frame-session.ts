@@ -16,17 +16,19 @@
 // before its React root first commits is lost (React Refresh re-renders only mounted roots), and
 // one written before its HMR socket subscribed may never reach it. So once it has hydrated, the
 // session reads when the dev service last wrote. A write since the document began to load:
-// reload it, once (`reloadedToCatchUp`; the reloaded document then only refreshes). Otherwise:
-// ask the app's router for a fresh render. The canvas is busy (`updating`) from the session's
-// start or a document's unload until that render, so the first press lands on what is on disk.
-// The Next internals this needs are in next-hydration.ts. Each wait is bounded: a document to
-// attach and to hydrate CATCH_UP_TIMEOUT_MS, the read READ_TIMEOUT_MS, the refresh
-// CATCH_UP_TIMEOUT_MS. The service and the browser share a host and its clock: a skew can cost
-// one needless reload or miss one, never a loop.
+// reload it, but not before COMPILE_GRACE_MS after the write (a document requested sooner is
+// rendered from the old code); a reloaded document also counts a write in the grace before its
+// own start, and a chain reloads at most twice (`reloadsInChain`). Otherwise: ask the app's
+// router for a fresh render. The canvas is busy (`updating`) from the session's start or a
+// document's unload until that render, so the first press lands on what is on disk. The Next
+// internals this needs are in next-hydration.ts. Each wait is bounded: a document to attach and
+// to hydrate CATCH_UP_TIMEOUT_MS, the read READ_TIMEOUT_MS, the grace COMPILE_GRACE_MS, the
+// refresh CATCH_UP_TIMEOUT_MS. The service and the browser share a host and its clock: a skew
+// can cost a needless reload or miss one, never a loop.
 
 import { locatorFile } from '@/shared/lib/locator'
 
-import { NEXT_VERIFIED, isRouterRequest, refreshRouter, reloadDocument, whenHydrated } from './next-hydration'
+import { COMPILE_GRACE_MS, NEXT_VERIFIED, isRouterRequest, refreshRouter, reloadDocument, whenHydrated } from './next-hydration'
 
 /** Mutations must pause this long before an update counts as rendered. */
 const QUIET_MS = 120
@@ -44,6 +46,8 @@ const ANIMATION_FOLLOW_MS = 1000
 const CATCH_UP_TIMEOUT_MS = 10_000
 /** How long the catch-up waits for the dev service's last write time. */
 const READ_TIMEOUT_MS = 1000
+/** Catch-up reloads in one chain at most; after them, a document that missed a write is refreshed. */
+const MAX_RELOADS = 2
 
 /**
  * A Next document's catch-up: waiting for it to hydrate, reading when the service last wrote,
@@ -51,8 +55,8 @@ const READ_TIMEOUT_MS = 1000
  */
 interface CatchUp {
   phase: 'hydrating' | 'reading' | 'refreshing' | 'reloading'
-  /** This document is the reload of one that caught up that way: it does not reload again. */
-  reloaded: boolean
+  /** How many catch-up reloads led to this document (0 for one the user or Next loaded). */
+  reloads: number
   stopWaiting: () => void
   /** Ends the phase that is taking too long. */
   timeout: number
@@ -132,8 +136,8 @@ export class FrameSession {
   /** Between the start or an unload and the next attach (Next only), until CATCH_UP_TIMEOUT_MS. */
   private awaitingDocument = false
   private documentTimer = 0
-  /** The document being unloaded is reloading to catch up: the next one must not reload again. */
-  private reloadedToCatchUp = false
+  /** Catch-up reloads that led to the document still to come: 0, 1 or MAX_RELOADS. */
+  private reloadsInChain = 0
 
   private readonly iframe: HTMLIFrameElement
   private readonly listener: FrameListener
@@ -297,10 +301,10 @@ export class FrameSession {
     })
 
     this.stopAwaitingDocument()
-    const reloaded = this.reloadedToCatchUp
-    this.reloadedToCatchUp = false
+    const reloads = this.reloadsInChain
+    this.reloadsInChain = 0
     this.listener.attached()
-    if (this.catchesUp()) this.startCatchUp(doc, win, reloaded)
+    if (this.catchesUp()) this.startCatchUp(doc, win, reloads)
     this.scheduleLayout()
   }
 
@@ -308,8 +312,8 @@ export class FrameSession {
   // A Next document's catch-up: once per document, never for a client-side navigation (the
   // document stays) and again after a full reload (a new one attaches).
 
-  private startCatchUp(doc: Document, win: Window, reloaded: boolean): void {
-    const catchUp: CatchUp = { phase: 'hydrating', reloaded, stopWaiting: () => {}, timeout: 0, check: 0, refreshedAt: 0, answeredAt: null }
+  private startCatchUp(doc: Document, win: Window, reloads: number): void {
+    const catchUp: CatchUp = { phase: 'hydrating', reloads, stopWaiting: () => {}, timeout: 0, check: 0, refreshedAt: 0, answeredAt: null }
     this.catchUp = catchUp
     catchUp.timeout = window.setTimeout(() => this.endCatchUp(`the page did not hydrate within ${CATCH_UP_TIMEOUT_MS / 1000} s (no <next-route-announcer>)`), CATCH_UP_TIMEOUT_MS)
     const stop = whenHydrated(doc, () => this.onHydrated(catchUp, win))
@@ -339,28 +343,36 @@ export class FrameSession {
 
   /**
    * A write at or after the document's navigation start may be missing from it (both are ms
-   * since the epoch; the read comes after hydration, which bounds the window). Reload it then,
-   * unless it is itself such a reload; refresh otherwise.
+   * since the epoch; the read comes after hydration, which bounds the window). A catch-up
+   * reload's document may also miss one written up to COMPILE_GRACE_MS before it began: the
+   * grace is a measurement, not a guarantee. Reload then, no sooner than the grace after the
+   * write (the wait clamped to the grace, against a skewed clock), unless the chain has reloaded
+   * MAX_RELOADS times; refresh otherwise.
    */
   private catchUpWith(catchUp: CatchUp, win: Window, lastWriteAt: number | null): void {
     if (this.catchUp !== catchUp) return
-    const missed = lastWriteAt !== null && lastWriteAt >= Math.floor(win.performance.timeOrigin)
-    if (missed && !catchUp.reloaded) {
+    const start = Math.floor(win.performance.timeOrigin) - (catchUp.reloads > 0 ? COMPILE_GRACE_MS : 0)
+    const missed = lastWriteAt !== null && lastWriteAt >= start
+    if (missed && catchUp.reloads < MAX_RELOADS) {
       catchUp.phase = 'reloading'
-      this.reloadedToCatchUp = true
       // Busy until the reload unloads this document (detach), then until the next one attaches.
       catchUp.timeout = window.setTimeout(() => {
-        this.reloadedToCatchUp = false
+        this.reloadsInChain = 0
         this.endCatchUp(`the page did not reload within ${CATCH_UP_TIMEOUT_MS / 1000} s`)
       }, CATCH_UP_TIMEOUT_MS)
-      reloadDocument(win)
+      const wait = Math.min(COMPILE_GRACE_MS, Math.max(0, lastWriteAt + COMPILE_GRACE_MS - Date.now()))
+      catchUp.check = window.setTimeout(() => {
+        if (this.catchUp !== catchUp) return // unloaded or stopped meanwhile
+        this.reloadsInChain = catchUp.reloads + 1
+        reloadDocument(win)
+      }, wait)
       return
     }
     if (missed) {
       console.warn(
-        '[trivia] The dev service wrote the Next.js app again while the canvas reloaded it to catch up. The canvas refreshes ' +
-          `it instead of reloading it again (Next.js ${NEXT_VERIFIED}); an edit written while the page loaded may not show ` +
-          'until the next reload.',
+        `[trivia] The dev service wrote the Next.js app again while the canvas reloaded it ${MAX_RELOADS} times to catch up. ` +
+          `The canvas refreshes it instead of reloading it again (Next.js ${NEXT_VERIFIED}); an edit written while the page ` +
+          'loaded may not show until the next reload.',
       )
     }
     const problem = refreshRouter(win)
@@ -417,7 +429,7 @@ export class FrameSession {
     clearTimeout(this.documentTimer)
     this.documentTimer = window.setTimeout(() => {
       this.awaitingDocument = false
-      this.reloadedToCatchUp = false
+      this.reloadsInChain = 0
       // No warning: the canvas's own status says the app has not loaded.
       this.listener.loadTimedOut?.()
       this.scheduleLayout()

@@ -1022,6 +1022,9 @@ describe('a Next document catches up once it has hydrated (LLD-13 §6)', () => {
     engine.apply({ op: 'remove', target: at('0.2'), expectedName: 'p' }, 'Remove element') // an agent, just now
     c.hydrate()
     await idle()
+    expect(reloads).toEqual([]) // not before Next can have compiled the write (COMPILE_GRACE_MS)
+    expect(c.view().updating).toBe(true)
+    await tick(550)
     expect(reloads).toEqual([c.doc().defaultView])
     expect(refreshes).toEqual([])
     expect(c.view().updating).toBe(true)

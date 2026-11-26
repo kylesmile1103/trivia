@@ -13,6 +13,16 @@
 /** The Next.js version these internals were checked against. */
 export const NEXT_VERIFIED = '16.4.6'
 
+/**
+ * How long after a file write a page request can still be served from the old code: Turbopack
+ * has not noticed the change yet. Measured with next@16.4.6 from a write to its hot update
+ * reaching a page: 60 to 80 ms on macOS, about 150 ms on a CI runner; a reload 10 ms after a
+ * write was rendered and bundled stale. The assumption (not verified in Next's code): a page
+ * requested once Turbopack has seen the change is rendered and bundled from it. About three
+ * times the slowest measurement.
+ */
+export const COMPILE_GRACE_MS = 500
+
 const ANNOUNCER = 'next-route-announcer'
 const RSC_PARAM = '_rsc'
 
