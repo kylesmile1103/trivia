@@ -14,10 +14,13 @@ const DATA_TABLE = `${PLAYGROUND}src/components/data-table.tsx`
 const FORMS = `${PLAYGROUND}src/components/forms`
 const original = fs.readFileSync(DASHBOARD, 'utf8')
 
-test.afterEach(() => {
-  restore(DASHBOARD, original)
-  fs.rmSync(DATA_TABLE, { force: true })
-  fs.rmSync(FORMS, { recursive: true, force: true })
+test.afterEach(async () => {
+  try {
+    await restore(DASHBOARD, original)
+  } finally {
+    fs.rmSync(DATA_TABLE, { force: true })
+    fs.rmSync(FORMS, { recursive: true, force: true })
+  }
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
@@ -59,7 +62,8 @@ test('Table inserts a DataTable bound to the list query, showing the API\'s rows
   await settled(page)
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
   await expect.poll(dashboard).toBe(original)
-  expect(fs.existsSync(DATA_TABLE)).toBe(false)
+  // The undo writes its files one after another: the component file goes after Dashboard.tsx.
+  await expect.poll(() => fs.existsSync(DATA_TABLE)).toBe(false)
   await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toHaveCount(0)
 })
 

@@ -43,7 +43,11 @@ setInterval(() => {}, 1000)
     // The launcher loads the native engine and starts the dev service before it spawns next:
     // more than expect.poll's one-second default on a busy CI runner.
     await expect.poll(() => output, { timeout: 15_000 }).toContain('fixture next args ["dev","--hostname","127.0.0.1","--port","5329","--webpack"]')
-    const mcp = output.match(/Trivia MCP: (http:\/\/127\.0\.0\.1:\d+)\/@trivia\/mcp/)?.[1]
+    // The launcher prints its URLs after spawning next, which writes to the same stdout from its own
+    // process, so the two lines can arrive in either order: wait for the URL too.
+    const MCP = /Trivia MCP: (http:\/\/127\.0\.0\.1:\d+)\/@trivia\/mcp/
+    await expect.poll(() => MCP.test(output), { timeout: 15_000 }).toBe(true)
+    const mcp = output.match(MCP)?.[1]
     expect(mcp).toBeDefined()
     expect(await (await fetch(`${mcp}/@trivia/api/health`)).json()).toMatchObject({ ok: true, data: { root } })
     if (router === 'pages') {

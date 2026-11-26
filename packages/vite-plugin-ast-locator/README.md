@@ -40,6 +40,10 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 - `apply` and `batch` run as one transaction in the binding (`applyOps`): ops are applied to the
   text in memory, then every changed file is written, all or nothing. A failing op writes nothing.
   Vite's watcher picks up the writes and sends a normal HMR update.
+- Vite's watcher (the chokidar in Vite 8.3) drops further changes to a file for 50 ms after it
+  reports one, so an editor's in-place save (truncate, then write) can reach Vite as an empty
+  file. With the API on, the plugin stats a changed project file again 100 ms after its last
+  event and, if it moved, emits the change again on `server.watcher` (`src/watch.ts`).
 - Mutating requests run one at a time. Undo/redo restore byte-exact snapshots and answer
   `409 conflict` without writing anything when a file changed outside the designer. With nothing to
   undo or redo they answer `{ files: [] }`.

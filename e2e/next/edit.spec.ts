@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
-import { restore } from '../files'
+import { restoreAll } from '../files'
 
 const SERVER = fileURLToPath(new URL('../../examples/next-admin/app/page.tsx', import.meta.url))
 const CLIENT = fileURLToPath(new URL('../../examples/next-admin/src/components/edit-demo.tsx', import.meta.url))
@@ -16,8 +16,8 @@ const selected = (page: Page) => page.evaluate(() =>
   (window as Window & { __trivia?: { state(): { selected: string | null } } }).__trivia?.state().selected,
 )
 
-test.afterEach(() => {
-  for (const [file, original] of originals) restore(file, original)
+test.afterEach(async () => {
+  await restoreAll(originals)
 })
 
 async function clickCanvas(page: Page, target: Locator, button: 'left' | 'right' = 'left') {

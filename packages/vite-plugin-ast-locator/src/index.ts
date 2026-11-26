@@ -15,6 +15,7 @@ import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
+import { replayDroppedChanges } from './watch.js'
 
 export { API_BASE, MCP_PATH } from '@trivia/dev-service'
 export type * from '@trivia/dev-service'
@@ -71,6 +72,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let paths: ProjectPaths | undefined
   let roots: string[] = []
   let service: EngineService | undefined
+  let stopReplay: (() => void) | undefined
   // The inferencer's previews (docs/product.md, slice 6) are modules at `/@trivia/preview/<id>.tsx`
   // that never exist on disk. They resolve to a path in the project's src/ (so the project's
   // aliases, JSX transform and React refresh apply to them like to its own files) and their
@@ -183,6 +185,9 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),
       })
       server.middlewares.use(createDevMiddleware(host, { service, logger: server.config.logger, allowRemote, mcp: options.mcp !== false }))
+      // The canvas must show what is on disk: replay a change the watcher dropped (watch.ts).
+      stopReplay?.()
+      stopReplay = replayDroppedChanges(server.watcher, roots)
       // A sync rewrites the manifest: previews generated from the old one are stale.
       const manifestFile = path.join(server.config.root, 'trivia.manifest.json')
       const blueprintDir = path.join(server.config.root, paths.blueprintDir) + path.sep
@@ -192,6 +197,16 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         if (changed === manifestFile) invalidatePreviews(server, false)
         else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
+    },
+
+    closeServer({ reason }) {
+      // A restart configures the new server before it closes the old one. With plugins passed
+      // inline, one instance serves both: `stopReplay` is the new server's by now, and
+      // configureServer stopped the old one. A plugin instance of its own (from a config file)
+      // stops with the old watcher, whose close removes its listener (watch.ts).
+      if (reason === 'restart') return
+      stopReplay?.()
+      stopReplay = undefined
     },
   }
 }

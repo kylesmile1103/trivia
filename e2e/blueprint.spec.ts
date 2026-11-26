@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { expect, test, type Page } from '@playwright/test'
 
-import { restore } from './files'
+import { restoreAll } from './files'
 
 const root = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
 const name = 'CanvasDraft'
@@ -104,12 +104,14 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
     await undo.click()
     await expect.poll(files, { timeout: 15_000 }).toEqual(restored)
   } finally {
-    restore(app, before)
-    if (priorLock) restore(lock, priorLock)
-    else fs.rmSync(lock, { force: true })
-    fs.rmSync(source, { force: true })
-    fs.rmSync(path.join(blueprint, doc), { force: true })
-    for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+    try {
+      await restoreAll(priorLock ? [[app, before], [lock, priorLock]] : [[app, before]])
+    } finally {
+      if (!priorLock) fs.rmSync(lock, { force: true })
+      fs.rmSync(source, { force: true })
+      fs.rmSync(path.join(blueprint, doc), { force: true })
+      for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+    }
   }
 })
 
@@ -135,12 +137,13 @@ test.describe('Blueprint panel', () => {
     newDirs = [path.join(blueprint, 'pages'), blueprint].filter((dir) => !fs.existsSync(dir))
   })
 
-  test.afterEach(() => {
-    for (const [file, original] of baseline) {
-      if (!original) fs.rmSync(file, { force: true })
-      else restore(file, original)
+  test.afterEach(async () => {
+    try {
+      await restoreAll([...baseline].flatMap(([file, original]) => (original ? [[file, original] as const] : [])))
+    } finally {
+      for (const [file, original] of baseline) if (!original) fs.rmSync(file, { force: true })
+      for (const dir of newDirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
     }
-    for (const dir of newDirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
   })
 
   const canvas = (page: Page) => page.frameLocator('iframe[title="App canvas"]')

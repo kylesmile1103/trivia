@@ -7,16 +7,15 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
-import { restore } from '../files'
+import { restoreAll } from '../files'
 
 const CREATE = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/create.tsx', import.meta.url))
 const EDIT = fileURLToPath(new URL('../../examples/refine-admin/src/pages/customers/edit.tsx', import.meta.url))
 const original = fs.readFileSync(CREATE, 'utf8')
 const originalEdit = fs.readFileSync(EDIT, 'utf8')
 
-test.afterEach(() => {
-  restore(CREATE, original)
-  restore(EDIT, originalEdit)
+test.afterEach(async () => {
+  await restoreAll([[CREATE, original], [EDIT, originalEdit]])
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
