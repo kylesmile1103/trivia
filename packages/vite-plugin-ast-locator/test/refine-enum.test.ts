@@ -182,6 +182,20 @@ describe('a form field whose enum changed', () => {
     expect(read(EDIT)).toContain('status: z.enum(["pending", "active", "closed"]),')
   }, 60_000)
 
+  it('finds the Select where an earlier change in the same plan moved it', async () => {
+    await statuses(['pending', 'active', 'suspended', 'closed'])
+    // A field added first shifts the grid that holds Status, and the items with it.
+    const planned = await fix(EDIT, [{ action: 'add', field: 'phone', index: 0 }, { action: 'align', field: 'status' }])
+    expect(planned.label).toBe('Add field Phone; Update the Status options from the contract')
+    const code = read(EDIT)
+    expect(code).toContain('name="phone"')
+    expect(code).toContain('status: z.enum(["pending", "active", "suspended", "closed"]),')
+    expect(code).toContain(`${item('suspended', 'Suspended')}\n${item('closed', 'Closed')}\n${ITEM.slice(2)}</SelectContent>`)
+    expect(code.match(/<SelectItem value="closed">/g)).toHaveLength(1)
+    await post(server.socket, '/undo')
+    expect(read(EDIT)).toBe(originals.get(EDIT))
+  }, 60_000)
+
   it('rejects an align after another change to the same field in one plan', async () => {
     await statuses(['pending', 'active', 'closed'])
     const refused = await plan(EDIT, [{ action: 'rebuild', field: 'status' }, { action: 'align', field: 'status' }])
