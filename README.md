@@ -21,6 +21,16 @@ Point at an element in your running app, change it, and the change lands in your
 minimal text edit. Everything you didn't touch stays exactly as you wrote it, whitespace and
 comments included. Edit from the canvas, your IDE or an AI agent: all three work on the same files.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/designer-dark.png">
+    <img alt="The Trivia designer on the refine-admin example. A Status badge is selected, every row's badge is outlined, and the inspector's variant menu is open." src="docs/images/designer-light.png" width="900">
+  </picture>
+  <br>
+  <sub>One click selects the Status badge, and every row lights up: they all come from line 63 of
+  <code>src/pages/customers/list.tsx</code>. Picking a variant rewrites that one attribute.</sub>
+</p>
+
 > In compiler terms, *trivia* is the whitespace and comments a parse-and-print round trip throws
 > away. Keeping them is the whole point.
 
@@ -32,6 +42,16 @@ comments included. Edit from the canvas, your IDE or an AI agent: all three work
 - **Knows your API contract.** For Refine + shadcn apps on OpenAPI: columns, form fields, contract
   drift and new resource pages, planned from the spec and written as ordinary code.
 - **Local and dev-only.** Nothing is added to your production bundle. No account, no telemetry.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/data-dark.png">
+    <img alt="The Data tab for the customers list: its columns read from the source, and an Add column menu listing the contract fields the page doesn't show yet." src="docs/images/data-light.png" width="900">
+  </picture>
+  <br>
+  <sub>The Data tab reads the page's columns from its source and offers the contract's other
+  fields, typed, as new columns (<code>*</code> marks a required field).</sub>
+</p>
 
 ## Quick start
 
