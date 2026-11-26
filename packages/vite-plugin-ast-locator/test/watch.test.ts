@@ -141,6 +141,15 @@ describe('replaying a change the watcher dropped', () => {
 
 describe('in a Vite dev server', () => {
   const DASHBOARD = 'src/pages/Dashboard.tsx'
+  /**
+   * These tests write the change they pretend was dropped only after a module fetch, which a real
+   * dropped write never waits for: the recheck must come after it. The fetch may take FETCH_MS (a
+   * loaded runner, such as the whole gate in parallel, has needed more than a second); the
+   * recheck comes a second after that.
+   */
+  const FETCH_MS = 4_000
+  const TEST_RECHECK_MS = FETCH_MS + 1_000
+
   /** The source Vite transformed the module it serves from, read from its inline source map. */
   async function served(socket: string): Promise<string | null> {
     const { body } = await request(socket, '/' + DASHBOARD)
@@ -151,7 +160,7 @@ describe('in a Vite dev server', () => {
   it('serves the whole file again after an in-place write whose second event was dropped', async () => {
     // The recheck must come after the second write, as a real dropped write (within chokidar's 50 ms
     // window) always does; here that write waits for a module fetch, which a loaded runner slows.
-    timing.recheckMs = 3_000
+    timing.recheckMs = TEST_RECHECK_MS
     root = copyPlayground()
     const server = await startServer(root)
     try {
@@ -162,10 +171,10 @@ describe('in a Vite dev server', () => {
       // The truncation is heard and the open canvas fetches the module in between...
       fs.writeFileSync(file, '')
       server.vite.watcher.emit('change', file, fs.statSync(file))
-      await vi.waitFor(async () => expect(await served(server.socket)).not.toBe(original))
+      await vi.waitFor(async () => expect(await served(server.socket)).not.toBe(original), { timeout: FETCH_MS })
       // ...then the content is written and its event dropped.
       fs.writeFileSync(file, original)
-      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 10_000 })
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: TEST_RECHECK_MS + 10_000 })
     } finally {
       timing.recheckMs = RECHECK_MS
       await server.close()
@@ -182,7 +191,7 @@ describe('in a Vite dev server', () => {
 
   it('serves the second of two engine writes (an edit, then its undo) whose second event was dropped', async () => {
     // As above, the fetch between the two writes is this test's own step: the recheck waits past it.
-    timing.recheckMs = 3_000
+    timing.recheckMs = TEST_RECHECK_MS
     root = copyPlayground()
     const server = await startServer(root)
     try {
@@ -197,11 +206,11 @@ describe('in a Vite dev server', () => {
       // The edit is heard and the open canvas fetches its module...
       renameOver(file, edited, mtime)
       server.vite.watcher.emit('change', file, fs.statSync(file))
-      await vi.waitFor(async () => expect(await served(server.socket)).toBe(edited))
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(edited), { timeout: FETCH_MS })
       // ...then the undo is written and chokidar drops its event: Vite still serves the edit.
       renameOver(file, original, mtime)
       expect(await served(server.socket)).toBe(edited)
-      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 10_000 })
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: TEST_RECHECK_MS + 10_000 })
     } finally {
       timing.recheckMs = RECHECK_MS
       await server.close()
