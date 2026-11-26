@@ -45,5 +45,17 @@ public sealed class ConcurrencyTests(PostgresFixture postgres)
         JsonElement reloaded = await api.Client.GetFromJsonAsync<JsonElement>(location);
         Assert.Equal(currentVersion, reloaded.GetProperty("version").GetUInt32());
         Assert.Equal("Version Two", reloaded.GetProperty("fullName").GetString());
+
+        using HttpResponseMessage patchWithout = await api.Client.PatchAsJsonAsync(location, new { notes = "No version" });
+        Assert.True((await CrudTests.ReadProblem(patchWithout, HttpStatusCode.BadRequest))
+            .GetProperty("errors").TryGetProperty("version", out _));
+        using HttpResponseMessage stalePatch = await api.Client.PatchAsJsonAsync(location, new { notes = "Stale", version });
+        Assert.Equal("stale", (await CrudTests.ReadProblem(stalePatch, HttpStatusCode.Conflict)).GetProperty("code").GetString());
+        using HttpResponseMessage patched = await api.Client.PatchAsJsonAsync(location, new { notes = "Current", version = currentVersion });
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+        JsonElement afterPatch = await patched.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Current", afterPatch.GetProperty("notes").GetString());
+        Assert.Equal("Version Two", afterPatch.GetProperty("fullName").GetString());
+        Assert.NotEqual(currentVersion, afterPatch.GetProperty("version").GetUInt32());
     }
 }

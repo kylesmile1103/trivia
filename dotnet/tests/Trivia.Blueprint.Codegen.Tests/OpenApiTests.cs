@@ -34,6 +34,9 @@ public sealed class OpenApiTests
         JsonElement details = paths.GetProperty("/api/v1/customers/{id}");
         Assert.Equal("getCustomerById", details.GetProperty("get").GetProperty("operationId").GetString());
         Assert.Equal("updateCustomer", details.GetProperty("put").GetProperty("operationId").GetString());
+        Assert.Equal("patchCustomer", details.GetProperty("patch").GetProperty("operationId").GetString());
+        // Contract-sync lists PATCH as a custom operation, so its entry explains itself.
+        Assert.Equal("Change some fields of the customer", details.GetProperty("patch").GetProperty("summary").GetString());
         Assert.Equal("deleteCustomer", details.GetProperty("delete").GetProperty("operationId").GetString());
         JsonElement custom = paths.GetProperty("/api/v1/customers/{id}/approve-kyc").GetProperty("post");
         Assert.Equal("approveKycCustomer", custom.GetProperty("operationId").GetString());
@@ -51,7 +54,17 @@ public sealed class OpenApiTests
         Assert.Equal("pending", properties.GetProperty("status").GetProperty("default").GetString());
         Assert.Equal(1_000_000, properties.GetProperty("creditLimit").GetProperty("maximum").GetInt32());
 
-        foreach (string name in new[] { "CustomerResponse", "CreateCustomerRequest", "UpdateCustomerRequest", "CustomerPage" })
+        // A PATCH member is optional with no default, and a required one is still never null.
+        JsonElement patch = schemas.GetProperty("PatchCustomerRequest");
+        Assert.False(patch.TryGetProperty("required", out _), patch.ToString());
+        JsonElement patchProperties = patch.GetProperty("properties");
+        Assert.Equal("string", patchProperties.GetProperty("fullName").GetProperty("type").GetString());
+        Assert.False(patchProperties.GetProperty("status").TryGetProperty("default", out _));
+        Assert.False(patchProperties.GetProperty("creditLimit").TryGetProperty("default", out _));
+        Assert.Equal(["null", "string"], patchProperties.GetProperty("notes").GetProperty("type")
+            .EnumerateArray().Select(type => type.GetString()));
+
+        foreach (string name in new[] { "CustomerResponse", "CreateCustomerRequest", "UpdateCustomerRequest", "PatchCustomerRequest", "CustomerPage" })
             Assert.True(schemas.TryGetProperty(name, out _));
         await Verifier.Verify(File.ReadAllText(first.DocumentPath)).UseDirectory("Snapshots").UseFileName("BankOpenApi").DisableDiff();
     }

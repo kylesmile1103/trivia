@@ -53,6 +53,103 @@ public sealed record UpdateCustomerRequest
     public Guid? ExternalRef { get; init; }
 }
 
+public sealed record PatchCustomerRequest : IValidatableObject
+{
+    internal readonly bool fullNameSent;
+    [JsonPropertyName("fullName"), MinLength(2), MaxLength(120), global::System.ComponentModel.Description("Legal name")]
+    public string? FullName
+    {
+        get;
+        init
+        {
+            field = value;
+            fullNameSent = true;
+        }
+    }
+
+    internal readonly bool emailSent;
+    [JsonPropertyName("email"), EmailAddress]
+    public string? Email
+    {
+        get;
+        init
+        {
+            field = value;
+            emailSent = true;
+        }
+    }
+
+    internal readonly bool statusSent;
+    [JsonPropertyName("status")]
+    public global::BackOffice.Enums.CustomerStatus? Status
+    {
+        get;
+        init
+        {
+            field = value;
+            statusSent = true;
+        }
+    }
+
+    internal readonly bool creditLimitSent;
+    [JsonPropertyName("creditLimit"), Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true), global::BackOffice.Generated.DecimalPrecision(18, 2)]
+    public decimal? CreditLimit
+    {
+        get;
+        init
+        {
+            field = value;
+            creditLimitSent = true;
+        }
+    }
+
+    internal readonly bool notesSent;
+    [JsonPropertyName("notes"), MaxLength(1000)]
+    public string? Notes
+    {
+        get;
+        init
+        {
+            field = value;
+            notesSent = true;
+        }
+    }
+
+    internal readonly bool birthDateSent;
+    [JsonPropertyName("birthDate")]
+    public DateOnly? BirthDate
+    {
+        get;
+        init
+        {
+            field = value;
+            birthDateSent = true;
+        }
+    }
+
+    internal readonly bool externalRefSent;
+    [JsonPropertyName("externalRef")]
+    public Guid? ExternalRef
+    {
+        get;
+        init
+        {
+            field = value;
+            externalRefSent = true;
+        }
+    }
+
+    IEnumerable<ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
+    {
+        if (fullNameSent && FullName is null)
+            yield return new("The fullName field cannot be null.", ["fullName"]);
+        if (emailSent && Email is null)
+            yield return new("The email field cannot be null.", ["email"]);
+        if (statusSent && Status is null)
+            yield return new("The status field cannot be null.", ["status"]);
+    }
+}
+
 public sealed record CustomerPage(IReadOnlyList<CustomerResponse> Items, int Total, int Page, int PageSize);
 public sealed record ApproveKycCustomerRequest
 {

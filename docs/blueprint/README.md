@@ -66,6 +66,18 @@ Run `TRIVIA_NEXT_BUILD=1 pnpm exec nx test blueprint-compiler` to typecheck and 
 emitted app. The `blueprint-next` Playwright project exercises the generated app through
 Aspire with the API and PostgreSQL. [Next.js code generation](lld/LLD-12-nextjs-codegen-target.md).
 
+## Before publishing the API
+
+A new app's `auth.mode` is `none`, which suits development: the API answers every request,
+and `trivia-dotnet plan` and `write` (so also `backend`) report an `auth_none` warning. The
+published AppHost exposes the web app and proxies `/api` to the API, so publishing needs
+authentication: set `auth.mode` to `oidc` in `app.blueprint.json` and configure
+`Authentication:Authority` and `Authentication:Audience`, or put an authenticating gateway in
+front of the API. With `none` the runtime OpenAPI document (`/openapi/v1.json`) is served in
+Development only. The build-time document under `web/openapi/` does not change. Outside
+Development the API also refuses to start without `ConnectionStrings:AppDb`, which Aspire
+supplies. [LLD-09 auth](lld/LLD-09-dotnet-codegen.md#7-auth-fr-nc-13-should)
+
 ## MVP acceptance measurements
 
 Run `pnpm exec nx run tools:mvp` for the scripted slice. Real releases run this target

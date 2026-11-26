@@ -54,7 +54,7 @@ dotnet/
 
 | Command | Does | Exit |
 | --- | --- | --- |
-| `plan --blueprint <dir> --root <dir> [--content]` | Prints the file plan as JSON on stdout | 0, or 1 on diagnostics |
+| `plan --blueprint <dir> --root <dir> [--content]` | Prints the file plan as JSON on stdout | 0, or 1 on error diagnostics |
 | `write --blueprint <dir> --root <dir> [--force]` | Applies the plan | 0, 1, or 2 when a write is refused |
 | `check --blueprint <dir> --root <dir>` | Fails when a generated file is stale or was edited by hand. For CI | 0 or 1 |
 | `migrate <Name> --root <dir>` | Adds an EF Core migration and applies rename hints | 0 or 1 |
@@ -138,8 +138,17 @@ src/<App>.AppHost/, .ServiceDefaults/, .MigrationService/     scaffold (LLD-10)
 
 ⚑ The standalone `Program.cs` calls `AddGeneratedServices` and `MapGeneratedEndpoints`.
   LLD-10 will add `AddServiceDefaults` and `MapDefaultEndpoints` when it supplies their project.
-  The PostgreSQL connection comes from `ConnectionStrings:AppDb`, with a local development
-  default. The emitted package versions are selected from the generator's central pins.
+  The PostgreSQL connection comes from `ConnectionStrings:AppDb`. The emitted package versions
+  are selected from the generator's central pins.
+⚑ (decided 2026-11-26) Only the Development environment falls back to
+  `Host=localhost;Database=<app>;Username=postgres` when `ConnectionStrings:AppDb` is missing
+  or blank. Elsewhere `MapGeneratedEndpoints` throws at startup with a message naming
+  `ConnectionStrings:AppDb`, except under build-time OpenAPI generation, which runs the entry
+  point as `GetDocument.Insider` in Production with no database
+  ([the documented check](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0#customize-runtime-behavior-during-build-time-document-generation)).
+  EF's design-time tools default
+  to Development, so `migrate` keeps working without a database. Why: a production API that
+  silently pointed at localhost failed late and far from its cause.
   Model-dependent setup, including auth, stays behind the generated methods.
 
 ## 4. API conventions (FR-NC-06, FR-NC-07, FR-NC-10)
@@ -152,11 +161,30 @@ This section is the contract with the data provider (LLD-10). Change both or nei
 | get | `GET /api/v1/<plural>/{id}` | 200 the record | `get<Entity>ById` |
 | create | `POST /api/v1/<plural>` | 201 the record, with `Location` | `create<Entity>` |
 | update | `PUT /api/v1/<plural>/{id}` | 200 the record | `update<Entity>` |
+| patch | `PATCH /api/v1/<plural>/{id}` | 200 the record | `patch<Entity>` |
 | delete | `DELETE /api/v1/<plural>/{id}` | 204 | `delete<Entity>` |
 | custom | `<method> /api/v1/<plural>/<path>` | 200, or 204 without `returns` | `<name><Entity>` |
 
 Tags are the plural in PascalCase. Schema names are `<Entity>Response`,
-`Create<Entity>Request`, `Update<Entity>Request` and `<Entity>Page`. JSON is camelCase.
+`Create<Entity>Request`, `Update<Entity>Request`, `Patch<Entity>Request` and `<Entity>Page`.
+JSON is camelCase.
+
+⚑ (decided 2026-11-26) The `update` operation maps both verbs: `PUT` replaces every writable
+member (an omitted one takes its default or null), and `PATCH` changes only the members present
+in the body, which is what the data provider's `update` sends. Why: generated edit forms submit
+their own fields only, so a `PUT` from them silently nulled the omitted fields and reset those
+with a default. In a `PATCH` body every member is optional and has no default, validation
+applies to the members present, and a present `null` on a required member is a 400 with that
+member in `errors`. On an entity with `concurrency: true` the `PATCH` body requires `version`
+like the `PUT` body. The document describes both.
+
+⚑ (decided 2026-11-26) The manifest's `update` slot stays `PUT`, so its schema and required
+markers describe the full edit form, while the data provider's `update` sends `PATCH` with the
+form's fields, which changes those fields and leaves the rest alone. `patch<Entity>` stays a
+custom operation, with the summary "Change some fields of the <entity>", for actions that
+change one or two fields, such as a "Deactivate" or "Mark shipped" button. Why: contract-sync's
+"PUT wins" rule (`docs/data-provider.md`, classification) also decides the slot for every
+third-party OpenAPI backend, so neither it nor the generator changes.
 
 ⚑ Preserve the framework's component IDs for the generated record names. Override the
   enum and JSON schema types through a schema transformer, and apply input defaults,
@@ -179,10 +207,21 @@ List parameters:
 - `q`: a case-insensitive match over the `searchable` fields.
 
 ⚑ Always order by the key as the final sort term for stable page boundaries.
-  Ordered comparisons apply to numeric and temporal fields. Text matching uses
-  case-sensitive `contains` and `startswith`, and `q` uses PostgreSQL ILIKE with
-  wildcard characters escaped. The `null` operator applies to nullable fields.
-  Non-null comparisons, including `ne`, exclude null values.
+  Ordered comparisons apply to numeric and temporal fields. The `null` operator applies to
+  nullable fields. Non-null comparisons, including `ne`, exclude null values.
+
+⚑ (decided 2026-11-26) `contains`, `startswith` and `q` all match text without regard to case,
+  through PostgreSQL ILIKE with `\` escaping `%`, `_` and itself, so a wildcard in the value
+  matches only itself. Why: in the pinned `@refinedev/core` 5.0.12 `contains` and `startswith`
+  are the case-insensitive operators and `containss` and `startswiths` the sensitive ones,
+  and the data provider passes Refine's operators through unchanged.
+
+⚑ (decided 2026-11-26) `eq`, `ne` and `in` compare exactly for every type, a deliberate
+  deviation from Refine, whose `eq` and `ne` are documented as case-insensitive (`eqs` and
+  `nes` are its sensitive ones). A case-insensitive exact match, if one is needed later, is a
+  new explicit operator. Why: these operators carry values taken from the data (ids, foreign
+  keys, enum and status values, select options), where an exact comparison is right and keeps
+  the btree index usable, so `filter=code:eq:ab1` must not match `AB1`.
 
 The response's `items`, `total`, `page` and `pageSize` are what contract-sync's pagination
 heuristics already recognize (`docs/data-provider.md`).
@@ -230,6 +269,14 @@ namespaces, nullable enabled, no `var` in generated code.
 - **Contracts.** Records. `Create` and `Update` requests carry the writable fields
   (not `readOnly`, not generated, not the key) with validation attributes from the
   constraints. The response carries every field. A `<Entity>Page` record wraps lists.
+  ⚑ (decided 2026-11-26) With the `update` operation, `Patch<Entity>Request` carries the same
+  members and constraints without `Required` or defaults. Each member's `init` accessor also
+  sets an internal `<member>Sent` flag, and it implements `IValidatableObject` to reject a sent
+  `null` on a required member. Why: System.Text.Json calls a setter only for a property present
+  in the body, so the flag records presence while the property keeps its plain type, its
+  DataAnnotations and its OpenAPI schema, which an `Optional<T>` or `JsonElement` member would
+  each lose. The flags are lowercase fields, so they never collide with a PascalCase member,
+  and serialization, OpenAPI and validation ignore them.
 - **Endpoints.** A static partial class with `Map<Entity>Endpoints` and one private static
   method per enabled operation, using typed results so the OpenAPI document knows every
   status. Mapping between entity and records is generated assignment code. No mapper library.
@@ -253,6 +300,11 @@ static partial void OnDeleted(Customer entity, AppDbContext db);
 
 A hook rejects an operation by throwing `ApiProblemException(status, title)`, which the
 generated handler turns into problem details.
+
+⚑ (decided 2026-11-26) A `PATCH` builds an `Update<Entity>Request` from the stored record with
+the sent members laid over it, then saves through the same code as `PUT`, so `OnUpdating` and
+`OnUpdated` run for both verbs with the merged record. Why: a rule a developer wrote in
+`OnUpdating` for `PUT` must not be bypassed by the second verb.
 
 ⚑ Include `OnDeleted` to give deletion both hooks under FR-NC-08. CRUD writes and
   their hooks share an EF transaction, so a rejecting post-save hook rolls back the row
@@ -303,6 +355,18 @@ from `Authentication:Authority` and `Authentication:Audience`, and every group r
 authenticated user. Per-entity roles (`api.roles`) are a later extension. With `none`, nothing
 is added.
 
+⚑ (decided 2026-11-26) `none` stays the default, and with it the runtime OpenAPI endpoint is
+mapped only in Development. `plan` and `write` report one `auth_none` diagnostic with
+severity `warning` on `app.blueprint.json` (pointer `/auth/mode`, or `""` when the mode is
+defaulted). Without an app document its message begins "There is no app.blueprint.json, so
+auth.mode defaults to none". `check` leaves it out: it answers whether the generated files are
+current, runs in CI, and a reader of its JSON could take any entry as stale. Warnings never
+change an exit code or block a write; only errors do. The CLI's `backend` prints the warnings
+`write` returns, and the dev service passes them through. Why:
+the AppHost publishes the web app externally and proxies `/api`, so a published API without
+`oidc` or an authenticating gateway in front answers anyone, and its document mapped the whole
+surface in every environment.
+
 ⚑ Protect the runtime OpenAPI endpoint as well as the model groups in OIDC mode.
   The document declares a global HTTP bearer security requirement. Build-time generation
   remains available to the contract pipeline without contacting the issuer.
@@ -330,6 +394,8 @@ is added.
 
 ## 9. Open points
 
-- `PATCH` with partial updates. Not generated: Refine's update sends the whole form.
+- ⚑ (decided 2026-11-26) `PATCH` with partial updates is generated beside `PUT` (section 4).
+  Why: Refine's update sends the whole *form*, not the whole record, and an edit form that
+  leaves a field out must not clear it.
 - Whether the tool should run `dotnet format` on scaffold files. No: they are written once,
   from text we control.

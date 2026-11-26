@@ -25,6 +25,12 @@ public static class ApiRegistrationEmitter
             services.AddAuthorization();
             """ : "";
         string authMiddleware = oidc ? "app.UseAuthentication(); app.UseAuthorization();" : "";
+        // Without authentication the runtime document is for development only. The build-time
+        // document does not depend on this route.
+        string openApi = oidc ? "app.MapOpenApi().RequireAuthorization();" : """
+            if (app.Environment.IsDevelopment())
+                app.MapOpenApi();
+            """;
         string lists = string.Join(" or ", model.Entities.Where(entity => entity.Api.Operations.Contains("list"))
             .Select(entity => Literal("list" + Pascal(entity.Plural))));
         string addListMetadata = lists.Length == 0 ? "" : $$"""
@@ -35,7 +41,7 @@ public static class ApiRegistrationEmitter
                 return Task.CompletedTask;
             });
             """;
-        return Unit($"{space}.Generated", ["System.Text.Json", "System.Text.Json.Nodes",
+        return Unit($"{space}.Generated", ["System.Reflection", "System.Text.Json", "System.Text.Json.Nodes",
             "System.Text.Json.Serialization", "Microsoft.AspNetCore.OpenApi", "Microsoft.AspNetCore.Routing",
             "Microsoft.EntityFrameworkCore", "Microsoft.OpenApi", $"global::{space}.Data",
             .. (oidc ? new[] { "Microsoft.AspNetCore.Authentication.JwtBearer" } : []),
@@ -45,8 +51,8 @@ public static class ApiRegistrationEmitter
             {
                 public static void AddGeneratedServices(this IServiceCollection services, IConfiguration configuration)
                 {
-                    services.AddDbContext<AppDbContext>(options =>
-                        options.UseNpgsql(configuration.GetConnectionString("AppDb") ?? {{fallback}}));
+                    services.AddDbContext<AppDbContext>((provider, options) =>
+                        options.UseNpgsql(AppDbConnection(configuration, provider.GetRequiredService<IHostEnvironment>())));
                     {{authServices}}
                     services.AddValidation();
                     services.AddProblemDetails();
@@ -69,11 +75,27 @@ public static class ApiRegistrationEmitter
 
                 public static void MapGeneratedEndpoints(this WebApplication app)
                 {
+                    // Fail at startup rather than on the first request. Build-time OpenAPI generation
+                    // runs this entry point in Production with no database, so it is exempt.
+                    if (Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
+                        _ = AppDbConnection(app.Configuration, app.Environment);
                     app.UseExceptionHandler();
                     app.UseStatusCodePages(ApiProblemHandler.WriteStatusAsync);
                     {{authMiddleware}}
-                    app.MapOpenApi(){{require}};
+                    {{openApi}}
                     {{maps}}
+                }
+
+                // The local database is a development convenience; elsewhere the setting is required.
+                private static string AppDbConnection(IConfiguration configuration, IHostEnvironment environment)
+                {
+                    string? connection = configuration.GetConnectionString("AppDb");
+                    if (!string.IsNullOrWhiteSpace(connection))
+                        return connection;
+                    if (environment.IsDevelopment())
+                        return {{fallback}};
+                    throw new InvalidOperationException(
+                        "ConnectionStrings:AppDb is not set. Outside Development the API needs it, for example as the ConnectionStrings__AppDb environment variable.");
                 }
 
                 {{SchemaTransformer(model)}}
@@ -141,6 +163,8 @@ public static class ApiRegistrationEmitter
             ModelField[] fields = entity.Fields.Where(field => field.ReadOnly != true && field.Generated is null).ToArray();
             AddInput($"Create{entity.Name}Request", fields, entity.Relations);
             AddInput($"Update{entity.Name}Request", fields, entity.Relations, entity.Concurrency == true);
+            if (entity.Api.Operations.Contains("update"))
+                AddInput($"Patch{entity.Name}Request", fields, entity.Relations, entity.Concurrency == true, patch: true);
             foreach (CustomOperation operation in entity.Api.Custom ?? [])
                 AddInput(CustomOperationEmitter.Request(entity, operation), operation.Input ?? [], []);
         }
@@ -183,9 +207,9 @@ public static class ApiRegistrationEmitter
             }
             """;
 
-        void AddInput(string name, ModelField[] fields, ModelRelation[] relations, bool version = false)
+        void AddInput(string name, ModelField[] fields, ModelRelation[] relations, bool version = false, bool patch = false)
         {
-            string properties = DescribeFields($"{name}Contract", fields, relations);
+            string properties = DescribeFields($"{name}Contract", fields, relations, patch);
             if (version)
                 properties += $"\nDescribeInput({name}Contract, \"version\", true, null, null);";
             if (properties.Length == 0)
@@ -200,14 +224,16 @@ public static class ApiRegistrationEmitter
         }
     }
 
-    private static string DescribeFields(string schema, ModelField[] fields, ModelRelation[] relations)
+    // A PATCH member is optional and has no default: leaving it out keeps the stored value.
+    // A required member stays non-null, since a PATCH cannot clear it.
+    private static string DescribeFields(string schema, ModelField[] fields, ModelRelation[] relations, bool patch)
     {
         IEnumerable<string> statements = fields
-            .Where(field => field.Required == true || field.Format is not null || field.Default.ValueKind != JsonValueKind.Undefined)
+            .Where(field => field.Required == true || field.Format is not null || (!patch && field.Default.ValueKind != JsonValueKind.Undefined))
             .Select(field =>
             {
                 string format = field.Format is string value ? Literal(value) : "null";
-                string defaultJson = field.Default.ValueKind != JsonValueKind.Undefined ? Literal(field.Default.GetRawText()) : "null";
+                string defaultJson = !patch && field.Default.ValueKind != JsonValueKind.Undefined ? Literal(field.Default.GetRawText()) : "null";
                 return $"DescribeInput({schema}, {Literal(field.Name)}, {(field.Required == true ? "true" : "false")}, {format}, {defaultJson});";
             });
         return string.Join("\n", statements.Concat(relations.Where(relation => relation.Kind == "belongsTo" && relation.Required == true)

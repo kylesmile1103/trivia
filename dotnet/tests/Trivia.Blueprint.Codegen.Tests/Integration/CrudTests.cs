@@ -90,6 +90,91 @@ public sealed class CrudTests(PostgresFixture postgres)
         await ReadProblem(missingDelete, HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task FR_NC_06_PatchChangesOnlyWhatTheRequestSendsAndPutReplaces()
+    {
+        // Account adds a required foreign key and an update timestamp to what a PATCH covers.
+        LoadedBlueprint bank = ModelLoader.Load(FixtureTests.Bank);
+        ModelEntity[] entities = bank.Model.Entities.Select(entity => entity.Name == "Account"
+            ? entity with { Api = entity.Api with { Operations = [.. entity.Api.Operations, "update"] } }
+            : entity).ToArray();
+        using GeneratedProject project = new(bank with { Model = bank.Model with { Entities = entities } });
+        await using RunningApi api = await postgres.StartAsync(project);
+        HttpClient client = api.Client;
+
+        using HttpResponseMessage created = await client.PostAsJsonAsync(Customers, new
+        {
+            fullName = "Noted Customer", email = "noted@example.test", status = "active", creditLimit = 7m,
+            notes = "Prefers email", birthDate = "1990-05-06"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        string location = created.Headers.Location!.OriginalString;
+
+        // BankAdmin's edit form submits its own fields only, and notes is not one of them.
+        using HttpResponseMessage edited = await client.PatchAsJsonAsync(location,
+            new { fullName = "Noted Again", email = "noted@example.test", creditLimit = 5m });
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+        JsonElement record = await client.GetFromJsonAsync<JsonElement>(location);
+        Assert.True(JsonElement.DeepEquals(record, await edited.Content.ReadFromJsonAsync<JsonElement>()));
+        Assert.Equal("Noted Again", record.GetProperty("fullName").GetString());
+        Assert.Equal(5m, record.GetProperty("creditLimit").GetDecimal());
+        Assert.Equal("Prefers email", record.GetProperty("notes").GetString());
+        Assert.Equal("active", record.GetProperty("status").GetString());
+        Assert.Equal("1990-05-06", record.GetProperty("birthDate").GetString());
+
+        // A present null clears an optional member and leaves the rest.
+        using HttpResponseMessage cleared = await client.PatchAsJsonAsync(location, new { notes = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        record = await client.GetFromJsonAsync<JsonElement>(location);
+        Assert.Equal(JsonValueKind.Null, record.GetProperty("notes").ValueKind);
+        Assert.Equal("Noted Again", record.GetProperty("fullName").GetString());
+
+        // Validation applies to the present members, and a required member cannot be sent as null.
+        using HttpResponseMessage invalid = await client.PatchAsJsonAsync(location, new { email = "invalid", creditLimit = -1 });
+        JsonElement errors = (await ReadProblem(invalid, HttpStatusCode.BadRequest)).GetProperty("errors");
+        Assert.True(errors.TryGetProperty("email", out _), errors.ToString());
+        Assert.True(errors.TryGetProperty("creditLimit", out _), errors.ToString());
+        using HttpResponseMessage nulled = await client.PatchAsJsonAsync(location,
+            new { fullName = (string?)null, status = (string?)null, notes = "Kept out" });
+        errors = (await ReadProblem(nulled, HttpStatusCode.BadRequest)).GetProperty("errors");
+        Assert.True(errors.TryGetProperty("fullName", out _), errors.ToString());
+        Assert.True(errors.TryGetProperty("status", out _), errors.ToString());
+        Assert.False(errors.TryGetProperty("notes", out _), errors.ToString());
+        record = await client.GetFromJsonAsync<JsonElement>(location);
+        Assert.Equal(JsonValueKind.Null, record.GetProperty("notes").ValueKind);
+
+        // PUT stays a full replace: omitted members take their default or null.
+        using HttpResponseMessage replaced = await client.PutAsJsonAsync(location,
+            new { fullName = "Replaced Customer", email = "noted@example.test", notes = "Replaced" });
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        record = await client.GetFromJsonAsync<JsonElement>(location);
+        Assert.Equal("Replaced", record.GetProperty("notes").GetString());
+        Assert.Equal("pending", record.GetProperty("status").GetString());
+        Assert.Equal(0m, record.GetProperty("creditLimit").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, record.GetProperty("birthDate").ValueKind);
+
+        using HttpResponseMessage missing = await client.PatchAsJsonAsync(Customers + "/" + Guid.CreateVersion7(), new { notes = "None" });
+        await ReadProblem(missing, HttpStatusCode.NotFound);
+
+        Guid customer = record.GetProperty("id").GetGuid();
+        await using NpgsqlConnection connection = new(api.ConnectionString);
+        await connection.OpenAsync();
+        await using NpgsqlCommand insert = new(
+            "INSERT INTO accounts (account_number, frozen, customer_id) VALUES ('0123456789', false, @id) RETURNING id", connection);
+        insert.Parameters.AddWithValue("id", customer);
+        string account = $"/api/v1/accounts/{Assert.IsType<int>(await insert.ExecuteScalarAsync())}";
+        using HttpResponseMessage frozen = await client.PatchAsJsonAsync(account, new { frozen = true });
+        Assert.Equal(HttpStatusCode.OK, frozen.StatusCode);
+        JsonElement accountRecord = await frozen.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(accountRecord.GetProperty("frozen").GetBoolean());
+        Assert.Equal("0123456789", accountRecord.GetProperty("accountNumber").GetString());
+        Assert.Equal(customer, accountRecord.GetProperty("customerId").GetGuid());
+        Assert.True(accountRecord.GetProperty("updatedAt").GetDateTimeOffset() > DateTimeOffset.UnixEpoch);
+        using HttpResponseMessage orphaned = await client.PatchAsJsonAsync(account, new { customerId = (Guid?)null });
+        Assert.True((await ReadProblem(orphaned, HttpStatusCode.BadRequest)).GetProperty("errors")
+            .TryGetProperty("customerId", out _));
+    }
+
     internal static async Task<JsonElement> ReadProblem(HttpResponseMessage response, HttpStatusCode expected)
     {
         string raw = await response.Content.ReadAsStringAsync();
