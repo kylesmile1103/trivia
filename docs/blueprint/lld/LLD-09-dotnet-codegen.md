@@ -216,6 +216,13 @@ List parameters:
   are the case-insensitive operators and `containss` and `startswiths` the sensitive ones,
   and the data provider passes Refine's operators through unchanged.
 
+⚑ (decided 2026-11-26) `eq`, `ne` and `in` compare exactly for every type, a deliberate
+  deviation from Refine, whose `eq` and `ne` are documented as case-insensitive (`eqs` and
+  `nes` are its sensitive ones). A case-insensitive exact match, if one is needed later, is a
+  new explicit operator. Why: these operators carry values taken from the data (ids, foreign
+  keys, enum and status values, select options), where an exact comparison is right and keeps
+  the btree index usable, so `filter=code:eq:ab1` must not match `AB1`.
+
 The response's `items`, `total`, `page` and `pageSize` are what contract-sync's pagination
 heuristics already recognize (`docs/data-provider.md`).
 
