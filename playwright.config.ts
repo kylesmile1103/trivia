@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 
 import { defineConfig, devices } from '@playwright/test'
@@ -22,6 +23,17 @@ const blueprintNextReason = blueprintNextUnavailable()
 const mvpAppPort = Number(process.env.TRIVIA_MVP_APP_PORT ?? 5476)
 const mvpDesignerPort = Number(process.env.TRIVIA_MVP_PORT ?? 4576)
 const missingMvp = missingMvpPrerequisite()
+
+// A killed run (Ctrl+C, a closed output pipe) skips e2e/next/refine.spec.ts's cleanup and can
+// leave the empty route folder its page test creates. Its page test then fails on every run in
+// this checkout: undo removes only the folders the create made (packages/next/src/host.ts), and
+// Next 16.4.6 keeps serving a page deleted from a folder that stays. Remove it before the
+// servers start, in the runner only: each worker loads this file again in the middle of a run.
+// Git never tracks an empty folder, so this one is always a leftover.
+const leftoverRoute = path.resolve('examples/next-admin/app/(bank)/accounts/create')
+if (process.env.TEST_WORKER_INDEX === undefined && fs.existsSync(leftoverRoute) && fs.readdirSync(leftoverRoute).length === 0) {
+  fs.rmdirSync(leftoverRoute)
+}
 
 // The dev service runs `trivia-dotnet` for the backend routes. The apps' servers find this
 // checkout's build of it first: `e2e/bin` holds a shim for what `nx run dotnet:tool` publishes.
