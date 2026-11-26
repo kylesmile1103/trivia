@@ -79,8 +79,9 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   `docs/api.md` `refine/*`). `trivia_get_page` reads a file's list and form pages: the selected
   element's file when none is given, every page under `src/` with neither. Each page has its
   columns or fields as the source has them and the contract fields it doesn't have yet.
-  `trivia_edit_columns` adds contract fields as typed columns and removes or reorders columns by
-  key, in order, as one `Agent: …` undo entry, and returns the page as it now reads.
+  `trivia_edit_columns` adds contract fields as typed columns, removes or reorders columns by
+  key, and aligns an enum column's filter options with the contract in place, in order, as one
+  `Agent: …` undo entry, and returns the page as it now reads (with the plan's `warnings`).
   `trivia_edit_fields` does the same for a form page's fields (rule, default and control
   together), against the create or update request body. The control is written in the form's
   style: a `Controller` with shadcn's `Field`, or Refine's `<FormField>`.
@@ -90,8 +91,10 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   `trivia_add_pages` generates a contract resource's missing pages (`docs/api.md`
   `refine/pages/plan`); with neither file nor selection, `trivia_get_page` lists the resources
   and the pages each has and could have.
-  Fixes name columns and fields by key (a `rebuild` finds the position when it is planned), so a
-  list read before another fix ran still applies correctly.
+  Fixes are `align` (in place: a changed enum's options, a rule's bounds and optionality) or
+  `rebuild` (a changed type, or options Trivia can read but not edit one by one). They name
+  columns and fields by key and are resolved when planned (a `rebuild` finds the position, an
+  `align` reads the options), so a list read before another fix ran still applies correctly.
   `trivia_apply` also takes the value ops (`insertElement`, `removeElement`, `moveElement`,
   `setProperty`, `removeProperty`) for edits the adapter doesn't plan, such as renaming a header.
   The chain ops (`setCallArgument`, `insertCall`, `removeCall`) edit one call of a zod rule in
@@ -169,8 +172,10 @@ The same setup on `examples/refine-admin`, with the designer open on the custome
 | "Accounts need create, edit and detail pages." | `trivia_add_pages` (create, edit, show); then it read the new form and **relabelled the currency options**: the generator had written "Eur", "Usd", "Gbp". Fixed: codes keep their case |
 | "The backend team just updated the bank API spec. Bring the app in line with it." | drift → `trivia_sync_openapi` → drift → removed the Email column, rebuilt Status (column and edit field), added `nationality` to the create form, and checked drift was empty. It then **repaired two side effects by hand**: "Gb / Us / Vn" labels (same fix), and a rebuilt Status column that **lost its sorting**, because generated enum columns weren't sortable. Fixed: every scalar column sorts |
 
-The second fix shows a rebuild's cost: it replaces the column with the generated shape. A
-narrower fix for `enum_changed`, updating only the options, would keep customisations.
+The second fix showed a rebuild's cost: it replaces the column with the generated shape. Since
+2026-11-26 `enum_changed` is fixed in place instead (`docs/product.md`, slice 3): `align` adds
+the `closed` option to the Status filter, the rule and the Select, and the column keeps its
+sorting, cell and labels.
 
 Tests: `packages/vite-plugin-ast-locator/test/{mcp,selection}.test.ts` (through the SDK client),
 `packages/designer/src/shared/engine/selection-sync.test.ts`, and `e2e/mcp.spec.ts` (the whole
