@@ -8,8 +8,9 @@ import { parseArgs } from 'node:util'
 import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint, type Diagnostic } from '@trivia/blueprint'
 
 import { ASPIRE_MISSING, ASPIRE_NEXT_STEPS, checkAspireVersion } from './aspire.js'
-import { compilePage, type CompileContext } from './compile.js'
+import { compilePage, type CompileContext, type RegistryItem } from './compile.js'
 import type { ProjectFacts } from './facts.js'
+import { compareBytes } from './print/style.js'
 import { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
 
 const usage = `Usage: trivia-blueprint <command>
@@ -87,6 +88,33 @@ async function openProject(root: string): Promise<Project> {
   return new EngineService({ host: createNextHost(root, engine), engine, version }) as Project
 }
 
+const shellWord = (word: string) => /^[\w@./:+-]+$/.test(word) ? word : "'" + word.replaceAll("'", "'\\''") + "'"
+
+/**
+ * One install line for shadcn items and one for Refine UI's, deduplicated and byte-sorted.
+ * The CLI prints them and never runs them: fetching components needs the network.
+ */
+export function registryCommands(items: readonly RegistryItem[]): string[] {
+  const words = (registry: RegistryItem['registry'], word: (item: string) => string) =>
+    [...new Set(items.filter((entry) => entry.registry === registry).map(({ item }) => item))].sort(compareBytes).map(word)
+  return [words('shadcn', shellWord), words('refine', (item) => shellWord('https://ui.refine.dev/r/' + encodeURIComponent(item) + '.json'))]
+    .filter((line) => line.length).map((line) => 'pnpm exec shadcn add ' + line.join(' '))
+}
+
+/** The registry items of the shipped kit manifests. */
+function kitItems(): RegistryItem[] {
+  const kit = fileURLToPath(new URL('../kit/', import.meta.url))
+  return fs.readdirSync(kit).filter((file) => file.endsWith('.manifest.json')).map((file) => {
+    const { source: { registry, item } } = JSON.parse(fs.readFileSync(path.join(kit, file), 'utf8')) as { source: RegistryItem }
+    return { registry, item }
+  })
+}
+
+/** The template's Refine UI layout and views; a Vite app also gets the whole kit (LLD-06 §7). */
+const templateItems = (target: ProjectFacts['target']): RegistryItem[] => [
+  { registry: 'refine', item: 'layout-01' }, { registry: 'refine', item: 'views' }, ...(target === 'vite-refine' ? kitItems() : []),
+]
+
 function createProject(
   root: string, dest: string, version: string, target: ProjectFacts['target'], dotnet: boolean, webDirectory = DEFAULT_WEB_DIRECTORY,
 ): void {
@@ -118,7 +146,7 @@ function createProject(
   fs.writeFileSync(path.join(dir, 'blueprint', APP_DOC), serialize(app), { flag: 'wx' })
   console.log(`Created ${destination}`)
   if (!localPlugin) console.log('Point ' + framework + ' and contract-sync at your Trivia distribution before installing.')
-  console.log(`Run in ${dir}\n  pnpm install\n  pnpm exec shadcn add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json`)
+  console.log(`Run in ${dir}\n  pnpm install` + registryCommands(templateItems(target)).map((line) => '\n  ' + line).join(''))
   if (dotnet) console.log(ASPIRE_NEXT_STEPS)
 }
 
@@ -299,6 +327,9 @@ export async function run(argv: string[], version: string, commands = backendCom
     const { code, message, details } = error as Error & { code?: string; details?: unknown }
     console.error((code ? code + ': ' : '') + message)
     if (details) console.error(JSON.stringify(details, null, 2))
+    if (command === 'eject' && code === 'unresolved_component') {
+      for (const line of registryCommands((details as { requires?: RegistryItem[] } | undefined)?.requires ?? [])) console.error(line)
+    }
     if (command === 'eject' && (details as { diagnostics?: { code: string }[] } | undefined)?.diagnostics
       ?.some(({ code }) => code === 'unknown_resource')) {
       console.error('Generate the backend and sync the contract with trivia-blueprint backend, then eject again.')
