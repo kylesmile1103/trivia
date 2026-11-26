@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { Plugin } from 'vite'
+import { type Plugin, isCSSRequest } from 'vite'
 
 import {
   type EngineBinding, EngineService, PREVIEW_PREFIX, createDevMiddleware, loadEngine,
@@ -181,17 +181,30 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       })
     },
 
-    // Vite reloads the page when an updated file has a module that nothing imports (a dead end
-    // of its update propagation). A stylesheet's dependency on a file stays in the graph as an
-    // `asset` node after the stylesheet dropped it: Tailwind's plugin makes its stylesheet depend
-    // on every file it scans, so after an undo deleted an ejected page (or the lock), the next
-    // eject reloaded the canvas, though nothing reads that node. Such nodes are left out (before
-    // the other plugins' hooks, Tailwind's among them); Vite updates the rest, and sends nothing
-    // for an empty list. A dependency a stylesheet still has keeps its CSS update.
+    // Two kinds of reload for files the canvas never imports, both found by eject, undo, eject
+    // on the Refine example. Tailwind's plugin makes its stylesheet depend on every file it
+    // scans, and Vite keeps each one as an `asset` node that the stylesheet imports.
+    // - A blueprint file (a document, the lock) that only stylesheets depend on: Tailwind reloads
+    //   the page when a scanned file that is no module changes, as it cannot know whether the
+    //   file is rendered. The dev service reads blueprint files from disk and previews bring their
+    //   own stylesheet, so the update goes to those stylesheets instead (Tailwind rebuilds them;
+    //   its hook returns early for a module that is not an asset). A blueprint file a module
+    //   imports is left as it is.
+    // - An `asset` node nothing imports any more (the stylesheet, rebuilt after an undo deleted
+    //   the file, dropped it): Vite treats it as a dead end and reloads, when nothing reads it.
+    //   Such nodes are left out; Vite updates the rest and sends nothing for an empty list.
+    // This runs before the other plugins' hooks, Tailwind's among them, which see the list it returns.
     hotUpdate: {
       order: 'pre',
       handler({ file, modules }) {
-        if (service === undefined || NODE_MODULES.test(file) || relativeToRoots(path.resolve(file), roots) === null) return
+        if (service === undefined || paths === undefined || NODE_MODULES.test(file)) return
+        const rel = relativeToRoots(path.resolve(file), roots)
+        if (rel === null) return
+        if (modules.length > 0 && modules.every((mod) => mod.type === 'asset') && rel.startsWith(paths.blueprintDir + '/')) {
+          // A stylesheet imported from JavaScript is a `js` node, so its file tells, not its type.
+          const stylesheets = new Set(modules.flatMap((mod) => [...mod.importers].filter((importer) => isCSSRequest(importer.file ?? importer.url))))
+          if (stylesheets.size > 0) return [...stylesheets]
+        }
         const consumed = modules.filter((mod) => mod.type !== 'asset' || mod.importers.size > 0)
         return consumed.length === modules.length ? undefined : consumed
       },
