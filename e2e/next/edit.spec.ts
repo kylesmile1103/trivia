@@ -15,6 +15,10 @@ const historyAction = (page: Page, label: 'Undo' | 'Redo') => page.getByRole('bu
 const selected = (page: Page) => page.evaluate(() =>
   (window as Window & { __trivia?: { state(): { selected: string | null } } }).__trivia?.state().selected,
 )
+/** What the Undo control names (its tooltip): the designer's history, as the designer last read it. */
+const undoLabel = (page: Page) => page.evaluate(() =>
+  (window as Window & { __trivia?: { state(): { history: { undoLabel: string | null } } } }).__trivia?.state().history.undoLabel,
+)
 
 test.afterEach(async () => {
   await restoreAll(originals)
@@ -96,6 +100,9 @@ test('FR-TN-05 inserts, moves, removes, undoes and redoes guarded Next edits', a
   expect(read(CLIENT)).toBe(inserted)
 
   await expect(historyAction(page, 'Undo')).toBeEnabled()
+  // The designer reads history by polling: until it has seen the insert, the canvas still
+  // expects to go busy for it, and refuses a right-click then. The run before ends on another label.
+  await expect.poll(() => undoLabel(page)).toBe('Insert element')
   await clickCanvas(page, added, 'right')
   await page.getByRole('menu', { name: 'Actions for p' }).getByRole('menuitem', { name: 'Move down' }).click()
   await expect(notes).toHaveText(['Client component', 'Added note'])
@@ -112,4 +119,75 @@ test('FR-TN-05 inserts, moves, removes, undoes and redoes guarded Next edits', a
   await historyAction(page, 'Redo').click()
   await expect(added).toHaveCount(0)
   await expect.poll(() => read(CLIENT)).toBe(originals.get(CLIENT)!)
+})
+
+// Next.js 16.4.6 can leave a page on its old render after an edit written while it loaded: an
+// HMR update that reaches it before its React root first commits is lost, and one written before
+// its HMR socket subscribed never arrives. Once a canvas document has hydrated, the canvas
+// reloads it if the dev service wrote since it began to load, and refreshes the app's router
+// otherwise (LLD-13 §6), which renders what is on disk.
+
+type RouterRequests = Window & { routerRequests?: Array<{ path: string; hydrated: boolean }> }
+
+test('FR-TN-05 refreshes a Next canvas document once after it hydrates, then lets the user in', async ({ page }) => {
+  // The App Router asks for a fresh server render with `?_rsc=`. Note each such request, and
+  // whether Next's route announcer (added in an effect after the root's first commit) was there.
+  // The canvas iframe's first document is about:blank, whose window the app's document reuses:
+  // this runs there, and its fetch wrapper stays.
+  await page.addInitScript(() => {
+    const w = window as RouterRequests
+    if (location.pathname.startsWith('/__trivia') || w.routerRequests) return
+    w.routerRequests = []
+    const fetch = w.fetch
+    w.fetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href)
+      if (url.searchParams.has('_rsc')) w.routerRequests!.push({ path: url.pathname, hydrated: document.querySelector('next-route-announcer') !== null })
+      return fetch.call(this, input, init)
+    } as typeof fetch
+  })
+  // With no write while the document loads, it is never reloaded: one document request.
+  let documents = 0
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() !== page.mainFrame()) documents++
+  })
+  await page.goto('/__trivia/')
+  const app = frame(page)
+  const requests = () => app.locator(':root').evaluate(() => (window as RouterRequests).routerRequests)
+  await expect.poll(requests).toEqual([{ path: '/', hydrated: true }])
+  await expect(page.getByTestId('canvas-overlay')).not.toHaveAttribute('aria-busy')
+  await page.waitForTimeout(500) // nothing else asks for one: no edit, no navigation
+  expect(await requests()).toHaveLength(1)
+  expect(documents).toBe(1)
+})
+
+test('FR-TN-05 shows an edit written while the Next canvas loads, every time', async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.goto('/__trivia/')
+  const app = frame(page)
+  const target = 'src/components/edit-demo.tsx#EditDemo#0.2'
+  await expect(app.locator('#demo-note')).toHaveAttribute('data-ast-node', target)
+  for (let round = 1; round <= 15; round++) {
+    // Reload the canvas's document, and edit (over the API, as an agent would) the moment its
+    // server-rendered HTML shows the node: before React has hydrated it.
+    await app.locator(':root').evaluate((root, n) => {
+      root.setAttribute('data-round', String(n))
+      setTimeout(() => location.reload())
+    }, round)
+    await expect(app.locator(`:root:not([data-round="${round}"]) #demo-note`)).toHaveAttribute('data-ast-node', target)
+    const result = await apply(page, { op: 'insert', target, expectedName: 'p', placement: 'before', snippet: '<p id="added-note">Added note</p>' })
+    expect(result.changed).toBe(true)
+    await expect(app.locator('#added-note'), `round ${round}`).toHaveAttribute('data-ast-node', result.locator)
+    await restoreAll(originals)
+    await expect(app.locator('#added-note'), `round ${round}, restored`).toHaveCount(0)
+  }
+})
+
+test('FR-TN-05 a click on a Next canvas that is still loading selects once it has caught up', async ({ page }) => {
+  await page.goto('/__trivia/')
+  // The server's HTML is on the canvas before the app has hydrated: click it without waiting.
+  const box = await frame(page).getByRole('heading', { name: 'Next.js back office' }).boundingBox()
+  if (!box) throw new Error('missing canvas bounds')
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect.poll(() => selected(page)).toBe('app/page.tsx#Home#0.0')
+  await expect(inspector(page).getByRole('region', { name: 'Text' })).toContainText('Next.js back office')
 })
