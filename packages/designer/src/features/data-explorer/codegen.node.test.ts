@@ -96,7 +96,7 @@ describe('in the playground', () => {
     for (const entry of ['src', 'package.json', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'vite.config.ts', 'mock-api.ts']) {
       fs.cpSync(path.join(PLAYGROUND, entry), path.join(dir, entry), { recursive: true })
     }
-    fs.symlinkSync(path.join(PLAYGROUND, 'node_modules'), path.join(dir, 'node_modules'), 'dir')
+    fs.symlinkSync(path.join(PLAYGROUND, 'node_modules'), path.join(dir, 'node_modules'), 'junction')
   })
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }))
 
@@ -131,7 +131,7 @@ describe('in the playground', () => {
         ``,
       ].join('\n'),
     )
-    const tsc = spawnSync(path.join(dir, 'node_modules/.bin/tsc'), ['-p', 'tsconfig.app.json', '--noEmit'], { cwd: dir, encoding: 'utf8' })
+    const tsc = spawnSync(process.execPath, [path.join(dir, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.app.json', '--noEmit'], { cwd: dir, encoding: 'utf8' })
     expect(tsc.stdout + tsc.stderr).toBe('')
     expect(tsc.status).toBe(0)
   }, 120_000)
@@ -142,7 +142,7 @@ describe('in the playground', () => {
       page,
       `import { DataTable } from "@/components/data-table"\nimport type { CustomerDto } from "@/api/generated/types.gen"\nexport const Wrong = ({ rows }: { rows: CustomerDto[] }) => <DataTable columns={[{ key: "nope", header: "Nope" }]} data={rows} />\n`,
     )
-    const tsc = spawnSync(path.join(dir, 'node_modules/.bin/tsc'), ['-p', 'tsconfig.app.json', '--noEmit'], { cwd: dir, encoding: 'utf8' })
+    const tsc = spawnSync(process.execPath, [path.join(dir, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.app.json', '--noEmit'], { cwd: dir, encoding: 'utf8' })
     fs.rmSync(page)
     expect(tsc.status).not.toBe(0)
     expect(tsc.stdout).toContain('nope')

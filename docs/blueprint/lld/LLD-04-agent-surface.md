@@ -157,8 +157,9 @@ Codes come from `docs/api.md`. New in `error.details`:
 | Blueprint from a newer version | 422 `unsupported` | `{ found, supported }` |
 
 ⚑ Contract action diagnostics put the available synced operation names in the patch
-response's structured hint. A mistyped list-header refetch points at `query` and offers
-the implicit `list` query. The patch tool description also names both conventions.
+response's structured hint. An invalid contract refetch points at `query` and suggests
+using `list` in a list page's row or header actions. The patch tool description also
+names both conventions.
 
 ## 5. Security
 

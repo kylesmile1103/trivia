@@ -266,6 +266,7 @@ function listPage(
     )
   }
   const setup = actionSetup(context, imports)
+  const afterTable = context.actions?.afterTable
   return `${imports.render()}
 
 export function ${component}() {${setup}
@@ -281,7 +282,7 @@ ${columns.map((c) => `${indent(c, 6)},`).join('\n')}
     refineCoreProps: {
       resource: "${name}",
     },
-  });
+  });${afterTable ? '\n\n' + indent(afterTable, 2) : ''}
 
   return (
     <ListView>
