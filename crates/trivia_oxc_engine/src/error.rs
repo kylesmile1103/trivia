@@ -7,7 +7,7 @@ pub enum EngineError {
     InvalidLocator(String),
     #[error("no JSX node at `{0}`")]
     NodeNotFound(String),
-    #[error("invalid value path `{0}` (expected `<file>#<scope>#<binding or call()>[.prop][[key=value]][[i]]…`)")]
+    #[error("invalid value path `{0}` (expected `<file>#<scope>#<binding or call()>[.prop][[key=value]][[=value]][[i]][<Tag>.attr]…`)")]
     InvalidValuePath(String),
     #[error("no value at `{path}`: {why}")]
     ValueNotFound { path: String, why: String },

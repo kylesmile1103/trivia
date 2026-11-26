@@ -10,7 +10,11 @@
 //!   name in the scope (`<Refine>`), whose first step names an attribute
 //!   (`<Refine>.resources`: the expression in `resources={…}`);
 //! * a step is `.prop` (an object property), `[key=value]` (the array element that is an
-//!   object whose `key` is the string `value`) or `[i]` (the `i`-th element).
+//!   object whose `key` is the string `value`), `[=value]` (the array element that is the
+//!   string `value`), `[i]` (the `i`-th element), or `<Tag>.attr`: the expression in
+//!   `attr={…}` of the one `<Tag>` element inside the value as written, wherever it sits in it
+//!   (`columns[id=status].header<DataTableFilterCombobox>.options`: a filter's options inside
+//!   a column header's JSX). No `<Tag>` there is not found; two are ambiguous.
 //!
 //! Before each step, and at the end when an edit needs an object or array, the value is
 //! unwrapped to the literal it holds: parentheses and TS `as`/`satisfies`/`!` go, a function
@@ -54,7 +58,11 @@ pub enum Head {
 pub enum Step {
     Prop(String),
     Key { key: String, value: String },
+    /// `[=value]`: the element that is the string `value`.
+    Value(String),
     Index(usize),
+    /// `<Tag>`, always followed by `.attr`: the one `<Tag>` inside the value (see the module docs).
+    Element(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,7 +86,7 @@ impl ValuePath {
         let head_end = if rest.starts_with('<') {
             rest.find('>').map_or(rest.len(), |i| i + 1)
         } else {
-            rest.find(['.', '[']).unwrap_or(rest.len())
+            rest.find(['.', '[', '<']).unwrap_or(rest.len())
         };
         let (head_text, mut steps_text) = rest.split_at(head_end);
         let head = if let Some(tag) = head_text.strip_prefix('<').and_then(|t| t.strip_suffix('>')) {
@@ -96,17 +104,27 @@ impl ValuePath {
         let mut steps = Vec::new();
         while !steps_text.is_empty() {
             if let Some(after) = steps_text.strip_prefix('.') {
-                let end = after.find(['.', '[']).unwrap_or(after.len());
+                let end = after.find(['.', '[', '<']).unwrap_or(after.len());
                 let prop = &after[..end];
                 if !is_identifier(prop) {
                     return Err(invalid());
                 }
                 steps.push(Step::Prop(prop.to_string()));
                 steps_text = &after[end..];
+            } else if let Some(after) = steps_text.strip_prefix('<') {
+                let end = after.find('>').ok_or_else(invalid)?;
+                let tag = &after[..end];
+                steps_text = &after[end + 1..];
+                // The attribute comes next: `<Tag>.attr`.
+                if !tag.split('.').all(is_identifier) || !steps_text.starts_with('.') {
+                    return Err(invalid());
+                }
+                steps.push(Step::Element(tag.to_string()));
             } else if let Some(after) = steps_text.strip_prefix('[') {
                 let end = after.find(']').ok_or_else(invalid)?;
                 let inner = &after[..end];
                 let step = match inner.split_once('=') {
+                    Some(("", value)) if !value.is_empty() => Step::Value(value.to_string()),
                     Some((key, value)) if is_identifier(key) && !value.is_empty() => {
                         Step::Key { key: key.to_string(), value: value.to_string() }
                     }
@@ -144,7 +162,9 @@ impl fmt::Display for ValuePath {
             match step {
                 Step::Prop(p) => write!(f, ".{p}")?,
                 Step::Key { key, value } => write!(f, "[{key}={value}]")?,
+                Step::Value(value) => write!(f, "[={value}]")?,
                 Step::Index(i) => write!(f, "[{i}]")?,
+                Step::Element(tag) => write!(f, "<{tag}>")?,
             }
         }
         Ok(())
@@ -198,11 +218,22 @@ pub(crate) fn resolve<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Res
                 return Err(EngineError::InvalidValuePath(format!("{path} (after <{tag}> comes the attribute: <{tag}>.name)")));
             };
             steps = rest;
-            element_attribute(program, &path.file, &path.scope, tag, attr).map_err(missing)?
+            element_attribute(program, path, Within::Scope, tag, attr)?
         }
     };
     let mut slot = None;
-    for step in steps {
+    let mut steps = steps.iter();
+    while let Some(step) = steps.next() {
+        if let Step::Element(tag) = step {
+            // The parser puts the attribute after it.
+            let Some(Step::Prop(attr)) = steps.next() else {
+                return Err(EngineError::InvalidValuePath(format!("{path} (after <{tag}> comes the attribute: <{tag}>.name)")));
+            };
+            expr = element_attribute(program, path, Within::Value(expr.span()), tag, attr)?;
+            // An attribute is not an item of a literal: nothing to remove or move it from.
+            slot = None;
+            continue;
+        }
         let container = unwrap_literal(expr);
         match step {
             Step::Prop(prop) => {
@@ -240,6 +271,21 @@ pub(crate) fn resolve<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Res
                 expr = element;
                 slot = Some(Slot { container, index });
             }
+            Step::Value(text) => {
+                let Expression::ArrayExpression(arr) = container else {
+                    return Err(missing(format!("`[={text}]` needs an array, but the value there is {}", kind_name(container))));
+                };
+                let mut hits = arr.elements.iter().enumerate().filter_map(|(i, e)| {
+                    let e = e.as_expression()?;
+                    (static_string(e).as_deref() == Some(text.as_str())).then_some((i, e))
+                });
+                let (index, element) = hits.next().ok_or_else(|| missing(format!("no element is the string \"{text}\"")))?;
+                if hits.next().is_some() {
+                    return Err(EngineError::Unsupported(format!("`{path}` is ambiguous: more than one element is the string \"{text}\"")));
+                }
+                expr = element;
+                slot = Some(Slot { container, index });
+            }
             Step::Index(i) => {
                 let Expression::ArrayExpression(arr) = container else {
                     return Err(missing(format!("`[{i}]` needs an array, but the value there is {}", kind_name(container))));
@@ -252,40 +298,64 @@ pub(crate) fn resolve<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Res
                     .ok_or_else(|| missing(format!("element {i} is a spread or a hole, not a value")))?;
                 slot = Some(Slot { container, index: *i });
             }
+            Step::Element(_) => unreachable!("handled before the literal is unwrapped"),
         }
     }
     Ok(Resolved { expr, slot })
 }
 
-/// The expression of attribute `attr` (`attr={…}`) on the first `<tag>` element in `scope`.
+/// Where an element step looks for its `<tag>`.
+enum Within {
+    /// The path's head: the first `<tag>` of the scope.
+    Scope,
+    /// A step: the one `<tag>` inside this value (its whole source, as written).
+    Value(Span),
+}
+
+/// The expression of attribute `attr` (`attr={…}`) on the `<tag>` element `within` names.
 fn element_attribute<'p, 'a>(
     program: &'p Program<'a>,
-    file: &str,
-    scope: &str,
+    path: &ValuePath,
+    within: Within,
     tag: &str,
     attr: &str,
-) -> std::result::Result<&'p Expression<'a>, String> {
-    let table = crate::locator::JsxTable::build(program, file).map_err(|e| e.to_string())?;
-    let in_scope = |n: &crate::locator::JsxNode| scope == MODULE_SCOPE || n.scope == scope;
-    let node = table
-        .nodes
-        .iter()
-        .find(|n| in_scope(n) && n.name.as_deref() == Some(tag))
-        .ok_or_else(|| format!("`{scope}` renders no <{tag}>"))?;
+) -> Result<&'p Expression<'a>> {
+    let missing = |why: String| EngineError::ValueNotFound { path: path.to_string(), why };
+    let table = crate::locator::JsxTable::build(program, &path.file).map_err(|e| missing(e.to_string()))?;
+    let named = |n: &&crate::locator::JsxNode| n.name.as_deref() == Some(tag);
+    let node = match within {
+        Within::Scope => {
+            let scope = path.scope.as_str();
+            table
+                .nodes
+                .iter()
+                .filter(named)
+                .find(|n| scope == MODULE_SCOPE || n.scope == scope)
+                .ok_or_else(|| missing(format!("`{scope}` renders no <{tag}>")))?
+        }
+        Within::Value(span) => {
+            let mut hits = table.nodes.iter().filter(named).filter(|n| span.start <= n.span.start && n.span.end <= span.end);
+            let node = hits.next().ok_or_else(|| missing(format!("the value before <{tag}> renders no <{tag}>")))?;
+            if hits.next().is_some() {
+                return Err(EngineError::Unsupported(format!("`{path}` is ambiguous: the value before <{tag}> renders more than one <{tag}>")));
+            }
+            node
+        }
+    };
     let at = node
         .attributes
         .iter()
         .find(|a| a.name.as_deref() == Some(attr))
-        .ok_or_else(|| format!("<{tag}> has no `{attr}` attribute"))?;
+        .ok_or_else(|| missing(format!("<{tag}> has no `{attr}` attribute")))?;
     if !matches!(at.value, Some(crate::locator::AttrValue::Expression { .. })) {
-        return Err(format!("<{tag}>'s `{attr}` is not a `{{…}}` expression"));
+        return Err(missing(format!("<{tag}>'s `{attr}` is not a `{{…}}` expression")));
     }
     descend::attribute(program, at.span)
         .and_then(|a| match &a.value {
             Some(oxc_ast::ast::JSXAttributeValue::ExpressionContainer(c)) => c.expression.as_expression(),
             _ => None,
         })
-        .ok_or_else(|| format!("<{tag}>'s `{attr}` holds no expression Trivia can reach"))
+        .ok_or_else(|| missing(format!("<{tag}>'s `{attr}` holds no expression Trivia can reach")))
 }
 
 /// Find a node by span, stepping at each level into the child that contains it. Covers where
@@ -1055,12 +1125,104 @@ export const PostEdit = () => {
             "src/a.tsx#PostList#columns[accessorKey=category.id]",
             "src/a.tsx#App#<Refine>.resources[name=posts]",
             "src/a.tsx#App#<Foo.Bar>.items",
+            "src/a.tsx#PostList#columns[id=status].header<DataTableFilterCombobox>.options[value=a]",
+            "src/a.tsx#module#schema.status[=a]",
+            "src/a.tsx#X#a[=v]",
+            "src/a.tsx#X#a<Foo.Bar>.items[=x y]",
         ] {
             assert_eq!(ValuePath::parse(s).unwrap().to_string(), s);
         }
-        for bad in ["a.tsx#X", "a.tsx#X#", "a.tsx#X#1a", "a.tsx#X#a..b", "a.tsx#X#a[", "a.tsx#X#a[=v]", "a.tsx#X#a[x=]", "a.tsx#1#a", "a.tsx#X#f(x)", "a.tsx#X#<1x>.a", "a.tsx#X#<A"] {
+        assert_eq!(ValuePath::parse("a.tsx#X#a[=v]").unwrap().steps, [Step::Value("v".into())]);
+        assert_eq!(
+            ValuePath::parse("a.tsx#X#a.header<Combo>.options").unwrap().steps,
+            [Step::Prop("header".into()), Step::Element("Combo".into()), Step::Prop("options".into())]
+        );
+        for bad in ["a.tsx#X", "a.tsx#X#", "a.tsx#X#1a", "a.tsx#X#a..b", "a.tsx#X#a[", "a.tsx#X#a[=]", "a.tsx#X#a[x=]", "a.tsx#1#a", "a.tsx#X#f(x)", "a.tsx#X#<1x>.a", "a.tsx#X#<A"] {
             assert!(ValuePath::parse(bad).is_err(), "{bad}");
         }
+        // A mid-path element names the attribute next.
+        for bad in ["a.tsx#X#a.header<Combo>", "a.tsx#X#a.header<Combo>[0]", "a.tsx#X#a.header<Combo><B>.c", "a.tsx#X#a.header<1x>.c", "a.tsx#X#a.header<>.c", "a.tsx#X#a.header<Combo.c"] {
+            assert!(matches!(ValuePath::parse(bad), Err(EngineError::InvalidValuePath(_))), "{bad}");
+        }
+    }
+
+    #[test]
+    fn reaches_an_attribute_of_the_one_element_inside_a_value() {
+        const HEADERS: &str = r#"export function List() {
+  const columns = useMemo(
+    () => [
+      {
+        id: "status",
+        header: ({ column }) => (
+          <div className="flex">
+            <span>Status</span>
+            <DataTableFilterCombobox
+              column={column}
+              options={[
+                { label: "Pending", value: "pending" },
+                { label: t("active"), value: "active" },
+              ]}
+            />
+          </div>
+        ),
+      },
+      {
+        id: "kind",
+        header: ({ column }) => {
+          if (column.getIsFiltered()) return <Filtered />;
+          return <DataTableFilterCombobox column={column} options={kinds} />;
+        },
+      },
+      { id: "name", header: "Name" },
+      {
+        id: "both",
+        header: () => (
+          <>
+            <DataTableFilterCombobox options={[]} />
+            <DataTableFilterCombobox options={[]} />
+          </>
+        ),
+      },
+    ],
+    [],
+  );
+  return <DataTable columns={columns} />;
+}
+"#;
+        let at = |p: &str| describe_value(HEADERS, &format!("src/l.tsx#List#{p}"));
+        let json = |p: &str| serde_json::to_value(at(p).unwrap()).unwrap();
+        let options = json("columns[id=status].header<DataTableFilterCombobox>.options");
+        assert_eq!(options["kind"], "array");
+        assert_eq!(options["elements"][0]["properties"][1]["value"], serde_json::json!({ "kind": "string", "line": 12, "value": "pending" }));
+        assert_eq!(json("columns[id=status].header<DataTableFilterCombobox>.options[value=active].value")["value"], "active");
+        // A header with a block body and an early return: the one Combobox in the whole function.
+        assert_eq!(json("columns[id=kind].header<DataTableFilterCombobox>.options"), serde_json::json!({ "kind": "identifier", "line": 23, "name": "kinds" }));
+        let code = |p: &str| at(p).unwrap_err().code();
+        let message = |p: &str| at(p).unwrap_err().to_string();
+        assert_eq!(code("columns[id=name].header<DataTableFilterCombobox>.options"), "node_not_found");
+        assert!(message("columns[id=name].header<DataTableFilterCombobox>.options").contains("renders no <DataTableFilterCombobox>"));
+        // Only inside the value: the Status header's <div> is not the Kind header's.
+        assert_eq!(code("columns[id=kind].header<div>.className"), "node_not_found");
+        assert!(message("columns[id=status].header<DataTableFilterCombobox>.nope").contains("has no `nope` attribute"));
+        assert_eq!(code("columns[id=both].header<DataTableFilterCombobox>.options"), "unsupported");
+        assert!(message("columns[id=both].header<DataTableFilterCombobox>.options").contains("more than one <DataTableFilterCombobox>"));
+        // The head form still takes the scope's first one.
+        assert_eq!(json("<DataTableFilterCombobox>.options")["elements"][0]["line"], 12);
+    }
+
+    #[test]
+    fn selects_an_array_element_by_its_string() {
+        const SCHEMA: &str = "const schema = z.object({\n  status: z.enum([\"a\", `b`], \"Pick one\").optional(),\n  twice: z.enum([\"a\", \"a\"]),\n});\n";
+        let alloc = Allocator::default();
+        let program = parse(&alloc, SCHEMA, "src/f.ts").unwrap();
+        let resolve_at = |p: &str| resolve(&program, &ValuePath::parse(&format!("src/f.ts#module#{p}")).unwrap());
+        let b = resolve_at("schema.status[=b]").unwrap();
+        assert_eq!(&SCHEMA[b.expr.span().start as usize..b.expr.span().end as usize], "`b`");
+        assert_eq!(b.slot.map(|s| s.index), Some(1));
+        let err = |p: &str| resolve_at(p).err().unwrap();
+        assert!(err("schema.status[=c]").to_string().contains("no element is the string \"c\""));
+        assert_eq!(err("schema.twice[=a]").code(), "unsupported");
+        assert!(err("schema[=a]").to_string().contains("needs an array, but the value there is an object"));
     }
 
     #[test]
