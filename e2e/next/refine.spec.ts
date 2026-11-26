@@ -60,9 +60,15 @@ test('registers a missing Refine page as an App Router file and undoes the same 
   await expect(result).toBeOK()
   const createPath = '/accounts/create'
   await expect.poll(async () => (await page.request.get(createPath)).status()).toBe(200)
-  await page.evaluate((url) => {
-    document.querySelector<HTMLIFrameElement>('iframe[title="App canvas"]')!.contentWindow!.location.assign(url)
-  }, createPath)
+  // Opened as a user opens a path, through the designer: Next's dev client can reload the old
+  // page on its own after the write (seen as `/` loading again right after this navigation
+  // started), and a reload cancels a load on its way. The designer then asks again (FR-DS-02).
+  await page.getByRole('tab', { name: 'Pages' }).click()
+  const pathField = page.getByRole('textbox', { name: 'Path' })
+  // The field follows the canvas: once it shows where the canvas is, typing into it holds.
+  await expect(pathField).toHaveValue(/^\//)
+  await pathField.fill(createPath)
+  await pathField.press('Enter')
   await expect(app(page).getByRole('button', { name: 'Create account', exact: true })).toBeVisible()
   expect(fs.readFileSync(PROVIDER, 'utf8')).toContain('create: "/accounts/create"')
 
