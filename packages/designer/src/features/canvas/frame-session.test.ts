@@ -3,6 +3,10 @@
 // A Next document's catch-up (LLD-13 §6), against FrameSession itself: the canvas listener is a
 // stub that answers `lastWrite`, the app's documents are jsdom iframes, and reloading one is
 // what the test does when `reloadDocument` is called.
+//
+// One fake clock drives everything the catch-up reads: timers, Date (the service's lastWriteAt),
+// the designer's performance, and each frame document's timeOrigin and performance.now(). No
+// real time passes, so each test asserts its deadline to the millisecond.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,14 +25,17 @@ interface App {
   win: FrameWindow
   doc: Document
   refreshes: number
-  resources: Array<(list: { getEntries(): Array<{ name: string; startTime: number; responseEnd: number }> }) => void>
+  resources: Array<(list: { getEntries(): Array<{ name: string; startTime: number; responseEnd: number; duration: number }> }) => void>
 }
 
+/** A new app document, which began to load now (on the fake clock). */
 function appDocument(): App {
   const host = document.createElement('iframe')
   document.body.append(host)
   const win = host.contentWindow as FrameWindow
   const app: App = { win, doc: host.contentDocument!, refreshes: 0, resources: [] }
+  const timeOrigin = Date.now()
+  Object.defineProperty(win, 'performance', { configurable: true, value: { timeOrigin, now: () => Date.now() - timeOrigin } })
   Object.assign(win, {
     ResizeObserver: class {
       observe() {}
@@ -51,7 +58,8 @@ function appDocument(): App {
   return app
 }
 
-const tick = (ms = 0) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+/** Let `ms` pass on the fake clock, running the timers and promises due meanwhile. */
+const later = (ms: number) => vi.advanceTimersByTimeAsync(ms)
 
 let warn: ReturnType<typeof vi.spyOn>
 let lastWrite: () => Promise<number | null>
@@ -72,24 +80,30 @@ function startSession(next = true, attach = true): void {
 }
 
 const hydrate = () => app.doc.body.append(app.doc.createElement('next-route-announcer'))
+/** The current document's navigation start, as the window test reads it. */
+const began = () => app.win.performance.timeOrigin
 /** The router's request for the refresh answered, as the frame's resource timing reports it. */
 function routerAnswered(): void {
   const now = app.win.performance.now()
-  for (const observer of [...app.resources]) observer({ getEntries: () => [{ name: `${app.win.location.href}?_rsc=1`, startTime: now, responseEnd: now }] })
+  const entry = { name: `${app.win.location.href}?_rsc=1`, startTime: now, responseEnd: now, duration: 0 }
+  for (const observer of [...app.resources]) observer({ getEntries: () => [entry] })
 }
 /** The page reloads: its document unloads, a new one loads. */
-async function reload(): Promise<void> {
+function reload(): void {
   app.win.dispatchEvent(new Event('pagehide'))
-  await tick(20)
   app = appDocument()
   iframe.dispatchEvent(new Event('load'))
 }
+/** The refresh answers and the DOM stays quiet: the catch-up ends QUIET_MS (120 ms) later. */
 async function settle(): Promise<void> {
   routerAnswered()
-  await tick(250)
+  await later(119)
+  expect(session.updating).toBe(true)
+  await later(1)
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'], now: 1_795_000_000_000 })
   reloads.windows.length = 0
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   lastWrite = async () => null
@@ -103,58 +117,47 @@ afterEach(() => {
 })
 
 describe('a Next document catches up by reloading when the service wrote while it loaded', () => {
-  // Timers are fake (the grace, the bounds); Date, performance and the documents' timeOrigin
-  // are the real clock, as the service's lastWriteAt and the browser share one.
-  const later = (ms: number) => vi.advanceTimersByTimeAsync(ms)
-  /** The current document's navigation start, as the window test reads it. */
-  const began = () => Math.floor(app.win.performance.timeOrigin)
-
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
-  })
-
-  it('reloads once, no sooner than the grace after the write, and is busy throughout', async () => {
+  it('reloads once, exactly the grace after the write, and is busy throughout', async () => {
     startSession()
-    lastWrite = async () => Date.now() - 10 // an agent's edit, written while this document loaded
+    await later(100) // the document loads
+    lastWrite = async () => Date.now() - 10 // an agent's edit, written while it loaded
     hydrate()
     await later(0)
     expect(app.refreshes).toBe(0)
-    // The reload is due 490 ms on; the margins absorb the real time a loaded machine adds.
-    await later(380)
+    await later(489)
     expect(reloads.windows).toEqual([]) // Turbopack may not have seen the write yet
     expect(session.updating).toBe(true)
-    await later(200)
+    await later(1)
     expect(reloads.windows).toEqual([app.win])
 
-    await reload()
+    reload()
     expect(session.updating).toBe(true) // between the unload and the new attach as well
-    lastWrite = async () => began() - 600 // nothing since: the write was before the grace
+    lastWrite = async () => began() - 501 // nothing since: the write was before the grace
     hydrate()
     await later(0)
     expect(app.refreshes).toBe(1)
     expect(reloads.windows).toHaveLength(1)
-    expect(session.updating).toBe(true)
-    await settle() // the refresh's settle reads the real clock
+    await settle()
     expect(session.updating).toBe(false)
     expect(warn).not.toHaveBeenCalled()
   })
 
-  it('reloads at once when the write was more than the grace ago', async () => {
+  it('reloads at once when the write was the grace or more ago', async () => {
     startSession()
-    await tick(560) // the document took its time to hydrate (the real clock: the write is in its window)
-    lastWrite = async () => Date.now() - 520
+    await later(560) // the document took its time to hydrate
+    lastWrite = async () => Date.now() - 500
     hydrate()
     await later(0)
     expect(reloads.windows).toEqual([app.win])
   })
 
-  it('waits no longer than the grace when the write seems to be in the future (a skewed clock)', async () => {
+  it('waits exactly the grace when the write seems to be in the future (a skewed clock)', async () => {
     startSession()
     lastWrite = async () => Date.now() + 5_000
     hydrate()
-    await later(400)
+    await later(499)
     expect(reloads.windows).toEqual([])
-    await later(200)
+    await later(1)
     expect(reloads.windows).toHaveLength(1)
   })
 
@@ -180,27 +183,44 @@ describe('a Next document catches up by reloading when the service wrote while i
     startSession()
     lastWrite = async () => Date.now()
     hydrate()
-    await later(510)
-    await reload()
+    await later(500)
+    expect(reloads.windows).toHaveLength(1)
+    reload()
     lastWrite = async () => began() - 100 // the reload came too soon after the write after all
     hydrate()
-    await later(0)
-    expect(reloads.windows).toHaveLength(1) // delayed the same way
-    await later(510)
+    await later(399) // delayed the same way: the grace after the write
+    expect(reloads.windows).toHaveLength(1)
+    await later(1)
     expect(reloads.windows).toHaveLength(2)
     expect(app.refreshes).toBe(0)
   })
 
-  it('refreshes a reloaded document whose last write came more than the grace before it began', async () => {
+  it('counts a write exactly the grace before a reloaded document began, and refreshes for one a millisecond older', async () => {
     startSession()
     lastWrite = async () => Date.now()
     hydrate()
-    await later(510)
-    await reload()
-    lastWrite = async () => began() - 600
+    await later(500)
+    reload()
+    lastWrite = async () => began() - 500 // the edge of its window: reload, the grace long past
     hydrate()
     await later(0)
-    expect(reloads.windows).toHaveLength(1)
+    expect(reloads.windows).toHaveLength(2)
+
+    reload() // the chain's second reload
+    lastWrite = async () => null
+    hydrate()
+    await later(0)
+    await settle()
+    reload() // the user's own reload: a new chain
+    lastWrite = async () => Date.now()
+    hydrate()
+    await later(500)
+    expect(reloads.windows).toHaveLength(3)
+    reload()
+    lastWrite = async () => began() - 501
+    hydrate()
+    await later(0)
+    expect(reloads.windows).toHaveLength(3)
     expect(app.refreshes).toBe(1)
   })
 
@@ -209,30 +229,30 @@ describe('a Next document catches up by reloading when the service wrote while i
     lastWrite = async () => Date.now() // something keeps writing
     for (let reloaded = 1; reloaded <= 2; reloaded++) {
       hydrate()
-      await later(510)
+      await later(500)
       expect(reloads.windows).toHaveLength(reloaded)
-      await reload()
+      reload()
     }
     hydrate()
-    await later(510)
+    await later(500)
     expect(reloads.windows).toHaveLength(2)
     expect(app.refreshes).toBe(1)
     expect(warn).toHaveBeenCalledTimes(1)
     expect(String(warn.mock.calls[0]![0])).toMatch(/wrote the Next\.js app again.*2 times.*16\.4\.6/s)
-    await settle() // the refresh's settle reads the real clock
+    await settle()
     expect(session.updating).toBe(false)
   })
 
-  it('refreshes a first document whose last write came just before it began, or that has none', async () => {
+  it('refreshes a first document whose last write came a millisecond before it began, or that has none', async () => {
     startSession()
     lastWrite = async () => began() - 1 // no grace for a document the user or Next loaded
     hydrate()
     await later(0)
     expect(reloads.windows).toEqual([])
     expect(app.refreshes).toBe(1)
-    await settle() // the refresh's settle reads the real clock
+    await settle()
 
-    await reload() // a full reload of its own: not a catch-up
+    reload() // a full reload of its own: not a catch-up
     lastWrite = async () => null
     hydrate()
     await later(0)
@@ -240,24 +260,24 @@ describe('a Next document catches up by reloading when the service wrote while i
     expect(app.refreshes).toBe(1)
   })
 
-  it('refreshes, without reloading, when the read fails or takes over a second', async () => {
+  it('refreshes, without reloading, when the read fails or takes a second', async () => {
     startSession()
     lastWrite = () => Promise.reject(new Error('the engine went away'))
     hydrate()
     await later(0)
     expect(app.refreshes).toBe(1)
-    await settle() // the refresh's settle reads the real clock
+    await settle()
     expect(session.updating).toBe(false)
 
-    await reload()
+    reload()
     lastWrite = () => new Promise(() => {}) // never answers
     hydrate()
-    await later(800)
+    await later(999)
     expect(app.refreshes).toBe(0)
-    await later(300)
+    await later(1)
     expect(app.refreshes).toBe(1)
     expect(reloads.windows).toEqual([])
-    await settle() // the refresh's settle reads the real clock
+    await settle()
     expect(session.updating).toBe(false)
   })
 
@@ -265,18 +285,18 @@ describe('a Next document catches up by reloading when the service wrote while i
     startSession()
     lastWrite = async () => Date.now()
     hydrate()
-    await later(510)
-    await reload() // the catch-up reload
+    await later(500)
+    reload() // the catch-up reload
     lastWrite = async () => null
     hydrate()
     await later(0)
-    await settle() // the refresh's settle reads the real clock
+    await settle()
 
     lastWrite = async () => Date.now() // later, edits while the user reloads, twice over
     for (let reloaded = 2; reloaded <= 3; reloaded++) {
-      await reload()
+      reload()
       hydrate()
-      await later(510)
+      await later(500)
       expect(reloads.windows).toHaveLength(reloaded)
     }
   })
@@ -300,7 +320,7 @@ describe('a Next canvas is busy until a document has attached', () => {
     expect(session.updating).toBe(true) // the server's HTML may show already; nothing is attached
     iframe.dispatchEvent(new Event('load'))
     hydrate()
-    await tick()
+    await later(0)
     await settle()
     expect(session.updating).toBe(false)
 
@@ -311,12 +331,12 @@ describe('a Next canvas is busy until a document has attached', () => {
     expect(session.updating).toBe(true) // now catching up
   })
 
-  it('for at most ten seconds, then lets go without a warning', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+  it('for ten seconds at most, then lets go without a warning', async () => {
     startSession(true, false)
-    await vi.advanceTimersByTimeAsync(9_600) // margins for the real time a loaded machine adds
+    await later(9_999)
     expect(session.updating).toBe(true)
-    await vi.advanceTimersByTimeAsync(600)
+    expect(listener.loadTimedOut).not.toHaveBeenCalled()
+    await later(1)
     expect(session.updating).toBe(false)
     expect(listener.loadTimedOut).toHaveBeenCalledTimes(1)
     expect(warn).not.toHaveBeenCalled()
