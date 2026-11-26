@@ -42,7 +42,10 @@ internal static class ListQuery
     }
 
     internal static IOrderedQueryable<TEntity> Order<TEntity, TKey>(IQueryable<TEntity> query, IOrderedQueryable<TEntity>? ordered, Expression<Func<TEntity, TKey>> key, bool descending) => ordered is null ? (descending ? query.OrderByDescending(key) : query.OrderBy(key)) : (descending ? ordered.ThenByDescending(key) : ordered.ThenBy(key));
-    internal static string SearchPattern(string text) => "%" + text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%";
+    internal static string SearchPattern(string text) => "%" + Literally(text) + "%";
+    internal static string PrefixPattern(string text) => Literally(text) + "%";
+    // ILIKE reads % and _ as wildcards. The patterns escape them, and the escape, with \.
+    private static string Literally(string text) => text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal);
     internal static T[] Values<T>(ListFilter filter, Func<string, T> parse)
     {
         string[] values = filter.Value.Split(',');

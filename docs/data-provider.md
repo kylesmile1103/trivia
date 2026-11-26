@@ -181,7 +181,8 @@ hang off. Ties go to the shorter path, then lexicographic order. The item path i
 - `get`: GET on the item path.
 - `create`: POST on the base.
 - `update`: PUT, else PATCH, on the item path. When both exist, PUT wins and PATCH becomes
-  custom.
+  custom. The sibling PATCH stays bindable as a custom operation, for actions that change a
+  few fields.
 - `delete`: DELETE on the item path.
 - Everything else is custom: `POST /customers/{id}/approve-kyc`, non-list GETs,
   sub-collections.

@@ -9,6 +9,8 @@ import { syncContract } from '@trivia/contract-sync'
 import { refineName } from '../src/index.js'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
+import { runCodegen } from './codegen.js'
+
 const workspace = path.resolve(import.meta.dirname, '../../..')
 const bank = path.join(workspace, 'packages/blueprint/fixtures/model/valid/bank/model.blueprint.json')
 const snapshot = path.join(workspace, 'dotnet/tests/Trivia.Blueprint.Codegen.Tests/Snapshots/BankOpenApi.verified.txt')
@@ -42,8 +44,16 @@ it('FR-AS-05 syncs the bank OpenAPI snapshot without overrides', async () => {
       pagination: { style: 'page', pageParam: 'page', pageSizeParam: 'pageSize', totalPath: 'total' },
     })
   }
-  expect(manifest.resources.find(({ name }) => name === 'Customer')?.customOperations.map(({ operationId }) => operationId))
-    .toEqual(['approveKycCustomer'])
+  // The API serves PUT (full replace) and PATCH (merge) on the item path. Contract-sync keeps PUT
+  // in the update slot, whose request describes the whole record an edit form edits, and lists
+  // PATCH, which the data provider's update sends, as a custom operation.
+  const customer = manifest.resources.find(({ name }) => name === 'Customer')!
+  expect(customer.operations.update).toMatchObject({ method: 'PUT', path: '/api/v1/customers/{id}', operationId: 'updateCustomer' })
+  expect(customer.customOperations.map(({ operationId, method, path }) => ({ operationId, method, path }))).toEqual([
+    { operationId: 'patchCustomer', method: 'PATCH', path: '/api/v1/customers/{id}' },
+    { operationId: 'approveKycCustomer', method: 'POST', path: '/api/v1/customers/{id}/approve-kyc' },
+  ])
+  expect(customer.customOperations[0]?.summary).toBe('Change some fields of the customer')
 })
 
 
@@ -112,10 +122,8 @@ it('FR-AS-08 reports a fix on every ejected page that used a removed model field
 
 
 function buildContract(blueprint: string, webDirectory?: string) {
-  const generator = path.join(workspace, 'dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj')
   const options = { cwd: root, encoding: 'utf8', timeout: 90_000 } as const
-  execFileSync('dotnet', ['run', '--project', generator, '--configuration', 'Release', '--disable-build-servers', '--',
-    'write', '--blueprint', blueprint, '--root', root, ...(webDirectory ? ['--web-dir', webDirectory] : [])], options)
+  runCodegen(['write', '--blueprint', blueprint, '--root', root, ...(webDirectory ? ['--web-dir', webDirectory] : [])], options)
   execFileSync('dotnet', ['build', 'src/BackOffice.Api/BackOffice.Api.csproj', '-warnaserror', '--disable-build-servers'], options)
 }
 

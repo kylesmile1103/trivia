@@ -19,7 +19,7 @@ internal static class PlanCommand
     {
         Option<bool> content = new("--content") { Description = "Include proposed file contents." };
         return CreateGenerationCommand("plan", "Preview the generated files.", output, content,
-            (plan, _, includeContent) => (plan.Diagnostics.Count == 0 ? 0 : 1, plan, includeContent));
+            (plan, _, includeContent) => (plan.Diagnostics.Any(diagnostic => diagnostic.IsError) ? 1 : 0, plan, includeContent));
     }
 
     internal static Command CreateGenerationCommand(string name, string description, TextWriter output,

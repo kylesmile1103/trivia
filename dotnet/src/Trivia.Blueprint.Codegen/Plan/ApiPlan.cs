@@ -15,7 +15,23 @@ public static class ApiPlan
         _ = Ownership.Resolve(Path.GetFullPath(root), $"{webDirectory}/openapi", directory: true);
         string api = $"src/{input.AppName}.Api";
         ModelDocument model = input.Model;
-        return PlanWriter.Plan(root, input.ModelRev, api, EmitFiles(api, model).Concat(EmitProject(api, input, webDirectory)), force);
+        FilePlan plan = PlanWriter.Plan(root, input.ModelRev, api, EmitFiles(api, model).Concat(EmitProject(api, input, webDirectory)), force);
+        return AuthWarning(input) is Diagnostic warning ? plan with { Diagnostics = [.. plan.Diagnostics, warning] } : plan;
+    }
+
+    // `none` stays the development default, but an API published that way answers anyone.
+    private static Diagnostic? AuthWarning(LoadedBlueprint input)
+    {
+        AppAuth? auth = input.App?.Auth;
+        if ((auth?.Mode ?? "none") != "none")
+            return null;
+        string mode = input.App is null
+            ? $"There is no {ModelLoader.AppFile}, so auth.mode defaults to none"
+            : "auth.mode is none";
+        return new("auth_none", ModelLoader.AppFile, auth is null ? "" : "/auth/mode",
+            mode + ", so the generated API accepts every request without authentication and serves " +
+            "its OpenAPI document only in Development. Before publishing it, set auth.mode to oidc or put an " +
+            "authenticating gateway in front of it.", "warning");
     }
 
     private static IEnumerable<EmittedFile> EmitProject(string api, LoadedBlueprint input, string webDirectory)

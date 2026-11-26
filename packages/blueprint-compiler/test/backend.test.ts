@@ -38,7 +38,8 @@ beforeEach(async () => {
     } else if (name === 'trivia-dotnet') {
       const source = fs.readFileSync(path.join(args[args.indexOf('--blueprint') + 1], '${MODEL_DOC}'))
       const modelRev = 'sha256:' + createHash('sha256').update(process.env.FAKE_STALE ? 'stale' : source).digest('hex')
-      if (args[0] !== 'migrate') console.log(JSON.stringify({ modelRev, diagnostics: [] }))
+      const diagnostics = [{ code: 'auth_none', doc: 'app.blueprint.json', pointer: '', message: 'Publish behind oidc.', severity: 'warning' }]
+      if (args[0] !== 'migrate') console.log(JSON.stringify({ modelRev, diagnostics }))
       else {
         // Like the real tool after a successful run: every marker is settled, here as renamed.
         const settled = JSON.parse(source).entities.flatMap((entity) => [
@@ -97,6 +98,9 @@ it('FR-AS-08 writes, migrates, builds and syncs in order, then prints drift', as
     { name: 'pnpm', args: ['run', 'sync'], cwd: web },
   ])
   expect(console.log).toHaveBeenCalledWith('No contract drift.')
+  // The generator's warnings reach the developer once, and do not stop the loop.
+  const warnings = vi.mocked(console.log).mock.calls.flat().filter((line) => String(line).includes('Publish behind oidc.'))
+  expect(warnings).toEqual(['warning app.blueprint.json: Publish behind oidc.'])
 })
 
 it('can run from the web directory and omits the migration when no name was passed', async () => {

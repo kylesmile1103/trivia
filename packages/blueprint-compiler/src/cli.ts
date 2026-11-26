@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
-import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint } from '@trivia/blueprint'
+import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint, type Diagnostic } from '@trivia/blueprint'
 
 import { ASPIRE_MISSING, ASPIRE_NEXT_STEPS, checkAspireVersion } from './aspire.js'
 import { compilePage, type CompileContext } from './compile.js'
@@ -200,9 +200,13 @@ async function backend(directory: string, migration: string | undefined, command
   const args = ['--blueprint', blueprint, '--root', solution]
   const location = webDirectory === DEFAULT_WEB_DIRECTORY ? [] : ['--web-dir', webDirectory]
   const generated = step('Generate the backend', commands['trivia-dotnet'], ['write', ...args, ...location], solution)
-  const { modelRev } = JSON.parse(generated) as { modelRev?: string }
+  const { modelRev, diagnostics } = JSON.parse(generated) as { modelRev?: string; diagnostics?: Partial<Diagnostic>[] }
   if (typeof modelRev !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(modelRev)) {
     throw new Error('Backend generation returned no model revision.')
+  }
+  // A successful write carries warnings only, such as an API without authentication.
+  for (const { severity, doc, pointer, message } of diagnostics ?? []) {
+    console.log(`${severity ?? 'warning'} ${doc ?? ''}${pointer ?? ''}: ${message ?? ''}`)
   }
   const project = await openProject(web)
   let recorded = modelRev

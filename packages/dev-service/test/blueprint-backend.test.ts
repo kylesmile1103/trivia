@@ -204,6 +204,18 @@ it('FR-NC-12 says loudly that the markers were not cleared when the model change
   expect(fs.readFileSync(modelPath(), 'utf8')).toBe(before)
 })
 
+it('NFR-05 passes the no-authentication warning through once without blocking the next steps', async () => {
+  const warning = {
+    code: 'auth_none', severity: 'warning', doc: 'app.blueprint.json', pointer: '', message: 'Publish behind oidc or a gateway.',
+  }
+  reply({ files: [create], diagnostics: [warning] })
+  expect(await (await post({ mode: 'plan' })).json()).toMatchObject({ ok: true, data: { diagnostics: [warning] } })
+  reply({ files: [create], diagnostics: [warning] })
+  const { data } = await (await post({ mode: 'write' })).json() as { data: { diagnostics: unknown[] } }
+  expect(data).toMatchObject({ written: true, diagnostics: [warning], next: expect.any(Array) })
+  expect(data.diagnostics).toHaveLength(1)
+})
+
 it('NFR-05 refuses option-like migration names and a symlinked blueprint before starting a child', async () => {
   const invalid = await post({ mode: 'write', migration: '--root=/outside' })
   expect(invalid.status).toBe(400)
