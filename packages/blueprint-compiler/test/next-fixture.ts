@@ -5,7 +5,9 @@ import path from 'node:path'
 import { syncContract } from '@trivia/contract-sync'
 
 import type { CompileContext } from '../src/index.js'
-import { runCodegen } from './codegen.js'
+// .ts, not .js: e2e/blueprint-next-app.mjs loads this file with node --experimental-strip-types,
+// which does not map a .js specifier to the .ts file the way Vitest does.
+import { runCodegen } from './codegen.ts'
 
 export const mvp = new URL('../fixtures/next/mvp/', import.meta.url)
 export const nextExample = new URL('../../../examples/next-admin/', import.meta.url)
