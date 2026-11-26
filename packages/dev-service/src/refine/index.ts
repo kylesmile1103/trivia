@@ -14,13 +14,32 @@ import type { TriviaManifest } from '@trivia/contract-sync'
 import type { AppRoute } from '../api/service.js'
 import { ApiError } from '../engine.js'
 import type { DevHost, PreviewHost } from '../host.js'
-import { type ColumnContext, columnFor, humanize } from './columns.js'
+import { type ColumnContext, columnFor, fieldShape, humanize } from './columns.js'
 import { type PageDrift, pageDrift } from './drift.js'
-import { type FormStyle, formFieldFor, kebab } from './fields.js'
+import { type FormStyle, defaultValue, formFieldFor, kebab } from './fields.js'
 import { type ControlElement, type FormPage, type OutlineNode, bodyFields, formPages } from './form.js'
+import {
+  type EnumSites,
+  type OpaqueSite,
+  type OptionItem,
+  type OptionSite,
+  arrayOps,
+  isReadable,
+  isStale,
+  itemOps,
+  opaqueWarning,
+  optionEdits,
+  readableSite,
+  removedValues,
+  shiftLocator,
+  siblingLocator,
+  siteName,
+  splitLocator,
+  values,
+} from './options.js'
 import { alignOps, hasDiff, ruleDiff } from './rules.js'
 import { PAGE_KINDS, type PageKind, type ScaffoldContext, generateRefinePage, supportedKinds } from './scaffold.js'
-import { type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
+import { type ColumnInfo, type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
 export type { FormFieldInfo, FormPage } from './form.js'
@@ -38,8 +57,10 @@ export type FieldChange =
   /** Re-generate a field from the contract where it is now, keeping its label (drift fixes). */
   | { action: 'rebuild'; field: string }
   /**
-   * Bring a field's zod rule in line with the contract in place: its bounds, and `.optional()`/
-   * `.nullable()` where the contract no longer allows them (drift fixes, slice 5).
+   * Bring a field in line with the contract in place (drift fixes): its enum options (the
+   * `z.enum([…])` array, the `<SelectItem>`s, a default naming a removed value; slice 3), its
+   * zod rule's bounds, and `.optional()`/`.nullable()` where the contract no longer allows them
+   * (slice 5).
    */
   | { action: 'align'; field: string }
 
@@ -101,13 +122,15 @@ export type ColumnChange =
   | { action: 'move'; column: string; index: number }
   /** Re-generate a column from the contract where it is now, keeping its label (drift fixes). */
   | { action: 'rebuild'; column: string }
+  /** Bring a column's filter options in line with the contract in place (drift fixes, slice 3). */
+  | { action: 'align'; column: string }
 
 /** `changes` from a request body, checked. */
 export function parseColumnChanges(value: unknown): ColumnChange[] {
   const bad = () =>
     new ApiError(
       'invalid_op',
-      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", column }, { action: "move", column, index } or { action: "rebuild", column }',
+      'changes must be a non-empty array of { action: "add", field, index?, label? }, { action: "remove", column }, { action: "move", column, index }, { action: "rebuild", column } or { action: "align", column }',
     )
   if (!Array.isArray(value) || value.length === 0) throw bad()
   return value.map((c: unknown) => {
@@ -117,7 +140,7 @@ export function parseColumnChanges(value: unknown): ColumnChange[] {
     if (action === 'add' && typeof field === 'string' && (index === undefined || isIndex(index)) && (label === undefined || typeof label === 'string')) {
       return { action, field, ...(index !== undefined ? { index: index as number } : {}), ...(label !== undefined ? { label: label as string } : {}) }
     }
-    if ((action === 'remove' || action === 'rebuild') && typeof column === 'string') return { action, column }
+    if ((action === 'remove' || action === 'rebuild' || action === 'align') && typeof column === 'string') return { action, column }
     if (action === 'move' && typeof column === 'string' && isIndex(index)) return { action, column, index: index as number }
     throw bad()
   })
@@ -227,6 +250,12 @@ function findNode(nodes: OutlineNode[], test: (n: OutlineNode) => boolean): Outl
   }
   return null
 }
+
+/** A name a value path can take as a `.prop` step. */
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+/** At most this much of a source in a message. */
+const clip = (source: string) => (source.length > 60 ? `${source.slice(0, 59)}…` : source)
 
 /** Most files a page scan reads. */
 const MAX_SCAN = 2000
@@ -562,18 +591,31 @@ export class RefineAdapter {
       const resource = page.contract ? contractResource(manifest, page.contract.resource, null) : null
       let fields = null
       let required: string[] = []
-      const sources = new Map<string, string>()
       if (page.kind === 'list') {
         fields = resource?.entity?.fields.map(fieldInfo) ?? null
-        for (const c of page.columns) if (c.key && c.headerSource) sources.set(c.key, c.headerSource)
       } else if (resource && page.contract) {
         const body = bodyFields(resource, page.contract.operation)
         fields = body?.map(fieldInfo) ?? null
         required = (body ?? []).filter((f) => f.required).map((f) => f.name)
-        for (const f of page.fields) if (f.renderSource) sources.set(f.name, f.renderSource)
       }
-      const drift = pageDrift(page, { fields, required }, sources, (name) =>
-        page.kind === 'form' ? this.#leftover(page, name).map(({ line, text }) => ({ line, text })) : [],
+      // Where the page writes each contract enum's values, read as the plan that fixes it reads them.
+      const enums = new Set((fields ?? []).filter((f) => f.shape === 'enum').map((f) => f.name))
+      const sites = new Map<string, EnumSites>()
+      if (page.kind === 'list') {
+        for (const c of page.columns) {
+          const name = c.accessorKey ?? c.key
+          if (c.key && name && enums.has(name)) sites.set(c.key, this.#columnSites(c))
+        }
+      } else {
+        const outline = this.#outlineOnce(page.file)
+        for (const f of page.fields) if (enums.has(f.name)) sites.set(f.name, this.#fieldSites(page, f.name, outline))
+      }
+      const drift = pageDrift(
+        page,
+        { fields, required },
+        sites,
+        (name) => (page.kind === 'form' ? this.#leftover(page, name).map(({ line, text }) => ({ line, text })) : []),
+        (removed, own) => this.#valueMentions(page.file, removed, own),
       )
       if (drift.issues.length > 0) out.push(drift)
     }
@@ -615,34 +657,23 @@ export class RefineAdapter {
     // prefix, so a later change in the same plan names the right element.
     type Control = { name: string; locator: string; element: ControlElement; direct: boolean; parent: { locator: string; name: string } | null }
     let controls: Control[] = page.fields.flatMap((f) => (f.control ? [{ name: f.name, ...f.control }] : []))
-    const split = (loc: string) => {
-      const at = loc.lastIndexOf('#') + 1
-      return { head: loc.slice(0, at), path: loc.slice(at).split('.').map(Number) }
-    }
     let container = page.container
     /**
      * Shift by `by` every tracked locator (controls, their parents, the container) at or after
      * (an insert) or after (a removal) the slot `at` names, and everything inside them.
      */
     const renumber = (at: string, by: 1 | -1) => {
-      const { head, path } = split(at)
-      const depth = path.length - 1
-      const from = path[depth]! + (by === -1 ? 1 : 0)
-      const shift = (loc: string): string => {
-        const l = split(loc)
-        const inside = l.head === head && l.path.length > depth && path.slice(0, depth).every((seg, i) => l.path[i] === seg)
-        if (!inside || l.path[depth]! < from) return loc
-        const moved = [...l.path]
-        moved[depth] = moved[depth]! + by
-        return head + moved.join('.')
-      }
+      const shift = (loc: string) => shiftLocator(loc, at, by)
       controls = controls.map((c) => ({ ...c, locator: shift(c.locator), parent: c.parent && { ...c.parent, locator: shift(c.parent.locator) } }))
       if (container) container = { ...container, locator: shift(container.locator) }
     }
-    const sibling = (loc: string, placement: 'before' | 'after') => {
-      const { head, path } = split(loc)
-      return head + [...path.slice(0, -1), path.at(-1)! + (placement === 'after' ? 1 : 0)].join('.')
-    }
+    const sibling = siblingLocator
+    const split = splitLocator
+    // Read from the files as they are on disk: the plan is applied after it is made.
+    const outline = this.#outlineOnce(file)
+    // Fields an earlier change in this plan added, removed, rebuilt or aligned: their option
+    // sites were read before that change.
+    const touched = new Set<string>()
     /**
      * Where a new field goes without an index (⚑ docs/product.md, slice 5): after the nearest
      * field before it in the contract, inside that field's own wrapper; else before the nearest
@@ -702,6 +733,7 @@ export class RefineAdapter {
           if (schema.has(field.name) || controls.some((c) => c.name === field.name)) {
             throw new ApiError('conflict', `${page.component} already has a \`${field.name}\` field`)
           }
+          touched.add(field.name)
           const label = change.label ?? humanize(field.name)
           const snippet = formFieldFor(field, context, label)
           if (page.schemaPath) ops.push({ op: 'setProperty', path: page.schemaPath, prop: field.name, value: snippet.rule })
@@ -749,16 +781,62 @@ export class RefineAdapter {
         case 'align': {
           const info = page.fields.find((f) => f.name === change.field)
           const field = body?.find((f) => f.name === change.field)
-          if (!info?.rule || !field) {
-            throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` rule from the contract to align (it has ${page.fields.map((f) => f.name).join(', ')})`)
+          const isEnum = field !== undefined && fieldShape(field) === 'enum'
+          const noRule = () =>
+            new ApiError('node_not_found', `${page.component} has no \`${change.field}\` rule from the contract to align (it has ${page.fields.map((f) => f.name).join(', ')})`)
+          // An enum field's options may be in its control alone.
+          if (!info || !field || (!info.rule && !isEnum)) throw noRule()
+          if (touched.has(change.field)) {
+            throw new ApiError('conflict', `\`${change.field}\` changed earlier in this plan; align it in a plan of its own`)
           }
-          const diff = ruleDiff(info.ruleChain, field)
-          if (!page.schemaPath || !diff || !/^[A-Za-z_$][\w$]*$/.test(change.field)) {
-            throw new ApiError('unsupported', `\`${change.field}\`'s rule \`${info.rule.slice(0, 60)}\` is not a zod chain Trivia can edit in place; rebuild the field instead`)
+          touched.add(change.field)
+          const label = info.label ?? humanize(change.field)
+          // Its enum options, where the form writes them (⚑ docs/product.md, slice 3).
+          const contract = (field.enum ?? []).filter((v): v is string => typeof v === 'string')
+          const sites: EnumSites = isEnum ? this.#fieldSites(page, change.field, outline) : {}
+          const stale = [sites.rule, sites.items].filter(isReadable).filter((site) => isStale(site, contract))
+          const blocked = stale.find((site) => site.state === 'blocked')
+          if (blocked) {
+            throw new ApiError('unsupported', `${siteName(label, blocked)} cannot be edited in place (${blocked.why}); rebuild the field instead`)
           }
-          if (!hasDiff(diff)) throw new ApiError('conflict', `\`${change.field}\`'s rule already matches the contract`)
-          ops.push(...alignOps(`${page.schemaPath}.${change.field}`, info.ruleChain!, diff))
-          labels.push(`Update the ${info.label ?? humanize(change.field)} rule from the contract`)
+          const diff = info.rule ? ruleDiff(info.ruleChain, field) : null
+          const ruleOps = page.schemaPath && hasDiff(diff) && IDENTIFIER.test(change.field) ? alignOps(`${page.schemaPath}.${change.field}`, info.ruleChain!, diff) : []
+          if (stale.length === 0) {
+            // Nothing to do for options: the rule alone, as before.
+            if (!info.rule) throw noRule()
+            if (!page.schemaPath || !diff || !IDENTIFIER.test(change.field)) {
+              throw new ApiError('unsupported', `\`${change.field}\`'s rule \`${info.rule.slice(0, 60)}\` is not a zod chain Trivia can edit in place; rebuild the field instead`)
+            }
+            if (!hasDiff(diff)) {
+              const opaque = [sites.rule, sites.items].filter((site): site is OpaqueSite => site?.state === 'opaque')
+              if (opaque.length > 0 && ![sites.rule, sites.items].some(isReadable)) {
+                throw new ApiError('unsupported', `${opaque.map((site) => `the ${label} ${site.what}`).join(' and ')} ${opaque.length === 1 ? 'is' : 'are'} not a literal list Trivia can edit in place`)
+              }
+              throw new ApiError('conflict', `\`${change.field}\`'s rule already matches the contract`)
+            }
+          }
+          const rule = stale.find((site) => site.kind === 'rule')
+          const items = stale.find((site) => site.kind === 'items')
+          if (rule) ops.push(...arrayOps(rule, optionEdits(values(rule), contract)))
+          ops.push(...ruleOps)
+          const { removed, own } = removedValues(stale, contract, sites.default)
+          // A default that names a removed value no longer type-checks: the generator's instead.
+          if (sites.default && removed.includes(sites.default.value) && page.defaultsPath) {
+            ops.push({ op: 'setProperty', path: page.defaultsPath, prop: change.field, value: defaultValue(field) })
+          }
+          if (items) {
+            const control = controls.find((c) => c.name === change.field)
+            if (!control) throw new ApiError('internal', `${page.component}'s \`${change.field}\` control is no longer tracked`)
+            ops.push(...itemOps(items, optionEdits(values(items), contract), control.locator, renumber))
+          }
+          if (stale.length > 0) {
+            for (const { value, references } of this.#valueMentions(page.file, removed, own)) {
+              warnings.push(`${page.file} still names "${value}" outside the ${label} options: ${references.map((m) => `line ${m.line} (${m.text})`).join('; ')}`)
+            }
+            for (const site of [sites.rule, sites.items]) if (site?.state === 'opaque') warnings.push(opaqueWarning(page.file, label, site))
+            labels.push(`Update the ${label} options from the contract`)
+          }
+          if (ruleOps.length > 0) labels.push(`Update the ${label} rule from the contract`)
           break
         }
         case 'remove': {
@@ -766,6 +844,7 @@ export class RefineAdapter {
           if (!control && !schema.has(change.field) && !defaults.has(change.field)) {
             throw new ApiError('node_not_found', `${page.component} has no \`${change.field}\` field (it has ${page.fields.map((f) => f.name).join(', ')})`)
           }
+          touched.add(change.field)
           const left = rebuilding.has(change.field) ? [] : this.#leftover(page, change.field)
           if (left.length > 0) {
             warnings.push(`${page.file} still mentions \`${change.field}\` outside its field: ${left.map((m) => `line ${m.line} (${m.text})`).join('; ')}`)
@@ -799,7 +878,7 @@ export class RefineAdapter {
           break
         }
         default:
-          throw new ApiError('invalid_op', `unknown field change ${JSON.stringify(change)} (add, remove, move or rebuild)`)
+          throw new ApiError('invalid_op', `unknown field change ${JSON.stringify(change)} (add, remove, move, rebuild or align)`)
       }
     }
     for (const change of changes) step(change)
@@ -818,6 +897,112 @@ export class RefineAdapter {
     } catch {
       return []
     }
+  }
+
+  /**
+   * Where `file` still names each of the `removed` enum values outside the lines `own` (the
+   * options an `align` removes, a default it rewrites): string literals and object keys
+   * (`=== "suspended"`, `{ suspended: "destructive" }`). They break or go dead when the value goes.
+   */
+  #valueMentions(file: string, removed: readonly string[], own: ReadonlySet<number>): Array<{ value: string; references: Array<{ line: number; text: string }> }> {
+    return removed.flatMap((value) => {
+      let found: Mention[]
+      try {
+        found = this.#host.mentions?.(file, value) ?? []
+      } catch {
+        found = []
+      }
+      const references = found
+        .filter((m) => (m.kind === 'string' || m.kind === 'key') && !own.has(m.line))
+        .filter((m, i, all) => all.findIndex((n) => n.line === m.line) === i)
+        .map(({ line, text }) => ({ line, text }))
+      return references.length > 0 ? [{ value, references }] : []
+    })
+  }
+
+  /** `file`'s outline, read the first time it is asked for. */
+  #outlineOnce(file: string): () => OutlineNode[] {
+    let outline: OutlineNode[] | null = null
+    return () => (outline ??= this.#host.outline(file) as OutlineNode[])
+  }
+
+  /** The value at `at`, or what kept it from being read: not there, or not one value (`unsupported`). */
+  #readValue(at: string): ValueDesc | 'absent' | 'ambiguous' {
+    try {
+      return this.#host.describeValue!(at) as ValueDesc
+    } catch (error) {
+      return error instanceof ApiError && error.code === 'unsupported' ? 'ambiguous' : 'absent'
+    }
+  }
+
+  /** Where a list column writes its enum's values (options.ts): its header's `DataTableFilterCombobox options={[…]}`. */
+  #columnSites(column: ColumnInfo): EnumSites {
+    const absent: OptionSite = { kind: 'column', state: 'absent' }
+    if (!this.#host.describeValue) return { column: absent }
+    // By path, not from the header's excerpt: a long header is read whole.
+    const at = `${column.path}.header<DataTableFilterCombobox>.options`
+    const options = this.#readValue(at)
+    if (options === 'absent') return { column: absent }
+    const opaque = (what: string): EnumSites => ({ column: { kind: 'column', state: 'opaque', what } })
+    if (options === 'ambiguous') return opaque('filter `options` (its header has more than one <DataTableFilterCombobox>)')
+    if (options.kind !== 'array') return opaque(`filter \`options={${options.kind === 'identifier' ? options.name : '…'}}\``)
+    const items: OptionItem[] = []
+    for (const el of options.elements) {
+      const value = el.kind === 'object' ? el.properties.find((p) => p.key === 'value')?.value : undefined
+      if (value?.kind !== 'string') return opaque('filter `options={[…]}`')
+      items.push({ value: value.value, line: el.line })
+    }
+    return { column: readableSite('column', at, items) }
+  }
+
+  /**
+   * Where a form writes field `name`'s enum values (options.ts): the array in its `z.enum([…])`
+   * rule and its control's `<SelectItem>`s; and its default, when that is a string.
+   */
+  #fieldSites(page: FormPage, name: string, outline: () => OutlineNode[]): EnumSites {
+    const info = page.fields.find((f) => f.name === name)
+    if (!info || !this.#host.describeValue) return {}
+    const sites: EnumSites = {}
+
+    if (info.rule === null) sites.rule = { kind: 'rule', state: 'absent' }
+    else {
+      const opaque: OptionSite = { kind: 'rule', state: 'opaque', what: `rule \`${clip(info.rule)}\`` }
+      const at = `${page.schemaPath}.${name}`
+      const array = info.ruleChain?.[0]?.name === 'z.enum' && page.schemaPath && IDENTIFIER.test(name) ? this.#readValue(at) : 'ambiguous'
+      if (array === 'absent') sites.rule = { kind: 'rule', state: 'absent' }
+      else if (array === 'ambiguous' || array.kind !== 'array' || !array.elements.every((e) => e.kind === 'string')) sites.rule = opaque
+      else sites.rule = readableSite('rule', at, array.elements.map((e) => ({ value: (e as { value: string }).value, line: e.line })))
+    }
+
+    const control = info.control
+    const node = control && findNode(outline(), (n) => n.locator === control.locator)
+    if (!control || !node) sites.items = { kind: 'items', state: 'absent' }
+    else {
+      const found: OutlineNode[] = []
+      const walk = (nodes: OutlineNode[]) => {
+        for (const n of nodes) {
+          if (n.name === 'SelectItem') found.push(n)
+          else walk(n.children)
+        }
+      }
+      walk(node.children)
+      const read = found.map((n) => {
+        const attributes = ((this.#host.inspect(n.locator) as { attributes?: Array<{ name: string | null; value: unknown; source: string }> }).attributes ?? [])
+        return { node: n, value: attributes.find((a) => a.name === 'value') }
+      })
+      const odd = read.find((r) => typeof r.value?.value !== 'string')
+      if (found.length === 0) sites.items = { kind: 'items', state: 'opaque', what: `control \`<${info.widget ?? control.element}>\`` }
+      else if (odd) sites.items = { kind: 'items', state: 'opaque', what: `control's \`<SelectItem${odd.value ? ` value={${clip(odd.value.source)}}` : ''}>\`` }
+      else {
+        sites.items = readableSite('items', control.locator, read.map((r) => ({ value: r.value!.value as string, line: r.node.line, locator: r.node.locator, direct: r.node.isDirect })))
+      }
+    }
+
+    if (page.defaultsPath && info.hasDefault && IDENTIFIER.test(name)) {
+      const value = this.#readValue(`${page.defaultsPath}.${name}`)
+      sites.default = typeof value === 'object' && value.kind === 'string' ? { value: value.value, line: info.defaultLine ?? value.line } : null
+    }
+    return sites
   }
 
   /**
@@ -1053,6 +1238,10 @@ export class RefineAdapter {
       return column
     }
     const shown = (name: string) => columns.some((c) => c.keys.includes(name))
+    const warnings: string[] = []
+    // Columns an earlier change in this plan added, removed, rebuilt or aligned (by path): their
+    // options were read before that change.
+    const touched = new Set<string>()
     const step = (change: ColumnChange): void => {
       switch (change.action) {
         case 'rebuild': {
@@ -1083,12 +1272,14 @@ export class RefineAdapter {
           const at = change.index ?? after()
           if (at > columns.length) throw new ApiError('invalid_op', `index ${at} is out of range: ${page.component} has ${columns.length} columns`)
           columns.splice(at, 0, { keys: [field.name], path: `${page.columnsPath}[id=${field.name}]`, label, data: true })
+          touched.add(`${page.columnsPath}[id=${field.name}]`)
           ops.push({ op: 'insertElement', path: page.columnsPath, index: at, value: column.value, imports: column.imports })
           labels.push(`Add column ${label}`)
           break
         }
         case 'remove': {
           const column = find(change.column)
+          touched.add(column.path)
           columns.splice(columns.indexOf(column), 1)
           ops.push({ op: 'removeElement', path: column.path })
           labels.push(`Remove column ${column.label}`)
@@ -1105,12 +1296,40 @@ export class RefineAdapter {
           labels.push(`Move column ${column.label}`)
           break
         }
+        case 'align': {
+          // The filter's options, in place (⚑ docs/product.md, slice 3).
+          const column = find(change.column)
+          const info = page.columns.find((c) => c.path === column.path)
+          if (!info || touched.has(column.path)) {
+            throw new ApiError('conflict', `column \`${change.column}\` changed earlier in this plan; align it in a plan of its own`)
+          }
+          touched.add(column.path)
+          const field = resource?.entity?.fields.find((f) => f.name === (info.accessorKey ?? info.key))
+          if (!field || fieldShape(field) !== 'enum') {
+            throw new ApiError('unsupported', `column \`${change.column}\` shows no enum field of the contract, so it has no options to align`)
+          }
+          const contract = (field.enum ?? []).filter((v): v is string => typeof v === 'string')
+          const site = this.#columnSites(info).column
+          if (site?.state === 'opaque') throw new ApiError('unsupported', `the ${column.label} ${site.what} is not a literal list Trivia can edit in place`)
+          if (!isReadable(site)) throw new ApiError('unsupported', `column ${column.label}'s header has no <DataTableFilterCombobox options={[…]}> to align`)
+          if (!isStale(site, contract)) throw new ApiError('conflict', `the ${column.label} filter options already match the contract`)
+          if (site.state === 'blocked') {
+            throw new ApiError('unsupported', `${siteName(column.label, site)} cannot be edited in place (${site.why}); rebuild the column instead`)
+          }
+          ops.push(...arrayOps(site, optionEdits(values(site), contract)))
+          const { removed, own } = removedValues([site], contract)
+          for (const { value, references } of this.#valueMentions(page.file, removed, own)) {
+            warnings.push(`${page.file} still names "${value}" outside the ${column.label} options: ${references.map((m) => `line ${m.line} (${m.text})`).join('; ')}`)
+          }
+          labels.push(`Update the ${column.label} filter options from the contract`)
+          break
+        }
         default:
-          throw new ApiError('invalid_op', `unknown column change ${JSON.stringify(change)} (add, remove, move or rebuild)`)
+          throw new ApiError('invalid_op', `unknown column change ${JSON.stringify(change)} (add, remove, move, rebuild or align)`)
       }
     }
     for (const change of changes) step(change)
-    return { ops, label: labels.join('; ') }
+    return { ops, label: labels.join('; '), ...(warnings.length > 0 ? { warnings } : {}) }
   }
 
   /** Where this project keeps Badge and refine-ui's data table (shadcn layout: ui/ and refine-ui/ side by side). */

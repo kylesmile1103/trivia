@@ -170,7 +170,8 @@ function rule(field: FormField): string {
   return base
 }
 
-function defaultValue(field: FormField): string {
+/** The default a new field gets in `defaultValues`, as source text (an `align` also writes it over a removed enum value). */
+export function defaultValue(field: FormField): string {
   const shape = fieldShape(field)
   if (field.default !== undefined) return JSON.stringify(field.default)
   if (!field.required) return 'undefined'

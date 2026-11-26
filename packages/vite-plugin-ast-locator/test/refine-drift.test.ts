@@ -73,10 +73,10 @@ describe('contract drift', () => {
       fix: { label: 'Remove column Email', changes: [{ action: 'remove', column: 'email' }] },
     })
     expect(list.issues[1].message).toBe('Column Status filters on pending, active, suspended; the contract\'s values are pending, active, suspended, closed')
-    expect(list.issues[1].fix.changes).toEqual([{ action: 'rebuild', column: 'status' }])
+    expect(list.issues[1].fix.changes).toEqual([{ action: 'align', column: 'status' }])
 
-    // A fix read before another fix ran still lands right: a rebuild is resolved when it is
-    // planned, where the column then is (the designer's list may lag behind the source).
+    // A fix read before another fix ran still lands right: a change is resolved when it is
+    // planned, by the column's key (the designer's list may lag behind the source).
     await fix(list, list.issues[0])
     await fix(list, list.issues[1])
     const listPage = (await get(server.socket, '/refine/page?file=src/pages/customers/list.tsx')).body.data[0]
