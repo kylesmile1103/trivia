@@ -89,7 +89,7 @@ describe('read endpoints', () => {
 
   it('history starts empty', async () => {
     const r = await get(socket, '/history')
-    expect(r.body.data).toEqual({ canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
+    expect(r.body.data).toEqual({ canUndo: false, canRedo: false, undoLabel: null, redoLabel: null, lastWriteAt: null })
   })
 })
 
@@ -101,7 +101,7 @@ describe('apply, undo, redo', () => {
       file: DASHBOARD,
       changed: true,
       locator: SAVE,
-      history: { canUndo: true, canRedo: false, undoLabel: 'Save: outline', redoLabel: null },
+      history: { canUndo: true, canRedo: false, undoLabel: 'Save: outline', redoLabel: null, lastWriteAt: expect.any(Number) },
     })
     const edited = read()
     expect(edited).toBe(original.replace('<Button>Save changes', '<Button variant="outline">Save changes'))
@@ -110,12 +110,12 @@ describe('apply, undo, redo', () => {
     expect(undo.status).toBe(200)
     expect(undo.body.data).toEqual({
       files: [DASHBOARD],
-      history: { canUndo: false, canRedo: true, undoLabel: null, redoLabel: 'Save: outline' },
+      history: { canUndo: false, canRedo: true, undoLabel: null, redoLabel: 'Save: outline', lastWriteAt: expect.any(Number) },
     })
     expect(read()).toBe(original)
 
     const redo = await post(socket, '/redo')
-    expect(redo.body.data.history).toEqual({ canUndo: true, canRedo: false, undoLabel: 'Save: outline', redoLabel: null })
+    expect(redo.body.data.history).toEqual({ canUndo: true, canRedo: false, undoLabel: 'Save: outline', redoLabel: null, lastWriteAt: expect.any(Number) })
     expect(read()).toBe(edited)
   })
 
@@ -130,14 +130,14 @@ describe('apply, undo, redo', () => {
     await post(socket, '/apply', { op: setProp(SAVE, 'variant', 'outline') })
     await post(socket, '/undo')
     const r = await post(socket, '/apply', { op: setProp(SAVE, 'size', 'lg') })
-    expect(r.body.data.history).toEqual({ canUndo: true, canRedo: false, undoLabel: 'Set size', redoLabel: null })
+    expect(r.body.data.history).toEqual({ canUndo: true, canRedo: false, undoLabel: 'Set size', redoLabel: null, lastWriteAt: expect.any(Number) })
   })
 
   it('undo and redo with nothing to do change nothing', async () => {
     const undo = await post(socket, '/undo')
     expect(undo.body.data).toEqual({
       files: [],
-      history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
+      history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null, lastWriteAt: null },
     })
     expect((await post(socket, '/redo')).body.data.files).toEqual([])
     expect(read()).toBe(original)
@@ -157,6 +157,7 @@ describe('apply, undo, redo', () => {
       canRedo: false,
       undoLabel: 'outline',
       redoLabel: null,
+      lastWriteAt: expect.any(Number), // the apply's: the refused undo wrote nothing
     })
   })
 
@@ -288,7 +289,7 @@ describe('batch', () => {
       file: 'src/App.tsx',
       changed: true,
       locator: APP_MAIN,
-      history: { canUndo: true, canRedo: false, undoLabel: 'Restyle', redoLabel: null },
+      history: { canUndo: true, canRedo: false, undoLabel: 'Restyle', redoLabel: null, lastWriteAt: expect.any(Number) },
     })
     expect(read()).toContain('<Button variant="outline">Save changes')
     expect(read()).toContain('<Button variant="destructive">Cancel')

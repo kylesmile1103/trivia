@@ -246,6 +246,31 @@ The engine edits files. It does not care which kind of component a file holds. W
   stylesheet depend on every file it scans; after an undo deleted an ejected page and the lock,
   the rebuilt stylesheet dropped them and their nodes stayed behind with no importer, so the
   next eject reloaded the canvas. A node that a stylesheet still imports keeps its CSS update.
+  ⚑ (decided 2026-11-26) A Next canvas document catches up once it has hydrated, because Next
+  16.4.6 can leave it on the source from before an edit written while it loaded. A hot update
+  that reaches it before its React root first commits is lost: React Refresh re-renders only
+  mounted roots, and `hydrate()` opens the HMR socket before the root commits. An edit written
+  between its HTML and its HMR subscription never reaches it. Once Next's
+  `<next-route-announcer>` appears (an effect after the first commit), `frame-session.ts` reads
+  `/history`'s `lastWriteAt` (at most 1 s). A write at or after the document's navigation start
+  reloads it. Otherwise the canvas calls `window.next.router.refresh()`, which re-renders client
+  components from their current modules, at the cost of one RSC render per canvas load. Both
+  Next internals live in `next-hydration.ts`.
+  ⚑ (decided 2026-11-26) A catch-up reload waits until `COMPILE_GRACE_MS` (500 ms) after the
+  write, because a reload 10 ms after a write was itself served stale. A write reaches a page as
+  a hot update 60 to 80 ms later on macOS and about 150 ms later on CI. The assumption, not
+  verified in Next's code, is that a page requested once Turbopack has seen the change is built
+  from it. A catch-up reload's document also counts a write within the grace before its start,
+  and a chain reloads at most twice, then refreshes and warns once. Each wait is bounded
+  (attach and hydrate 10 s, the read 1 s, the refresh 10 s), and a cut-short catch-up warns
+  once. The service and the browser share a host and its clock: a skew costs a reload or misses
+  one, never a loop. Nothing tells the canvas when Turbopack has compiled a write, because the
+  dev service runs in the launcher, not in Next's process, so the grace is a measured bound.
+  ⚑ (decided 2026-11-26) On Next the canvas is busy from its start or a document's unload until
+  the next attach (at most 10 s, no warning), and through the catch-up, so that a press on the
+  server-rendered page waits and selects on the caught-up render. With no document it is
+  dropped. The catch-up's history read is also the designer's history sync, so an edit it
+  notices starts its own wait before the catch-up ends. Vite is unchanged.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
@@ -304,6 +329,17 @@ The engine edits files. It does not care which kind of component a file holds. W
   foreign Origin.
 - ⚑ The example's build runs `next build` and scans its emitted assets for `data-ast-node`
   and `@trivia/`. The scanner skips the separate development output and build cache.
+- ⚑ (decided 2026-11-26) `e2e/next/edit.spec.ts` covers the catch-up with three tests. A
+  document is refreshed once, after it hydrated, and is not reloaded when nothing was written.
+  An insert over the API the moment a reloaded canvas shows its HTML renders, fifteen rounds in
+  a row, each restored once the canvas is no longer busy. A click on the server-rendered
+  canvas selects once the canvas has caught up. The insert test still edits early over the
+  API, and waits until the designer names its insert ("Insert element") before its
+  right-click, because the canvas refuses a right-click while an edit the designer has just
+  noticed renders. Before the fix the insert test failed 1 run in 10 locally (1 in 3 to 1 in
+  10 on CI), and the race test failed 2 runs in 3. With it (macOS, `pnpm e2e -- --project
+  next`): the race test at `--repeat-each=30` passed 30 of 30 (450 rounds), and the FR-TN-05
+  spec at `--repeat-each=10` passed 60 of 60.
 
 ## 8. Open points
 
@@ -313,5 +349,14 @@ The engine edits files. It does not care which kind of component a file holds. W
   API port up front. An occupied app port exits with Next's error and closes the new service.
 - The built integration was checked in the scratch app with webpack and with React Compiler
   on Turbopack. Both stamped client and server JSX and preserved usage-site attribute order.
+- ⚑ (decided 2026-11-26) Both Next losses are reported upstream as a draft, and a plain browser
+  tab outside the designer still has them (workaround: reload). Residuals in the canvas: a
+  plain file write (an IDE's save) between a document's HTML and its HMR subscription is never
+  seen by the service. A document that the user or Next loads within the grace after a service
+  write (a reload, Next's own reload, a write and then a navigation) can be built from the old
+  code, while its window, which starts at its own navigation, leaves the write out. A manual
+  canvas reload shows the change in both cases. A component under `React.memo`
+  with equal props could in principle survive the router refresh; the probe's refresh rendered
+  the change.
 - Whether the dev service should also host the designer's static files, so one process serves
   everything for Next.js apps. Later.

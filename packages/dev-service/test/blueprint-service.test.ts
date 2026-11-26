@@ -50,7 +50,7 @@ it('FR-AG-03 serializes source and blueprint writes in one queue and restores or
   await editBlueprint
   expect(await undoBlueprint).toEqual({
     files: ['blueprint/app.blueprint.json', 'blueprint/pages/Orders.page.json'],
-    history: { canUndo: true, canRedo: true, undoLabel: 'Add source', redoLabel: 'Add orders' },
+    history: { canUndo: true, canRedo: true, undoLabel: 'Add source', redoLabel: 'Add orders', lastWriteAt: expect.any(Number) },
   })
   expect(read(APP)).toEqual(Buffer.from(before))
   expect(fs.existsSync(path.join(root, 'blueprint', PAGE))).toBe(false)

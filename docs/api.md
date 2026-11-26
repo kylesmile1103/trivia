@@ -88,7 +88,13 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   it, as with any hand edit. The Next.js host makes no such promise.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
-- `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null }`.
+- `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null,
+  lastWriteAt: number | null }`. `lastWriteAt` is when the service last wrote the project (a
+  recorded edit, an undo or a redo), in ms since the epoch by the service's clock, and null before
+  its first write. An op that changes nothing, a refused one and an undo or redo with nothing to
+  do leave it as it was. The designer compares it with a Next.js canvas document's load to tell
+  whether the document can have missed an edit (LLD-13 §6); the service and the browser share a
+  host.
 - `manifest` is the project's `trivia.manifest.json` (`docs/data-provider.md`), null when it has
   none. `Drift = { status: "current" | "changed" | "unknown", source, manifestHash, specHash }`
   compares the manifest's `schemaHash` with contract-sync's canonical hash of the spec at

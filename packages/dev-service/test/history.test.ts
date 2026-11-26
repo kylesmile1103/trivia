@@ -14,7 +14,27 @@ describe('History', () => {
       history.undone()
     }
     expect(labels).toEqual(['5', '4', '3'])
-    expect(history.state()).toEqual({ canUndo: false, canRedo: true, undoLabel: null, redoLabel: '3' })
+    expect(history.state()).toEqual({ canUndo: false, canRedo: true, undoLabel: null, redoLabel: '3', lastWriteAt: expect.any(Number) })
+  })
+
+  it('notes when a write last landed: a recorded edit, an undo or a redo', () => {
+    let now = 1_000
+    const history = new History(100, () => now)
+    expect(history.state().lastWriteAt).toBeNull()
+    history.undone() // nothing to undo: nothing was written
+    expect(history.state().lastWriteAt).toBeNull()
+    now = 2_000
+    history.record(entry('a'))
+    expect(history.state().lastWriteAt).toBe(2_000)
+    now = 3_000
+    history.undone()
+    expect(history.state().lastWriteAt).toBe(3_000)
+    now = 4_000
+    history.redone()
+    expect(history.state().lastWriteAt).toBe(4_000)
+    now = 5_000
+    history.redone() // nothing to redo
+    expect(history.state().lastWriteAt).toBe(4_000)
   })
 
   it('defaults to 100 entries', () => {
