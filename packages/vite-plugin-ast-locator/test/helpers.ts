@@ -6,7 +6,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 
-import { createServer, type ServerOptions, type ViteDevServer } from 'vite'
+import { createServer, type Plugin, type ServerOptions, type ViteDevServer } from 'vite'
 
 import astLocator, { type AstLocatorOptions } from '../src/index.js'
 
@@ -61,10 +61,12 @@ export interface TestServer {
   close(): Promise<void>
 }
 
+/** A dev server on `root` with the plugin, and `plugins` after it. */
 export async function startServer(
   root: string,
   options: AstLocatorOptions = {},
   server: ServerOptions = {},
+  plugins: Plugin[] = [],
 ): Promise<TestServer> {
   const vite = await createServer({
     root,
@@ -72,7 +74,7 @@ export async function startServer(
     logLevel: 'silent',
     appType: 'custom',
     cacheDir: path.join(root, '.vite'),
-    plugins: [astLocator(options)],
+    plugins: [astLocator(options), ...plugins],
     resolve: { alias: { '@': path.join(root, 'src') } },
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { ...server, middlewareMode: true, ws: false, watch: null },

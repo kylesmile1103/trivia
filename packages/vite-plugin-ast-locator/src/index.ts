@@ -14,7 +14,7 @@ import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
-import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
+import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile, relativeToRoots } from './transform.js'
 import { replayDroppedChanges } from './watch.js'
 
 export { API_BASE, MCP_PATH } from '@trivia/dev-service'
@@ -197,6 +197,22 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         if (changed === manifestFile) invalidatePreviews(server, false)
         else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
+    },
+
+    // Vite reloads the page when an updated file has a module that nothing imports (a dead end
+    // of its update propagation). A stylesheet's dependency on a file stays in the graph as an
+    // `asset` node after the stylesheet dropped it: Tailwind's plugin makes its stylesheet depend
+    // on every file it scans, so after an undo deleted an ejected page (or the lock), the next
+    // eject reloaded the canvas, though nothing reads that node. Such nodes are left out (before
+    // the other plugins' hooks, Tailwind's among them); Vite updates the rest, and sends nothing
+    // for an empty list. A dependency a stylesheet still has keeps its CSS update.
+    hotUpdate: {
+      order: 'pre',
+      handler({ file, modules }) {
+        if (service === undefined || NODE_MODULES.test(file) || relativeToRoots(path.resolve(file), roots) === null) return
+        const consumed = modules.filter((mod) => mod.type !== 'asset' || mod.importers.size > 0)
+        return consumed.length === modules.length ? undefined : consumed
+      },
     },
 
     closeServer({ reason }) {
