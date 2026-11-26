@@ -9,7 +9,7 @@
   <a href="https://github.com/kylesmile1103/trivia/actions/workflows/nightly.yml"><img alt="Nightly" src="https://github.com/kylesmile1103/trivia/actions/workflows/nightly.yml/badge.svg"></a>
   <a href="https://github.com/kylesmile1103/trivia/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/kylesmile1103/trivia/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/kylesmile1103/trivia/releases"><img alt="Release" src="https://img.shields.io/github/v/release/kylesmile1103/trivia?include_prereleases&sort=semver"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/kylesmile1103/trivia"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <br>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-OXC-dea584?logo=rust">
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white">
