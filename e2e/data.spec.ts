@@ -62,7 +62,8 @@ test('Table inserts a DataTable bound to the list query, showing the API\'s rows
   await settled(page)
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
   await expect.poll(dashboard).toBe(original)
-  expect(fs.existsSync(DATA_TABLE)).toBe(false)
+  // The undo writes its files one after another: the component file goes after Dashboard.tsx.
+  await expect.poll(() => fs.existsSync(DATA_TABLE)).toBe(false)
   await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toHaveCount(0)
 })
 
