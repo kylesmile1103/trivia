@@ -53,6 +53,31 @@ describe('FR-DM-07: model operations through the public batch reducer', () => {
     expect(JSON.stringify(blueprint)).toBe(before)
   })
 
+  it('clears rename markers only at the revision the migration read, all or nothing', () => {
+    const renamed = apply(loadBlueprint({ [MODEL_DOC]: bank }), [
+      { ...modelOp, op: 'renameField', entity: 'Customer', field: 'fullName', name: 'legalName' },
+      { ...modelOp, op: 'renameField', entity: 'Customer', field: 'email', name: 'contactEmail' },
+    ], options)
+    if (!renamed.ok) throw new Error(renamed.error.message)
+    const marked = renamed.writes[0]!.after!
+    const blueprint = loadBlueprint({ [MODEL_DOC]: marked })
+    const markers = [
+      { entity: 'Customer', field: 'legalName', from: 'fullName' },
+      { entity: 'Customer', field: 'contactEmail', from: 'email' },
+    ]
+    const clear = { op: 'clearRenameMarkers', doc: MODEL_DOC, baseRev: revOfText(marked), markers }
+
+    const stale = apply(blueprint, [{ ...clear, baseRev: revOfText(bank) }], options)
+    expect(stale).toMatchObject({ ok: false, error: { code: 'conflict', status: 409, op: 0 } })
+    expect(stale).not.toHaveProperty('writes')
+    const changed = apply(blueprint, [{ ...clear, markers: [markers[0], { ...markers[1], from: 'mail' }] }], options)
+    expect(changed).toMatchObject({ ok: false, error: { code: 'conflict', status: 409, op: 0 } })
+    expect(changed).not.toHaveProperty('writes')
+
+    const cleared = apply(blueprint, [clear], options)
+    expect(cleared.ok && cleared.writes[0]!.after).not.toContain('renamedFrom')
+  })
+
   it('refuses an entity removal with the inbound relation names', () => {
     const outcome = apply(loadBlueprint({ [MODEL_DOC]: bank }), [
       { ...modelOp, op: 'removeEntity', entity: 'Customer' },

@@ -34,32 +34,77 @@ it('FR-TN-02 delegates route discovery to the host with the engine readers', asy
   expect(readRoutes).toHaveBeenCalledOnce()
 })
 
-// A file watcher can miss a write (an edit and its undo milliseconds apart), and a host that
-// missed one keeps serving the module it transformed before: the canvas then shows stale code,
-// even after a reload. So the service names every file it wrote, after the write succeeded.
-it('tells the host which files an edit, an undo and a redo wrote, and nothing for a no-op or a refusal', async () => {
+// A host's updates for the service's writes come from its own file watcher, like for any other
+// write (the Vite host replays a change its watcher dropped, vite-plugin-ast-locator/src/watch.ts),
+// and filesWritten is optional (the Next.js host has none): the service needs nothing more.
+it('edits, undoes and redoes through a host that is not told of the writes, and reports the files each wrote', async () => {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'trivia-host-'))
   fs.mkdirSync(path.join(root, 'src/components/ui'), { recursive: true })
-  fs.writeFileSync(path.join(root, 'src/App.tsx'), 'export function App() {\n  return <div title="a" />\n}\n')
-  const filesChanged = vi.fn()
+  const file = path.join(root, 'src/App.tsx')
+  const original = 'export function App() {\n  return <div title="a" />\n}\n'
+  fs.writeFileSync(file, original)
   const host: DevHost = {
     root, kind: 'vite', uiDir: 'src/components/ui', importBase: '@/components/ui', allowedHosts: [],
     resolveModule: async () => null, readRoutes: async () => [], preview: { publish: () => '/preview' },
-    filesChanged,
   }
   const service = new EngineService({ host, engine: await loadEngine(), version: 'test' })
   const edit = (value: string) => ({ op: 'updateProp', target: 'src/App.tsx#App#0', expectedName: 'div', prop: 'title', value })
+  const edited = original.replace('title="a"', 'title="b"')
 
-  await service.apply(edit('b'), 'edit')
-  expect(filesChanged).toHaveBeenLastCalledWith(['src/App.tsx'])
-  await service.undo()
-  expect(filesChanged).toHaveBeenLastCalledWith(['src/App.tsx'])
-  await service.redo()
-  expect(filesChanged).toHaveBeenLastCalledWith(['src/App.tsx'])
-  expect(filesChanged).toHaveBeenCalledTimes(3)
+  expect(await service.apply(edit('b'), 'edit')).toMatchObject({ file: 'src/App.tsx', changed: true })
+  expect(fs.readFileSync(file, 'utf8')).toBe(edited)
+  expect(await service.undo()).toMatchObject({ files: ['src/App.tsx'], history: { canUndo: false, redoLabel: 'edit' } })
+  expect(fs.readFileSync(file, 'utf8')).toBe(original)
+  expect(await service.redo()).toMatchObject({ files: ['src/App.tsx'], history: { undoLabel: 'edit', canRedo: false } })
+  expect(fs.readFileSync(file, 'utf8')).toBe(edited)
 
-  await service.apply(edit('b'), 'no-op')
+  expect(await service.apply(edit('b'), 'no-op')).toMatchObject({ changed: false })
   await expect(service.apply({ ...edit('c'), expectedName: 'span' }, 'refused')).rejects.toThrow()
-  expect(filesChanged).toHaveBeenCalledTimes(3)
+  expect(fs.readFileSync(file, 'utf8')).toBe(edited)
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+// A dev server that caches transformed modules would answer a request made right after the
+// write (the eject dialog navigates the canvas then) with the module from before it, while its
+// watcher has not reported the write yet. So the service names what it wrote, once it is on disk
+// and before the call is answered; the host only drops its cache, and its watcher sends the update.
+it('names the files each write put on disk before answering, after the previews, and nothing for a no-op or a refusal', async () => {
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'trivia-host-'))
+  fs.mkdirSync(path.join(root, 'src/components/ui'), { recursive: true })
+  const file = path.join(root, 'src/App.tsx')
+  fs.writeFileSync(file, 'export function App() {\n  return <div title="a" />\n}\n')
+  const events: string[] = []
+  const title = () => /title="(\w)"/.exec(fs.readFileSync(file, 'utf8'))?.[1]
+  const host: DevHost = {
+    root, kind: 'vite', uiDir: 'src/components/ui', importBase: '@/components/ui', allowedHosts: [],
+    resolveModule: async () => null, readRoutes: async () => [],
+    preview: { publish: () => '/preview', invalidateBlueprints: () => events.push('previews') },
+    filesWritten: (files) => events.push(`written ${files.join(',')}${files.includes('src/App.tsx') ? ` title=${title()}` : ''}`),
+  }
+  const service = new EngineService({ host, engine: await loadEngine(), version: 'test' })
+  const edit = (value: string) => ({ op: 'updateProp', target: 'src/App.tsx#App#0', expectedName: 'div', prop: 'title', value })
+  const answered = (call: string) => () => { events.push(`answered ${call}`) }
+
+  await service.apply(edit('b'), 'edit').then(answered('edit'))
+  await service.batch([edit('c')], 'batch').then(answered('batch'))
+  await service.undo().then(answered('undo'))
+  await service.redo().then(answered('redo'))
+  await service.apply(edit('c'), 'no-op').then(answered('no-op'))
+  await service.apply({ ...edit('d'), expectedName: 'span' }, 'refused').catch(answered('refused'))
+  await service.writeDocuments([{ file: 'pages/Draft.page.json', before: null, after: '{}\n' }], 'document').then(answered('document'))
+  await service.undo().then(answered('document undo'))
+  await service.redo().then(answered('document redo'))
+  expect(events).toEqual([
+    'written src/App.tsx title=b', 'answered edit',
+    'written src/App.tsx title=c', 'answered batch',
+    'written src/App.tsx title=b', 'answered undo',
+    'written src/App.tsx title=c', 'answered redo',
+    'answered no-op',
+    'answered refused',
+    // A document write is no engine write; its undo and redo are, after the previews.
+    'previews', 'answered document',
+    'previews', 'written blueprint/pages/Draft.page.json', 'answered document undo',
+    'previews', 'written blueprint/pages/Draft.page.json', 'answered document redo',
+  ])
   fs.rmSync(root, { recursive: true, force: true })
 })

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Trivia.Blueprint.Codegen.Model;
 using Trivia.Blueprint.Codegen.Plan;
 
 namespace Trivia.Blueprint.Codegen.Commands;
@@ -17,7 +18,8 @@ internal static class WriteCommand
                 }
                 catch (WriteRefusedException exception)
                 {
-                    return (exception.ExitCode, plan with { Diagnostics = exception.Diagnostics }, false);
+                    Diagnostic[] warnings = plan.Diagnostics.Where(diagnostic => !diagnostic.IsError).ToArray();
+                    return (exception.ExitCode, plan with { Diagnostics = [.. exception.Diagnostics, .. warnings] }, false);
                 }
             });
 }

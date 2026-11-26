@@ -6,9 +6,9 @@ using Json.Schema;
 
 namespace Trivia.Blueprint.Codegen.Model;
 
-public sealed record Diagnostic(string Code, string Doc, string Pointer, string Message)
+public sealed record Diagnostic(string Code, string Doc, string Pointer, string Message, string Severity = "error")
 {
-    public string Severity => "error";
+    [JsonIgnore] public bool IsError => Severity == "error";
 }
 
 public sealed class BlueprintInputException(IReadOnlyList<Diagnostic> diagnostics)

@@ -34,6 +34,7 @@ internal static class MigrateCommand
         if (!SyntaxFacts.IsValidIdentifier(name) || name.StartsWith('@') || SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None)
             return Fail(output, new("invalid_migration_name", "", "", "Provide a migration name that is a valid C# identifier."));
 
+        Run? run = null;
         try
         {
             root = Path.GetFullPath(root);
@@ -44,11 +45,10 @@ internal static class MigrateCommand
             string relative = LocateProject(root, input?.AppName);
             string migrationsPath = Path.GetDirectoryName(relative)!.Replace(Path.DirectorySeparatorChar, '/') + "/" + Migrations;
             string directory = Ownership.Resolve(root, migrationsPath, directory: true);
-            HashSet<string> before = MigrationFiles(directory).ToHashSet(StringComparer.Ordinal);
             string snapshot = Ownership.Resolve(root, migrationsPath + "/AppDbContextModelSnapshot.cs");
-            IReadOnlyDictionary<string, string> previousTables = input is not null && File.Exists(snapshot)
-                ? RenameRewriter.ReadTables(File.ReadAllText(snapshot))
-                : new Dictionary<string, string>();
+            PreviousModel previous = input is not null && File.Exists(snapshot)
+                ? RenameRewriter.ReadSnapshot(File.ReadAllText(snapshot))
+                : PreviousModel.Empty;
 
             // A relative path keeps NuGet project identities consistent when the working directory
             // is an OS alias, such as /var on macOS.
@@ -67,19 +67,33 @@ internal static class MigrateCommand
             string[] tool = localTool ? ["tool", "run", "dotnet-ef", "--"] : ["ef"];
             string[] arguments = [.. tool, "migrations", "add", name, "--project", relative,
                 "--startup-project", relative, "--context", "AppDbContext", "--output-dir", Migrations, "--no-build", "--no-color"];
+            run = new(directory, snapshot);
             (int status, string message) = await RunDotnet(root, arguments, cancellationToken);
             if (status != 0)
-                return Fail(output, new("migration_failed", relative, "", message));
+                return run.Undo(() => Fail(output, new("migration_failed", relative, "", message)));
 
-            string[] added = MigrationFiles(directory).Where(path => !before.Contains(path) &&
-                Path.GetFileName(path).EndsWith($"_{name}.cs", StringComparison.Ordinal)).ToArray();
+            string[] added = run.Added().Where(path => Path.GetFileName(path).EndsWith($"_{name}.cs", StringComparison.Ordinal)).ToArray();
             if (added.Length != 1)
-                return Fail(output, new("migration_missing", migrationsPath, "", "EF did not produce exactly one new migration."));
+                return run.Undo(() => Fail(output, new("migration_missing", migrationsPath, "", "EF did not produce exactly one new migration.")));
 
             string migration = Path.GetRelativePath(root, added[0]).Replace(Path.DirectorySeparatorChar, '/');
-            string migrationFile = Ownership.Resolve(root, migration);
-            IReadOnlyList<MigrationRename> renames = input is null ? [] : RewriteNewMigration(migrationFile, input.Model, previousTables);
-            output.WriteLine(JsonSerializer.Serialize(new { migration, renames, diagnostics = Array.Empty<Diagnostic>() }, ModelLoader.Json));
+            RenameResult renamed = input is null
+                ? new("", [], [], [])
+                : RewriteNewMigration(Ownership.Resolve(root, migration), input.Model, previous);
+            if (renamed.Diagnostics.Count > 0)
+                return run.Undo(() =>
+                {
+                    output.WriteLine(JsonSerializer.Serialize(new { modelRev = input!.ModelRev, diagnostics = renamed.Diagnostics }, ModelLoader.Json));
+                    return 1;
+                });
+            output.WriteLine(JsonSerializer.Serialize(new
+            {
+                migration,
+                modelRev = input?.ModelRev,
+                renames = renamed.Renames,
+                settled = renamed.Settled,
+                diagnostics = Array.Empty<Diagnostic>()
+            }, ModelLoader.Json));
             return 0;
         }
         catch (BlueprintInputException exception)
@@ -90,7 +104,45 @@ internal static class MigrateCommand
         catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException or
             ArgumentException or Win32Exception or OperationCanceledException)
         {
-            return Fail(output, new("migration_failed", "", "", exception.Message));
+            Diagnostic failure = new("migration_failed", "", "", exception.Message);
+            return run is null ? Fail(output, failure) : run.Undo(() => Fail(output, failure));
+        }
+    }
+
+    /// <summary>
+    /// What one `ef migrations add` may change: new files in the migrations directory and EF's model snapshot.
+    /// A failed run puts both back, so the next run sees the same difference again.
+    /// </summary>
+    private sealed class Run
+    {
+        private readonly string directory;
+        private readonly bool directoryExisted;
+        private readonly HashSet<string> before;
+        private readonly string snapshot;
+        private readonly byte[]? snapshotBytes;
+
+        public Run(string directory, string snapshot)
+        {
+            this.directory = directory;
+            this.snapshot = snapshot;
+            directoryExisted = Directory.Exists(directory);
+            before = MigrationFiles(directory).ToHashSet(StringComparer.Ordinal);
+            snapshotBytes = File.Exists(snapshot) ? File.ReadAllBytes(snapshot) : null;
+        }
+
+        public IEnumerable<string> Added() => MigrationFiles(directory).Where(path => !before.Contains(path));
+
+        public int Undo(Func<int> report)
+        {
+            foreach (string file in Added().Where(file => file != snapshot).ToArray())
+                File.Delete(file);
+            if (snapshotBytes is null)
+                File.Delete(snapshot);
+            else if (!File.ReadAllBytes(snapshot).AsSpan().SequenceEqual(snapshotBytes))
+                File.WriteAllBytes(snapshot, snapshotBytes);
+            if (!directoryExisted && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                Directory.Delete(directory);
+            return report();
         }
     }
 
@@ -160,17 +212,16 @@ internal static class MigrateCommand
         return (process.ExitCode, (await stdout + await stderr).Trim());
     }
 
-    private static IReadOnlyList<MigrationRename> RewriteNewMigration(string file,
-        ModelDocument model, IReadOnlyDictionary<string, string> previousTables)
+    private static RenameResult RewriteNewMigration(string file, ModelDocument model, PreviousModel previous)
     {
         if (!model.Entities.Any(entity => entity.RenamedFrom is not null || entity.Fields.Any(field => field.RenamedFrom is not null)))
-            return [];
+            return new("", [], [], []);
         byte[] bytes = File.ReadAllBytes(file);
         bool hasBom = bytes.AsSpan().StartsWith(Encoding.UTF8.GetPreamble());
         string source = Encoding.UTF8.GetString(bytes.AsSpan(hasBom ? 3 : 0));
-        RenameResult rewritten = RenameRewriter.Rewrite(source, model, previousTables);
-        if (rewritten.Renames.Count == 0)
-            return [];
+        RenameResult rewritten = RenameRewriter.Rewrite(source, model, previous);
+        if (rewritten.Diagnostics.Count > 0 || rewritten.Source == source)
+            return rewritten;
         string temporary = $"{file}.{Guid.NewGuid():N}.tmp";
         try
         {
@@ -183,7 +234,7 @@ internal static class MigrateCommand
         {
             File.Delete(temporary);
         }
-        return rewritten.Renames;
+        return rewritten;
     }
 
     private static int Fail(TextWriter output, Diagnostic diagnostic)

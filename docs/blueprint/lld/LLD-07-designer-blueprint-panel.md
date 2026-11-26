@@ -89,7 +89,14 @@ dispatches the plan's ops through the action bus (`dispatchBatch`, `shared/state
 changed batch, `POST /blueprint/ejected` verifies that shared history entry. An unchanged
 re-eject opens the route without verifying an entry it did not create. The dialog lists the
 files named by the ops, including route registration and the lock. The canvas navigates
-to the real route, where every element is now selectable.
+to the real route, where every element is now selectable. ⚑ (decided 2026-11-26) The
+eject's writes make Vite send `full-reload` (Tailwind's module for a written file that an
+earlier undo left without importers, at once; the lock invalidating the previews, on the
+watcher's event), and a reload that starts while the route loads cancels that load. So
+`canvas.navigate` remembers its URL until the next document attaches, and asks again when that
+document is a reload of somewhere else; any other document (the route, a link, a redirect)
+ends the wait. Reason: a fire-and-forget navigation left the canvas on the preview in 9 of 10
+back-to-back runs, and only the canvas sees which document arrived.
 
 **Model editor (Phase 2).** A list of entities, and for the selected one a grid of fields
 (name, type, required, constraints, default) with relations and API options below. Each cell
@@ -103,9 +110,12 @@ custom API operations use JSON fields. The entity form defaults to a UUID key na
 optional migration name. Confirm runs `mode: "write"`. Backend writes are outside the
 undo history, and the dialog says so. The solution's git status is the safety net.
 ⚑ The table includes the DevHost's delete action. Confirmation checks the app and model
-revisions before calling the generator. It writes the API before requesting a named
-migration, because DevHost runs migration as a separate CLI command. The dialog reports
-generation and migration outcomes and points to sync and drift in the Data tab.
+revisions before calling the generator. The dialog reports generation and migration
+outcomes and points to sync and drift in the Data tab.
+⚑ (decided 2026-11-26) Confirmation sends one request, with the migration name when one is
+given, because the service now writes the API before it migrates (LLD-04 section 5). The
+dialog lists the migration's renames and syncs history afterwards, since clearing the
+migrated rename markers is an undo entry and the model editor must reload with it.
 
 **Undo and redo.** Patches are entries of the shared history, so the toolbar's undo works. The
 panel re-reads the summary after every history change. ⚑ A successful patch asks the

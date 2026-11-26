@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Locator, type Page, type Route, expect, test } from '@playwright/test'
 
-import { restore, writeWhole } from './files'
+import { expectServed, restore, writeWhole } from './files'
 
 const DASHBOARD = fileURLToPath(new URL('../examples/playground/src/pages/Dashboard.tsx', import.meta.url))
 const original = fs.readFileSync(DASHBOARD, 'utf8')
@@ -158,6 +158,29 @@ test('Delete removes the selected Button from the source; undo restores it', asy
   expect((await undo.json()).ok).toBe(true)
   expect(dashboard()).toBe(original)
   await expect(save).toBeVisible()
+})
+
+// An engine edit and its undo milliseconds apart: the chokidar in Vite 8.3 drops a file's second
+// change within 50 ms, and Linux CI lost undos that way (the canvas kept the edit, even after a
+// reload). Engine writes reach Vite only through its watcher, so the plugin's replay must bring
+// every undo back. Twenty pairs, so that each run stresses it.
+test('an edit and its immediate undo, twenty times over, leave the canvas on the original source', async ({ page }) => {
+  await openCanvas(page)
+  const footer = app(page).locator('[data-slot=card-footer] button')
+  const target = (await app(page).getByRole('button', { name: 'Save changes' }).getAttribute('data-ast-node'))!
+  const post = async (endpoint: string, data: unknown) => {
+    const body = await (await page.request.post('/@trivia/api' + endpoint, { data })).json()
+    expect(body.ok, JSON.stringify(body)).toBe(true)
+  }
+  for (let pair = 1; pair <= 20; pair++) {
+    await post('/apply', { op: { op: 'remove', target, expectedName: 'Button' }, label: `Remove Save (${pair})` })
+    await post('/undo', {})
+    expect(dashboard()).toBe(original)
+    await expectServed(DASHBOARD, original)
+    await expect(footer).toHaveText(['Cancel', 'Save changes'])
+  }
+  await openCanvas(page)
+  await expect(footer).toHaveText(['Cancel', 'Save changes'])
 })
 
 test('a click and Delete before an edit has rendered are refused, not applied to whatever now sits at that position', async ({ page }) => {

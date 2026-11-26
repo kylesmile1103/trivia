@@ -30,6 +30,26 @@ function readOrNull(file: string): Buffer | null {
   }
 }
 
+/**
+ * Every hot message the canvas's Vite client receives from now on: the app's socket, through the
+ * designer's proxy, not the designer's own under /__trivia/.
+ */
+function canvasHotMessages(page: Page): Array<{ type: string; triggeredBy?: string }> {
+  const messages: Array<{ type: string; triggeredBy?: string }> = []
+  page.on('websocket', (socket) => {
+    if (new URL(socket.url()).pathname.startsWith('/__trivia/')) return
+    socket.on('framereceived', ({ payload }) => {
+      try {
+        const message = JSON.parse(String(payload)) as { type?: unknown; triggeredBy?: string }
+        if (typeof message.type === 'string') messages.push({ ...message, type: message.type })
+      } catch {
+        // not a hot message
+      }
+    })
+  })
+  return messages
+}
+
 async function navigateCanvas(page: Page, route: string) {
   await page.locator('iframe[title="App canvas"]').evaluate((frame, url) =>
     (frame as HTMLIFrameElement).contentWindow!.location.assign(url), route)
@@ -112,6 +132,32 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
       fs.rmSync(path.join(blueprint, doc), { force: true })
       for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
     }
+  }
+})
+
+// A blueprint write leaves the route entry loaded (it is static), so a preview that failed to load
+// (here its page did not exist yet) has no module for the write to invalidate: the entry reloads
+// the canvas itself on the plugin's blueprint event, and the preview then loads.
+test('a draft preview that failed to load shows the page once its document is written', async ({ page }) => {
+  const recovered = 'RecoverDraft'
+  const blueprint = path.join(root, 'blueprint')
+  const document = path.join(blueprint, `pages/${recovered}.page.json`)
+  expect(fs.existsSync(document)).toBe(false)
+  const dirs = [path.join(blueprint, 'pages'), blueprint].filter((dir) => !fs.existsSync(dir))
+  const canvas = page.frameLocator('iframe[title="App canvas"]')
+  try {
+    await page.goto('/__trivia/')
+    await expect(canvas.getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 30_000 })
+    const preview = page.waitForResponse((response) => new URL(response.url()).pathname === '/@trivia/api/blueprint/preview')
+    await navigateCanvas(page, '/__blueprint/' + recovered)
+    expect((await (await preview).json()).ok).toBe(false)
+    await post(page, '/blueprint/patch', { label: 'Draft a page', ops: [
+      { op: 'createPage', doc: `pages/${recovered}.page.json`, baseRev: null, name: recovered, route: '/recover-draft', kind: 'custom' },
+    ] })
+    await expect(canvas.locator('[data-bp-node]').first()).toBeAttached({ timeout: 30_000 })
+  } finally {
+    fs.rmSync(document, { force: true })
+    for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
   }
 })
 
@@ -201,6 +247,43 @@ test.describe('Blueprint panel', () => {
     await expect.poll(() => read(appFile)).toEqual(baseline.get(appFile))
     await expect.poll(() => read(lock)).toEqual(baseline.get(lock))
     await expect(panel(page).getByRole('button', { name: 'Preview AccountIntake' })).toBeVisible()
+  })
+
+  // Ejecting again after an undo creates the page file a second time. The canvas must take the
+  // eject, its undo and the second eject as hot updates, not as reloads of the app. The test never
+  // opens the page's preview, so no write from the page's creation on has a reason to reload.
+  test('eject, undo, eject: the canvas takes each as hot updates and never reloads', async ({ page }) => {
+    const hot = canvasHotMessages(page)
+    await openBlueprint(page)
+    const from = hot.length
+    await createPage(page, 'AccountIntake', '/blueprint-account-intake', 'create')
+    await panel(page).getByRole('button', { name: 'Eject AccountIntake' }).click()
+    await page.getByRole('dialog', { name: 'Eject AccountIntake' }).getByRole('button', { name: 'Confirm eject' }).click()
+    const ejectedPage = canvas(page).locator('[data-ast-node^="src/pages/accounts/create.tsx#"]').first()
+    await expect(ejectedPage).toBeVisible({ timeout: 35_000 })
+    const written = [appFile, generated, lock]
+    const ejected = written.map(read)
+    // The dialog moved the canvas to the page's route, a navigation. From here on the canvas's
+    // document must stay the same one: a mark on its window is gone after any reload.
+    type Marked = { trivia_e2e_mark?: string }
+    const html = canvas(page).locator('html')
+    await html.evaluate(() => { (window as Marked).trivia_e2e_mark = 'kept' })
+
+    await page.getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => written.map(read), { timeout: 15_000 }).toEqual(written.map((file) => baseline.get(file)))
+    await expect(ejectedPage).toHaveCount(0, { timeout: 15_000 })
+
+    // Eject again through the API, as the dialog does, without the dialog's navigation.
+    const { ops, label } = await post<{ ops: unknown[]; label: string }>(page, '/blueprint/plan', { pages: ['AccountIntake'] })
+    await post(page, '/batch', { ops, label })
+    await post(page, '/blueprint/ejected', { pages: ['AccountIntake'], entry: label })
+    expect(written.map(read)).toEqual(ejected)
+    await expect(ejectedPage).toBeVisible({ timeout: 35_000 })
+    // A full reload arrives with the hot updates of the files written, or with the replay of a
+    // dropped change 100 ms later. Nothing marks its absence, so give it a second.
+    await page.waitForTimeout(1_000)
+    expect(hot.slice(from).filter((message) => message.type === 'full-reload')).toEqual([])
+    expect(await html.evaluate(() => (window as Marked).trivia_e2e_mark)).toBe('kept')
   })
 
   test('FR-DS-03 FR-DS-09 previews text bound to the value exposed by a manifest input', async ({ page }) => {

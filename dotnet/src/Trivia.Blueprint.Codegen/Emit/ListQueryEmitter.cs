@@ -54,10 +54,15 @@ public static class ListQueryEmitter
                         ? (descending ? query.OrderByDescending(key) : query.OrderBy(key))
                         : (descending ? ordered.ThenByDescending(key) : ordered.ThenBy(key));
 
-                internal static string SearchPattern(string text) => "%" + text
+                internal static string SearchPattern(string text) => "%" + Literally(text) + "%";
+
+                internal static string PrefixPattern(string text) => Literally(text) + "%";
+
+                // ILIKE reads % and _ as wildcards. The patterns escape them, and the escape, with \.
+                private static string Literally(string text) => text
                     .Replace("\\", "\\\\", StringComparison.Ordinal)
                     .Replace("%", "\\%", StringComparison.Ordinal)
-                    .Replace("_", "\\_", StringComparison.Ordinal) + "%";
+                    .Replace("_", "\\_", StringComparison.Ordinal);
 
                 internal static T[] Values<T>(ListFilter filter, Func<string, T> parse)
                 {
@@ -206,8 +211,10 @@ public static class ListQueryEmitter
         ];
         if (member.Type == "string")
         {
-            operations.Add(("contains", $"{present}{column}.Contains(value)"));
-            operations.Add(("startswith", $"{present}{column}.StartsWith(value)"));
+            // Refine's contains and startswith ignore case (its containss and startswiths do not).
+            string escape = Literal("\\");
+            operations.Add(("contains", $"{present}EF.Functions.ILike({column}!, ListQuery.SearchPattern(value), {escape})"));
+            operations.Add(("startswith", $"{present}EF.Functions.ILike({column}!, ListQuery.PrefixPattern(value), {escape})"));
         }
         if (member.Type is "int" or "long" or "decimal" or "DateOnly" or "DateTimeOffset")
         {

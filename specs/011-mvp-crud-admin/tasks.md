@@ -34,8 +34,8 @@
 
 - [x] T013 Measure SC-004 and SC-005. Record them in `docs/blueprint/README.md`
 - [x] T014 Add the slice to the release checklist: `tools/release` runs it before tagging
-- [ ] T015 Update `docs/HANDOFF.md` (status, catches) and `docs/product.md` (day 1 is in, with a link to the BRD), and review the ⚑ decisions with the owner
-  Deferred: the lead reviews the ⚑ decisions with the owner
+- [x] T015 Update `docs/HANDOFF.md` (status, catches) and `docs/product.md` (day 1 is in, with a link to the BRD), and review the ⚑ decisions with the owner
+  The ⚑ review was delegated by the owner and done on 2026-11-26 (see `docs/blueprint/README.md`, "Decisions (⚑)").
 
 ## Found by the slice
 

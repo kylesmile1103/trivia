@@ -70,8 +70,10 @@ it('routes mutations and custom calls under /api/v1', async () => {
   expect(result).toEqual({ data: { id: 7 } })
   expect(send.mock.calls.slice(0, 4).map(([url, init]) => [url, init?.method])).toEqual([
     ['/api/v1/customers/7', 'GET'], ['/api/v1/customers', 'POST'],
-    ['/api/v1/customers/7', 'PUT'], ['/api/v1/customers/7', 'DELETE'],
+    ['/api/v1/customers/7', 'PATCH'], ['/api/v1/customers/7', 'DELETE'],
   ])
+  // An edit form submits its own fields only, so update merges them instead of replacing the record.
+  expect(send.mock.calls[2]?.[1]?.body).toBe('{"fullName":"Jane"}')
   expect(requestUrl(send, 4).searchParams.getAll('option')).toEqual(['one', 'two'])
   expect(requestUrl(send, 4).searchParams.get('keep')).toBe('1')
   expect(new Headers(send.mock.calls[4]?.[1]?.headers).get('x-test')).toBe('yes')

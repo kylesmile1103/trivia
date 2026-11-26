@@ -182,13 +182,29 @@ The adapter keeps a map from preview id to page name and serves
 inferencer previews, including the Tailwind stylesheet for classes no file has used yet.
 A preview route, `/__blueprint/<Name>`, is registered in dev by a small client entry that the
 plugin injects, so the canvas can navigate to it without touching the app's router file. The
-store's change events invalidate previews, and the page reloads.
+store's change events invalidate the loaded page previews, and the page reloads.
 
 ⚑ Vite injects the development route beside the Refine app's existing routes. Its lazy
 client entry asks the loopback preview API for the module. The shared inferencer loader
 adds a default export and the preview stylesheet. Relative imports resolve as if the
 module were at its ejected path. A missing call stub can also be served virtually.
-Vite invalidates the modules on draft document and contract file changes.
+Vite invalidates the compiled page modules on draft document and contract file changes.
+⚑ (decided 2026-11-26) The route entry (`blueprint-route.tsx`, `vite-plugin-ast-locator/src/blueprint-entry.ts`)
+is never invalidated, because it is static: its one route takes the page as a parameter and it
+fetches the preview when it renders. A blueprint write therefore reloads the canvas only while a
+page preview module is loaded, where before every write did, on a Refine app whatever route the
+canvas showed (`App.tsx` imports the entry). A failed preview (a compile error, a page not
+written yet) loaded no module to invalidate, so every document change also sends the hot event
+`trivia:blueprints-changed`, and the entry reloads the page on it only after its preview
+request failed: the next write retries it.
+⚑ (decided 2026-11-26) A blueprint file that a stylesheet scans becomes that stylesheet's CSS
+update, never a reload, because the dev service reads blueprint files from disk and no page
+imports them. Tailwind's plugin scans `blueprint/*.json` and reloads the page when a scanned
+file that is not a module changes; the plugin's pre `hotUpdate` hook hands Vite the importing
+stylesheets instead (`isCSSRequest` on their file: `index.css` imported from JavaScript is a `js`
+node), so Tailwind rebuilds the CSS, a class written only in a document included, and the
+canvas stays. A blueprint file a module imports, and every file outside the directory, keep the
+usual path.
 
 ⚑ Spec 005 used the three spec 002 sample manifests. Spec 006 replaces that catalog with
 the full kit shipped by `@trivia/blueprint-compiler`. The dev service reads the same files
@@ -269,10 +285,10 @@ source so a batch rollback or undo can restore it through the ordinary guarded w
 
 | Command | Does |
 | --- | --- |
-| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for Refine UI |
+| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` commands for the kit and Refine UI |
 | `validate [--json]` | Loads, validates, prints diagnostics. Exit 1 on errors |
 | `compile <Page> [--out file]` | Prints or writes one compiled page |
-| `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards |
+| `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards. A refusal for missing components prints their `shadcn add` commands |
 
 Run `validate`, `compile` and `eject` from the project root. Commands exit with 0 for success,
 1 for operation errors and validation errors, or 2 for incorrect arguments.
@@ -287,7 +303,17 @@ therefore a printed command, not something `new` runs silently.
 the repo) and constructs a standalone engine service without a server. This shares the
 project facts, validation, route plan and native writes without a package dependency cycle.
 `new` links the local Vite plugin when available because Trivia packages are built from
-the workspace. It prints commands for Refine UI's layout and views registry items.
+the workspace.
+
+⚑ (decided 2026-11-26) `new --target vite-refine` prints two install lines derived from the
+shipped kit manifests (`kit/*.manifest.json`, `source.registry` and `source.item`): one
+`pnpm exec shadcn add` for the shadcn items, and one for Refine UI's `layout-01` and `views`
+with the kit's `data-table` ([LLD-06 §7](LLD-06-component-kit.md#7-registry-installation)).
+Each line is deduplicated and byte-sorted. A Next.js app gets the layout and views line. When
+eject is refused with `unresolved_component`, the CLI also prints these lines for `requires`,
+covering only what the pages use. There is no `kit` command, and the CLI runs neither line,
+so it stays offline. Reason: lines derived from the manifests install every component a
+blueprint can use and cannot drift from the kit.
 
 ⚑ The Vite template uses the application's `Plugin` type for the Trivia plugin at the
 config boundary. A checkout link can resolve a separate compatible Vite 8 installation.
@@ -312,6 +338,7 @@ by the Refine example. The provider displays mutation errors and Blueprint toast
 ## 9. Follow-ups
 
 - Kit registry installation and fixture coverage are in [LLD-06](LLD-06-component-kit.md).
-- Deferred: needs spec 010 (app-specific backend and data provider orchestration).
-- Deferred: needs spec 012 (Next.js preview and eject target).
+- App-specific backend and data provider orchestration: spec 010 (`trivia-blueprint backend`
+  and the template's data provider, [LLD-10](LLD-10-aspire-solution-and-contract-loop.md)).
+- Next.js compilation, preview and eject: spec 012 ([LLD-12](LLD-12-nextjs-codegen-target.md)).
 - A page-level error boundary and loading skeleton for custom pages remain open.

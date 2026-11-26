@@ -5,16 +5,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { Plugin } from 'vite'
+import { type Plugin, isCSSRequest } from 'vite'
 
 import {
   type EngineBinding, EngineService, PREVIEW_PREFIX, createDevMiddleware, loadEngine,
 } from '@trivia/dev-service'
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
+import { BLUEPRINT_ENTRY, BLUEPRINT_ROUTE, blueprintEntry } from './blueprint-entry.js'
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
-import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile } from './transform.js'
+import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile, relativeToRoots } from './transform.js'
 import { replayDroppedChanges } from './watch.js'
 
 export { API_BASE, MCP_PATH } from '@trivia/dev-service'
@@ -47,25 +48,6 @@ export interface AstLocatorOptions {
 }
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
-
-const BLUEPRINT_ENTRY = 'blueprint-route.tsx'
-const BLUEPRINT_ROUTE = '/__blueprint/:triviaPage'
-const blueprintEntry = [
-  'import { lazy, Suspense, useMemo } from "react"',
-  'import { useParams } from "react-router"',
-  'export function TriviaBlueprintRoute() {',
-  '  const { triviaPage: page } = useParams()',
-  '  const Preview = useMemo(() => lazy(async () => {',
-  '    const response = await fetch("/@trivia/api/blueprint/preview", {',
-  '      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page }),',
-  '    })',
-  '    const result = await response.json()',
-  '    if (!result.ok) throw new Error(result.error.message)',
-  '    return import(/* @vite-ignore */ result.data.module)',
-  '  }), [page])',
-  '  return <Suspense fallback={null}><Preview /></Suspense>',
-  '}',
-].join('\n')
 
 export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let engine: EngineBinding | undefined
@@ -197,6 +179,35 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         if (changed === manifestFile) invalidatePreviews(server, false)
         else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
+    },
+
+    // Two kinds of reload for files the canvas never imports, both found by eject, undo, eject
+    // on the Refine example. Tailwind's plugin makes its stylesheet depend on every file it
+    // scans, and Vite keeps each one as an `asset` node that the stylesheet imports.
+    // - A blueprint file (a document, the lock) that only stylesheets depend on: Tailwind reloads
+    //   the page when a scanned file that is no module changes, as it cannot know whether the
+    //   file is rendered. The dev service reads blueprint files from disk and previews bring their
+    //   own stylesheet, so the update goes to those stylesheets instead (Tailwind rebuilds them;
+    //   its hook returns early for a module that is not an asset). A blueprint file a module
+    //   imports is left as it is.
+    // - An `asset` node nothing imports any more (the stylesheet, rebuilt after an undo deleted
+    //   the file, dropped it): Vite treats it as a dead end and reloads, when nothing reads it.
+    //   Such nodes are left out; Vite updates the rest and sends nothing for an empty list.
+    // This runs before the other plugins' hooks, Tailwind's among them, which see the list it returns.
+    hotUpdate: {
+      order: 'pre',
+      handler({ file, modules }) {
+        if (service === undefined || paths === undefined || NODE_MODULES.test(file)) return
+        const rel = relativeToRoots(path.resolve(file), roots)
+        if (rel === null) return
+        if (modules.length > 0 && modules.every((mod) => mod.type === 'asset') && rel.startsWith(paths.blueprintDir + '/')) {
+          // A stylesheet imported from JavaScript is a `js` node, so its file tells, not its type.
+          const stylesheets = new Set(modules.flatMap((mod) => [...mod.importers].filter((importer) => isCSSRequest(importer.file ?? importer.url))))
+          if (stylesheets.size > 0) return [...stylesheets]
+        }
+        const consumed = modules.filter((mod) => mod.type !== 'asset' || mod.importers.size > 0)
+        return consumed.length === modules.length ? undefined : consumed
+      },
     },
 
     closeServer({ reason }) {

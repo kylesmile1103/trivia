@@ -7,7 +7,7 @@ import type { FSWatcher } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RECHECK_MS, replayDroppedChanges, timing } from '../src/watch.js'
-import { copyPlayground, request, startServer } from './helpers.js'
+import { copyPlayground, post, request, startServer } from './helpers.js'
 
 let root: string
 let stop: () => void = () => {}
@@ -171,6 +171,108 @@ describe('in a Vite dev server', () => {
       await server.close()
     }
   }, 30_000)
+
+  /** Write `text` over `file` as the engine does (workspace.rs): a temporary sibling renamed over it. */
+  function renameOver(file: string, text: string, mtime: Date) {
+    const tmp = path.join(path.dirname(file), `.${path.basename(file)}.trivia-test-${process.pid}.tmp`)
+    fs.writeFileSync(tmp, text)
+    fs.utimesSync(tmp, mtime, mtime)
+    fs.renameSync(tmp, file)
+  }
+
+  it('serves the second of two engine writes (an edit, then its undo) whose second event was dropped', async () => {
+    // As above, the fetch between the two writes is this test's own step: the recheck waits past it.
+    timing.recheckMs = 3_000
+    root = copyPlayground()
+    const server = await startServer(root)
+    try {
+      const file = fs.realpathSync(path.join(root, DASHBOARD))
+      const original = fs.readFileSync(file, 'utf8')
+      expect(await served(server.socket)).toBe(original)
+      // The same size and modification time (Linux stamps files from a clock that ticks every few
+      // milliseconds, so an edit and its undo can share one): only the inode tells the writes apart.
+      const edited = original.replace('Save changes', 'Keep changes')
+      expect(edited.length).toBe(original.length)
+      const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
+      // The edit is heard and the open canvas fetches its module...
+      renameOver(file, edited, mtime)
+      server.vite.watcher.emit('change', file, fs.statSync(file))
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(edited))
+      // ...then the undo is written and chokidar drops its event: Vite still serves the edit.
+      renameOver(file, original, mtime)
+      expect(await served(server.socket)).toBe(edited)
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 10_000 })
+    } finally {
+      timing.recheckMs = RECHECK_MS
+      await server.close()
+    }
+  }, 30_000)
+
+  it('sends one update for an engine edit: the watcher\'s', async () => {
+    root = copyPlayground()
+    // A module that accepts its own updates, as React Refresh makes a component module (this
+    // server has no React plugin): an update then reaches the client as `update`.
+    fs.writeFileSync(path.join(root, 'src/Hot.tsx'), 'export function Hot() {\n  return <p title="a">hot</p>\n}\n\nif (import.meta.hot) import.meta.hot.accept()\n')
+    const server = await startServer(root)
+    try {
+      const file = fs.realpathSync(path.join(root, 'src/Hot.tsx'))
+      expect((await request(server.socket, '/src/Hot.tsx')).status).toBe(200)
+      const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+      const edit = await post(server.socket, '/apply', { op: { op: 'updateProp', target: 'src/Hot.tsx#Hot#0', expectedName: 'p', prop: 'title', value: 'b' } })
+      expect(edit.body.ok).toBe(true)
+      // What chokidar emits for the engine's rename: one change, with the stats it read.
+      server.vite.watcher.emit('change', file, fs.statSync(file))
+      await vi.waitFor(() => expect(send).toHaveBeenCalled())
+      // Past the replay's recheck, which finds the file as the event left it.
+      await new Promise((resolve) => setTimeout(resolve, 3 * RECHECK_MS))
+      expect(send.mock.calls).toEqual([[{ type: 'update', updates: [expect.objectContaining({ type: 'js-update', path: '/src/Hot.tsx' })] }]])
+    } finally {
+      await server.close()
+    }
+  })
+
+  // A client can ask for a module as soon as an engine write is answered, before the watcher
+  // reports it: the eject dialog navigates the canvas then (an e2e trace got the old App.tsx,
+  // 304, and the canvas stayed on it). Vite must already serve the new source; the update is
+  // still only the watcher's. The watcher is closed here, so nothing but the host can refresh it.
+  describe('serves an engine write at once, before the watcher reports it, and sends nothing for it', () => {
+    const save = `${DASHBOARD}#Dashboard#0.0.2.1`
+    const outline = { op: { op: 'updateProp', target: save, expectedName: 'Button', prop: 'variant', value: 'outline' } }
+
+    it('an edit', async () => {
+      root = copyPlayground()
+      const server = await startServer(root)
+      try {
+        const file = fs.realpathSync(path.join(root, DASHBOARD))
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        await server.vite.watcher.close()
+        const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+        expect((await post(server.socket, '/apply', outline)).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        expect(send).not.toHaveBeenCalled()
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('an undo', async () => {
+      root = copyPlayground()
+      const server = await startServer(root)
+      try {
+        const file = fs.realpathSync(path.join(root, DASHBOARD))
+        const original = fs.readFileSync(file, 'utf8')
+        expect((await post(server.socket, '/apply', outline)).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        await server.vite.watcher.close()
+        const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+        expect((await post(server.socket, '/undo')).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(original)
+        expect(send).not.toHaveBeenCalled()
+      } finally {
+        await server.close()
+      }
+    })
+  })
 
   it('clears its pending check when the server closes', async () => {
     root = copyPlayground()
