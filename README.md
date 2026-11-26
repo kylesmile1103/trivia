@@ -35,7 +35,8 @@ comments included. Edit from the canvas, your IDE or an AI agent: all three work
 
 ## Quick start
 
-You need Node 22, pnpm 12 and Rust 1.97 or newer.
+You need Node 22, pnpm 12 and Rust 1.97 or newer, on macOS or Linux (Windows is untested:
+[CI/CD](docs/ci.md)).
 
 ```sh
 pnpm install

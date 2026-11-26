@@ -1,10 +1,16 @@
-# Everything, uncached, on every operating system (docs/ci.md). Never blocks a pull request.
+# Everything, uncached, on Linux (x64, arm64) and macOS; Windows on request (docs/ci.md).
+# Never blocks a pull request.
 name: Nightly
 
 on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      windows:
+        description: Also run the gate on windows-2025 (unsupported, known red; docs/ci.md)
+        type: boolean
+        default: false
   push:
     # A change to this workflow or the shared setup runs it, so it is tested before merge.
     paths: ['.github/workflows/nightly.yml', '.github/actions/**']
@@ -27,7 +33,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
+        # Windows only when dispatched with windows: true (unsupported for now, docs/ci.md ⚑).
+        os: ${{ fromJSON(inputs.windows && '["ubuntu-24.04","ubuntu-24.04-arm","macos-15","windows-2025"]' || '["ubuntu-24.04","ubuntu-24.04-arm","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:

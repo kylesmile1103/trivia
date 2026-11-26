@@ -30,6 +30,10 @@
             "operation": "approveKycCustomer",
             "input": "{}",
             "id": "row.id"
+          },
+          {
+            "do": "refetch",
+            "query": "list"
           }
         ]
       }

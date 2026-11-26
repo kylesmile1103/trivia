@@ -24,7 +24,7 @@
     "lint": "cargo clippy -p trivia_napi --all-targets -- -D warnings"
   },
   "devDependencies": {
-    "@napi-rs/cli": "3.10.8"
+    "@napi-rs/cli": "3.10.12"
   },
   "nx": {
     "name": "engine",

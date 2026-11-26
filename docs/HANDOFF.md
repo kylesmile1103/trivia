@@ -338,7 +338,8 @@ The order is the product's (`docs/product.md`, Slices):
    (`docs/mcp.md`, the Refine session). The rule half is now one `setCallArgument` on `z.enum`.
    The `<SelectItem>`s and a column's filter options still need their own in-place edit.
 
-Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build,
+Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
+(Windows is unsupported for now; its two known failures are in `docs/ci.md`, "nightly.yml"),
 notarizing the macOS app (needs an Apple Developer ID); the Data tab's TanStack-path forms (edit
 forms, nested objects).
 

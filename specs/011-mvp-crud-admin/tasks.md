@@ -64,8 +64,10 @@
   implies it was a collision with no way out. The refusal names what is missing with examples;
   the collision carries a guarded `removeField` fix. Regressions:
   `packages/blueprint/src/model/apply.test.ts`, `packages/blueprint/src/model/validate.test.ts`.
-- Open, for the owner: both T011 sessions wanted a `refetch` after the Approve KYC mutation
-  in the row action. LLD-05 allows `refetch` of the list in header actions only (⚑).
+- [x] Both T011 sessions needed a list `refetch` after the Approve KYC row mutation.
+  LLD-05 now accepts `refetch` of `list` in row and header actions on list pages.
+  `packages/blueprint-compiler/test/contract-actions.test.ts` executes both targets' emitted
+  row handlers and checks that only a successful mutation triggers a refetch.
 
 ## Dependencies
 

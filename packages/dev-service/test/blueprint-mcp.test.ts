@@ -72,6 +72,7 @@ it('FR-AG-02 lists blueprint tools and their guarded input shapes', async () => 
     readOnly: annotations?.readOnlyHint,
   }))).toMatchSnapshot()
   const patch = blueprint.find(({ name }) => name === 'trivia_blueprint_patch')
+  expect(patch?.description).toContain('refetch query "list" in row or header actions on a list page')
   const { items, minItems } = patch?.inputSchema.properties?.ops as {
     minItems: number
     items: { oneOf?: OperationSchema[]; anyOf?: OperationSchema[] }
@@ -310,7 +311,7 @@ it('FR-AG-06 returns a loadable blueprint preview and optional code over MCP', a
   expect(withCode.structuredContent).toMatchObject({ code: expect.stringContaining('export function CustomerList()') })
 })
 
-it('FR-AG-04: MCP diagnostics show the synced mutation ID and the implicit list query', async () => {
+it('FR-AG-04: MCP diagnostics show the synced mutation ID and how to refetch the implicit list query', async () => {
   const manifestFile = path.join(root, 'trivia.manifest.json')
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as TriviaManifest
   const customer = manifest.resources.find(({ name }) => name === 'Customer')!
@@ -324,7 +325,9 @@ it('FR-AG-04: MCP diagnostics show the synced mutation ID and the implicit list 
 
   const page = listPage()
   const options = (operation: string, query: string) => ({
-    rowActions: [{ name: 'approveKyc', label: 'Approve KYC', steps: [{ do: 'mutate', resource: 'Customer', operation, id: 'row.id' }] }],
+    rowActions: [{ name: 'approveKyc', label: 'Approve KYC', steps: [
+      { do: 'mutate', resource: 'Customer', operation, id: 'row.id' }, { do: 'refetch', query },
+    ] }],
     headerActions: [{ name: 'refresh', label: 'Refresh', steps: [{ do: 'refetch', query }] }],
   })
   const draft = await tool('trivia_blueprint_patch', {
@@ -341,8 +344,12 @@ it('FR-AG-04: MCP diagnostics show the synced mutation ID and the implicit list 
       hint: { text: expect.stringContaining('approveKycCustomer') },
     },
     {
+      code: 'unsupported_operation', pointer: '/options/rowActions/0/steps/1/query',
+      hint: { text: 'Use query "list" in row or header actions on a list page.' },
+    },
+    {
       code: 'unsupported_operation', pointer: '/options/headerActions/0/steps/0/query',
-      hint: { text: expect.stringContaining('"list"') },
+      hint: { text: 'Use query "list" in row or header actions on a list page.' },
     },
   ])
   expect(JSON.stringify(data?.diagnostics)).not.toContain('getCustomerKyc')
