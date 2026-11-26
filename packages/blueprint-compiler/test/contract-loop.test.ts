@@ -9,6 +9,8 @@ import { syncContract } from '@trivia/contract-sync'
 import { refineName } from '../src/index.js'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
+import { runCodegen } from './codegen.js'
+
 const workspace = path.resolve(import.meta.dirname, '../../..')
 const bank = path.join(workspace, 'packages/blueprint/fixtures/model/valid/bank/model.blueprint.json')
 const snapshot = path.join(workspace, 'dotnet/tests/Trivia.Blueprint.Codegen.Tests/Snapshots/BankOpenApi.verified.txt')
@@ -120,10 +122,8 @@ it('FR-AS-08 reports a fix on every ejected page that used a removed model field
 
 
 function buildContract(blueprint: string, webDirectory?: string) {
-  const generator = path.join(workspace, 'dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj')
   const options = { cwd: root, encoding: 'utf8', timeout: 90_000 } as const
-  execFileSync('dotnet', ['run', '--project', generator, '--configuration', 'Release', '--disable-build-servers', '--',
-    'write', '--blueprint', blueprint, '--root', root, ...(webDirectory ? ['--web-dir', webDirectory] : [])], options)
+  runCodegen(['write', '--blueprint', blueprint, '--root', root, ...(webDirectory ? ['--web-dir', webDirectory] : [])], options)
   execFileSync('dotnet', ['build', 'src/BackOffice.Api/BackOffice.Api.csproj', '-warnaserror', '--disable-build-servers'], options)
 }
 
