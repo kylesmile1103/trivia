@@ -21,6 +21,14 @@ import { NODE_MODULES, relativeToRoots } from './transform.js'
 export const RECHECK_MS = 100
 
 /**
+ * The delay actually used, RECHECK_MS unless a test lengthens it. Internal (the package exports
+ * only its index): the real-server test makes the write it pretends was dropped only after a
+ * module fetch, which under load outlasts 100 ms, where a real dropped write lands within
+ * chokidar's 50 ms window.
+ */
+export const timing = { recheckMs: RECHECK_MS }
+
+/**
  * After a `change` event for a project file (under one of `roots`, not in `node_modules`), stat
  * the file again RECHECK_MS later. When its mtime, size or inode moved since the event, emit the
  * change again as chokidar does (`change`, then `all`), with the new stats. Emitting on the
@@ -51,7 +59,7 @@ export function replayDroppedChanges(watcher: FSWatcher, roots: readonly string[
       } finally {
         replaying = undefined
       }
-    }, RECHECK_MS))
+    }, timing.recheckMs))
   }
   const onRemoved = (event: string | symbol, listener: unknown) => {
     if (event === 'change' && listener === onChange) stop()

@@ -6,7 +6,7 @@ import path from 'node:path'
 import type { FSWatcher } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { RECHECK_MS, replayDroppedChanges } from '../src/watch.js'
+import { RECHECK_MS, replayDroppedChanges, timing } from '../src/watch.js'
 import { copyPlayground, request, startServer } from './helpers.js'
 
 let root: string
@@ -149,6 +149,9 @@ describe('in a Vite dev server', () => {
   }
 
   it('serves the whole file again after an in-place write whose second event was dropped', async () => {
+    // The recheck must come after the second write, as a real dropped write (within chokidar's 50 ms
+    // window) always does; here that write waits for a module fetch, which a loaded runner slows.
+    timing.recheckMs = 3_000
     root = copyPlayground()
     const server = await startServer(root)
     try {
@@ -162,11 +165,12 @@ describe('in a Vite dev server', () => {
       await vi.waitFor(async () => expect(await served(server.socket)).not.toBe(original))
       // ...then the content is written and its event dropped.
       fs.writeFileSync(file, original)
-      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 2_000 })
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 10_000 })
     } finally {
+      timing.recheckMs = RECHECK_MS
       await server.close()
     }
-  })
+  }, 30_000)
 
   it('clears its pending check when the server closes', async () => {
     root = copyPlayground()
