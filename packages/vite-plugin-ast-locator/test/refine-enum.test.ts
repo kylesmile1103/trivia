@@ -7,9 +7,12 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { REFINE_ADMIN, copyRefineAdmin, get, post, startServer, type TestServer } from './helpers.js'
+import { REFINE_ADMIN, copyRefineAdmin, get, post, socketFetch, startServer, type TestServer } from './helpers.js'
 
 const LIST = 'src/pages/customers/list.tsx'
 const EDIT = 'src/pages/customers/edit.tsx'
@@ -112,6 +115,26 @@ describe('a column whose enum gained a value', () => {
     expect(undone.status, JSON.stringify(undone.body)).toBe(200)
     expect(read(LIST)).toBe(list)
   }, 120_000)
+
+  it('is aligned by an agent too, with trivia_edit_columns', async () => {
+    await statuses(['pending', 'active', 'suspended', 'closed'])
+    const client = new Client({ name: 'refine-enum-test', version: '0.0.0' })
+    await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/@trivia/mcp'), { fetch: socketFetch(server.socket) }) as unknown as Transport)
+    try {
+      const r = (await client.callTool({
+        name: 'trivia_edit_columns',
+        arguments: { file: LIST, changes: [{ action: 'align', column: 'status' }], label: 'Offer the closed status' },
+      })) as { isError?: boolean; content: Array<{ text?: string }>; structuredContent?: any }
+      expect(r.isError, JSON.stringify(r.content)).toBeFalsy()
+      expect(r.content[0]?.text).toContain('Update the Status filter options from the contract')
+      expect(r.structuredContent.history.undoLabel).toBe('Agent: Offer the closed status')
+    } finally {
+      await client.close()
+    }
+    expect(read(LIST)).toContain(`${option('Suspended', 'suspended')}\n${option('Closed', 'closed')}`)
+    await post(server.socket, '/undo')
+    expect(read(LIST)).toBe(originals.get(LIST))
+  }, 60_000)
 })
 
 describe('a form field whose enum changed', () => {
