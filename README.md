@@ -9,7 +9,7 @@
   <a href="https://github.com/kylesmile1103/trivia/actions/workflows/nightly.yml"><img alt="Nightly" src="https://github.com/kylesmile1103/trivia/actions/workflows/nightly.yml/badge.svg"></a>
   <a href="https://github.com/kylesmile1103/trivia/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/kylesmile1103/trivia/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/kylesmile1103/trivia/releases"><img alt="Release" src="https://img.shields.io/github/v/release/kylesmile1103/trivia?include_prereleases&sort=semver"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/kylesmile1103/trivia"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <br>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-OXC-dea584?logo=rust">
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white">
@@ -20,6 +20,16 @@
 Point at an element in your running app, change it, and the change lands in your `.tsx` file as a
 minimal text edit. Everything you didn't touch stays exactly as you wrote it, whitespace and
 comments included. Edit from the canvas, your IDE or an AI agent: all three work on the same files.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/designer-dark.png">
+    <img alt="The Trivia designer on the refine-admin example. A Status badge is selected, every row's badge is outlined, and the inspector's variant menu is open." src="docs/images/designer-light.png" width="900">
+  </picture>
+  <br>
+  <sub>One click selects the Status badge, and every row lights up: they all come from line 63 of
+  <code>src/pages/customers/list.tsx</code>. Picking a variant rewrites that one attribute.</sub>
+</p>
 
 > In compiler terms, *trivia* is the whitespace and comments a parse-and-print round trip throws
 > away. Keeping them is the whole point.
@@ -32,6 +42,16 @@ comments included. Edit from the canvas, your IDE or an AI agent: all three work
 - **Knows your API contract.** For Refine + shadcn apps on OpenAPI: columns, form fields, contract
   drift and new resource pages, planned from the spec and written as ordinary code.
 - **Local and dev-only.** Nothing is added to your production bundle. No account, no telemetry.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/data-dark.png">
+    <img alt="The Data tab for the customers list: its columns read from the source, and an Add column menu listing the contract fields the page doesn't show yet." src="docs/images/data-light.png" width="900">
+  </picture>
+  <br>
+  <sub>The Data tab reads the page's columns from its source and offers the contract's other
+  fields, typed, as new columns (<code>*</code> marks a required field).</sub>
+</p>
 
 ## Quick start
 
