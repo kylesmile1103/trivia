@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
+import { restore, writeWhole } from '../files'
+
 const ROOT = fileURLToPath(new URL('../../examples/refine-admin/', import.meta.url))
 const SPEC = path.join(ROOT, 'openapi/bank.openapi.json')
 const LIST = path.join(ROOT, 'src/pages/customers/list.tsx')
@@ -30,7 +32,7 @@ function snapshot(): Map<string, string> {
 const before = snapshot()
 
 test.afterEach(() => {
-  for (const [file, text] of before) if (fs.readFileSync(file, 'utf8') !== text) fs.writeFileSync(file, text)
+  for (const [file, text] of before) restore(file, text)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
@@ -43,7 +45,7 @@ test('a spec change: sync, see what it broke, fix it from the Data tab', async (
   spec.components.schemas.CustomerStatus.enum.push('closed')
   // Slice 5: a bound changes, and the forms' rules are edited in place.
   for (const name of ['CustomerDto', 'CreateCustomerRequest', 'UpdateCustomerRequest']) spec.components.schemas[name].properties.fullName.minLength = 3
-  fs.writeFileSync(SPEC, JSON.stringify(spec, null, 2))
+  writeWhole(SPEC, JSON.stringify(spec, null, 2))
 
   await page.goto('/__trivia/')
   await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible()

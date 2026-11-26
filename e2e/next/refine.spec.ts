@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 
 import { type Page, expect, test } from '@playwright/test'
 
+import { restore } from '../files'
+
 const CLIENT_LIST = fileURLToPath(new URL('../../examples/next-admin/src/features/bank/customers/list.tsx', import.meta.url))
 const PROVIDER = fileURLToPath(new URL('../../examples/next-admin/src/providers/bank-providers.tsx', import.meta.url))
 const CREATE = fileURLToPath(new URL('../../examples/next-admin/app/(bank)/accounts/create/page.tsx', import.meta.url))
@@ -11,7 +13,7 @@ const app = (page: Page) => page.frameLocator('iframe[title="App canvas"]')
 
 test.afterEach(() => {
   for (const [file, original] of originals) {
-    if (fs.readFileSync(file, 'utf8') !== original) fs.writeFileSync(file, original)
+    restore(file, original)
   }
   fs.rmSync(CREATE, { force: true })
 })

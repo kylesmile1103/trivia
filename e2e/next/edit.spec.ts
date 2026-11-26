@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
+import { restore } from '../files'
+
 const SERVER = fileURLToPath(new URL('../../examples/next-admin/app/page.tsx', import.meta.url))
 const CLIENT = fileURLToPath(new URL('../../examples/next-admin/src/components/edit-demo.tsx', import.meta.url))
 const originals = new Map([SERVER, CLIENT].map((file) => [file, fs.readFileSync(file, 'utf8')]))
@@ -15,7 +17,7 @@ const selected = (page: Page) => page.evaluate(() =>
 )
 
 test.afterEach(() => {
-  for (const [file, original] of originals) if (read(file) !== original) fs.writeFileSync(file, original)
+  for (const [file, original] of originals) restore(file, original)
 })
 
 async function clickCanvas(page: Page, target: Locator, button: 'left' | 'right' = 'left') {

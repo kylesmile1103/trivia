@@ -3,10 +3,12 @@
 //
 //   TRIVIA_APP_PORT=5341 TRIVIA_PORT=4441 pnpm exec playwright test e2e/style.spec.ts
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import { expect, type FrameLocator, type Page, test } from '@playwright/test'
+
+import { restore } from './files'
 
 const DASHBOARD = fileURLToPath(new URL('../examples/playground/src/pages/Dashboard.tsx', import.meta.url))
 // <div className="grid gap-2"> — the "Project name" field wrapper.
@@ -30,7 +32,7 @@ test.afterEach(async () => {
   try {
     expect(errors, 'no page errors (designer or canvas)').toEqual([])
   } finally {
-    if ((await readFile(DASHBOARD, 'utf8')) !== original) await writeFile(DASHBOARD, original)
+    restore(DASHBOARD, original)
   }
 })
 

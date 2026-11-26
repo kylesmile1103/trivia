@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Locator, type Page, type Route, expect, test } from '@playwright/test'
 
+import { restore, writeWhole } from './files'
+
 const DASHBOARD = fileURLToPath(new URL('../examples/playground/src/pages/Dashboard.tsx', import.meta.url))
 const original = fs.readFileSync(DASHBOARD, 'utf8')
 
 test.afterEach(async () => {
-  if (fs.readFileSync(DASHBOARD, 'utf8') !== original) fs.writeFileSync(DASHBOARD, original)
+  restore(DASHBOARD, original)
 })
 
 const app = (page: Page): FrameLocator => page.frameLocator('iframe[title="App canvas"]')
@@ -551,7 +553,7 @@ test('an edit made outside the designer bumps the revision and drops previews (H
   await expect(app(page).locator('style#trivia-preview')).toHaveCount(1)
   const revision = await storeCall<number>(page, 'return designer.getState().revision')
 
-  fs.writeFileSync(DASHBOARD, original.replace('Project settings', 'Project preferences'))
+  writeWhole(DASHBOARD, original.replace('Project settings', 'Project preferences'))
   await expect(app(page).getByText('Project preferences')).toBeVisible()
   await expect.poll(() => storeCall<number>(page, 'return designer.getState().revision')).toBeGreaterThan(revision)
   await expect(app(page).locator('style#trivia-preview')).toHaveCount(0)
@@ -635,7 +637,7 @@ test('dragging Save out of the page into App.tsx moves it between files, and one
     await expect.poll(dashboard).toBe(original)
     await expect.poll(() => fs.readFileSync(APP_FILE, 'utf8')).toBe(appBefore)
   } finally {
-    if (fs.readFileSync(APP_FILE, 'utf8') !== appBefore) fs.writeFileSync(APP_FILE, appBefore)
+    restore(APP_FILE, appBefore)
   }
 })
 

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
+import { restore, writeWhole } from './files'
+
 const root = fileURLToPath(new URL('../examples/blueprint-kit/', import.meta.url))
 const fixture = new URL('../packages/blueprint-compiler/fixtures/kit/', import.meta.url)
 const routes = {
@@ -38,7 +40,7 @@ test.beforeAll(async ({ request }) => {
   for (const file of ['app.blueprint.json', ...pages.map((page) => `pages/${page}.page.json`)]) {
     const target = remember('blueprint/' + file)
     fs.mkdirSync(path.dirname(target), { recursive: true })
-    fs.copyFileSync(new URL(file, fixture), target)
+    writeWhole(target, fs.readFileSync(new URL(file, fixture)))
   }
   const plan = await post<{ ops: Array<{ file?: string }>; label: string }>(request, '/blueprint/plan', { pages })
   remember('src/App.tsx')
@@ -52,7 +54,7 @@ test.beforeAll(async ({ request }) => {
 test.afterAll(() => {
   for (const [file, before] of originals) {
     if (before === null) fs.rmSync(file, { force: true })
-    else if (!fs.existsSync(file) || !fs.readFileSync(file).equals(before)) fs.writeFileSync(file, before)
+    else restore(file, before)
   }
   for (const dir of [...newDirectories].sort((a, b) => b.length - a.length)) {
     if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)

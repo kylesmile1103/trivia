@@ -8,13 +8,15 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
+import { restore } from '../files'
+
 const ROOT = fileURLToPath(new URL('../../examples/refine-admin/', import.meta.url))
 const APP = path.join(ROOT, 'src/App.tsx')
 const SHOW = path.join(ROOT, 'src/pages/transactions/show.tsx')
 const original = fs.readFileSync(APP, 'utf8')
 
 test.afterEach(() => {
-  if (fs.readFileSync(APP, 'utf8') !== original) fs.writeFileSync(APP, original)
+  restore(APP, original)
   fs.rmSync(SHOW, { force: true })
 })
 
