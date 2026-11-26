@@ -25,8 +25,11 @@ public static class ApiPlan
         AppAuth? auth = input.App?.Auth;
         if ((auth?.Mode ?? "none") != "none")
             return null;
+        string mode = input.App is null
+            ? $"There is no {ModelLoader.AppFile}, so auth.mode defaults to none"
+            : "auth.mode is none";
         return new("auth_none", ModelLoader.AppFile, auth is null ? "" : "/auth/mode",
-            "auth.mode is none, so the generated API accepts every request without authentication and serves " +
+            mode + ", so the generated API accepts every request without authentication and serves " +
             "its OpenAPI document only in Development. Before publishing it, set auth.mode to oidc or put an " +
             "authenticating gateway in front of it.", "warning");
     }

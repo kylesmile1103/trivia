@@ -356,10 +356,13 @@ authenticated user. Per-entity roles (`api.roles`) are a later extension. With `
 is added.
 
 ⚑ (decided 2026-11-26) `none` stays the default, and with it the runtime OpenAPI endpoint is
-mapped only in Development. `plan`, `write` and `check` report one `auth_none` diagnostic with
+mapped only in Development. `plan` and `write` report one `auth_none` diagnostic with
 severity `warning` on `app.blueprint.json` (pointer `/auth/mode`, or `""` when the mode is
-defaulted). Warnings never change an exit code or block a write; only errors do. The CLI's
-`backend` prints the warnings `write` returns, and the dev service passes them through. Why:
+defaulted). Without an app document its message begins "There is no app.blueprint.json, so
+auth.mode defaults to none". `check` leaves it out: it answers whether the generated files are
+current, runs in CI, and a reader of its JSON could take any entry as stale. Warnings never
+change an exit code or block a write; only errors do. The CLI's `backend` prints the warnings
+`write` returns, and the dev service passes them through. Why:
 the AppHost publishes the web app externally and proxies `/api`, so a published API without
 `oidc` or an authenticating gateway in front answers anyone, and its document mapped the whole
 surface in every environment.
