@@ -172,6 +172,42 @@ describe('in a Vite dev server', () => {
     }
   }, 30_000)
 
+  /** Write `text` over `file` as the engine does (workspace.rs): a temporary sibling renamed over it. */
+  function renameOver(file: string, text: string, mtime: Date) {
+    const tmp = path.join(path.dirname(file), `.${path.basename(file)}.trivia-test-${process.pid}.tmp`)
+    fs.writeFileSync(tmp, text)
+    fs.utimesSync(tmp, mtime, mtime)
+    fs.renameSync(tmp, file)
+  }
+
+  it('serves the second of two engine writes (an edit, then its undo) whose second event was dropped', async () => {
+    // As above, the fetch between the two writes is this test's own step: the recheck waits past it.
+    timing.recheckMs = 3_000
+    root = copyPlayground()
+    const server = await startServer(root)
+    try {
+      const file = fs.realpathSync(path.join(root, DASHBOARD))
+      const original = fs.readFileSync(file, 'utf8')
+      expect(await served(server.socket)).toBe(original)
+      // The same size and modification time (Linux stamps files from a clock that ticks every few
+      // milliseconds, so an edit and its undo can share one): only the inode tells the writes apart.
+      const edited = original.replace('Save changes', 'Keep changes')
+      expect(edited.length).toBe(original.length)
+      const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
+      // The edit is heard and the open canvas fetches its module...
+      renameOver(file, edited, mtime)
+      server.vite.watcher.emit('change', file, fs.statSync(file))
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(edited))
+      // ...then the undo is written and chokidar drops its event: Vite still serves the edit.
+      renameOver(file, original, mtime)
+      expect(await served(server.socket)).toBe(edited)
+      await vi.waitFor(async () => expect(await served(server.socket)).toBe(original), { timeout: 10_000 })
+    } finally {
+      timing.recheckMs = RECHECK_MS
+      await server.close()
+    }
+  }, 30_000)
+
   it('clears its pending check when the server closes', async () => {
     root = copyPlayground()
     const server = await startServer(root)
