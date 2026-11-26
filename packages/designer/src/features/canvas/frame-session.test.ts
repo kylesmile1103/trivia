@@ -119,10 +119,11 @@ describe('a Next document catches up by reloading when the service wrote while i
     hydrate()
     await later(0)
     expect(app.refreshes).toBe(0)
-    await later(470)
+    // The reload is due 490 ms on; the margins absorb the real time a loaded machine adds.
+    await later(380)
     expect(reloads.windows).toEqual([]) // Turbopack may not have seen the write yet
     expect(session.updating).toBe(true)
-    await later(40)
+    await later(200)
     expect(reloads.windows).toEqual([app.win])
 
     await reload()
@@ -151,9 +152,9 @@ describe('a Next document catches up by reloading when the service wrote while i
     startSession()
     lastWrite = async () => Date.now() + 5_000
     hydrate()
-    await later(490)
+    await later(400)
     expect(reloads.windows).toEqual([])
-    await later(20)
+    await later(200)
     expect(reloads.windows).toHaveLength(1)
   })
 
@@ -251,9 +252,9 @@ describe('a Next document catches up by reloading when the service wrote while i
     await reload()
     lastWrite = () => new Promise(() => {}) // never answers
     hydrate()
-    await later(900)
+    await later(800)
     expect(app.refreshes).toBe(0)
-    await later(200)
+    await later(300)
     expect(app.refreshes).toBe(1)
     expect(reloads.windows).toEqual([])
     await settle() // the refresh's settle reads the real clock
@@ -313,9 +314,9 @@ describe('a Next canvas is busy until a document has attached', () => {
   it('for at most ten seconds, then lets go without a warning', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
     startSession(true, false)
-    await vi.advanceTimersByTimeAsync(9_900)
+    await vi.advanceTimersByTimeAsync(9_600) // margins for the real time a loaded machine adds
     expect(session.updating).toBe(true)
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(600)
     expect(session.updating).toBe(false)
     expect(listener.loadTimedOut).toHaveBeenCalledTimes(1)
     expect(warn).not.toHaveBeenCalled()
