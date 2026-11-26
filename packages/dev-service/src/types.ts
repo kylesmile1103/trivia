@@ -39,6 +39,12 @@ export interface HistoryState {
   canRedo: boolean
   undoLabel: string | null
   redoLabel: string | null
+  /**
+   * When the service last wrote the project (an edit, an undo or a redo), in ms since the epoch
+   * (`Date.now()` of the service); null before its first write. The canvas compares it with a
+   * Next.js document's load (LLD-13 §6). The service and the browser share a host, and a clock.
+   */
+  lastWriteAt: number | null
 }
 
 export interface ApplyResult {

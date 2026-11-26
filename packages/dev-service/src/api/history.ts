@@ -17,17 +17,22 @@ export class History {
   readonly limit: number
   #undo: HistoryEntry[] = []
   #redo: HistoryEntry[] = []
+  readonly #now: () => number
+  /** When the last recorded edit, undo or redo was written (`HistoryState.lastWriteAt`). */
+  #lastWriteAt: number | null = null
 
-  constructor(limit = 100) {
+  constructor(limit = 100, now: () => number = () => Date.now()) {
     if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`history limit must be a positive integer, got ${limit}`)
     this.limit = limit
+    this.#now = now
   }
 
-  /** A new edit: clears the redo stack and drops the oldest entry past the cap. */
+  /** A new edit, just written: clears the redo stack and drops the oldest entry past the cap. */
   record(entry: HistoryEntry): void {
     this.#undo.push(entry)
     if (this.#undo.length > this.limit) this.#undo.shift()
     this.#redo = []
+    this.#lastWriteAt = this.#now()
   }
 
   get nextUndo(): HistoryEntry | undefined {
@@ -41,13 +46,17 @@ export class History {
   /** `nextUndo` was written back to disk. */
   undone(): void {
     const entry = this.#undo.pop()
-    if (entry) this.#redo.push(entry)
+    if (!entry) return
+    this.#redo.push(entry)
+    this.#lastWriteAt = this.#now()
   }
 
   /** `nextRedo` was written again. */
   redone(): void {
     const entry = this.#redo.pop()
-    if (entry) this.#undo.push(entry)
+    if (!entry) return
+    this.#undo.push(entry)
+    this.#lastWriteAt = this.#now()
   }
 
   state(): HistoryState {
@@ -56,6 +65,7 @@ export class History {
       canRedo: this.#redo.length > 0,
       undoLabel: this.nextUndo?.label ?? null,
       redoLabel: this.nextRedo?.label ?? null,
+      lastWriteAt: this.#lastWriteAt,
     }
   }
 }
