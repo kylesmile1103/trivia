@@ -15,8 +15,11 @@ public sealed class RenameMigrationTests
     [Fact]
     public async Task FR_NC_12_ReportsEfsOwnColumnRenameAsTheMarkersRename()
     {
+        // Renamed twice before migrating (A -> B -> C): the marker keeps A, the column the database has.
         using MigrationScenario scenario = await MigrationScenario.CreateAsync();
-        scenario.RenameField("Customer", "notes", "remarks");
+        scenario.RenameField("Customer", "notes", "memo");
+        scenario.RenameField("Customer", "memo", "remarks");
+        Assert.Equal("notes", (string?)scenario.Field("Customer", "remarks")["renamedFrom"]);
         (int status, JsonElement result, string output) = await scenario.MigrateAsync("RenameNotes");
         Assert.True(status == 0, output);
         string migration = scenario.MigrationSource(result);
