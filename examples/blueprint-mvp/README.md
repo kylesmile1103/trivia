@@ -7,7 +7,15 @@ customer. The generated Approve KYC endpoint returns HTTP 501 until its hook is 
 ## Run from a Trivia checkout
 
 Install the workspace dependencies first. Use .NET 10, Aspire CLI 13.6.5 and a running
-Docker-compatible container runtime. Run the following from the repository root in a POSIX shell.
+Docker-compatible container runtime. A fresh Aspire install gets a newer CLI, which this
+solution is not verified with, so install the pinned version as CI does:
+
+```sh
+curl -fsSL https://aspire.dev/install.sh -o aspire-install.sh
+bash aspire-install.sh --version 13.6.5
+```
+
+Run the following from the repository root in a POSIX shell.
 
 ```sh
 pnpm install

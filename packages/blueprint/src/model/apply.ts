@@ -18,6 +18,12 @@ const onEntity = { ...modelOp, entity: modelTypeName }
 const entityPatchSchema = entitySchema.omit({ renamedFrom: true }).partial({
   plural: true, key: true, fields: true, relations: true, indexes: true, api: true,
 })
+/** A marker a migration settled: the entity's (and field's) current name and the `renamedFrom` it expects. */
+const settledMarkerSchema = z.strictObject({
+  entity: modelTypeName,
+  field: modelMemberName.optional(),
+  from: z.union([modelTypeName, modelMemberName]),
+})
 
 export const modelOpSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('setModel'), ...modelOp, namespace: modelNamespace }),
@@ -34,6 +40,8 @@ export const modelOpSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('removeRelation'), ...onEntity, relation: modelMemberName }),
   z.strictObject({ op: z.literal('setIndexes'), ...onEntity, indexes: z.array(modelIndexSchema) }),
   z.strictObject({ op: z.literal('setEntityApi'), ...onEntity, api: entityApiSchema }),
+  /** After a successful migration: remove the markers it settled. Each one must still read as expected. */
+  z.strictObject({ op: z.literal('clearRenameMarkers'), ...modelOp, markers: z.array(settledMarkerSchema).min(1) }),
 ])
 
 export type ModelOp = z.output<typeof modelOpSchema>
@@ -142,6 +150,26 @@ function renameField(entity: ModelEntity, from: string, name: string): void {
   }
 }
 
+// All or nothing: every marker is checked before any is removed, and a marker that moved or changed since the
+// migration read the model refuses the op (with the batch's baseRev, the guard of LLD-08 §4).
+function clearRenameMarkers(model: ModelDoc, markers: readonly z.output<typeof settledMarkerSchema>[]): void {
+  const found = markers.map(({ entity: entityName, field: fieldName, from }) => {
+    const entity = model.entities.find((item) => item.name === entityName)
+    if (!entity) refuse('conflict', `No entity named "${entityName}" to clear its rename marker from`, { entity: entityName })
+    const item: Renamable | undefined = fieldName === undefined ? entity : entity.fields.find((field) => field.name === fieldName)
+    const label = fieldName === undefined ? entityName : `${entityName}.${fieldName}`
+    const details = { entity: entityName, ...(fieldName !== undefined && { field: fieldName }), expected: from }
+    if (!item) refuse('conflict', `No field named "${label}" to clear its rename marker from`, details)
+    if (item.renamedFrom !== from) {
+      refuse('conflict', item.renamedFrom === undefined
+        ? `${label} is not marked as renamed from ${from}`
+        : `${label} is marked as renamed from ${item.renamedFrom}, not ${from}`, { ...details, found: item.renamedFrom ?? null })
+    }
+    return item
+  })
+  for (const item of found) delete item.renamedFrom
+}
+
 type EntityOp = Extract<ModelOp, { entity: string }>
 
 function applyEntityOp(model: ModelDoc, op: EntityOp): void {
@@ -191,6 +219,7 @@ export function applyModelOp(draft: Draft, op: ModelOp): void {
     case 'setEnum': upsert(model.data.enums, op.enum); break
     case 'removeEnum': removeEnum(model.data, op.name); break
     case 'setEntity': setEntity(model.data, op.entity); break
+    case 'clearRenameMarkers': clearRenameMarkers(model.data, op.markers); break
     default: applyEntityOp(model.data, op)
   }
   draft.put(op.doc, model.data)

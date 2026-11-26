@@ -33,10 +33,26 @@ beforeEach(async () => {
       console.log('step output')
       console.error('step error')
       process.exitCode = 17
+    } else if (name === 'aspire') {
+      console.log(process.env.FAKE_ASPIRE ?? '13.6.5+b33d222049f1ecc3bc7257ec07b622fe550b2580')
     } else if (name === 'trivia-dotnet') {
       const source = fs.readFileSync(path.join(args[args.indexOf('--blueprint') + 1], '${MODEL_DOC}'))
+      const modelRev = 'sha256:' + createHash('sha256').update(process.env.FAKE_STALE ? 'stale' : source).digest('hex')
       const diagnostics = [{ code: 'auth_none', doc: 'app.blueprint.json', pointer: '', message: 'Publish behind oidc.', severity: 'warning' }]
-      console.log(JSON.stringify({ modelRev: 'sha256:' + createHash('sha256').update(source).digest('hex'), diagnostics }))
+      if (args[0] !== 'migrate') console.log(JSON.stringify({ modelRev, diagnostics }))
+      else {
+        // Like the real tool after a successful run: every marker is settled, here as renamed.
+        const settled = JSON.parse(source).entities.flatMap((entity) => [
+          ...(entity.renamedFrom ? [{ entity: entity.name, from: entity.renamedFrom, outcome: 'renamed' }] : []),
+          ...entity.fields.filter((field) => field.renamedFrom)
+            .map((field) => ({ entity: entity.name, field: field.name, from: field.renamedFrom, outcome: 'renamed' })),
+        ])
+        const renames = settled.map(({ entity, field, from }) => ({
+          kind: field ? 'column' : 'table', entity, ...(field && { field }), from, oldName: from, newName: field ?? entity,
+        }))
+        const migration = 'src/BankOffice.Api/Data/Migrations/20261126000000_' + args[1] + '.cs'
+        console.log(JSON.stringify({ migration, modelRev, renames, settled, diagnostics: [] }))
+      }
     }
   `)
   expect(await run(['new', root, '--api', 'dotnet-minimal'], 'test')).toBe(0)
@@ -48,16 +64,28 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   fs.rmSync(path.dirname(root), { recursive: true, force: true })
 })
 
 function executables(fail = '') {
   const command = (name: string) => ({ executable: process.execPath, prefix: [fake, log, fail, name] })
-  return { 'trivia-dotnet': command('trivia-dotnet'), dotnet: command('dotnet'), pnpm: command('pnpm') }
+  return { 'trivia-dotnet': command('trivia-dotnet'), dotnet: command('dotnet'), pnpm: command('pnpm'), aspire: command('aspire') }
 }
 
+/** The loop's steps, after the Aspire version check that starts every run (asserted on its own). */
 function steps() {
   return fs.readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    .filter(({ name }) => name !== 'aspire')
+}
+
+function markedModel(): string {
+  const marked = modelSchema.parse(JSON.parse(model))
+  marked.entities[0]!.fields[0]!.renamedFrom = 'legalName'
+  marked.entities[1]!.renamedFrom = 'Ledger'
+  const text = serialize(marked)
+  fs.writeFileSync(path.join(web, 'blueprint', MODEL_DOC), text)
+  return text
 }
 
 it('FR-AS-08 writes, migrates, builds and syncs in order, then prints drift', async () => {
@@ -96,6 +124,56 @@ it.each([
   expect(console.log).not.toHaveBeenCalledWith('No contract drift.')
 })
 
+
+it('FR-DM-08 clears the markers migrate settled, prints its renames and records the cleared model', async () => {
+  markedModel()
+  expect(await run(['backend', '--migration', 'RenameName'], 'test', executables())).toBe(0)
+  const text = fs.readFileSync(path.join(web, 'blueprint', MODEL_DOC), 'utf8')
+  expect(text).not.toContain('renamedFrom')
+  expect(console.log).toHaveBeenCalledWith('Renamed legalName to fullName.')
+  expect(console.log).toHaveBeenCalledWith('Renamed Ledger to Account.')
+  const lock = JSON.parse(fs.readFileSync(path.join(web, 'blueprint/blueprint.lock.json'), 'utf8'))
+  expect(lock.model.rev).toBe(revOfText(text))
+})
+
+it('FR-DM-08 exits non-zero saying the markers were not cleared when the model changed after migrate read it', async () => {
+  const before = markedModel()
+  vi.stubEnv('FAKE_STALE', '1')
+  expect(await run(['backend', '--migration', 'RenameName'], 'test', executables())).toBe(1)
+  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toMatch(/RenameName\.cs was added, but its rename markers were not cleared/)
+  expect(fs.readFileSync(path.join(web, 'blueprint', MODEL_DOC), 'utf8')).toBe(before)
+  expect(steps().map(({ args }) => args[0])).toEqual(['write', 'migrate'])
+})
+
+it('checks the Aspire CLI before generating and stops on another major or minor version', async () => {
+  expect(await run(['backend'], 'test', executables())).toBe(0)
+  const [first] = fs.readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+  expect(first).toEqual({ name: 'aspire', args: ['--version'], cwd: root })
+  fs.rmSync(log)
+
+  vi.stubEnv('FAKE_ASPIRE', '17.0.0+2f0c8e1')
+  expect(await run(['backend'], 'test', executables())).toBe(1)
+  const output = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(output).toContain('Aspire CLI 17.0.0')
+  expect(output).toContain('13.6.5')
+  expect(output).toContain('curl -fsSL https://aspire.dev/install.sh -o aspire-install.sh')
+  expect(output).toContain('bash aspire-install.sh --version 13.6.5')
+  expect(steps()).toEqual([])
+})
+
+it('warns and continues when the Aspire CLI is not on PATH', async () => {
+  const commands = { ...executables(), aspire: { executable: path.join(root, 'missing-aspire') } }
+  expect(await run(['backend'], 'test', commands)).toBe(0)
+  const output = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(output).toMatch(/Warning: the Aspire CLI is not on PATH/)
+  expect(output).toContain('bash aspire-install.sh --version 13.6.5')
+  expect(steps().map(({ args }) => args[0])).toEqual(['write', 'build', 'run'])
+})
+
+it('prints the pinned Aspire install command after creating a .NET solution', () => {
+  const printed = vi.mocked(console.log).mock.calls.flat().join('\n')
+  expect(printed).toContain('curl -fsSL https://aspire.dev/install.sh -o aspire-install.sh\n  bash aspire-install.sh --version 13.6.5')
+})
 
 it('records the generated model in the existing lock after sync', async () => {
   const file = path.join(web, 'blueprint/blueprint.lock.json')

@@ -86,7 +86,10 @@ interface EjectPlan { ops: Op[]; files: string[]; requires: RegistryItem[]; warn
                       lock: object; label: string }
 interface BackendResult { files: Array<{ path: string; kind: 'generated' | 'scaffold';
                           action: 'create' | 'update' | 'unchanged' | 'delete' | 'refused' }>;
-                          written: boolean; diagnostics: Diagnostic[]; log: string }
+                          written: boolean; diagnostics: Diagnostic[]; log: string;
+                          renames?: Array<{ kind: 'table' | 'column'; entity: string; field?: string;
+                                            from: string; oldName: string; newName: string }>;
+                          next?: Array<object> }
 ```
 
 - ⚑ A malformed lock yields an `invalid_lock` warning and draft statuses. An unreadable or
@@ -150,6 +153,7 @@ Codes come from `docs/api.md`. New in `error.details`:
 | Component not installed | 422 `unresolved_component` | `{ requires }` |
 | Page edited since eject | 409 `conflict` | `{ page, file }` |
 | `dotnet` or `trivia-dotnet` not found | 422 `unsupported` | `{ hint }` |
+| Rename markers not cleared after a migration | 409 `conflict` | `{ migration, renames, markers, revs? }` |
 | Blueprint from a newer version | 422 `unsupported` | `{ found, supported }` |
 
 ⚑ Contract action diagnostics put the available synced operation names in the patch
@@ -169,10 +173,17 @@ names both conventions.
   It probes `dotnet --version` if the shim is missing so it can identify the missing SDK
   or tool. It disables .NET CLI telemetry and uses the shared queue to order generation
   with model edits. Spec 010 supplies the combined solution layout.
-- ⚑ `mode: "write"` with a migration runs the CLI's separate `migrate` command after the
-  caller generates the API. The backend keeps the CLI's `delete` action, maps blocked
-  changes to `refused`, and sets `written` on a successful change. The wire result
-  carries CLI diagnostics and capped stderr.
+- ⚑ (decided 2026-11-26) `mode: "write"` with a migration runs the CLI's `write` and then
+  `migrate` in one queued call, so the migration comes from the current generated code: a
+  stale `.g.cs` used to give an empty or wrong migration with exit 0. A `write` that exits
+  non-zero stops the call before `migrate` and returns its result, a refusal on exit 2. A
+  refused `migrate` returns its diagnostics and leaves no migration behind (LLD-09 section 6).
+  After a successful migrate the same queued call clears the markers it settled with
+  `clearRenameMarkers` (LLD-08 section 4), recorded as one undo entry, and `renames` lists
+  the renames the migration made. A refused clear is 409 `conflict` saying the markers were
+  not cleared. The migration stays. The backend keeps the CLI's `delete` action, maps blocked
+  changes to `refused`, and sets `written` on a successful change. The wire result carries
+  CLI diagnostics and capped stderr from both commands.
 
 ## 6. Tests
 
