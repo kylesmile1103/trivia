@@ -97,5 +97,6 @@ try {
   const [exit] = await once(hosted, 'exit')
   process.exitCode = stopping ? 0 : exit ?? 1
 } finally {
-  fs.rmSync(root, { recursive: true, force: true })
+  // The app's processes can still be writing into it for a moment after Aspire exits (ENOTEMPTY).
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 }
