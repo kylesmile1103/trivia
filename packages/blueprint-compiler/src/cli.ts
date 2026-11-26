@@ -110,9 +110,9 @@ function kitItems(): RegistryItem[] {
   })
 }
 
-/** The template's Refine UI layout and views; a Vite app also gets the whole kit (LLD-06 §7). */
-const templateItems = (target: ProjectFacts['target']): RegistryItem[] => [
-  { registry: 'refine', item: 'layout-01' }, { registry: 'refine', item: 'views' }, ...(target === 'vite-refine' ? kitItems() : []),
+/** The template's Refine UI layout and views, plus the whole kit, for either target (LLD-06 §7). */
+const templateItems = (): RegistryItem[] => [
+  { registry: 'refine', item: 'layout-01' }, { registry: 'refine', item: 'views' }, ...kitItems(),
 ]
 
 function createProject(
@@ -146,7 +146,7 @@ function createProject(
   fs.writeFileSync(path.join(dir, 'blueprint', APP_DOC), serialize(app), { flag: 'wx' })
   console.log(`Created ${destination}`)
   if (!localPlugin) console.log('Point ' + framework + ' and contract-sync at your Trivia distribution before installing.')
-  console.log(`Run in ${dir}\n  pnpm install` + registryCommands(templateItems(target)).map((line) => '\n  ' + line).join(''))
+  console.log(`Run in ${dir}\n  pnpm install` + registryCommands(templateItems()).map((line) => '\n  ' + line).join(''))
   if (dotnet) console.log(ASPIRE_NEXT_STEPS)
 }
 

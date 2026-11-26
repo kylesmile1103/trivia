@@ -74,6 +74,14 @@ it('FR-RC-12 prints one install line for the kit\'s shadcn items and one for Ref
   expect(cli('new', 'bank-admin', '--target', 'vite-refine').stdout).toBe(created.stdout)
 }, 30_000)
 
+it('FR-RC-12 prints the same kit and Refine UI install lines for a Next.js project', () => {
+  // The kit is target-independent; the Next template's components.json sets rsc: true, so the
+  // shadcn CLI adds the client directives itself.
+  const created = cli('new', 'bank-next', '--target', 'next-refine')
+  expect(created.status, created.stderr).toBe(0)
+  expect(installLines(created.stdout)).toEqual([kitItems('shadcn'), refineItems()])
+}, 30_000)
+
 it('FR-KT-01 keeps the registry commands of LLD-06 section 7 equal to the shipped kit', () => {
   const design = fs.readFileSync(path.resolve(import.meta.dirname, '../../../docs/blueprint/lld/LLD-06-component-kit.md'), 'utf8')
   const section = /^## 7\. Registry installation\n([\s\S]*?)^## 8\./m.exec(design)?.[1] ?? ''
