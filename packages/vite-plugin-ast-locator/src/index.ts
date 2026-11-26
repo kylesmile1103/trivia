@@ -12,6 +12,7 @@ import {
 } from '@trivia/dev-service'
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
+import { BLUEPRINT_ENTRY, BLUEPRINT_ROUTE, blueprintEntry } from './blueprint-entry.js'
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile, relativeToRoots } from './transform.js'
@@ -47,25 +48,6 @@ export interface AstLocatorOptions {
 }
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
-
-const BLUEPRINT_ENTRY = 'blueprint-route.tsx'
-const BLUEPRINT_ROUTE = '/__blueprint/:triviaPage'
-const blueprintEntry = [
-  'import { lazy, Suspense, useMemo } from "react"',
-  'import { useParams } from "react-router"',
-  'export function TriviaBlueprintRoute() {',
-  '  const { triviaPage: page } = useParams()',
-  '  const Preview = useMemo(() => lazy(async () => {',
-  '    const response = await fetch("/@trivia/api/blueprint/preview", {',
-  '      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page }),',
-  '    })',
-  '    const result = await response.json()',
-  '    if (!result.ok) throw new Error(result.error.message)',
-  '    return import(/* @vite-ignore */ result.data.module)',
-  '  }), [page])',
-  '  return <Suspense fallback={null}><Preview /></Suspense>',
-  '}',
-].join('\n')
 
 export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let engine: EngineBinding | undefined

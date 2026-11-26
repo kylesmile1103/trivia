@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { ViteDevServer } from 'vite'
 import { type DevHost, PREVIEW_PREFIX, discoverRoutes } from '@trivia/dev-service'
 
+import { BLUEPRINT_ENTRY, BLUEPRINTS_CHANGED } from './blueprint-entry.js'
 import type { ProjectPaths } from './options.js'
 
 export function createViteHost(server: ViteDevServer, paths: ProjectPaths): DevHost {
@@ -35,17 +36,25 @@ export function createViteHost(server: ViteDevServer, paths: ProjectPaths): DevH
   }
 }
 
-/** Invalidate the shared virtual modules affected by a document or manifest change. */
+/**
+ * Invalidate the shared virtual modules affected by a document change (`blueprintsOnly`) or a
+ * manifest change, and reload the page when one of them was loaded. The blueprint route entry
+ * is static (its one route takes the page as a parameter, and it fetches the preview when it
+ * renders), so no document, page set or lock makes it stale: it is never invalidated, and a
+ * canvas on another route no longer reloads on every blueprint write. A document change also
+ * sends BLUEPRINTS_CHANGED, on which an entry whose preview failed to load reloads.
+ */
 export function invalidatePreviews(server: ViteDevServer, blueprintsOnly: boolean): void {
   const prefix = path.join(server.config.root, 'src', '.trivia-preview') + path.sep
   const { moduleGraph, hot } = server.environments.client
   let stale = false
   for (const module of moduleGraph.idToModuleMap.values()) {
-    if (module.id?.startsWith(prefix) && module.transformResult !== null &&
-        (!blueprintsOnly || module.id.slice(prefix.length).startsWith('blueprint-'))) {
-      moduleGraph.invalidateModule(module)
-      stale = true
-    }
+    if (!module.id?.startsWith(prefix) || module.transformResult === null) continue
+    const name = module.id.slice(prefix.length).split('?', 1)[0]!
+    if (name === BLUEPRINT_ENTRY || (blueprintsOnly && !name.startsWith('blueprint-'))) continue
+    moduleGraph.invalidateModule(module)
+    stale = true
   }
   if (stale) hot.send({ type: 'full-reload' })
+  if (blueprintsOnly) hot.send({ type: 'custom', event: BLUEPRINTS_CHANGED })
 }

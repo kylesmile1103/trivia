@@ -115,6 +115,32 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
   }
 })
 
+// A blueprint write leaves the route entry loaded (it is static), so a preview that failed to load
+// (here its page did not exist yet) has no module for the write to invalidate: the entry reloads
+// the canvas itself on the plugin's blueprint event, and the preview then loads.
+test('a draft preview that failed to load shows the page once its document is written', async ({ page }) => {
+  const recovered = 'RecoverDraft'
+  const blueprint = path.join(root, 'blueprint')
+  const document = path.join(blueprint, `pages/${recovered}.page.json`)
+  expect(fs.existsSync(document)).toBe(false)
+  const dirs = [path.join(blueprint, 'pages'), blueprint].filter((dir) => !fs.existsSync(dir))
+  const canvas = page.frameLocator('iframe[title="App canvas"]')
+  try {
+    await page.goto('/__trivia/')
+    await expect(canvas.getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible({ timeout: 30_000 })
+    const preview = page.waitForResponse((response) => new URL(response.url()).pathname === '/@trivia/api/blueprint/preview')
+    await navigateCanvas(page, '/__blueprint/' + recovered)
+    expect((await (await preview).json()).ok).toBe(false)
+    await post(page, '/blueprint/patch', { label: 'Draft a page', ops: [
+      { op: 'createPage', doc: `pages/${recovered}.page.json`, baseRev: null, name: recovered, route: '/recover-draft', kind: 'custom' },
+    ] })
+    await expect(canvas.locator('[data-bp-node]').first()).toBeAttached({ timeout: 30_000 })
+  } finally {
+    fs.rmSync(document, { force: true })
+    for (const dir of dirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
+  }
+})
+
 test.describe('Blueprint panel', () => {
   const appRoot = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
   const blueprint = path.join(appRoot, 'blueprint')

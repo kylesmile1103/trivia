@@ -3,9 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 
 import type { ViteDevServer } from 'vite'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createViteHost } from '../src/host.js'
+import { blueprintEntry } from '../src/blueprint-entry.js'
+import { createViteHost, invalidatePreviews } from '../src/host.js'
 
 const PATHS = { uiDir: 'src/components/ui', importBase: '@/components/ui', blueprintDir: 'blueprint', warnings: [] }
 const temporary: string[] = []
@@ -53,4 +54,79 @@ it('answers null for a directory, a dependency and a file outside the project', 
   expect(await host.resolveModule('src/pages/accounts', 'src/App.tsx')).toBeNull()
   expect(await host.resolveModule('node_modules/x/index.js', 'src/App.tsx')).toBeNull()
   expect(await host.resolveModule('../outside.tsx', 'src/App.tsx')).toBeNull()
+})
+
+describe('invalidating previews', () => {
+  /**
+   * Just the parts of a dev server invalidatePreviews touches: preview modules by file name, each
+   * loaded (with a transform result) or not, and what the client is sent.
+   */
+  function previewServer(modules: Record<string, boolean>) {
+    const root = '/project'
+    const dir = path.join(root, 'src', '.trivia-preview')
+    const graph = new Map(Object.entries(modules).map(([name, loaded]) => {
+      const id = path.join(dir, name)
+      return [id, { id, transformResult: loaded ? { code: '' } : null }]
+    }))
+    const invalidated: string[] = []
+    const sent: unknown[] = []
+    const server = {
+      config: { root },
+      environments: {
+        client: {
+          moduleGraph: {
+            idToModuleMap: graph,
+            invalidateModule: (mod: { id: string; transformResult: unknown }) => {
+              invalidated.push(path.basename(mod.id))
+              mod.transformResult = null
+            },
+          },
+          hot: { send: (payload: unknown) => sent.push(payload) },
+        },
+      },
+    } as unknown as ViteDevServer
+    return { server, invalidated, sent }
+  }
+  const CHANGED = { type: 'custom', event: 'trivia:blueprints-changed' }
+  const RELOAD = { type: 'full-reload' }
+
+  // The route entry is static: its one route takes the page as a parameter and fetches the
+  // preview when it renders, so no document, page set or lock makes it stale.
+  it('leaves the blueprint route entry loaded and reloads nothing for it, but tells a failed preview', () => {
+    const { server, invalidated, sent } = previewServer({ 'blueprint-route.tsx': true })
+    invalidatePreviews(server, true)
+    expect(invalidated).toEqual([])
+    expect(sent).toEqual([CHANGED])
+  })
+
+  it('reloads once for a loaded page preview, and still leaves the entry', () => {
+    const { server, invalidated, sent } = previewServer({
+      'blueprint-route.tsx': true, 'blueprint-1f2e3d.tsx': true, 'blueprint-1f2e3d.css': true, 'blueprint-1f2e3d.handler.ts': true,
+    })
+    invalidatePreviews(server, true)
+    expect(invalidated.sort()).toEqual(['blueprint-1f2e3d.css', 'blueprint-1f2e3d.handler.ts', 'blueprint-1f2e3d.tsx'])
+    expect(sent).toEqual([RELOAD, CHANGED])
+  })
+
+  it('reloads nothing for a page preview that is not loaded', () => {
+    const { server, invalidated, sent } = previewServer({ 'blueprint-route.tsx': true, 'blueprint-1f2e3d.tsx': false })
+    invalidatePreviews(server, true)
+    expect(invalidated).toEqual([])
+    expect(sent).toEqual([CHANGED])
+  })
+
+  it('reloads for a loaded inferencer preview on a manifest change, without the entry or the blueprint event', () => {
+    const { server, invalidated, sent } = previewServer({ 'blueprint-route.tsx': true, 'accounts-list-9a8b.tsx': true })
+    invalidatePreviews(server, false)
+    expect(invalidated).toEqual(['accounts-list-9a8b.tsx'])
+    expect(sent).toEqual([RELOAD])
+  })
+
+  // With nothing loaded to invalidate, a failed preview would wait forever: its entry listens for
+  // the blueprint event and reloads the page on it. A preview that loaded ignores the event.
+  it('the route entry reloads on the next blueprint write only after a preview failed to load', () => {
+    const failed = /if \(!result\.ok\) \{\n\s*import\.meta\.hot\?\.on\("trivia:blueprints-changed", \(\) => location\.reload\(\)\)\n\s*throw new Error\(result\.error\.message\)\n\s*\}/
+    expect(blueprintEntry).toMatch(failed)
+    expect(blueprintEntry.match(/trivia:blueprints-changed/g)).toHaveLength(1)
+  })
 })
