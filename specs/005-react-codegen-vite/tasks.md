@@ -67,9 +67,9 @@ T004. The CLI needs eject.
 
 ## Deferred integrations
 
-- [ ] Full component kit and its registry command
-  Deferred: needs spec 006 (defines the component kit and manifest set).
-- [ ] App-specific backend and data provider orchestration
-  Deferred: needs spec 010 (wires the generated contract and frontend to the backend).
-- [ ] Next.js compilation, preview and eject
-  Deferred: needs spec 012 (defines the Next.js target and App Router registration).
+- [x] Full component kit and its registry command
+  Delivered: spec 006's 27 manifests; `new` and a refused eject print their install lines (`registryCommands` in `src/cli.ts`, LLD-05 section 7).
+- [x] App-specific backend and data provider orchestration
+  Delivered by spec 010: `trivia-blueprint backend` and the template's data provider (`templates/vite-refine/src/providers/data-provider.ts`).
+- [x] Next.js compilation, preview and eject
+  Delivered by spec 012: the `next-refine` target (`src/targets/next-refine/`, LLD-12).
