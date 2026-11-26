@@ -51,6 +51,7 @@ it('FR-AS-05 syncs the bank OpenAPI snapshot without overrides', async () => {
     { operationId: 'patchCustomer', method: 'PATCH', path: '/api/v1/customers/{id}' },
     { operationId: 'approveKycCustomer', method: 'POST', path: '/api/v1/customers/{id}/approve-kyc' },
   ])
+  expect(customer.customOperations[0]?.summary).toBe('Change some fields of the customer')
 })
 
 

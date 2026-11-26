@@ -244,6 +244,7 @@
         "tags": [
           "Customers"
         ],
+        "summary": "Change some fields of the customer",
         "operationId": "patchCustomer",
         "parameters": [
           {

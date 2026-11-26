@@ -61,7 +61,11 @@ public static class EndpointsEmitter
                     break;
                 case "update":
                     Register("Put", "/{id}", "UpdateAsync", $"update{name}", ".ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
-                    Register("Patch", "/{id}", "PatchAsync", $"patch{name}", ".ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
+                    // Contract-sync lists PATCH as a custom operation beside the PUT update slot,
+                    // so the summary says what it is for.
+                    string summary = Literal($"Change some fields of the {Snake(name).Replace('_', ' ')}");
+                    Register("Patch", "/{id}", "PatchAsync", $"patch{name}",
+                        $".WithSummary({summary}).ProducesValidationProblem().ProducesProblem(404).ProducesProblem(409)");
                     string confirmVersion = entity.Concurrency == true ? $$"""
                         if (entity.{{Member(entity, "version")}} != input.Version)
                             throw new ApiProblemException(409, "The record changed after it was read.", "stale");

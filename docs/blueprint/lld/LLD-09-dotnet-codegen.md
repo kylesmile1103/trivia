@@ -176,9 +176,15 @@ their own fields only, so a `PUT` from them silently nulled the omitted fields a
 with a default. In a `PATCH` body every member is optional and has no default, validation
 applies to the members present, and a present `null` on a required member is a 400 with that
 member in `errors`. On an entity with `concurrency: true` the `PATCH` body requires `version`
-like the `PUT` body. The document describes both. Contract-sync keeps `PUT` in the manifest's
-update slot (its request is the whole record an edit form edits) and lists `PATCH` as the
-custom operation `patch<Entity>` (`docs/data-provider.md`, classification).
+like the `PUT` body. The document describes both.
+
+⚑ (decided 2026-11-26) The manifest's `update` slot stays `PUT`, so its schema and required
+markers describe the full edit form, while the data provider's `update` sends `PATCH` with the
+form's fields, which changes those fields and leaves the rest alone. `patch<Entity>` stays a
+custom operation, with the summary "Change some fields of the <entity>", for actions that
+change one or two fields, such as a "Deactivate" or "Mark shipped" button. Why: contract-sync's
+"PUT wins" rule (`docs/data-provider.md`, classification) also decides the slot for every
+third-party OpenAPI backend, so neither it nor the generator changes.
 
 ⚑ Preserve the framework's component IDs for the generated record names. Override the
   enum and JSON schema types through a schema transformer, and apply input defaults,

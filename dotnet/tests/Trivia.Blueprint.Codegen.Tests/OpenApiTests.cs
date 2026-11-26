@@ -35,6 +35,8 @@ public sealed class OpenApiTests
         Assert.Equal("getCustomerById", details.GetProperty("get").GetProperty("operationId").GetString());
         Assert.Equal("updateCustomer", details.GetProperty("put").GetProperty("operationId").GetString());
         Assert.Equal("patchCustomer", details.GetProperty("patch").GetProperty("operationId").GetString());
+        // Contract-sync lists PATCH as a custom operation, so its entry explains itself.
+        Assert.Equal("Change some fields of the customer", details.GetProperty("patch").GetProperty("summary").GetString());
         Assert.Equal("deleteCustomer", details.GetProperty("delete").GetProperty("operationId").GetString());
         JsonElement custom = paths.GetProperty("/api/v1/customers/{id}/approve-kyc").GetProperty("post");
         Assert.Equal("approveKycCustomer", custom.GetProperty("operationId").GetString());
