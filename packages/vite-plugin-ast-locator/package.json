@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
+    "@tailwindcss/vite": "^4.3.3",
     "@trivia/blueprint": "workspace:*",
     "@trivia/blueprint-compiler": "workspace:*",
     "@types/node": "^24.13.3",

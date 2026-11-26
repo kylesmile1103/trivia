@@ -77,6 +77,7 @@ interface DevHost {
   readRoutes(source: RouteSource): Promise<RouteEntry[]> // host-specific
   preview: PreviewHost                              // virtual modules (Vite) or files (Next.js)
   allowedHosts: readonly string[] | true
+  filesWritten?(files: readonly string[]): void     // what an edit, undo or redo wrote, before its answer
 }
 ```
 
@@ -218,6 +219,33 @@ The engine edits files. It does not care which kind of component a file holds. W
   Vite 8.3 drops further changes to a file for 50 ms after it reports one, so an editor's
   in-place save (truncate, then write) could leave the canvas on the module transformed from
   the empty file. Next.js has its own watcher and is left alone.
+  ⚑ (decided 2026-11-26) The update of an engine write (edit, undo, redo) comes only from that
+  watcher, like any other write's, and `DevHost.filesChanged` is gone: #4 had the Vite host call
+  `client.reloadModule` on every file the service wrote, because the watcher dropped an undo
+  that came a few milliseconds after its edit. Every engine write renames a temporary file over
+  the target, so the inode moves and the replay always sees it (creates and deletes are
+  `add` and `unlink`, which the throttle leaves alone). `reloadModule` was the weaker path:
+  it ran only `updateModules` for client modules already in the graph, skipping the
+  environments' `watchChange`, `moduleGraph.onFileChange` and the plugins' `hotUpdate`, and it
+  made every engine edit send two updates. Only a dropped write pays for this: its update
+  arrives up to about 100 ms later, as a hand edit's already does.
+  ⚑ (decided 2026-11-26) Read-after-write: once an edit, undo or redo is answered, every new
+  request to the Vite dev server gets the files as written. The service calls
+  `DevHost.filesWritten` once they are on disk and before it answers (in an undo or redo, after
+  `preview.invalidateBlueprints`, which takes a dropped module for one never loaded), and the
+  Vite host only drops their transformed modules: `moduleGraph.onFileChange` in every
+  environment, under the root and its real path, sending nothing, so the update stays the
+  watcher's one. Without it an e2e trace showed the eject dialog's navigation load `App.tsx` 304
+  from before the eject, and the watcher's update reach a document that had not registered the
+  module yet, which Vite's client drops: the canvas stayed on the old app. Not covered: a page
+  that fetched a module before the write and had not run it when the update came, Vite's
+  load-time race for any hand edit. The Next.js host has no such cache and no `filesWritten`.
+  ⚑ (decided 2026-11-26) A hot update leaves out the `asset` nodes nothing imports
+  (`hotUpdate`, `order: 'pre'`, in `vite-plugin-ast-locator/src/index.ts`), because Vite
+  treats such a node as a dead end and reloads the page for it. Tailwind's plugin makes its
+  stylesheet depend on every file it scans; after an undo deleted an ejected page and the lock,
+  the rebuilt stylesheet dropped them and their nodes stayed behind with no importer, so the
+  next eject reloaded the canvas. A node that a stylesheet still imports keeps its CSS update.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
@@ -262,6 +290,14 @@ The engine edits files. It does not care which kind of component a file holds. W
   redundant: on macOS, the playground and refine projects ran 102 checks with the 60 ms wait
   and 102 without, both times 22 polled for 50 to 170 ms and none needed a rewrite, and a
   write inside the watcher's 50 ms window is the replay's to fix and the check's to prove.
+  ⚑ (decided 2026-11-26) The canvas spec removes a button through the API and undoes it at
+  once, twenty times in one test, checking each time that Vite serves the original
+  (`expectServed`, no rewrite), because the replay is now the only fix for a dropped undo
+  and the drop happens on Linux CI, not on macOS.
+  ⚑ (decided 2026-11-26) The refine blueprint spec runs eject, undo, eject with no preview open
+  and fails on any `full-reload` message the canvas receives from the page's creation on, or a
+  lost mark on its window, because each reload it found (a dead end, the route entry, Tailwind's
+  for the lock, a stale `App.tsx` after the dialog's navigation) was a product defect.
 - The dev service: the plugin's API and MCP suites run unchanged through the Vite host, and a
   smoke subset runs through the standalone server.
 - The guard: the standalone server refuses a non-loopback client, a foreign Host and a

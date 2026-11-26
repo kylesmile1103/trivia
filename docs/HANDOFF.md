@@ -204,7 +204,7 @@ E2E tests and manual checks edit `examples/playground/src/**` on disk. Restore a
 `git checkout -- examples/` and check that `git status` is clean before committing. Specs write
 and restore example files through `e2e/files.ts` (`writeWhole`, `restore`, `restoreAll`), which
 wait until the dev server serves what they wrote; `writeInPlace` is for a test about an editor's
-in-place save.
+in-place save, and `expectServed` waits, without writing, for a write the engine made.
 
 ## 3. How the pieces fit (one paragraph)
 
@@ -303,9 +303,20 @@ writes `useQuery` hooks against it.
   reports a file's first change and drops the next ones for 50 ms without replaying them. A
   `writeFileSync` in a spec (truncate, then write) left Vite serving an empty `Dashboard.tsx` to
   every later test on Linux CI ("does not provide an export named 'Dashboard'"). The plugin now
-  replays a dropped change (`src/watch.ts`), and specs write through `e2e/files.ts`. To ask what
+  replays a dropped change (`src/watch.ts`), and specs write through `e2e/files.ts`. Engine
+  writes get their update the same way and from nothing else (`DevHost.filesChanged` is gone);
+  before answering, the plugin only drops the written modules from Vite's cache
+  (`DevHost.filesWritten`), so a request right after an edit gets the new source. To ask what
   Vite serves for a file, GET `/<path>` from the app's server and read `sourcesContent` in the
   module's inline source map: that is the exact text it transformed.
+- **macOS hides the watcher events Linux CI gets.** With fsevents, chokidar reported no unlink
+  for the undo of an eject, a `change` for the files the next eject created again, and it dropped
+  none of 60 undos sent right after their edits. To see add and unlink as Linux reports them, run
+  with `server: { watch: { useFsEvents: false } }` in the example's Vite config (and revert it).
+- **Tailwind scans the blueprint's JSON and reloads for it.** `@tailwindcss/vite` makes `index.css`
+  depend on every file it scans and reloads the page when a scanned file that is not a module
+  changes. The plugin's `hotUpdate` hook turns a blueprint file into its stylesheet's CSS update
+  and drops nodes nothing imports any more (Vite reloads for those too); see LLD-05 §5, LLD-13 §6.
 - **Re-run the *whole* suite after touching docs.** `errors.rs` pins one `docs/api.md` example
   per `Op` variant.
 - **Never run `cargo fmt`.** The repo isn't rustfmt-formatted: it uses long lines, and the

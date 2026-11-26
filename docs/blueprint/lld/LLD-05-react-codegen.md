@@ -182,13 +182,29 @@ The adapter keeps a map from preview id to page name and serves
 inferencer previews, including the Tailwind stylesheet for classes no file has used yet.
 A preview route, `/__blueprint/<Name>`, is registered in dev by a small client entry that the
 plugin injects, so the canvas can navigate to it without touching the app's router file. The
-store's change events invalidate previews, and the page reloads.
+store's change events invalidate the loaded page previews, and the page reloads.
 
 ⚑ Vite injects the development route beside the Refine app's existing routes. Its lazy
 client entry asks the loopback preview API for the module. The shared inferencer loader
 adds a default export and the preview stylesheet. Relative imports resolve as if the
 module were at its ejected path. A missing call stub can also be served virtually.
-Vite invalidates the modules on draft document and contract file changes.
+Vite invalidates the compiled page modules on draft document and contract file changes.
+⚑ (decided 2026-11-26) The route entry (`blueprint-route.tsx`, `vite-plugin-ast-locator/src/blueprint-entry.ts`)
+is never invalidated, because it is static: its one route takes the page as a parameter and it
+fetches the preview when it renders. A blueprint write therefore reloads the canvas only while a
+page preview module is loaded, where before every write did, on a Refine app whatever route the
+canvas showed (`App.tsx` imports the entry). A failed preview (a compile error, a page not
+written yet) loaded no module to invalidate, so every document change also sends the hot event
+`trivia:blueprints-changed`, and the entry reloads the page on it only after its preview
+request failed: the next write retries it.
+⚑ (decided 2026-11-26) A blueprint file that a stylesheet scans becomes that stylesheet's CSS
+update, never a reload, because the dev service reads blueprint files from disk and no page
+imports them. Tailwind's plugin scans `blueprint/*.json` and reloads the page when a scanned
+file that is not a module changes; the plugin's pre `hotUpdate` hook hands Vite the importing
+stylesheets instead (`isCSSRequest` on their file: `index.css` imported from JavaScript is a `js`
+node), so Tailwind rebuilds the CSS, a class written only in a document included, and the
+canvas stays. A blueprint file a module imports, and every file outside the directory, keep the
+usual path.
 
 ⚑ Spec 005 used the three spec 002 sample manifests. Spec 006 replaces that catalog with
 the full kit shipped by `@trivia/blueprint-compiler`. The dev service reads the same files

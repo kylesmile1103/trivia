@@ -511,7 +511,8 @@ export class EngineService {
     const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
     if (result.changed) {
       finish?.()
-      host.filesChanged?.(result.changes.map((change) => change.file))
+      // Before the answer: a request right after it must get the new source (DevHost.filesWritten).
+      host.filesWritten?.(result.changes.map((change) => change.file))
     }
     const last = ops.at(-1)
     const ejectLock = last?.file === this.blueprint.dir + '/' + LOCK_FILE && typeof last.content === 'string' ? last.content : undefined
@@ -580,7 +581,9 @@ export class EngineService {
     } else if (direction === 'redo' && entry.ejectLock) {
       this.#dropEjectedPreviews(entry.ejectLock, new Set(writes.filter(({ content }) => content !== null).map(({ file }) => file)))
     }
-    this.#options.host.filesChanged?.(entry.changes.map((change) => change.file))
+    // After the previews: the host drops the cached modules of what was written and of their
+    // importers, and the Vite host's preview invalidation takes a dropped module for one never loaded.
+    this.#options.host.filesWritten?.(entry.changes.map((change) => change.file))
     if (direction === 'undo') history.undone()
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }

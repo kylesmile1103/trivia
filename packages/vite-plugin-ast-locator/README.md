@@ -43,7 +43,12 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 - Vite's watcher (the chokidar in Vite 8.3) drops further changes to a file for 50 ms after it
   reports one, so an editor's in-place save (truncate, then write) can reach Vite as an empty
   file. With the API on, the plugin stats a changed project file again 100 ms after its last
-  event and, if it moved, emits the change again on `server.watcher` (`src/watch.ts`).
+  event and, if it moved, emits the change again on `server.watcher` (`src/watch.ts`). The
+  engine's own writes get their update the same way, from nothing else: each one renames a
+  temporary file over the target, so the file's inode moves and a dropped edit or undo is always
+  replayed. Before an edit, undo or redo is answered, the plugin drops the written files' modules
+  from Vite's cache (`moduleGraph.onFileChange`), so a request made right after the answer gets
+  the new source though the watcher has not reported the write yet.
 - Mutating requests run one at a time. Undo/redo restore byte-exact snapshots and answer
   `409 conflict` without writing anything when a file changed outside the designer. With nothing to
   undo or redo they answer `{ files: [] }`.
