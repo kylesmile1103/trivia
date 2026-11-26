@@ -26,8 +26,9 @@ CRUD, server field errors, KYC confirmation, designer edits, undo and re-eject c
 - The MVP Playwright project uses `TRIVIA_MVP_APP_PORT` and `TRIVIA_MVP_PORT`. Aspire
   allocates its API and database ports. CI needs Aspire CLI 13.6.5 and a container runtime
   for this project.
-- The lead still needs to run the prompt in two fresh Claude Code sessions and review the
-  marked decisions with the owner. [Agent exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise)
+- Two fresh Claude Code sessions built BankAdmin with only the Trivia server
+  ([sessions](../examples/blueprint-mvp/sessions/README.md)). The owner delegated the review of
+  the marked decisions, and it was done on 2026-11-26. [Agent exercise](../examples/blueprint-mvp/README.md#run-the-mcp-authoring-exercise)
   · [Decisions](blueprint/README.md#decisions-).
 
 ## 1. Status (2026-10-09, session 3)

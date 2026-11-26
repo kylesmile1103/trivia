@@ -290,6 +290,7 @@ The owner delegated the review of these decisions, and it was done on 2026-11-26
 - Spec 005. The offline CLI loads the installed Vite adapter's dev service (or the sibling build in the repo) and constructs a standalone engine service without a server. [LLD-05](lld/LLD-05-react-codegen.md#7-cli-and-templates-fr-rc-12)
 - Spec 005. The Vite template uses the application's `Plugin` type for the Trivia plugin at the config boundary. [LLD-05](lld/LLD-05-react-codegen.md#7-cli-and-templates-fr-rc-12)
 - Spec 005. The Vite scaffold wires Refine's notification provider to Sonner 2.0.8, the version used by the Refine example. [LLD-05](lld/LLD-05-react-codegen.md#7-cli-and-templates-fr-rc-12)
+- Spec 005. `new` prints the kit's install lines, derived from its manifests, and a refused eject prints them for only what its pages use (2026-11-26). [LLD-05](lld/LLD-05-react-codegen.md#7-cli-and-templates-fr-rc-12)
 - Spec 006. Exact style variants take precedence over a library-family variant such as `base`. [LLD-06](lld/LLD-06-component-kit.md#2-published-manifests-fr-kt-01)
 - Spec 006. Manifest slots describe the outer registry parts. [LLD-06](lld/LLD-06-component-kit.md#2-published-manifests-fr-kt-01)
 - Spec 006. The dev service reads the shipped kit manifests in place of the three spec 002 samples. [LLD-06](lld/LLD-06-component-kit.md#2-published-manifests-fr-kt-01)
