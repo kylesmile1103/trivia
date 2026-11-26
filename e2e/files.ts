@@ -155,6 +155,15 @@ export async function restoreAll(files: Iterable<readonly [file: string, origina
 }
 
 /**
+ * Wait until the dev server serves `file` transformed from `data`, without writing anything: for
+ * a write the test did not make itself (an engine edit or undo), serving it is the plugin's job
+ * (vite-plugin-ast-locator/src/watch.ts), and a stale module fails here.
+ */
+export async function expectServed(file: string, data: string | Uint8Array): Promise<void> {
+  await converge(file, bytes(data), false)
+}
+
+/**
  * Write `data` over `file` in place, as VS Code and Cursor save (truncate, then write), then wait
  * until the dev server serves it, without rewriting it: when Vite heard only the truncation,
  * serving the whole file is the plugin's job (vite-plugin-ast-locator/src/watch.ts), and a stale
