@@ -2,10 +2,12 @@
 // native engine) behind the designer's proxy. These tests edit playground files on disk and
 // write the originals back after each test.
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { type Locator, type Page, expect, test } from '@playwright/test'
+
+import { restore } from './files'
 
 const playground = path.resolve(import.meta.dirname, '../examples/playground')
 const DASHBOARD = path.join(playground, 'src/pages/Dashboard.tsx')
@@ -27,7 +29,7 @@ test.beforeEach(async () => {
 
 test.afterEach(async () => {
   for (const [file, bytes] of originals) {
-    if (!(await readFile(file)).equals(bytes)) await writeFile(file, bytes)
+    restore(file, bytes)
   }
 })
 

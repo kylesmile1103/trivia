@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 import { type FrameLocator, type Page, expect, test } from '@playwright/test'
 
+import { restore } from './files'
+
 const PLAYGROUND = fileURLToPath(new URL('../examples/playground/', import.meta.url))
 const DASHBOARD = `${PLAYGROUND}src/pages/Dashboard.tsx`
 const DATA_TABLE = `${PLAYGROUND}src/components/data-table.tsx`
@@ -13,7 +15,7 @@ const FORMS = `${PLAYGROUND}src/components/forms`
 const original = fs.readFileSync(DASHBOARD, 'utf8')
 
 test.afterEach(() => {
-  if (fs.readFileSync(DASHBOARD, 'utf8') !== original) fs.writeFileSync(DASHBOARD, original)
+  restore(DASHBOARD, original)
   fs.rmSync(DATA_TABLE, { force: true })
   fs.rmSync(FORMS, { recursive: true, force: true })
 })

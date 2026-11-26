@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { expect, test, type Page } from '@playwright/test'
 
+import { restore } from './files'
+
 const root = fileURLToPath(new URL('../examples/refine-admin/', import.meta.url))
 const name = 'CanvasDraft'
 const doc = `pages/${name}.page.json`
@@ -102,8 +104,8 @@ test('SC-004 previews a draft, ejects it, and edits the ejected source from the 
     await undo.click()
     await expect.poll(files, { timeout: 15_000 }).toEqual(restored)
   } finally {
-    if (!fs.readFileSync(app).equals(before)) fs.writeFileSync(app, before)
-    if (priorLock) fs.writeFileSync(lock, priorLock)
+    restore(app, before)
+    if (priorLock) restore(lock, priorLock)
     else fs.rmSync(lock, { force: true })
     fs.rmSync(source, { force: true })
     fs.rmSync(path.join(blueprint, doc), { force: true })
@@ -136,7 +138,7 @@ test.describe('Blueprint panel', () => {
   test.afterEach(() => {
     for (const [file, original] of baseline) {
       if (!original) fs.rmSync(file, { force: true })
-      else if (!read(file)?.equals(original)) fs.writeFileSync(file, original)
+      else restore(file, original)
     }
     for (const dir of newDirs) if (fs.existsSync(dir) && !fs.readdirSync(dir).length) fs.rmdirSync(dir)
   })
