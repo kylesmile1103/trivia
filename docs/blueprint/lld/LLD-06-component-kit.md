@@ -210,6 +210,14 @@ pnpm dlx shadcn@4.21.3 add https://ui.refine.dev/r/layout-01.json https://ui.ref
   https://ui.refine.dev/r/data-table.json
 ```
 
+⚑ (decided 2026-11-26) `trivia-blueprint new --target vite-refine` prints this list with
+`pnpm exec shadcn add`, derived from the manifests' `source.registry` and `source.item` and
+byte-sorted. The 27 manifests give 25 shadcn items, because Form and Field share `field`,
+Combobox is `command` and DatePicker is `calendar`, and one Refine UI item, `data-table`,
+beside the template's `layout-01` and `views`. Reason: a list derived from the manifests
+cannot drift from the kit, and `packages/blueprint-compiler/test/cli.test.ts` keeps the block
+above equal to it.
+
 For a fresh configuration, the same CLI's `init --template vite --base radix --preset nova`
 sets up the Radix base. Select `--base base` for Base UI. The Refine registry can use its own
 Radix component imports in a Base UI project, as the second fixture does. Forms require
