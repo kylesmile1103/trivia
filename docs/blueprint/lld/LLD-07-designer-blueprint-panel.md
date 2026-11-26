@@ -89,7 +89,14 @@ dispatches the plan's ops through the action bus (`dispatchBatch`, `shared/state
 changed batch, `POST /blueprint/ejected` verifies that shared history entry. An unchanged
 re-eject opens the route without verifying an entry it did not create. The dialog lists the
 files named by the ops, including route registration and the lock. The canvas navigates
-to the real route, where every element is now selectable.
+to the real route, where every element is now selectable. ⚑ (decided 2026-11-26) The
+eject's writes make Vite send `full-reload` (Tailwind's module for a written file that an
+earlier undo left without importers, at once; the lock invalidating the previews, on the
+watcher's event), and a reload that starts while the route loads cancels that load. So
+`canvas.navigate` remembers its URL until the next document attaches, and asks again when that
+document is a reload of somewhere else; any other document (the route, a link, a redirect)
+ends the wait. Reason: a fire-and-forget navigation left the canvas on the preview in 9 of 10
+back-to-back runs, and only the canvas sees which document arrived.
 
 **Model editor (Phase 2).** A list of entities, and for the selected one a grid of fields
 (name, type, required, constraints, default) with relations and API options below. Each cell

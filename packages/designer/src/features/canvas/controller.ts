@@ -173,6 +173,14 @@ export class CanvasController {
   private menu: Menu | null = null
   /** Bumped per right-click; a menu still loading for an older one is dropped. */
   private menuRequest = 0
+  /**
+   * The URL `navigate` asked the frame to load, until the next document attaches. The app's
+   * dev server may reload the page meanwhile, and a reload started while a load is on its way
+   * cancels that load: the frame reloads the URL it is leaving instead. Vite's client reloads
+   * 20 ms after the server sends `full-reload`, and an edit's writes can make it send one at
+   * once (an eject's do), so a navigation right after an edit is often cancelled.
+   */
+  private navigation: string | null = null
 
   readonly api: CanvasApi = {
     elements: (locator) => this.elementsOf(locator).filter(isHTMLElement),
@@ -190,7 +198,7 @@ export class CanvasController {
     moveRefusal: (locator) => this.moveRefusal(locator),
     move: (source, target, placement, version) => this.moveTo(source, target, placement, version),
     moveStep: (locator, direction, version) => this.moveStep(locator, direction, version),
-    navigate: (url) => this.iframe.contentWindow?.location.assign(url),
+    navigate: (url) => this.navigate(url),
   }
 
   private readonly iframe: HTMLIFrameElement
@@ -287,6 +295,7 @@ export class CanvasController {
     const state = designer.getState()
     this.waitingForFirstRender = this.status(state, this.session.doc) !== 'ready'
     state.bumpRevision()
+    this.resumeNavigation()
   }
 
   /** HMR re-rendered the app: locators may have shifted, previews are stale. */
@@ -311,6 +320,29 @@ export class CanvasController {
     const location = this.iframe.contentWindow?.location
     const path = location && location.href !== 'about:blank' ? `${location.pathname}${location.search}${location.hash}` : null
     designer.getState().setCanvasPath(path)
+  }
+
+  /** Load `url` in the frame, and remember it until a document attaches (see `navigation`). */
+  private navigate(url: string): void {
+    const win = this.iframe.contentWindow
+    if (!win) return
+    win.location.assign(url)
+    // A new hash only scrolls the document: nothing loads, so no reload can cancel it.
+    this.navigation = this.session.doc && win.location.href === new URL(url, win.location.href).href ? null : url
+  }
+
+  /**
+   * A document attached while a navigation was on its way. When it is a reload of somewhere
+   * else, a reload cancelled the navigation: ask again. Any other document ends the wait: the
+   * navigation arrived, or the app (a link, a redirect) went somewhere else, which wins.
+   */
+  private resumeNavigation(): void {
+    const url = this.navigation
+    this.navigation = null
+    const win = this.iframe.contentWindow
+    if (url === null || !win || !this.session.doc) return
+    const [entry] = win.performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+    if (entry?.type === 'reload' && win.location.href !== new URL(url, win.location.href).href) this.navigate(url)
   }
 
   private onStore(s: DesignerState, prev: DesignerState): void {
