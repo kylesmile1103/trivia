@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
@@ -33,6 +34,26 @@ export function createViteHost(server: ViteDevServer, paths: ProjectPaths): DevH
       invalidateBlueprints: () => invalidatePreviews(server, true),
     },
     allowedHosts: server.config.server.allowedHosts,
+    // Drop the cached modules of what the engine wrote at once, as Vite's watcher listener does
+    // before it sends the update (moduleGraph.onFileChange): a request right after the answer (the
+    // eject dialog navigates the canvas then) must not get the module transformed before the write.
+    // Nothing is sent here; the watcher's event sends the one update. Vite keys modules by real path.
+    filesWritten: (files) => {
+      const bases = [...new Set([root, realRoot()])]
+      for (const file of files) {
+        for (const base of bases) {
+          for (const environment of Object.values(server.environments)) environment.moduleGraph.onFileChange(path.join(base, file))
+        }
+      }
+    },
+  }
+
+  function realRoot(): string {
+    try {
+      return fs.realpathSync(root)
+    } catch {
+      return root
+    }
   }
 }
 

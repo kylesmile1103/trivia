@@ -231,6 +231,49 @@ describe('in a Vite dev server', () => {
     }
   })
 
+  // A client can ask for a module as soon as an engine write is answered, before the watcher
+  // reports it: the eject dialog navigates the canvas then (an e2e trace got the old App.tsx,
+  // 304, and the canvas stayed on it). Vite must already serve the new source; the update is
+  // still only the watcher's. The watcher is closed here, so nothing but the host can refresh it.
+  describe('serves an engine write at once, before the watcher reports it, and sends nothing for it', () => {
+    const save = `${DASHBOARD}#Dashboard#0.0.2.1`
+    const outline = { op: { op: 'updateProp', target: save, expectedName: 'Button', prop: 'variant', value: 'outline' } }
+
+    it('an edit', async () => {
+      root = copyPlayground()
+      const server = await startServer(root)
+      try {
+        const file = fs.realpathSync(path.join(root, DASHBOARD))
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        await server.vite.watcher.close()
+        const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+        expect((await post(server.socket, '/apply', outline)).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        expect(send).not.toHaveBeenCalled()
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('an undo', async () => {
+      root = copyPlayground()
+      const server = await startServer(root)
+      try {
+        const file = fs.realpathSync(path.join(root, DASHBOARD))
+        const original = fs.readFileSync(file, 'utf8')
+        expect((await post(server.socket, '/apply', outline)).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(fs.readFileSync(file, 'utf8'))
+        await server.vite.watcher.close()
+        const send = vi.spyOn(server.vite.environments.client.hot, 'send')
+        expect((await post(server.socket, '/undo')).body.ok).toBe(true)
+        expect(await served(server.socket)).toBe(original)
+        expect(send).not.toHaveBeenCalled()
+      } finally {
+        await server.close()
+      }
+    })
+  })
+
   it('clears its pending check when the server closes', async () => {
     root = copyPlayground()
     const server = await startServer(root)
