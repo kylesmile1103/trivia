@@ -5,10 +5,12 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
-import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint } from '@trivia/blueprint'
+import { APP_DOC, appSchema, BLUEPRINT_VERSION, hasErrors, loadDocument, SCHEMA_URL, serialize, validate, type Blueprint, type Diagnostic } from '@trivia/blueprint'
 
-import { compilePage, type CompileContext } from './compile.js'
+import { ASPIRE_MISSING, ASPIRE_NEXT_STEPS, checkAspireVersion } from './aspire.js'
+import { compilePage, type CompileContext, type RegistryItem } from './compile.js'
 import type { ProjectFacts } from './facts.js'
+import { compareBytes } from './print/style.js'
 import { checkedWebDirectory, DEFAULT_WEB_DIRECTORY, solutionFromWeb } from './solution.js'
 
 const usage = `Usage: trivia-blueprint <command>
@@ -31,11 +33,21 @@ const plugin = '@trivia/vite-plugin-ast-locator'
 const next = '@trivia/next'
 const service = '@trivia/dev-service'
 
+/** What a successful `trivia-dotnet migrate` prints (LLD-09 §6). */
+interface Migrated {
+  migration: string
+  modelRev?: string
+  renames: Array<{ kind: string; entity: string; field?: string; from: string; oldName: string; newName: string }>
+  settled: Array<{ entity: string; field?: string; from: string; outcome: string }>
+}
+
 interface Project {
   blueprintInputs(): Promise<{ blueprint: Blueprint; context: CompileContext }>
   planBlueprintEject(pages?: string[]): Promise<unknown>
   ejectBlueprint(pages?: string[]): Promise<unknown>
   recordGeneratedModel(modelRev: string): Promise<void>
+  /** Clears the markers a migration settled; the model's new revision, or null when there were none. */
+  clearRenameMarkers(migrated: Migrated): Promise<string | null>
   refine: {
     drift(): Promise<{ pages: Array<{ file: string; issues: Array<{ message: string }> }> }>
   }
@@ -76,6 +88,33 @@ async function openProject(root: string): Promise<Project> {
   return new EngineService({ host: createNextHost(root, engine), engine, version }) as Project
 }
 
+const shellWord = (word: string) => /^[\w@./:+-]+$/.test(word) ? word : "'" + word.replaceAll("'", "'\\''") + "'"
+
+/**
+ * One install line for shadcn items and one for Refine UI's, deduplicated and byte-sorted.
+ * The CLI prints them and never runs them: fetching components needs the network.
+ */
+export function registryCommands(items: readonly RegistryItem[]): string[] {
+  const words = (registry: RegistryItem['registry'], word: (item: string) => string) =>
+    [...new Set(items.filter((entry) => entry.registry === registry).map(({ item }) => item))].sort(compareBytes).map(word)
+  return [words('shadcn', shellWord), words('refine', (item) => shellWord('https://ui.refine.dev/r/' + encodeURIComponent(item) + '.json'))]
+    .filter((line) => line.length).map((line) => 'pnpm exec shadcn add ' + line.join(' '))
+}
+
+/** The registry items of the shipped kit manifests. */
+function kitItems(): RegistryItem[] {
+  const kit = fileURLToPath(new URL('../kit/', import.meta.url))
+  return fs.readdirSync(kit).filter((file) => file.endsWith('.manifest.json')).map((file) => {
+    const { source: { registry, item } } = JSON.parse(fs.readFileSync(path.join(kit, file), 'utf8')) as { source: RegistryItem }
+    return { registry, item }
+  })
+}
+
+/** The template's Refine UI layout and views, plus the whole kit, for either target (LLD-06 §7). */
+const templateItems = (): RegistryItem[] => [
+  { registry: 'refine', item: 'layout-01' }, { registry: 'refine', item: 'views' }, ...kitItems(),
+]
+
 function createProject(
   root: string, dest: string, version: string, target: ProjectFacts['target'], dotnet: boolean, webDirectory = DEFAULT_WEB_DIRECTORY,
 ): void {
@@ -107,7 +146,8 @@ function createProject(
   fs.writeFileSync(path.join(dir, 'blueprint', APP_DOC), serialize(app), { flag: 'wx' })
   console.log(`Created ${destination}`)
   if (!localPlugin) console.log('Point ' + framework + ' and contract-sync at your Trivia distribution before installing.')
-  console.log(`Run in ${dir}\n  pnpm install\n  pnpm exec shadcn add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json`)
+  console.log(`Run in ${dir}\n  pnpm install` + registryCommands(templateItems()).map((line) => '\n  ' + line).join(''))
+  if (dotnet) console.log(ASPIRE_NEXT_STEPS)
 }
 
 interface Command {
@@ -115,11 +155,12 @@ interface Command {
   prefix?: string[]
 }
 
-type BackendCommands = Record<'trivia-dotnet' | 'dotnet' | 'pnpm', Command>
+type BackendCommands = Record<'trivia-dotnet' | 'dotnet' | 'pnpm' | 'aspire', Command>
 
 const backendCommands: BackendCommands = {
   'trivia-dotnet': { executable: 'trivia-dotnet' },
   dotnet: { executable: 'dotnet' },
+  aspire: { executable: 'aspire' },
   pnpm: process.platform === 'win32' && process.env.npm_execpath?.endsWith('.cjs')
     ? { executable: process.execPath, prefix: [process.env.npm_execpath] } : { executable: 'pnpm' },
 }
@@ -136,6 +177,28 @@ function step(label: string, { executable, prefix = [] }: Command, args: string[
   }
   if (stderr) process.stderr.write(stderr)
   return stdout
+}
+
+// Running the solution needs the pinned Aspire CLI; generating it does not. Another major or minor stops here.
+function checkAspire({ executable, prefix = [] }: Command, cwd: string): void {
+  const { status, stdout, error } = spawnSync(executable, [...prefix, '--version'], {
+    cwd, shell: false, encoding: 'utf8', timeout: 60_000, env: { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: '1' },
+  })
+  if ((error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+    console.error(ASPIRE_MISSING)
+    return
+  }
+  const checked = checkAspireVersion(error || status !== 0 ? '' : stdout)
+  if (checked && 'error' in checked) throw new Error(checked.error)
+  if (checked) console.error(checked.warning)
+}
+
+function migrated(stdout: string): Migrated {
+  const value = JSON.parse(stdout) as Partial<Migrated>
+  if (typeof value.migration !== 'string' || !Array.isArray(value.renames) || !Array.isArray(value.settled)) {
+    throw new Error('The migration step returned no migration, renames or settled markers.')
+  }
+  return value as Migrated
 }
 
 function webProject(directory: string): string {
@@ -161,24 +224,33 @@ async function backend(directory: string, migration: string | undefined, command
     : { root: directory, webDirectory: requested }
   if (!layout) throw new Error('Pass --web-dir from the solution root to locate the web app.')
   const { root: solution, webDirectory } = layout
+  checkAspire(commands.aspire, solution)
   const args = ['--blueprint', blueprint, '--root', solution]
   const location = webDirectory === DEFAULT_WEB_DIRECTORY ? [] : ['--web-dir', webDirectory]
   const generated = step('Generate the backend', commands['trivia-dotnet'], ['write', ...args, ...location], solution)
-  const { modelRev } = JSON.parse(generated) as { modelRev?: string }
+  const { modelRev, diagnostics } = JSON.parse(generated) as { modelRev?: string; diagnostics?: Partial<Diagnostic>[] }
   if (typeof modelRev !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(modelRev)) {
     throw new Error('Backend generation returned no model revision.')
   }
+  // A successful write carries warnings only, such as an API without authentication.
+  for (const { severity, doc, pointer, message } of diagnostics ?? []) {
+    console.log(`${severity ?? 'warning'} ${doc ?? ''}${pointer ?? ''}: ${message ?? ''}`)
+  }
+  const project = await openProject(web)
+  let recorded = modelRev
   if (migration !== undefined) {
-    step('Add the migration', commands['trivia-dotnet'], ['migrate', migration, ...args], solution)
+    const result = migrated(step('Add the migration', commands['trivia-dotnet'], ['migrate', migration, ...args], solution))
+    // The guarded clear refuses if the model changed after migrate read it, and the loop stops there.
+    recorded = await project.clearRenameMarkers(result) ?? modelRev
+    for (const { oldName, newName } of result.renames) console.log(`Renamed ${oldName} to ${newName}.`)
   }
   const build = step('Build the solution', commands.dotnet, ['build', entry.doc.name + '.slnx', '--disable-build-servers'], solution)
   if (build) process.stdout.write(build)
   const sync = step('Sync the API contract', commands.pnpm, ['run', 'sync'], web)
   if (sync) process.stdout.write(sync)
 
-  const project = await openProject(web)
   const { pages } = await project.refine.drift()
-  await project.recordGeneratedModel(modelRev)
+  await project.recordGeneratedModel(recorded)
   if (!pages.length) console.log('No contract drift.')
   else {
     console.log(`Contract drift affects ${pages.length} page(s).`)
@@ -255,6 +327,9 @@ export async function run(argv: string[], version: string, commands = backendCom
     const { code, message, details } = error as Error & { code?: string; details?: unknown }
     console.error((code ? code + ': ' : '') + message)
     if (details) console.error(JSON.stringify(details, null, 2))
+    if (command === 'eject' && code === 'unresolved_component') {
+      for (const line of registryCommands((details as { requires?: RegistryItem[] } | undefined)?.requires ?? [])) console.error(line)
+    }
     if (command === 'eject' && (details as { diagnostics?: { code: string }[] } | undefined)?.diagnostics
       ?.some(({ code }) => code === 'unknown_resource')) {
       console.error('Generate the backend and sync the contract with trivia-blueprint backend, then eject again.')

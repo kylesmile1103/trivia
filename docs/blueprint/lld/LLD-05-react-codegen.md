@@ -285,10 +285,10 @@ source so a batch rollback or undo can restore it through the ordinary guarded w
 
 | Command | Does |
 | --- | --- |
-| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` command for Refine UI |
+| `new <dir> [--target vite-refine]` | Copies the template, writes an empty blueprint, prints the `shadcn add` commands for the kit and Refine UI |
 | `validate [--json]` | Loads, validates, prints diagnostics. Exit 1 on errors |
 | `compile <Page> [--out file]` | Prints or writes one compiled page |
-| `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards |
+| `eject [pages…] [--dry-run]` | Plans and applies through `@trivia/engine` directly, with the same guards. A refusal for missing components prints their `shadcn add` commands |
 
 Run `validate`, `compile` and `eject` from the project root. Commands exit with 0 for success,
 1 for operation errors and validation errors, or 2 for incorrect arguments.
@@ -303,7 +303,17 @@ therefore a printed command, not something `new` runs silently.
 the repo) and constructs a standalone engine service without a server. This shares the
 project facts, validation, route plan and native writes without a package dependency cycle.
 `new` links the local Vite plugin when available because Trivia packages are built from
-the workspace. It prints commands for Refine UI's layout and views registry items.
+the workspace.
+
+⚑ (decided 2026-11-26) `new --target vite-refine` prints two install lines derived from the
+shipped kit manifests (`kit/*.manifest.json`, `source.registry` and `source.item`): one
+`pnpm exec shadcn add` for the shadcn items, and one for Refine UI's `layout-01` and `views`
+with the kit's `data-table` ([LLD-06 §7](LLD-06-component-kit.md#7-registry-installation)).
+Each line is deduplicated and byte-sorted. A Next.js app gets the layout and views line. When
+eject is refused with `unresolved_component`, the CLI also prints these lines for `requires`,
+covering only what the pages use. There is no `kit` command, and the CLI runs neither line,
+so it stays offline. Reason: lines derived from the manifests install every component a
+blueprint can use and cannot drift from the kit.
 
 ⚑ The Vite template uses the application's `Plugin` type for the Trivia plugin at the
 config boundary. A checkout link can resolve a separate compatible Vite 8 installation.
@@ -328,6 +338,7 @@ by the Refine example. The provider displays mutation errors and Blueprint toast
 ## 9. Follow-ups
 
 - Kit registry installation and fixture coverage are in [LLD-06](LLD-06-component-kit.md).
-- Deferred: needs spec 010 (app-specific backend and data provider orchestration).
-- Deferred: needs spec 012 (Next.js preview and eject target).
+- App-specific backend and data provider orchestration: spec 010 (`trivia-blueprint backend`
+  and the template's data provider, [LLD-10](LLD-10-aspire-solution-and-contract-loop.md)).
+- Next.js compilation, preview and eject: spec 012 ([LLD-12](LLD-12-nextjs-codegen-target.md)).
 - A page-level error boundary and loading skeleton for custom pages remain open.

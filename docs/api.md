@@ -614,10 +614,16 @@ Content-Type: application/json
 `backend` runs `trivia-dotnet` for the project's blueprint and solution root. Install the
 .NET 10 SDK and put the .NET tool on `PATH`. `mode: "plan"` reports proposed files and
 diagnostics. `mode: "write"` applies the generation plan. Set `force: true` on a write to
-allow replacement or removal of modified generated files. After generation, a separate
-write-mode request with `migration` runs that named EF migration.
+allow replacement or removal of modified generated files. A write-mode request with
+`migration` generates the API and then adds that named EF migration in the same call. It
+stops before the migration when generation is refused. After a successful migration, the
+service clears the `renamedFrom` markers the migration settled, as one undo entry. When it
+cannot clear them because the model changed meanwhile, it answers 409 `conflict` with
+`error.details.migration`, `renames` and `markers`; the migration stays. A rename that would
+drop data refuses the migration with diagnostics and leaves no migration behind.
 
-The result is `{ files, written, diagnostics, log, next? }`. After a successful write
+The result is `{ files, written, diagnostics, log, renames?, next? }`. `renames` lists the
+table and column renames a migration made for `renamedFrom` markers. After a successful write
 or migration, `next` gives the build command and working directory, then the MCP calls
 for contract sync and drift. Each file has a `path`, `kind` and
 `action`, including `delete` for retired generated files and `refused` for blocked writes.

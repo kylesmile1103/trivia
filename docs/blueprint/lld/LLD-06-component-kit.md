@@ -200,7 +200,8 @@ pass draws on the [Web Interface Guidelines](https://raw.githubusercontent.com/v
 
 ## 7. Registry installation
 
-In a Vite Refine project, install the sources into the project's chosen shadcn configuration.
+In a Vite or Next.js Refine project, install the sources into the project's chosen shadcn
+configuration.
 The fixture uses the following registry commands.
 
 ```sh
@@ -209,6 +210,15 @@ pnpm dlx shadcn@4.21.3 add button dropdown-menu badge avatar alert tooltip skele
 pnpm dlx shadcn@4.21.3 add https://ui.refine.dev/r/layout-01.json https://ui.refine.dev/r/views.json \
   https://ui.refine.dev/r/data-table.json
 ```
+
+⚑ (decided 2026-11-26) `trivia-blueprint new` prints this list, for either target, with
+`pnpm exec shadcn add`, derived from the manifests' `source.registry` and `source.item` and
+byte-sorted. The 27 manifests give 25 shadcn items, because Form and Field share `field`,
+Combobox is `command` and DatePicker is `calendar`, and one Refine UI item, `data-table`,
+beside the template's `layout-01` and `views`. Reason: a list derived from the manifests
+cannot drift from the kit, and `packages/blueprint-compiler/test/cli.test.ts` keeps the block
+above equal to it. A Next.js project gets the same list: the kit is target-independent, and the
+Next template's `components.json` sets `rsc: true`, so the shadcn CLI adds the client directives.
 
 For a fresh configuration, the same CLI's `init --template vite --base radix --preset nova`
 sets up the Radix base. Select `--base base` for Base UI. The Refine registry can use its own

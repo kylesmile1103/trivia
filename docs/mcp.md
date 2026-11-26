@@ -246,8 +246,13 @@ If the tool returns `conflict`, read the named routes or files before retrying. 
 `trivia_blueprint_backend` uses the installed `trivia-dotnet` tool. Call it with
 `mode: "plan"` to inspect proposed files and diagnostics, then use `mode: "write"` to
 generate. `force: true` lets a generation write replace or remove modified generated
-files. A separate write-mode call with `migration` adds a named EF migration after
-generation. Inspect `written` and `diagnostics` in the result. After a successful write
+files. A write-mode call with `migration` generates and then adds a named EF migration;
+`renames` in the result lists the table and column renames it made for `renamedFrom`
+markers, and the markers it settled are cleared as one undo entry. A rename that would drop
+data refuses the migration with diagnostics that name the entity and field. A `conflict`
+after the migration means its markers were not cleared: clear the markers in
+`error.details.markers` with a `clearRenameMarkers` op through `trivia_blueprint_patch`.
+Inspect `written` and `diagnostics` in the result. After a successful write
 or migration, `next` gives the build command and working directory, then
 `trivia_sync_openapi` with the generated contract path, and `trivia_contract_drift`.
 An `unsupported` error includes installation guidance in `error.details.hint`.

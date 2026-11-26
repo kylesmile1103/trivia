@@ -11,14 +11,18 @@ internal sealed class RunningApi : IAsyncDisposable
     public HttpClient Client { get; }
     public string ConnectionString { get; }
 
-    private RunningApi(Process process, Uri address, string connectionString)
+    private RunningApi(Process process, Uri address, string? connectionString)
     {
         this.process = process;
         Client = new HttpClient { BaseAddress = address, Timeout = TimeSpan.FromSeconds(30) };
-        ConnectionString = connectionString;
+        ConnectionString = connectionString ?? "";
     }
 
-    public static async Task<RunningApi> StartAsync(GeneratedProject project, string connectionString,
+    /// <summary>
+    /// Builds and starts the API on a loopback port. A null connection string leaves
+    /// ConnectionStrings:AppDb unset. A failed start throws with the process output as its message.
+    /// </summary>
+    public static async Task<RunningApi> StartAsync(GeneratedProject project, string? connectionString,
         IReadOnlyDictionary<string, string>? settings = null)
     {
         string contextFile = File.ReadAllText(Path.Combine(project.ApiDirectory, "Data", "AppDbContext.g.cs"));
@@ -41,11 +45,12 @@ internal sealed class RunningApi : IAsyncDisposable
         Dictionary<string, string> environment = new()
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Production",
-            ["ConnectionStrings__AppDb"] = connectionString,
-            ["TRIVIA_TEST_CREATE_DB"] = "1",
+            ["TRIVIA_TEST_CREATE_DB"] = connectionString is null ? "0" : "1",
             ["Logging__LogLevel__Default"] = "Warning",
             ["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information"
         };
+        if (connectionString is not null)
+            environment["ConnectionStrings__AppDb"] = connectionString;
         if (settings is not null)
             foreach ((string key, string value) in settings)
                 environment[key] = value;

@@ -3,6 +3,8 @@ import path from 'node:path'
 
 import { expect, it } from 'vitest'
 
+import { ASPIRE_INSTALL, ASPIRE_VERSION } from '../src/aspire.js'
+
 it('ships a Vite Refine shell with eject anchors and registry aliases', () => {
   const root = path.resolve(import.meta.dirname, '../templates/vite-refine')
   const read = (file: string) => readFileSync(path.join(root, file), 'utf8')
@@ -21,7 +23,9 @@ it('ships a Vite Refine shell with eject anchors and registry aliases', () => {
 it('documents the commands to create, generate, eject and run an Aspire solution', () => {
   const readme = readFileSync(new URL('../../../docs/blueprint/README.md', import.meta.url), 'utf8')
   const gettingStarted = readme.split('## Run a generated .NET and Vite app')[1]?.split('\n## ')[0]
-  const commands = gettingStarted?.match(/```sh\n([\s\S]*?)```/)?.[1]?.trim().split('\n').filter((line) => !line.startsWith('#'))
+  // The section first installs the pinned Aspire CLI in its own block.
+  const run = [...gettingStarted?.matchAll(/```sh\n([\s\S]*?)```/g) ?? []].find(([, block]) => block!.includes('trivia-blueprint new'))
+  const commands = run?.[1]?.trim().split('\n').filter((line) => !line.startsWith('#'))
   expect(commands).toEqual([
     'trivia-blueprint new backoffice --api dotnet-minimal',
     'cd backoffice',
@@ -29,6 +33,20 @@ it('documents the commands to create, generate, eject and run an Aspire solution
     'trivia-blueprint eject',
     'aspire run',
   ])
+})
+
+it('documents the pinned Aspire install CI uses wherever a solution is run', () => {
+  const props = readFileSync(new URL('../../../dotnet/Directory.Packages.props', import.meta.url), 'utf8')
+  expect([...props.matchAll(/Include="Aspire\.Hosting\.[\w.]+" Version="\[([\d.]+)\]"/g)].map(([, version]) => version))
+    .toEqual(expect.arrayContaining([ASPIRE_VERSION]))
+  expect(ASPIRE_INSTALL).toEqual([
+    'curl -fsSL https://aspire.dev/install.sh -o aspire-install.sh',
+    'bash aspire-install.sh --version ' + ASPIRE_VERSION,
+  ])
+  for (const file of ['docs/blueprint/README.md', 'examples/blueprint-mvp/README.md']) {
+    const text = readFileSync(new URL('../../../' + file, import.meta.url), 'utf8')
+    expect([file, text.includes('```sh\n' + ASPIRE_INSTALL.join('\n') + '\n```')]).toEqual([file, true])
+  }
 })
 
 it('FR-NX-06 ships an App Router shell with the validated pins and the shared API provider', () => {

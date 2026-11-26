@@ -75,6 +75,49 @@ describe('FR-DM-07, FR-DM-08: model operation diffs', () => {
     expect(customer?.renamedFrom).toBeUndefined()
   })
 
+  it('clears the migrated markers it names and keeps the others (LLD-08 §4)', () => {
+    const [write] = run([
+      { op: 'renameField', entity: 'Customer', field: 'fullName', name: 'legalName' },
+      { op: 'renameField', entity: 'Customer', field: 'email', name: 'contactEmail' },
+      { op: 'renameEntity', entity: 'Customer', name: 'Client' },
+      { op: 'clearRenameMarkers', markers: [
+        { entity: 'Client', from: 'Customer' },
+        { entity: 'Client', field: 'legalName', from: 'fullName' },
+      ] },
+    ])
+    const [client] = modelSchema.parse(JSON.parse(write!.after!)).entities
+    expect(client?.renamedFrom).toBeUndefined()
+    expect(client?.fields[0]).toMatchObject({ name: 'legalName' })
+    expect(client?.fields[0]).not.toHaveProperty('renamedFrom')
+    // A marker the migration did not settle, such as one made after it read the model, stays.
+    expect(client?.fields[1]).toMatchObject({ name: 'contactEmail', renamedFrom: 'email' })
+  })
+
+  it('refuses the whole clear when one marker no longer reads as expected', () => {
+    const renamed = [{ op: 'renameField', entity: 'Customer', field: 'fullName', name: 'legalName' }]
+    const clear = (markers: object[]) => () => run([...renamed, { op: 'clearRenameMarkers', markers }])
+    expect(clear([{ entity: 'Customer', field: 'legalName', from: 'displayName' }]))
+      .toThrow(/Customer\.legalName is marked as renamed from fullName, not displayName/)
+    expect(clear([{ entity: 'Customer', field: 'legalName', from: 'fullName' }, { entity: 'Customer', from: 'Client' }]))
+      .toThrow(/Customer is not marked as renamed from Client/)
+    expect(clear([{ entity: 'Client', field: 'legalName', from: 'fullName' }])).toThrow(/No entity named "Client"/)
+    try {
+      clear([{ entity: 'Customer', field: 'displayName', from: 'fullName' }])()
+    } catch (error) {
+      expect((error as Refusal).error).toMatchObject({ code: 'conflict', details: { entity: 'Customer', field: 'displayName' } })
+    }
+  })
+
+  it('starts a rename chain from the migrated name once its marker is cleared', () => {
+    const [write] = run([
+      { op: 'renameField', entity: 'Customer', field: 'fullName', name: 'legalName' },
+      { op: 'clearRenameMarkers', markers: [{ entity: 'Customer', field: 'legalName', from: 'fullName' }] },
+      { op: 'renameField', entity: 'Customer', field: 'legalName', name: 'displayName' },
+    ])
+    const [customer] = modelSchema.parse(JSON.parse(write!.after!)).entities
+    expect(customer?.fields[0]).toMatchObject({ name: 'displayName', renamedFrom: 'legalName' })
+  })
+
   it('refuses moves past the final field index and ambiguous renames', () => {
     expect(() => run([{ op: 'moveField', entity: 'Account', field: 'frozen', index: 4 }]))
       .toThrow(/past the end of Account.fields/)

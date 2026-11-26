@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { ApiError } from '@/shared/engine/client'
+import { syncHistory } from '@/shared/engine/session'
 import type { BlueprintBackendResult } from '@/shared/engine/types'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -44,6 +45,11 @@ function FileTable({ title, result }: { title: string; result: BlueprintBackendR
           ))}
         </ul>
       )}
+      {result.renames && result.renames.length > 0 && (
+        <ul aria-label="Renames" className="space-y-1 text-xs">
+          {result.renames.map(({ oldName, newName }) => <li key={oldName + newName} className="font-mono [overflow-wrap:anywhere]">{oldName} → {newName}</li>)}
+        </ul>
+      )}
       {result.log && <details className="text-xs">
         <summary className="cursor-pointer">Generator output</summary>
         <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{result.log}</pre>
@@ -55,7 +61,6 @@ function FileTable({ title, result }: { title: string; result: BlueprintBackendR
 export function BackendDialog({ modelRev, appRev, onClose }: { modelRev: string; appRev: string | null; onClose(): void }) {
   const [plan, setPlan] = useState<BlueprintBackendResult | null>(null)
   const [generation, setGeneration] = useState<BlueprintBackendResult | null>(null)
-  const [migrationResult, setMigrationResult] = useState<BlueprintBackendResult | null>(null)
   const [problem, setProblem] = useState<ReturnType<typeof backendProblem> | null>(null)
   const [migration, setMigration] = useState('')
   const [writing, setWriting] = useState(false)
@@ -78,25 +83,20 @@ export function BackendDialog({ modelRev, appRev, onClose }: { modelRev: string;
   async function confirm() {
     if (!canConfirm || writing || invalidName) return
     setWriting(true)
-    let generated = false
     try {
       const summary = await blueprintApi.summary()
       if (summary.model?.rev !== basis.modelRev || (summary.app?.rev ?? null) !== basis.appRev) {
         setProblem({ message: 'The blueprint changed. Close this dialog and review a fresh plan.', diagnostics: [], hint: undefined })
         return
       }
-      const result = await blueprintApi.backend({ mode: 'write' })
-      setGeneration(result)
-      generated = !isBlocked(result)
-      if (generated && requestedMigration) {
-        const migration = await blueprintApi.backend({ mode: 'write', migration: requestedMigration })
-        setMigrationResult(migration)
-      }
+      // One call: the service writes the API, then adds the migration from it.
+      setGeneration(await blueprintApi.backend(requestedMigration ? { mode: 'write', migration: requestedMigration } : { mode: 'write' }))
     } catch (error) {
-      const failure = backendProblem(error)
-      setProblem(generated ? { ...failure, message: 'Backend generation completed. The migration failed. ' + failure.message } : failure)
+      setProblem(backendProblem(error))
     } finally {
       setWriting(false)
+      // A migration clears the rename markers it settled as an undo entry; the model editor reloads with it.
+      if (requestedMigration) void syncHistory()
     }
   }
 
@@ -111,7 +111,6 @@ export function BackendDialog({ modelRev, appRev, onClose }: { modelRev: string;
         </div>
       )}
       {generation ? <FileTable title="Backend generation result" result={generation} /> : plan && <FileTable title="Backend file plan" result={plan} />}
-      {migrationResult && <FileTable title="Migration result" result={migrationResult} />}
       {canConfirm && <Field label="Migration name (optional)">{(id) => (
         <>
           <Input id={id} value={migration} spellCheck={false} disabled={writing} aria-invalid={invalidName || undefined}

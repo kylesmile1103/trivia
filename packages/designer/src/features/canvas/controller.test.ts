@@ -803,6 +803,182 @@ describe('a full reload while an edit renders (finding 16)', () => {
   })
 })
 
+// ---------------------------------------------------------------------------------------------
+// Navigation. The frame's browsing context, reduced to the rule of browsers that matters here: a
+// load runs from `location.assign` until it arrives, and a reload started meanwhile cancels it
+// and reloads the URL the frame is leaving. Vite's client reloads 20 ms after the server sends
+// `full-reload`, and an eject's writes make it send one at once (Tailwind's module for a file
+// the eject writes again, left without importers by an earlier undo) and more on the watcher's
+// events (the lock invalidates the blueprint previews): the designer's navigation to the
+// ejected route, sent a moment later, was cancelled in 9 of 10 back-to-back e2e runs.
+
+interface Load {
+  url: string
+  type: 'navigate' | 'reload'
+}
+
+function mountFrame(engine: FakeEngine, path: string) {
+  const origin = 'http://localhost:5173'
+  /** Every URL the canvas asked the frame to load, in order. */
+  const requested: string[] = []
+  let pending: Load | null = null
+
+  /** One document: a real jsdom window, with the URL and navigation entry of `load`. */
+  function open(load: Load) {
+    const app = appDocument()
+    render(app, engine.children)
+    let url = load.url
+    const location = {
+      get href() { return url },
+      get origin() { return origin },
+      get pathname() { return new URL(url).pathname },
+      get search() { return new URL(url).search },
+      get hash() { return new URL(url).hash },
+      assign(to: string) {
+        requested.push(to)
+        const next = new URL(to, url)
+        // Only the hash changes: the document scrolls, nothing loads.
+        if (next.hash !== '' && next.href.split('#')[0] === url.split('#')[0]) url = next.href
+        else pending = { url: next.href, type: 'navigate' }
+      },
+    }
+    const performance = {
+      timeOrigin: app.win.performance.timeOrigin,
+      now: () => app.win.performance.now(),
+      getEntriesByType: (type: string) => (type === 'navigation' ? [{ name: load.url, type: load.type }] : []),
+    }
+    const win = new Proxy(app.win, {
+      get(target, key) {
+        if (key === 'location') return location
+        if (key === 'performance') return performance
+        const value: unknown = Reflect.get(target, key, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+    return { app, win, pushState: (to: string) => { url = new URL(to, url).href } }
+  }
+
+  let shown = open({ url: origin + path, type: 'navigate' })
+  const iframe = document.createElement('iframe')
+  Object.defineProperty(iframe, 'contentWindow', { get: () => shown.win })
+  Object.defineProperty(iframe, 'contentDocument', { get: () => shown.app.doc })
+  Object.defineProperty(iframe, 'offsetWidth', { get: () => 800 })
+  iframe.getBoundingClientRect = () => rect(0, 0, 800, 600)
+  const overlay = document.createElement('div')
+  document.body.append(overlay)
+  const controller = new CanvasController(iframe, overlay, () => {})
+  const unmount = controller.mount()
+  iframe.dispatchEvent(new Event('load'))
+
+  return {
+    controller,
+    requested,
+    /** Vite's client: `location.reload()`, which cancels a load on its way. */
+    reload() {
+      pending = { url: shown.win.location.href, type: 'reload' }
+    },
+    /** A link in the app: the frame starts a load the canvas didn't ask for. */
+    follow(to: string) {
+      pending = { url: new URL(to, origin).href, type: 'navigate' }
+    },
+    /** The app's router moves within the document (`history.pushState`). */
+    pushState: (to: string) => shown.pushState(to),
+    /** The load on its way arrives: the old document goes, the new one renders and loads. */
+    async arrive() {
+      const load = pending
+      if (!load) throw new Error('no load is on its way')
+      pending = null
+      shown.app.win.dispatchEvent(new Event('pagehide'))
+      shown = open(load)
+      iframe.dispatchEvent(new Event('load'))
+      await idle()
+    },
+    /** The path of the load on its way, if any. */
+    get loading() {
+      return pending ? pending.url.slice(origin.length) : null
+    },
+    unmount() {
+      unmount()
+      overlay.remove()
+    },
+  }
+}
+
+describe('a navigation the canvas asks for', () => {
+  let frame: ReturnType<typeof mountFrame> | null = null
+  afterEach(() => {
+    frame?.unmount()
+    frame = null
+  })
+
+  async function openAt(path: string) {
+    engine.children = ['button']
+    frame = mountFrame(engine, path)
+    await idle()
+    return frame
+  }
+
+  it('is asked for again when a reload cancels it, and arrives', async () => {
+    const f = await openAt('/__blueprint/AccountIntake')
+    f.controller.api.navigate('/blueprint-account-intake')
+    f.reload() // the eject's full reload lands while the ejected route loads
+    await f.arrive() // the preview again, reloaded
+
+    expect(f.requested).toEqual(['/blueprint-account-intake', '/blueprint-account-intake'])
+    expect(f.loading).toBe('/blueprint-account-intake')
+    await f.arrive()
+    expect(designer.getState().canvasPath).toBe('/blueprint-account-intake')
+  })
+
+  it('is asked for again after each reload that cancels it', async () => {
+    const f = await openAt('/__blueprint/AccountIntake')
+    f.controller.api.navigate('/blueprint-account-intake')
+    f.reload()
+    await f.arrive()
+    f.reload() // a second full reload reaches the reloaded preview
+    await f.arrive()
+    await f.arrive()
+
+    expect(f.requested).toEqual(Array(3).fill('/blueprint-account-intake'))
+    expect(designer.getState().canvasPath).toBe('/blueprint-account-intake')
+  })
+
+  it('is not asked for again once it has arrived', async () => {
+    const f = await openAt('/__blueprint/AccountIntake')
+    f.controller.api.navigate('/blueprint-account-intake')
+    await f.arrive()
+    f.reload()
+    await f.arrive()
+
+    expect(f.requested).toEqual(['/blueprint-account-intake'])
+    expect(f.loading).toBeNull()
+    expect(designer.getState().canvasPath).toBe('/blueprint-account-intake')
+  })
+
+  it('gives way to a load the app started meanwhile', async () => {
+    const f = await openAt('/__blueprint/AccountIntake')
+    f.controller.api.navigate('/blueprint-account-intake')
+    f.follow('/customers')
+    await f.arrive()
+    f.reload()
+    await f.arrive()
+
+    expect(f.requested).toEqual(['/blueprint-account-intake'])
+    expect(designer.getState().canvasPath).toBe('/customers')
+  })
+
+  it('to a new hash loads nothing, so no later reload repeats it', async () => {
+    const f = await openAt('/customers')
+    f.controller.api.navigate('#details')
+    f.pushState('/orders')
+    f.reload()
+    await f.arrive()
+
+    expect(f.requested).toEqual(['#details'])
+    expect(designer.getState().canvasPath).toBe('/orders')
+  })
+})
+
 describe('the right-click menu', () => {
   it('selects the element under the cursor and opens its menu there', async () => {
     const c = await open(['h2', 'button', 'p'])

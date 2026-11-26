@@ -57,7 +57,8 @@ public sealed class ScaffoldTests
     {
         using TempDirectory root = new();
         FilePlan plan = ApiPlan.Create(root.Path, ModelLoader.Load(FixtureTests.Bank));
-        Assert.Empty(plan.Diagnostics);
+        Assert.Equal(["auth_none"], plan.Diagnostics.Select(diagnostic => diagnostic.Code));
+        Assert.All(plan.Diagnostics, diagnostic => Assert.Equal("warning", diagnostic.Severity));
         PlanWriter.Write(root.Path, plan);
         string Read(string path) => File.ReadAllText(Path.Combine(root.Path, path));
         Assert.Contains("src/BackOffice.Api/BackOffice.Api.csproj", Read("BackOffice.slnx"));

@@ -10,7 +10,7 @@ import path from 'node:path'
 import { APP_DOC, loadDocument, MODEL_DOC, modelSchema, revOfText, summarizeModel } from '@trivia/blueprint'
 import { LOCK_FILE, projectFacts, readLock, serializeLock, type CompileContext } from '@trivia/blueprint-compiler'
 
-import { runBackend, type BackendRequest, type BackendResult } from '../blueprint/backend.js'
+import { markersToClear, runBackend, type BackendRequest, type BackendResult, type MigrateResult } from '../blueprint/backend.js'
 import { resolveBlueprintDir } from '../blueprint/paths.js'
 import { planEject, validateEjectLock, type EjectPlan } from '../blueprint/plan.js'
 import { previewPage, type PreviewResult } from '../blueprint/preview.js'
@@ -369,9 +369,41 @@ export class EngineService {
     })
   }
 
-  /** Keep backend generation ordered with its model edits. The CLI owns its file plan. */
+  /**
+   * Keep backend generation ordered with its model edits. The CLI owns its file plan. A migration's settled
+   * markers are cleared in the same queued call, so no edit can land between migrate and the clear.
+   */
   blueprintBackend(request: BackendRequest): Promise<BackendResult> {
-    return this.#queue.run(() => runBackend(this.blueprint, request))
+    return this.#queue.run(() => runBackend(this.blueprint, request, (migrated) => this.#clearRenameMarkers(migrated)))
+  }
+
+  /**
+   * After a successful `trivia-dotnet migrate`: remove the markers it settled with the guarded
+   * clearRenameMarkers op, as one undo entry. Returns the model's new revision, or null when there was
+   * nothing to clear. Refused, it throws `conflict`: the migration stays, the markers do too.
+   */
+  clearRenameMarkers(migrated: MigrateResult): Promise<string | null> {
+    return this.#queue.run(() => this.#clearRenameMarkers(migrated))
+  }
+
+  async #clearRenameMarkers(migrated: MigrateResult): Promise<string | null> {
+    const markers = markersToClear(migrated)
+    if (markers.length === 0) return null
+    const refused = (reason: string, revs?: unknown) => new ApiError('conflict',
+      `The migration ${migrated.migration} was added, but its rename markers were not cleared: ${reason}. ` +
+      'The migration is correct and stays. Clear the markers in error.details.markers with the clearRenameMarkers ' +
+      'op before renaming those items again.',
+      { migration: migrated.migration, renames: migrated.renames, markers, ...(revs !== undefined && { revs }) })
+    if (migrated.modelRev === undefined) throw refused('trivia-dotnet did not report the model revision it read')
+    const applied = await this.blueprint.apply([{ op: 'clearRenameMarkers', doc: MODEL_DOC, baseRev: migrated.modelRev, markers }])
+    if (!applied.ok) throw refused(applied.error.message, applied.error.details?.revs)
+    try {
+      this.#commitDocuments(applied.writes, 'Clear migrated rename markers')
+    } catch (error) {
+      if (error instanceof ApiError) throw refused(error.message)
+      throw error
+    }
+    return applied.result.revs[MODEL_DOC] ?? null
   }
 
   recordGeneratedModel(modelRev: string): Promise<void> {

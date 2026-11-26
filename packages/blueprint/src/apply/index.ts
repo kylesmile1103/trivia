@@ -46,6 +46,7 @@ const HANDLERS: { [N in OpName]: Handler<N> } = {
   setEntity: applyModelOp, removeEntity: applyModelOp, renameEntity: applyModelOp,
   setField: applyModelOp, removeField: applyModelOp, renameField: applyModelOp, moveField: applyModelOp,
   setRelation: applyModelOp, removeRelation: applyModelOp, setIndexes: applyModelOp, setEntityApi: applyModelOp,
+  clearRenameMarkers: applyModelOp,
 }
 
 function run(draft: Draft, op: BlueprintOp): void {

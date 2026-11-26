@@ -1,11 +1,13 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { syncContract } from '@trivia/contract-sync'
 
 import type { CompileContext } from '../src/index.js'
+// .ts, not .js: e2e/blueprint-next-app.mjs loads this file with node --experimental-strip-types,
+// which does not map a .js specifier to the .ts file the way Vitest does.
+import { runCodegen } from './codegen.ts'
 
 export const mvp = new URL('../fixtures/next/mvp/', import.meta.url)
 export const nextExample = new URL('../../../examples/next-admin/', import.meta.url)
@@ -28,9 +30,7 @@ export function prepareMvp(root: string, template = new URL('../templates/next-r
 }
 
 export async function mvpContract(root: string, web: string) {
-  const project = fileURLToPath(new URL('../../../dotnet/src/Trivia.Blueprint.Codegen/Trivia.Blueprint.Codegen.csproj', import.meta.url))
-  execFileSync('dotnet', ['run', '--project', project, '--configuration', 'Release', '--disable-build-servers', '--',
-    'write', '--blueprint', path.join(web, 'blueprint'), '--root', root], { cwd: root, timeout: 150_000, encoding: 'utf8' })
+  runCodegen(['write', '--blueprint', path.join(web, 'blueprint'), '--root', root], { cwd: root, timeout: 150_000, encoding: 'utf8' })
   execFileSync('dotnet', ['build', 'src/BankAdmin.Api/BankAdmin.Api.csproj', '-warnaserror', '--disable-build-servers'],
     { cwd: root, timeout: 150_000, encoding: 'utf8' })
   return syncContract({ cwd: web, input: 'openapi/api.openapi.json', zod: true })

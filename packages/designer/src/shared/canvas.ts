@@ -55,7 +55,9 @@ export interface CanvasApi {
   moveStep(locator: string, direction: 'up' | 'down', version: number): Promise<void>
   /**
    * Load `url` (a path in the app: `/customers/edit/42`) in the canvas. A full load, so it works
-   * whatever the app routes with; the store's `canvasPath` follows once it has rendered.
+   * whatever the app routes with; the store's `canvasPath` follows once it has rendered. It
+   * survives a reload the dev server starts meanwhile (a full reload after an edit, such as an
+   * eject's), which cancels the load: the canvas asks for it again.
    */
   navigate(url: string): void
   /** A PNG (data URL) of the app's whole page, up to 4000 px tall; null without a page. */

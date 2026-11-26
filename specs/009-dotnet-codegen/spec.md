@@ -121,5 +121,7 @@ Full text in `docs/blueprint/SRS.md` section 3.9: **FR-NC-01** to **FR-NC-13**, 
 
 ## Assumptions and out of scope
 
-- Minimal API slices on PostgreSQL (ADR-0010). No `PATCH`. No embedded relations in responses.
+- Minimal API slices on PostgreSQL (ADR-0010). No embedded relations in responses.
+  ⚑ (decided 2026-11-26) `PATCH` is generated beside `PUT` and changes only the members sent,
+  because generated edit forms send only their own fields (LLD-09 section 4).
 - The AppHost, ServiceDefaults and MigrationService scaffolds are spec 010.

@@ -387,11 +387,23 @@ exports[`FR-AG-02 lists blueprint tools and their guarded input shapes 2`] = `
       "api",
     ],
   },
+  {
+    "op": "clearRenameMarkers",
+    "required": [
+      "op",
+      "doc",
+      "baseRev",
+      "markers",
+    ],
+  },
 ]
 `;
 
 exports[`FR-DM-07 advertises model payloads and summarizes a patched model with its disk revision 1`] = `
 {
+  "clearRenameMarkers": [
+    "markers",
+  ],
   "moveField": [
     "entity",
     "field",

@@ -10,7 +10,9 @@ internal static class CheckCommand
         PlanCommand.CreateGenerationCommand("check", "Check whether generated files are current.", output,
             flag: null, (plan, _, _) =>
             {
-                List<Diagnostic> diagnostics = [.. plan.Diagnostics];
+                // check answers whether the generated files are current, so the plan's warnings
+                // (auth_none) stay with plan and write: a CI reader may take any entry here as stale.
+                List<Diagnostic> diagnostics = [.. plan.Diagnostics.Where(diagnostic => diagnostic.IsError)];
                 foreach (PlannedFile file in plan.Files)
                     if (file.Kind == FileKind.Generated && file.Action != FileAction.Unchanged &&
                         !plan.Diagnostics.Any(diagnostic => diagnostic.Doc == file.Path))
