@@ -177,6 +177,9 @@ test('FR-TN-05 shows an edit written while the Next canvas loads, every time', a
     const result = await apply(page, { op: 'insert', target, expectedName: 'p', placement: 'before', snippet: '<p id="added-note">Added note</p>' })
     expect(result.changed).toBe(true)
     await expect(app.locator('#added-note'), `round ${round}`).toHaveAttribute('data-ast-node', result.locator)
+    // Restore once the canvas has caught up: a plain file write (an IDE's) while a document
+    // loads is not something the canvas can know of (LLD-13 §8), and is not what this tests.
+    await expect(page.getByTestId('canvas-overlay'), `round ${round}, caught up`).not.toHaveAttribute('aria-busy')
     await restoreAll(originals)
     await expect(app.locator('#added-note'), `round ${round}, restored`).toHaveCount(0)
   }
