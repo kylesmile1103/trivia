@@ -19,8 +19,7 @@ vi.mock('sonner', () => {
 })
 // jsdom cannot reload a document: a Next catch-up that would is noted (frame-session.test.ts covers it).
 const reloads = vi.hoisted(() => [] as Window[])
-vi.mock('./next-hydration', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./next-hydration')>()),
+vi.mock('./reload-document', () => ({
   reloadDocument: (win: Window) => {
     reloads.push(win)
   },
@@ -212,6 +211,8 @@ function appDocument(): AppDocument {
         resources.splice(resources.indexOf(this.callback) >>> 0, 1)
       }
     },
+    // The Vite plugin's HMR probe, answered: the page's socket is open (vite-hmr.ts).
+    __TRIVIA_HMR__: { ready: true },
   })
   win.Element.prototype.getBoundingClientRect = function (this: Element) {
     const [x = 0, y = 0, w = 0, h = 0] = (this.getAttribute('data-rect') ?? '').split(',').map(Number)
@@ -841,6 +842,21 @@ describe('a full reload while an edit renders (finding 16)', () => {
     await c.click(pointOf(2))
     expect(designer.getState().selected).toBe(at('0.2'))
     expect(c.view().selection?.locator).toBe(at('0.2'))
+  })
+})
+
+describe('between two documents (LLD-13 §6)', () => {
+  it('shows the canvas busy from an unload until the next document has attached and caught up', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    expect(c.view().updating).toBe(false)
+    c.doc().defaultView!.dispatchEvent(new Event('pagehide')) // a reload or a navigation began
+    await idle()
+    expect(c.view().updating).toBe(true) // its modules may take a while: the overlay says so meanwhile
+    c.reload()
+    await quiet()
+    expect(c.view().updating).toBe(false)
+    await c.click(pointOf(1))
+    expect(designer.getState().selected).toBe(at('0.1'))
   })
 })
 

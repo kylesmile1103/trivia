@@ -84,17 +84,20 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - Read-after-write, on Vite: once `apply`, `batch`, `undo` or `redo` has answered, every new
   request to the dev server gets the files as written (the plugin drops their transformed modules
   before answering). Pages already open get the change as one hot update from Vite's watcher. A
-  page that fetched a module before the write and had not run it when that update came can miss
-  it, as with any hand edit. The Next.js host makes no such promise.
+  page still loading can miss that update: Vite sends it only to the HMR sockets open at that
+  moment, and its client drops one for a module that has not run yet. A canvas document catches
+  up: once it has loaded and its socket has answered the plugin's `trivia:hmr-ready` probe, it
+  reloads if `lastWriteAt` is at or after its start (LLD-13 §6). A plain browser tab does not,
+  and no page catches up after a hand edit. The Next.js host makes no such promise.
 - `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null,
   lastWriteAt: number | null }`. `lastWriteAt` is when the service last wrote the project (a
   recorded edit, an undo or a redo), in ms since the epoch by the service's clock, and null before
   its first write. An op that changes nothing, a refused one and an undo or redo with nothing to
-  do leave it as it was. The designer compares it with a Next.js canvas document's load to tell
-  whether the document can have missed an edit (LLD-13 §6); the service and the browser share a
-  host.
+  do leave it as it was. The designer compares it with a canvas document's load, on Next.js and
+  on Vite, to tell whether the document can have missed an edit (LLD-13 §6); the service and the
+  browser share a host. Contract-sync's `/sync` writes are not in it.
 - `manifest` is the project's `trivia.manifest.json` (`docs/data-provider.md`), null when it has
   none. `Drift = { status: "current" | "changed" | "unknown", source, manifestHash, specHash }`
   compares the manifest's `schemaHash` with contract-sync's canonical hash of the spec at

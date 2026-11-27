@@ -237,9 +237,11 @@ The engine edits files. It does not care which kind of component a file holds. W
   environment, under the root and its real path, sending nothing, so the update stays the
   watcher's one. Without it an e2e trace showed the eject dialog's navigation load `App.tsx` 304
   from before the eject, and the watcher's update reach a document that had not registered the
-  module yet, which Vite's client drops: the canvas stayed on the old app. Not covered: a page
-  that fetched a module before the write and had not run it when the update came, Vite's
-  load-time race for any hand edit. The Next.js host has no such cache and no `filesWritten`.
+  module yet, which Vite's client drops: the canvas stayed on the old app. Not covered then: a
+  page that fetched a module before the write and had not run it when the update came, Vite's
+  load-time race for any hand edit. Since 2026-11-27 a canvas document catches up after a
+  service write it can have missed (below); a plain browser tab, and any page for a hand edit,
+  still can miss one. The Next.js host has no such cache and no `filesWritten`.
   ⚑ (decided 2026-11-26) A hot update leaves out the `asset` nodes nothing imports
   (`hotUpdate`, `order: 'pre'`, in `vite-plugin-ast-locator/src/index.ts`), because Vite
   treats such a node as a dead end and reloads the page for it. Tailwind's plugin makes its
@@ -270,7 +272,109 @@ The engine edits files. It does not care which kind of component a file holds. W
   the next attach (at most 10 s, no warning), and through the catch-up, so that a press on the
   server-rendered page waits and selects on the caught-up render. With no document it is
   dropped. The catch-up's history read is also the designer's history sync, so an edit it
-  notices starts its own wait before the catch-up ends. Vite is unchanged.
+  notices starts its own wait before the catch-up ends. Vite was unchanged then; since
+  2026-11-27 it is busy the same way (below).
+  ⚑ (decided 2026-11-27) A Vite canvas document catches up like a Next one. The nightly e2e on
+  Linux caught `refine/drift.spec.ts` with the canvas on the old column for good: a document
+  reloaded after a sync fetched `src/pages/customers/list.tsx` at 5.38 s, the engine wrote it at
+  5.39 s, and the page's HMR socket connected at 5.67 s. Vite 8.3.3 misses such a write in two
+  ways, and the trace cannot tell which (the batch's answer and the socket's 101 are both at
+  5.39): the update was broadcast before the server had the socket (`dist/node/chunks/node.js`,
+  `createWebSocketServer`: only `error` and `full-reload` are buffered, and only while no client
+  is connected; the client's `connected` only logs, it asks for nothing it missed), or the
+  socket was open and the update arrived before the module had run (`dist/client/client.mjs`,
+  `HMRClient.fetchUpdate`: an update for a module not in `hotModulesMap` is dropped, and a
+  module registers only when it runs). So once a document has fired `load` (its static module
+  graph has run; the session attaches then) and its HMR socket has answered the plugin's probe,
+  `frame-session.ts` reads `/history`'s `lastWriteAt`. A write at or after the document's start
+  reloads it at once. Otherwise the catch-up ends. Reverses "Not covered" above, for service
+  writes.
+  ⚑ (decided 2026-11-27) No grace on Vite, as a request after a write gets the written files:
+  the service writes, calls `filesWritten` and records the write in one synchronous block
+  (`dev-service/src/api/service.ts`, `#transact`, and `#travel` for undo and redo), and
+  `filesWritten` runs `moduleGraph.onFileChange` in every environment, which drops the
+  transform result and the etag, so a later request cannot get a stale 304; source modules are
+  served `no-cache`. A document whose start is at or before `lastWriteAt` may lack the write and
+  is reloaded; a reloaded document counts no write before its own start (Next counts the grace
+  before it). A chain still reloads at most twice, then warns once and ends.
+  ⚑ (decided 2026-11-27) The plugin adds a dev-only probe script to the app's HTML
+  (`transformIndexHtml`, `<script type="module">` in `<head>`, under the base, with the API on):
+  the first script it adds to the user's page (so far: attributes, and a route in `App.tsx`).
+  It is the virtual module `\0trivia:hmr-ready` (`vite-plugin-ast-locator/src/hmr-probe.ts`,
+  served at `/@id/__x00__trivia:hmr-ready`), never a path under `src/.trivia-preview/`:
+  `invalidatePreviews` (`host.ts`) takes every loaded module there but the blueprint entry for a
+  stale preview and sends `full-reload`, so a probe there would reload the canvas on every sync
+  and blueprint write. It sends the custom event `trivia:hmr-ready` over `import.meta.hot`,
+  which waits for the connection. `configureServer` answers the asking socket alone
+  (`server.ws.on('trivia:hmr-ready', (_data, client) => client.send('trivia:hmr-ready'))`), so
+  other pages get nothing and a write still sends one update. The client handles messages in
+  order (`createHMRHandler` and its queue), so the answer arrives after every update broadcast
+  before the server knew the socket. On it the probe sets `window.__TRIVIA_HMR__.ready` and
+  dispatches `trivia:hmr-ready` on the window; `features/canvas/vite-hmr.ts` (the counterpart of
+  `next-hydration.ts`) reads both. The socket is not observable otherwise: the client keeps it
+  private, `vite:ws:connect` fires only at the moment of connecting, and resource timing has no
+  WebSocket entries.
+  ⚑ (decided 2026-11-27) One state machine for both hosts: `FrameSession` takes a host
+  description (`CatchUpHost`: `NEXT_CATCH_UP`, `VITE_CATCH_UP`) instead of `catchesUp`. Ready
+  when: hydrated (Next), the probe's answer after `load` (Vite). Grace: `COMPILE_GRACE_MS`, 0.
+  No write since the start: refresh the router and wait for its render, end the catch-up. A
+  chain at `MAX_RELOADS`: refresh and warn, warn and end. Not ready within 10 s: end with a
+  warning, read anyway and warn. The `hydrating` phase is now `waiting`, the warnings name the
+  host, and `reloadDocument` lives in the host-neutral `reload-document.ts`. Next behaves as
+  before; its unit tests are unchanged but for the mock's module path and the helper passing
+  the host description. `controller.ts` passes `VITE_CATCH_UP` when `health.host !== 'next'`;
+  its `lastWrite` is unchanged (its `syncHistory` also lets an edit the read notices start its
+  own wait before the catch-up ends).
+  ⚑ (decided 2026-11-27) The Vite canvas is busy (`aria-busy`, the progress cursor; presses
+  wait, drags and Delete are refused) from its start or a document's unload until the next
+  attach and through the catch-up, as on Next. Reverses "Vite is unchanged" above. A normal load
+  costs one `/history` read and one extra `settled`: the probe has usually answered before
+  `load`. Bounds, all existing constants: a document to attach 10 s (then `loadTimedOut`), the
+  probe 10 s, the read 1 s (a failed read counts as no write), the reload to unload 10 s, at
+  most 2 reloads in a chain.
+  ⚑ (decided 2026-11-27, deviation found in the e2e) The canvas republishes its view when a
+  document unloads: `FrameSession.awaitDocument` schedules a layout. The decision took the
+  overlay's busy state to be `FrameSession.updating` as it is, but nothing republished the view
+  between an unload and the next attach (the unload tears down the old document's observers and
+  cancels the pending frame), so the overlay kept the old view, not busy, while the next page
+  ran its modules: e2e B's busy check failed while the catch-up itself worked. From the unload
+  on, the canvas now shows busy and no boxes of the gone document. On Next this closes the same
+  gap, which lasted until its server's HTML loaded.
+  ⚑ (decided 2026-11-27) Without the probe on the page (HTML that did not go through Vite's
+  index transform, or an older plugin) the canvas reads at `load` and warns once per session;
+  that still catches every write made before `load`, and a write between `load` and the socket's
+  connection can still be missed there.
+  ⚑ (decided 2026-11-27) What else the Vite catch-up weighs. State: a catch-up reload loses the
+  app's in-memory state, at most a second's worth, since it fires only for a document still
+  loading when the write landed. Loops: a reloaded document reloads again only for a new write
+  at or after its own start, and `reloadsInChain` stops a chain at two, then one warning. No
+  double reload when Vite reloads for an edit itself: that document starts after the write, so
+  it is not flagged (the canvas e2e "a full reload while an edit renders" holds for that reason).
+  MCP and agent writes are in `lastWriteAt`, so they are covered at load. A navigation a
+  catch-up reload cancels (#20) is asked again by `resumeNavigation` on the next attach, for any
+  host; a Vite catch-up reload has no grace timer, so the window in which it can cancel one is
+  only the `/history` read. The drift trace under this design: the old document unloads at
+  5.30 s (busy), the batch answers at 5.39, the new document attaches at about 5.7 with the
+  probe answered, the read returns 5.39, at or after 5.30, it reloads, and the next document
+  starts after 5.39, reads and ends. `refine/drift.spec.ts` is not changed (its 15 s timeout and
+  its comment stay).
+  ⚑ (decided 2026-11-27) Rejected for Vite. Re-sending the update to a late client: a re-sent
+  update is dropped the same way when it arrives before its module registers, so it needs the
+  probe anyway; a broadcast re-imports in every tab, and a per-client update means rebuilding
+  Vite's boundary propagation by hand. A per-client `full-reload` the plugin decides from a
+  watcher log would cover IDE writes, but it puts the loop bound into a script in the user's page
+  and leaves the canvas not busy on a stale document until the reload lands (the rule-4 hazard
+  `controller.ts` `stale` exists to prevent); worth revisiting only if IDE writes during a load
+  become a real complaint. Holding the designer's edit until the canvas is connected: misses
+  MCP and agent writes, needs the same signal, and couples the action bus to the canvas. Reading
+  `lastWriteAt` at attach with no socket signal: it would have fixed this trace, but a write
+  between the read and the connection is still lost, and the trace shows 280 ms between the 101
+  and "connected" on CI. Taking "my own edit's re-import never came by `MAX_WAIT_MS`" for a miss:
+  covers only the designer's edits, fires 1.5 s late, and would reload on a slow cold transform
+  (`drift.spec.ts` says the first edit after a sync can be slow). Importing `/@vite/client` from
+  the designer into the frame for a hot context: needs eval or a script the designer adds to the
+  user's document, the base path, and an undocumented export; the probe uses only documented
+  plugin APIs.
 - **Client boundary props.** An element in a server component that renders a client component
   is still plain JSX with a locator as its first attribute. Nothing special.
 - **Prop schemas.** The analyzer reads `src/components/ui` as before. A `"use client"`
@@ -340,6 +444,35 @@ The engine edits files. It does not care which kind of component a file holds. W
   10 on CI), and the race test failed 2 runs in 3. With it (macOS, `pnpm e2e -- --project
   next`): the race test at `--repeat-each=30` passed 30 of 30 (450 rounds), and the FR-TN-05
   spec at `--repeat-each=10` passed 60 of 60.
+- ⚑ (decided 2026-11-27) The Vite catch-up's tests. `frame-session.test.ts` rewrote the two
+  tests that asserted the old behaviour ("never reads or reloads on a Vite host", "never on a
+  Vite host") to assert the new one, and adds nine Vite cases on the same fake clock: a write at
+  the start reloads the moment the read answers and is busy throughout; no read before the
+  socket's answer, and a write made while it connected is caught; no reload or refresh for no
+  write or one a millisecond before the start, one `settled`; a reloaded document counts no
+  write before its own start; a chain reloads twice, then one warning; no probe reads at attach
+  and warns once per session; a probe that never answers is read after 10 s with one warning; a
+  failed or slow read ends without a reload; nothing fires after an unload or a stop while it
+  waits or reads. `vite-hmr.test.ts` covers `whenConnected`, and `controller.test.ts` that the
+  view is busy from an unload until the next document has caught up. The plugin's
+  `test/hmr-probe.test.ts` runs real servers: the served `index.html` has the probe in `<head>`
+  before the entry; of two real HMR sockets the one that asks gets the answer and the other only
+  its own; no probe without the API; a manifest change with the probe loaded sends nothing (it
+  sends a `full-reload` when the probe is resolved under `src/.trivia-preview/`, checked by hand).
+- ⚑ (decided 2026-11-27) `e2e/canvas.spec.ts` (playground) has three deterministic tests. A,
+  the socket late: `page.routeWebSocket` holds the canvas's HMR socket (Playwright opens the
+  page's side only once the handler returns, `playwright-core` `WebSocketRouteHandler.handle`)
+  while the reloaded page runs its modules, and an insert over the API goes out (a Node HMR
+  client of the app's server hears it) to no socket of the canvas. B, a module late: `page.route`
+  holds `switch.tsx`, which `Dashboard.tsx` imports, so the reloaded page has fetched the old
+  `Dashboard.tsx` and cannot run it, and the insert's update reaches the page's socket and is
+  dropped. Released, both expect the insert with its locator, the canvas not busy, and exactly
+  one more document request. C: a load with no write meanwhile is one document request, and
+  the probe in the page has its answer. With the designer's source as it was before the catch-up
+  (the plugin's probe on the page), A and B failed every run (macOS: 10 of 10 at
+  `--repeat-each=5`), each with the insert never on the canvas; with it, A, B and C passed 30 of
+  30 each at `--repeat-each=30` (macOS), and `refine/drift.spec.ts`, unchanged, passed 10 of 10
+  at `--repeat-each=10`. Linux runs of both are still to come (the nightly).
 
 ## 8. Open points
 
@@ -358,5 +491,20 @@ The engine edits files. It does not care which kind of component a file holds. W
   canvas reload shows the change in both cases. A component under `React.memo`
   with equal props could in principle survive the router refresh; the probe's refresh rendered
   the change.
+- ⚑ (decided 2026-11-27) Residuals of the Vite catch-up. A plain file write (an IDE's) while a
+  document loads: the service never sees it, as on Next. A lazily imported module fetched before
+  a write and not yet run when its update arrives, at any time and not only at load: Vite's
+  client drops that update, and nothing reads `lastWriteAt` then. `/sync` is not in
+  `lastWriteAt` (`service.ts` `syncContract` writes through contract-sync, with no `record` and
+  no `filesWritten`); it mostly heals itself, as its changes end in a `full-reload`, which Vite
+  buffers while no client is connected, and adding it is a one-line `History` method if wanted.
+  A page without the probe can miss a write between its `load` and its socket's connection. A
+  plain browser tab outside the designer has no catch-up at all.
+- ⚑ (decided 2026-11-27) Optional hardening, for both hosts and not needed for the Vite fix:
+  take a document's start as `Date.now() - win.performance.now()` instead of
+  `performance.timeOrigin` (`frame-session.ts` `catchUpWith`). `timeOrigin` can lag the wall
+  clock after the machine sleeps (from memory of Chromium's behaviour, not verified here); a lag
+  makes every load after a write look missed, which costs two reloads each time. The unit tests'
+  fake clock gives the same value for both.
 - Whether the dev service should also host the designer's static files, so one process serves
   everything for Next.js apps. Later.
