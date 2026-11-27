@@ -59,23 +59,83 @@ release set.
 
 ## Using Trivia in your own Vite app
 
-The packages are at `0.1.0` and are consumed from this workspace today. The integration surface is one
-plugin.
+Nothing is published to npm yet. Build Trivia in its workspace, then link its packages into your app.
+`nx run tools:adopt` runs these steps on a copy of the Refine example outside the workspace, in CI on
+every pull request.
 
-```ts
-// vite.config.ts
-import astLocator from '@trivia/vite-plugin-ast-locator'
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+1. **Build Trivia.** This also builds the native engine.
 
-export default defineConfig({
-  // astLocator must come first: it has to see JSX before React's transform compiles it away.
-  plugins: [astLocator(), react()],
-})
-```
+   ```sh
+   cd /path/to/trivia
+   pnpm install
+   pnpm exec nx run-many -t build -p plugin contract-sync inferencer
+   ```
+
+2. **Link the plugin and contract-sync into your app**, as dev dependencies:
+
+   ```sh
+   cd /path/to/your-app
+   pnpm add -D link:/path/to/trivia/packages/vite-plugin-ast-locator link:/path/to/trivia/packages/contract-sync
+   ```
+
+   Pages that use the inferencer (`OpenApiShowInferencer` and its siblings) need it too:
+   `pnpm add link:/path/to/trivia/packages/trivia-inferencer`. These steps are tested with pnpm;
+   npm and yarn have their own link commands.
+
+3. **Add the plugin first** in `vite.config.ts`:
+
+   ```ts
+   // vite.config.ts
+   import astLocator from '@trivia/vite-plugin-ast-locator'
+   import react from '@vitejs/plugin-react'
+   import { defineConfig } from 'vite'
+
+   export default defineConfig({
+     // astLocator must come first: it has to see JSX before React's transform compiles it away.
+     plugins: [astLocator(), react()],
+   })
+   ```
+
+4. **Read your contract** (OpenAPI 3.x or Swagger 2, a file or a URL). This writes
+   `trivia.manifest.json`, which the Data tab and the Refine adapter read, and a typed client
+   in `src/api/generated`. A Refine app does not use that client; commit it or ignore it as you
+   like, but your `tsc` has to accept it ([`docs/data-provider.md`](data-provider.md)).
+
+   ```sh
+   pnpm exec trivia-contract-sync --input openapi/your-api.json --output src/api/generated --zod
+   ```
+
+5. **Start your app** as usual (`pnpm dev`). In dev mode the plugin stamps every JSX element and
+   serves the engine API at `/@trivia/api` and MCP at `/@trivia/mcp` on the same server.
+
+6. **Open the designer** on it, from the Trivia workspace:
+
+   ```sh
+   cd /path/to/trivia
+   TRIVIA_TARGET=http://localhost:5173 pnpm --filter @trivia/designer dev
+   # open http://localhost:4400/__trivia/
+   ```
+
+   The designer proxies everything outside `/__trivia/` to `TRIVIA_TARGET`, so the canvas is your
+   app on the designer's origin. Agents connect to your app's server (see
+   [Working with AI agents](#working-with-ai-agents-mcp)).
+
+**What Trivia expects of the app** (the limits in [`docs/product.md`](product.md), "Known limits"):
+
+- Vite 8 and React. The component palette and prop panels read your shadcn components, located
+  through `components.json`.
+- For the Refine adapter (pages, columns, fields, contract drift):
+  - a page is a file under `src/` that imports `@refinedev/react-table` or
+    `@refinedev/react-hook-form`;
+  - columns are an array literal in that file, as refine-ui's data table writes them;
+  - forms use `zodResolver(schema)` with `<FormField>` or `<Controller>`.
+
+  A page written another way is not read yet. Your real pages are what decide which shape is
+  supported next.
+- Refine 5, for the inferencer.
 
 The plugin runs in `vite serve` only (`apply: 'serve'`), skips `node_modules`, and returns a source map.
-It will not start without the native engine; `pnpm build:engine` first.
+It will not start without the native engine, which step 1 builds.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
