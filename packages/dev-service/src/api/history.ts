@@ -18,7 +18,7 @@ export class History {
   #undo: HistoryEntry[] = []
   #redo: HistoryEntry[] = []
   readonly #now: () => number
-  /** When the last recorded edit, undo or redo was written (`HistoryState.lastWriteAt`). */
+  /** When the service last wrote the project: an edit, undo, redo or sync (`HistoryState.lastWriteAt`). */
   #lastWriteAt: number | null = null
 
   constructor(limit = 100, now: () => number = () => Date.now()) {
@@ -56,6 +56,11 @@ export class History {
     const entry = this.#redo.pop()
     if (!entry) return
     this.#undo.push(entry)
+    this.#lastWriteAt = this.#now()
+  }
+
+  /** Files were written outside the undo history (a contract sync): only `lastWriteAt` moves. */
+  wrote(): void {
     this.#lastWriteAt = this.#now()
   }
 

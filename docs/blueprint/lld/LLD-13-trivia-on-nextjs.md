@@ -494,12 +494,11 @@ The engine edits files. It does not care which kind of component a file holds. W
 - ⚑ (decided 2026-11-27) Residuals of the Vite catch-up. A plain file write (an IDE's) while a
   document loads: the service never sees it, as on Next. A lazily imported module fetched before
   a write and not yet run when its update arrives, at any time and not only at load: Vite's
-  client drops that update, and nothing reads `lastWriteAt` then. `/sync` is not in
-  `lastWriteAt` (`service.ts` `syncContract` writes through contract-sync, with no `record` and
-  no `filesWritten`); it mostly heals itself, as its changes end in a `full-reload`, which Vite
-  buffers while no client is connected, and adding it is a one-line `History` method if wanted.
-  A page without the probe can miss a write between its `load` and its socket's connection. A
-  plain browser tab outside the designer has no catch-up at all.
+  client drops that update, and nothing reads `lastWriteAt` then. (`/sync` was a third until
+  2026-11-27: it now moves `lastWriteAt` through `History.wrote()` and reports its files to
+  `filesWritten`, without an undo entry.) A page without the probe can miss a write between
+  its `load` and its socket's connection. A plain browser tab outside the designer has no
+  catch-up at all.
 - ⚑ (decided 2026-11-27) Optional hardening, for both hosts and not needed for the Vite fix:
   take a document's start as `Date.now() - win.performance.now()` instead of
   `performance.timeOrigin` (`frame-session.ts` `catchUpWith`). `timeOrigin` can lag the wall

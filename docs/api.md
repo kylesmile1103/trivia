@@ -81,7 +81,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   guard. Source restores go through the engine's atomic, parse-validated write. Blueprint
   restores use guarded JSON snapshots in the same history. History lives in the dev-service
   process (lost on restart) and is capped at 100 entries.
-- Read-after-write, on Vite: once `apply`, `batch`, `undo` or `redo` has answered, every new
+- Read-after-write, on Vite: once `apply`, `batch`, `undo`, `redo` or `sync` has answered, every new
   request to the dev server gets the files as written (the plugin drops their transformed modules
   before answering). Pages already open get the change as one hot update from Vite's watcher. A
   page still loading can miss that update: Vite sends it only to the HMR sockets open at that
@@ -93,11 +93,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null,
   lastWriteAt: number | null }`. `lastWriteAt` is when the service last wrote the project (a
-  recorded edit, an undo or a redo), in ms since the epoch by the service's clock, and null before
-  its first write. An op that changes nothing, a refused one and an undo or redo with nothing to
-  do leave it as it was. The designer compares it with a canvas document's load, on Next.js and
-  on Vite, to tell whether the document can have missed an edit (LLD-13 §6); the service and the
-  browser share a host. Contract-sync's `/sync` writes are not in it.
+  recorded edit, an undo, a redo or a `/sync`, which is not an undo entry), in ms since the epoch
+  by the service's clock, and null before its first write. An op that changes nothing, a refused
+  one, a failed sync and an undo or redo with nothing to do leave it as it was. The designer
+  compares it with a canvas document's load, on Next.js and on Vite, to tell whether the
+  document can have missed an edit (LLD-13 §6); the service and the browser share a host.
 - `manifest` is the project's `trivia.manifest.json` (`docs/data-provider.md`), null when it has
   none. `Drift = { status: "current" | "changed" | "unknown", source, manifestHash, specHash }`
   compares the manifest's `schemaHash` with contract-sync's canonical hash of the spec at

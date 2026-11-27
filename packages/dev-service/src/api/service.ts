@@ -216,7 +216,8 @@ export class EngineService {
   /**
    * Re-run contract-sync (`docs/data-provider.md`) with the manifest's own source, output and
    * zod setting, in the edit queue. Refused (`conflict`) when the generated code or the manifest
-   * has uncommitted changes it would replace, unless `force`. Not in Trivia's undo history.
+   * has uncommitted changes it would replace, unless `force`. Not in Trivia's undo history, but
+   * it moves `lastWriteAt` and reports its files to `DevHost.filesWritten` like an edit.
    */
   async syncContract(options: SyncOptions = {}): Promise<SyncResult> {
     return this.#queue.run(async () => {
@@ -256,6 +257,12 @@ export class EngineService {
         }
         throw error
       }
+      // Not an undo entry, but still a write: a request right after the answer must get the new
+      // code (DevHost.filesWritten), and a canvas document loading now may have missed it, so
+      // it moves lastWriteAt (LLD-13 §6).
+      const relative = (file: string) => path.relative(root, path.resolve(root, file)).split(path.sep).join('/')
+      this.#options.host.filesWritten?.([...result.files.map((file) => relative(path.join(outputDir, file))), relative(manifestPath)])
+      this.#history.wrote()
       return {
         source: input,
         outputDir,
