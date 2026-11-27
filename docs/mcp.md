@@ -46,7 +46,7 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 | `trivia_outline` (read-only) | `{ file }` | `{ trees: OutlineNode[] }` (and an indented text tree) |
 | `trivia_list_components` (read-only) | — | `{ components: [{ name, importSource, acceptsChildren, props }] }` |
 | `trivia_list_routes` (read-only) | — | `{ routes: AppRoute[] }` (and a line per route: URL, page component, file) |
-| `trivia_get_page` (read-only) | `{ file? }` | `{ file, pages: ListPage[], hint? }` |
+| `trivia_get_page` (read-only) | `{ file? }` | `{ file, pages: (ListPage \| FormPage)[], unread: UnreadPage[], resources?, hint? }` |
 | `trivia_edit_columns` | `{ file, component?, changes: ColumnChange[] (1+), label }` | `ApplyResult & { page: ListPage, selection }` |
 | `trivia_edit_fields` | `{ file, component?, changes: FieldChange[] (1+), label }` | `ApplyResult & { page: FormPage, selection }` |
 | `trivia_contract_drift` (read-only) | — | `{ spec, pages: PageDrift[], note? }` |
@@ -80,6 +80,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   `docs/api.md` `refine/*`). `trivia_get_page` reads a file's list and form pages: the selected
   element's file when none is given, every page under `src/` with neither. Each page has its
   columns or fields as the source has them and the contract fields it doesn't have yet.
+  `unread` lists the `useTable`/`useForm` calls it found but cannot read, each with why
+  (`refine/unread` in api.md); the agent edits those pages as plain code.
   `trivia_edit_columns` adds contract fields as typed columns, removes or reorders columns by
   key, and aligns an enum column's filter options with the contract in place, in order, as one
   `Agent: …` undo entry, and returns the page as it now reads (with the plan's `warnings`).
