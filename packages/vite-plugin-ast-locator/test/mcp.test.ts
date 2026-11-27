@@ -203,6 +203,24 @@ describe('trivia_apply', () => {
     expect(read()).toBe(original)
   })
 
+  it('follows the selection through a batch, never onto the same-tag neighbour now at its old locator', async () => {
+    await select(SAVE)
+    const r = await call('trivia_apply', {
+      label: 'A new first button',
+      ops: [
+        { op: 'insert', target: CANCEL, expectedName: 'Button', placement: 'before', snippet: '<Button>New</Button>' },
+        { op: 'updateProp', target: CANCEL, expectedName: 'Button', prop: 'variant', value: 'outline' },
+      ],
+    })
+    expect(r.isError).toBeFalsy()
+    expect(read()).toContain('<Button variant="outline">New</Button>\n          <Button variant="ghost">Cancel</Button>\n          <Button>Save changes</Button>')
+    // SAVE's old locator now holds Cancel, a Button too: the selection is on Save, one further on.
+    const moved = `${DASHBOARD}#Dashboard#0.0.2.2`
+    expect(r.structuredContent.selection.selection).toEqual({ locator: moved, name: 'Button' })
+    const [root] = (await call('trivia_outline', { file: DASHBOARD })).structuredContent.trees
+    expect(root.children[0].children[2].children.map((c: any) => [c.locator, c.text])).toContainEqual([moved, 'Save changes'])
+  })
+
   it('clears the selection when it removes the selected element', async () => {
     await select(SAVE)
     await call('trivia_apply', { label: 'Drop save', ops: [{ op: 'remove', target: SAVE, expectedName: 'Button' }] })
