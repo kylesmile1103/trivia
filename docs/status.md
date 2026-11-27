@@ -11,8 +11,9 @@ Stated plainly so you can judge fit before investing time.
 - **No type checker.** OXC has none, so prop schemas come from syntactic analysis of your
   `src/components/ui` (variants from `cva(...)`, curated props for intrinsic tags). Unusual component
   patterns may yield partial schemas.
-- **Structural and value edits renumber locators.** The designer and agents drop a selection that a
-  renumbering invalidates rather than guess a new target.
+- **Structural and value edits renumber locators.** The engine follows the selected element through
+  an edit, by the byte ranges it changed, and drops the selection when the element is gone. Undo and
+  redo are not followed: a selection is kept only while the tag at its old locator still matches.
 - **Refine adapter scope.** Pages are found in `src/` files importing `@refinedev/react-table` or
   `@refinedev/react-hook-form`. Forms built with `register()` or another resolver are not read.
   A changed enum is fixed in place, but enum options written as a shared constant or a `.map` get no
@@ -28,7 +29,7 @@ Stated plainly so you can judge fit before investing time.
 In priority order (see [`docs/HANDOFF.md`](HANDOFF.md) section 7 for the live list):
 
 1. Use Trivia on a real internal tool and fix what breaks: pages whose shape the adapter does not read,
-   other UI kits, selection that follows JSX renumbered by a value op.
+   other UI kits.
 2. Edit forms and nested-object fields in generated forms.
 
 General editor features (canvas, inspector, style controls) are frozen to fixes until the jobs above

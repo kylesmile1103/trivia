@@ -345,7 +345,7 @@ The order is the product's (`docs/product.md`, Slices):
    - pages whose shape the adapter doesn't read (`register()` forms, columns from a helper);
    - other UI kits (an Ant Design or MUI adapter beside `src/refine/`);
    - Next.js;
-   - selection that follows JSX renumbered by a value op.
+   - selection that follows an undo or redo (an edit's is followed since 2026-11-27).
 2. Review the ⚑ decisions in `docs/product.md`.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build

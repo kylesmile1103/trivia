@@ -135,7 +135,8 @@ component palette and prop schemas come from the **user's** `src/components/ui/`
 4. **Locators are positions, not identities.** Any structural edit shifts later siblings, and so does a
    hand edit in the user's IDE. Every op carries the expected element name (e.g. `Button`), and the
    engine fails loudly if the locator now resolves to something else. After HMR the designer re-reads
-   locators from the DOM; it doesn't patch them.
+   locators from the DOM; it doesn't patch them. Where a selected node went is the engine's answer
+   (`follow`, `src/follow.rs`: its span through the bytes the op spliced), never index arithmetic.
 5. **Inject `data-ast-node` as the *first* attribute.** In JSX, later attributes and spreads win. The
    plugin also annotates `src/components/ui/button.tsx` itself, but there `<Comp … {...props}/>`
    receives the usage-site `data-ast-node` through `props`, which overrides the definition-site one.

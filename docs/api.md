@@ -54,8 +54,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | GET | `/@trivia/api/inspect` | `?locator=` | `NodeDetails` |
 | GET | `/@trivia/api/outline` | `?file=` (project-relative) | `OutlineNode[]` |
 | GET | `/@trivia/api/routes` | — | `AppRoute[]` (the app's pages, from the source) |
-| POST | `/@trivia/api/apply` | `{ op: Op, label?: string }` | `ApplyResult` |
-| POST | `/@trivia/api/batch` | `{ ops: Op[], label?: string }` | `ApplyResult` (last op's locator) |
+| POST | `/@trivia/api/apply` | `{ op: Op, label?: string, follow?: string[] }` | `ApplyResult` |
+| POST | `/@trivia/api/batch` | `{ ops: Op[], label?: string, follow?: string[] }` | `ApplyResult` (last op's locator) |
 | POST | `/@trivia/api/undo` | `{}` | `HistoryResult` |
 | POST | `/@trivia/api/redo` | `{}` | `HistoryResult` |
 | GET | `/@trivia/api/history` | — | `HistoryState` |
@@ -89,7 +89,27 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   up: once it has loaded and its socket has answered the plugin's `trivia:hmr-ready` probe, it
   reloads if `lastWriteAt` is at or after its start (LLD-13 §6). A plain browser tab does not,
   and no page catches up after a hand edit. The Next.js host makes no such promise.
-- `ApplyResult = { file, changed, locator: string | null, history: HistoryState }`.
+- `ApplyResult = { file, changed, locator: string | null, history: HistoryState, followed? }`.
+- `follow` (on `apply` and `batch`): locators whose node the engine follows through the edit,
+  since an edit renumbers the locators after what it adds, drops or moves (rule 4).
+  `followed` answers in the same order, and only when `follow` was sent. Each answer is where
+  that node is now, or null when the node is gone or its place can't be known. A string that is
+  not a locator, or resolves to nothing, is null too, and never fails the edit.
+  - The engine maps the node's byte span through the ranges the ops spliced. A splice before it
+    shifts it, one after it leaves it, and one inside it (its whole span included) keeps it. A
+    splice that cuts across the node or covers more than it removes it.
+  - A JSX move takes the moved element's subtree along. `moveElement` takes the JSX inside the
+    moved array element along, in order.
+  - Every answer must be a node of the result with exactly that span, the same kind and tag,
+    and (when no splice touched it) the same bytes, so a same-tag neighbour that slid into the
+    old locator is never the answer.
+  - A locator in a file the edit didn't change comes back as given. `replaceFile` and
+    `createFile` give null for their file.
+  - Undo and redo are not followed.
+  - `follow` that is not an array of strings is `400 invalid_op`.
+  - The binding is `applyOps(root, opsJson, followJson?)`, answering with `data.followed`. A
+    native build from before it ignores `followJson`: the service then follows nothing and
+    warns once to run `pnpm build:engine`.
 - `HistoryResult = { files: string[], history: HistoryState }`.
 - `HistoryState = { canUndo, canRedo, undoLabel: string | null, redoLabel: string | null,
   lastWriteAt: number | null }`. `lastWriteAt` is when the service last wrote the project (a
