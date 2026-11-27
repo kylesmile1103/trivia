@@ -70,7 +70,8 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
   the ops before it.
 - Once `trivia_apply` or `trivia_undo` has answered, a page the dev server serves from then on
   shows the files as written (on Vite, `docs/api.md`, read-after-write): a route opened in the
-  canvas right after it shows the edit. The open canvas re-renders on the hot update that follows.
+  canvas right after it shows the edit. The open canvas re-renders on the hot update that follows,
+  and a canvas page that was still loading reloads once it has loaded (LLD-13 §6).
 - `trivia_undo` undoes the newest entry of the shared history only if its label is the one
   given (the agent passes `history.undoLabel` from its last result or from
   `trivia_get_selection`). The user's own edits are never undone by mistake.
