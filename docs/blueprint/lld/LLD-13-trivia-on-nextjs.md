@@ -500,11 +500,15 @@ The engine edits files. It does not care which kind of component a file holds. W
   buffers while no client is connected, and adding it is a one-line `History` method if wanted.
   A page without the probe can miss a write between its `load` and its socket's connection. A
   plain browser tab outside the designer has no catch-up at all.
-- ⚑ (decided 2026-11-27) Optional hardening, for both hosts and not needed for the Vite fix:
-  take a document's start as `Date.now() - win.performance.now()` instead of
-  `performance.timeOrigin` (`frame-session.ts` `catchUpWith`). `timeOrigin` can lag the wall
-  clock after the machine sleeps (from memory of Chromium's behaviour, not verified here); a lag
-  makes every load after a write look missed, which costs two reloads each time. The unit tests'
-  fake clock gives the same value for both.
+- ⚑ (decided 2026-11-27, done the same day) A document's start, for both hosts, is
+  `Date.now() - win.performance.now()` when `catchUpWith` reads it, not
+  `performance.timeOrigin`. `timeOrigin` can lag the wall clock after the machine sleeps (from
+  memory of Chromium's behaviour, not reproduced here), and a lag made every load after a write
+  look missed, at two reloads each. No sleep fits inside a load still in progress, so the
+  document's own `now()` is its true age. Resource timing is placed in the designer's clock the
+  same way (`performance.now() - win.performance.now()` at attach) rather than by the two
+  `timeOrigin`s, so a lag can't hide the router refresh's answer either. The unit tests give
+  documents a `timeOrigin` an hour behind (`frame-session.test.ts`, "a document whose
+  timeOrigin lags the wall clock").
 - Whether the dev service should also host the designer's static files, so one process serves
   everything for Next.js apps. Later.
