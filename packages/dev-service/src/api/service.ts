@@ -28,7 +28,7 @@ import { uncommitted } from './git.js'
 import { History } from './history.js'
 import { SerialQueue } from './queue.js'
 import { type Screenshot, ScreenshotRelay } from './screenshots.js'
-import { type Selected, type SelectionState, SelectionStore, rebase } from './selection.js'
+import { type Selected, type SelectionState, SelectionStore } from './selection.js'
 
 export type Json = Record<string, unknown>
 
@@ -76,6 +76,8 @@ export interface SyncResult {
 export interface EditSource {
   /** An agent's edit moves the published selection along with the node it was on. */
   by?: 'designer' | 'agent'
+  /** Locators to follow through the edit: the answer's `followed` says where each one went. */
+  follow?: readonly string[]
 }
 
 export class EngineService {
@@ -515,7 +517,11 @@ export class EngineService {
     validateEjectLock(this.blueprint, ops)
     const { engine, host } = this.#options
     const finish = host.trackFileWrites?.(ops.flatMap((op) => op.op === 'createFile' && typeof op.file === 'string' ? [op.file] : []), [])
-    const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops)))
+    // The caller's locators, then (for an agent's edit) the published selection's.
+    const selected = source.by === 'agent' ? this.#selection.get().selection : null
+    const follow = [...(source.follow ?? []), ...(selected ? [selected.locator] : [])]
+    const result = unwrap<OpsResult>(engine.applyOps(host.root, JSON.stringify(ops), follow.length > 0 ? JSON.stringify(follow) : undefined))
+    const followed = follow.length === 0 ? [] : (result.followed ?? staleFollow(follow))
     if (result.changed) {
       finish?.()
       // Before the answer: a request right after it must get the new source (DevHost.filesWritten).
@@ -530,20 +536,20 @@ export class EngineService {
       this.#dropEjectedPreviews(ejectLock, new Set(ops.flatMap((op) =>
         typeof op.file === 'string' && (op.op === 'createFile' || op.op === 'replaceFile') ? [op.file] : [])))
     }
-    if (source.by === 'agent' && result.changed) this.#follow(ops, result.locator)
-    return { file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state() }
+    if (selected !== null && result.changed) this.#follow(selected, followed.at(-1) ?? null)
+    return {
+      file: result.file, changed: result.changed, locator: result.locator, history: this.#history.state(),
+      ...(source.follow && { followed: followed.slice(0, source.follow.length) }),
+    }
   }
 
   /**
-   * Move the published selection with an agent's edit: to where its node now is, checked by
-   * tag name, or to nothing when that can't be known (the node was removed, the tag there is
-   * another one, several ops ran). Never to whatever slid into its old position.
+   * Move the published selection with an agent's edit to where the engine followed its node
+   * (`applyOps`' follow), checked by tag name, or to nothing when it is gone or its place can't
+   * be known. Never to whatever slid into its old position.
    */
-  #follow(ops: Json[], resultLocator: string | null): void {
-    const current = this.#selection.get().selection
-    if (current === null) return
-    const [only] = ops
-    let next = ops.length === 1 && only ? rebase(current.locator, only, resultLocator) : current.locator
+  #follow(current: Selected, followed: string | null): void {
+    let next = followed
     if (next !== null) {
       try {
         const details = unwrap<{ name: string }>(this.#options.engine.inspect(this.#options.host.root, next))
@@ -595,6 +601,21 @@ export class EngineService {
     else history.redone()
     return { files: entry.changes.map((c) => c.file), history: history.state() }
   }
+}
+
+let warnedStaleFollow = false
+
+/**
+ * An engine built before `applyOps` took `followJson` ignores it. The edit is already written by
+ * then, so it is not refused: nothing is followed (the selection is let go), and it says once
+ * how to fix it.
+ */
+function staleFollow(follow: readonly string[]): null[] {
+  if (!warnedStaleFollow) {
+    warnedStaleFollow = true
+    console.warn('[trivia] the native engine does not follow locators (applyOps answered without `followed`): it is stale, rebuild it with `pnpm build:engine`')
+  }
+  return follow.map(() => null)
 }
 
 /** A default history label when the caller sends none. */

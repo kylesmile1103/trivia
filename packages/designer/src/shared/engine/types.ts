@@ -85,6 +85,8 @@ export interface ApplyResult {
   /** Locator of the inserted/moved/updated node after the edit; null after a removal. */
   locator: string | null
   history: HistoryState
+  /** Only when the edit was sent with `follow`: where each of those locators is now (null: gone or unknown). */
+  followed?: Array<string | null>
 }
 
 export interface HistoryResult {

@@ -133,11 +133,12 @@ Turn it off with `astLocator({ mcp: false })`; `api: false` turns off both.
 
 - The designer posts its selection (`POST /@trivia/api/selection`) whenever the user selects
   something, once the inspector has named it. The plugin keeps the latest, in memory.
-- An agent's edit moves the selection along with its element. Locators are positions, and
-  each op adds, removes or moves exactly one element, so the new locator is index arithmetic
-  (`packages/vite-plugin-ast-locator/src/api/selection.ts`, `rebase`). It is kept only if the
-  tag there is still the selected one; otherwise the selection is dropped, never retargeted.
-  After a batch of several ops the locator is only re-checked, not moved.
+- An agent's edit moves the selection along with its element, through every op of a batch.
+  The engine follows the selected node through the byte ranges the ops spliced (`follow` in
+  [api.md](api.md); `packages/dev-service/src/api/service.ts`, `#follow`). The new locator is
+  kept only if the tag there is still the selected one. Otherwise the selection is dropped
+  (the node was removed, replaced by another tag, or its place can't be known), never moved
+  onto a neighbour that slid into its old locator.
 - The designer adopts an agent's change on its next history sync (every 2 s, and after every
   re-render).
 - After every re-render the designer also re-checks the selected element's tag, so an edit

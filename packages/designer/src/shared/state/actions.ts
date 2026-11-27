@@ -53,21 +53,25 @@ export interface DispatchOptions {
 
 /** Apply one op (one undo entry). Selects the affected node afterwards, unless the user moved on (`followSelection`). */
 export async function dispatch(op: Op, label: string, { follow = true }: DispatchOptions = {}): Promise<ApplyResult | null> {
-  return run(() => engine.apply(op, label), [op], follow ? null : label)
+  return run((selected) => (selected ? engine.apply(op, label, selected) : engine.apply(op, label)), [op], follow ? null : label)
 }
 
 /** Apply several ops as one transaction (one undo entry), e.g. a gesture. */
 export async function dispatchBatch(ops: Op[], label: string): Promise<ApplyResult | null> {
-  return run(() => engine.batch(ops, label), ops, null)
+  return run((selected) => (selected ? engine.batch(ops, label, selected) : engine.batch(ops, label)), ops, null)
 }
 
-/** `left`: the label of an edit the user has left behind (`follow: false`), else null. */
-async function run(call: () => Promise<ApplyResult>, ops: readonly Op[], left: string | null): Promise<ApplyResult | null> {
+/**
+ * `call` sends the edit, with the selection to follow through it when there is one (and the
+ * edit's result is wanted). `left`: the label of an edit the user has left behind
+ * (`follow: false`), else null.
+ */
+async function run(call: (follow: string[] | undefined) => Promise<ApplyResult>, ops: readonly Op[], left: string | null): Promise<ApplyResult | null> {
   const sentAt = performance.now()
   const selectedBefore = designer.getState().selected
   inFlight++
   try {
-    const result = await call()
+    const result = await call(left === null && selectedBefore !== null ? [selectedBefore] : undefined)
     // A new `history` tells the canvas an HMR is on its way; an unchanged result writes
     // nothing and adds no entry (docs/api.md), so there is nothing to wait for.
     if (result.changed) designer.getState().setHistory(result.history, { files: [...new Set([result.file, ...editedFiles(ops)])], sentAt })
@@ -92,12 +96,22 @@ function followSelection(result: ApplyResult, ops: readonly Op[], selectedBefore
   const s = designer.getState()
   const last = ops.at(-1)
   // A value op (a Refine column, say) can add, drop or reorder JSX inside the literal it edits,
-  // which renumbers the JSX locators after it in that file. Nothing says where the selected
-  // node went, and a same-tag neighbour could slide into its old locator: let it go instead.
+  // which renumbers the JSX locators after it in that file, and a same-tag neighbour could slide
+  // into the selected node's old locator. The engine followed the node through the edit
+  // (`followed`): select where it went, or let go when it is gone (or the file was replaced).
+  // A selection made while the edit was on its way was read from the old file: let it go too. A
+  // canvas press that is waiting keeps waiting: this re-addresses the node, it selects nothing new.
   const selectedFile = s.selected === null ? null : locatorFile(s.selected)
   if (result.changed && selectedFile !== null && ops.some((op) =>
     op.op === 'replaceFile' ? op.file === selectedFile : isValueOp(op) && locatorFile(op.path) === selectedFile)) {
-    s.select(null)
+    const waiting = s.pressPending
+    // The engine kept the tag of the node at the old locator; the inspector's details then check
+    // it is the one the user selected (setDetails), as after a re-render.
+    const name = s.details !== null && s.details.locator === s.selected ? s.details.name : s.expectedSelectedName
+    const next = s.selected === selectedBefore ? (result.followed?.[0] ?? null) : null
+    s.select(next)
+    if (next !== null && name !== null) s.expectSelectedName(name)
+    if (waiting) s.setPressPending(true)
     return
   }
   const subject = last ? subjectOf(last) : null

@@ -284,7 +284,14 @@ pub(super) fn move_element(src: &str, file: &str, path: &str, index: usize) -> R
     // end of another element (or the comma after the last one), outside the removed lines.
     let (insert, _) = others.insert(src, index, text);
     let (start, end) = seq.removal(src, slot.index);
-    doc.commit(&program, vec![Edit::delete(start, end), insert], None)
+    // Where the element's bytes land in the result, so the JSX inside it can be followed.
+    let at = if start < insert.start { insert.start - (end - start) } else { insert.start };
+    let landed = insert.text.find(text).map(|offset| at + offset as u32);
+    let outcome = doc.commit(&program, vec![Edit::delete(start, end), insert], None)?;
+    if let Some(landed) = landed {
+        crate::follow::moved((moved.start, moved.end), (landed, landed + text.len() as u32));
+    }
+    Ok(outcome)
 }
 
 pub(super) fn set_property(src: &str, file: &str, path: &str, prop: &str, value: &str, imports: &[ImportSpec]) -> Result<Outcome> {

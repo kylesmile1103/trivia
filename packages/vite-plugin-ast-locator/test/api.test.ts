@@ -376,6 +376,10 @@ describe('request rules', () => {
     }
     const label = await post(socket, '/apply', { op: setProp(SAVE, 'variant', 'outline'), label: 3 })
     expect([label.status, label.body.error.code]).toEqual([400, 'invalid_op'])
+    for (const follow of [SAVE, [SAVE, 3], { locator: SAVE }]) {
+      const r = await post(socket, '/batch', { ops: [setProp(SAVE, 'variant', 'outline')], follow })
+      expect([r.status, r.body.error.code], JSON.stringify(follow)).toEqual([400, 'invalid_op'])
+    }
     const unknown = await get(socket, '/nope')
     expect([unknown.status, unknown.body.error.code]).toEqual([400, 'invalid_op'])
     expect(read()).toBe(original)

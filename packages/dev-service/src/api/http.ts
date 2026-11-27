@@ -178,8 +178,8 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
       {
         POST: (_url, body) => {
           const op = body['op']
-          if (!isObject(op)) throw new ApiError('invalid_op', 'body must be { op: Op, label?: string }')
-          return service.apply(op, labelOf(body))
+          if (!isObject(op)) throw new ApiError('invalid_op', 'body must be { op: Op, label?: string, follow?: string[] }')
+          return service.apply(op, labelOf(body), followOf(body))
         },
       },
     ],
@@ -189,9 +189,9 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
         POST: (_url, body) => {
           const ops = body['ops']
           if (!Array.isArray(ops) || ops.length === 0 || !ops.every(isObject)) {
-            throw new ApiError('invalid_op', 'body must be { ops: Op[] (non-empty), label?: string }')
+            throw new ApiError('invalid_op', 'body must be { ops: Op[] (non-empty), label?: string, follow?: string[] }')
           }
-          return service.batch(ops, labelOf(body))
+          return service.batch(ops, labelOf(body), followOf(body))
         },
       },
     ],
@@ -290,6 +290,14 @@ async function readBody(req: IncomingMessage, max: number): Promise<Json> {
 }
 
 /** The body's `label`, or undefined for the service's default. */
+/** The edit's `follow`: locators whose new place the answer gives (`ApplyResult.followed`). */
+function followOf(body: Json): { follow?: string[] } {
+  const follow = body['follow']
+  if (follow === undefined || follow === null) return {}
+  if (!Array.isArray(follow) || !follow.every((l) => typeof l === 'string')) throw new ApiError('invalid_op', '`follow` must be an array of locators (strings)')
+  return { follow }
+}
+
 function labelOf(body: Json): string | undefined {
   const label = body['label']
   if (label === undefined || label === null) return undefined

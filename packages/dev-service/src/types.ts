@@ -52,6 +52,11 @@ export interface ApplyResult {
   changed: boolean
   locator: string | null
   history: HistoryState
+  /**
+   * Only when the request had `follow`: where each of its locators is after the edit, in order;
+   * null when its node is gone or its place can't be known (docs/api.md).
+   */
+  followed?: Array<string | null>
 }
 
 export interface HistoryResult {

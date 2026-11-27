@@ -396,8 +396,11 @@ Shipped in three parts, each through the full gate:
     package's own (the eject payload and the dev server's errors; the banner, drawer and eject
     flow in jsdom) and `e2e/refine/inferencer.spec.ts`.
 - Known limits of slices 1–6:
-  - A value op renumbers the JSX locators after the literal it edits (rule 4). The designer
-    drops a selection in that file rather than guess, and so does an agent's edit.
+  - A value op renumbers the JSX locators after the literal it edits (rule 4). Since
+    2026-11-27 the engine follows the selected node through the edit (`follow`, docs/api.md),
+    for the designer and an agent's edit alike. Undo and redo are not followed: the designer
+    keeps the old locator if its tag still matches, so after undoing a fix the selection can
+    be lost, or land on a same-tag neighbour, as after undoing any structural edit.
   - A header is renamed by `setProperty` or `setText`; the panel has no rename yet.
   - Pages come from `src/` files that import `@refinedev/react-table` or
     `@refinedev/react-hook-form`.

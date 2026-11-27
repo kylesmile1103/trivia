@@ -147,14 +147,29 @@ struct Change {
 /// `data` is `{ file, changed, locator, changes: [{ file, before, after }] }`: `file` and
 /// `locator` come from the last op, `changes` lists each file whose text differs from before
 /// the batch, and `changed` is true when that list is non-empty.
+///
+/// `follow_json`, when given, is a JSON array of locators (strings) to follow through the
+/// batch (`engine::follow`): `data.followed` then says where each one is after it, in the same
+/// order, or null when its node is gone or its place can't be known. A string that is not a
+/// locator is null, and so is one in a changed file that resolves to nothing; one in a file the
+/// batch left as it was comes back as given, unchecked. Following is advice, never a reason to
+/// refuse an edit.
 #[napi]
-pub fn apply_ops(root: String, ops_json: String) -> String {
+pub fn apply_ops(root: String, ops_json: String, follow_json: Option<String>) -> String {
     engine_call(move || {
         let ops: Vec<Value> = serde_json::from_str(&ops_json)
             .map_err(|e| EngineError::InvalidOp(format!("expected a JSON array of ops: {e}")))?;
         if ops.is_empty() {
             return Err(EngineError::InvalidOp("a batch needs at least one op".into()).into());
         }
+        let mut follows: Option<Vec<Option<engine::Locator>>> = match &follow_json {
+            None => None,
+            Some(json) => {
+                let given: Vec<Value> = serde_json::from_str(json)
+                    .map_err(|e| EngineError::InvalidOp(format!("follow must be a JSON array of locators: {e}")))?;
+                Some(given.iter().map(|v| v.as_str().and_then(|s| engine::Locator::parse(s).ok())).collect())
+            }
+        };
         let ws = Workspace::new(&root)?;
         let total = ops.len();
         let mut files: Vec<Working> = Vec::new();
@@ -186,6 +201,9 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                 slots.push(slot);
             }
             let text = |slot: usize| files[slot].current.clone().ok_or_else(|| step(EngineError::Internal(format!("{} is missing", files[slot].file))));
+            // This op's own before texts, for following through it.
+            let before_op: Vec<Option<String>> = slots.iter().map(|&slot| files[slot].current.clone()).collect();
+            let mut stages: Vec<engine::follow::Stage> = Vec::new();
             let outcome = match (&op, &slots[..]) {
                 (Op::CreateFile { file, content, if_missing }, [slot]) => {
                     if *if_missing && let Some(existing) = &files[*slot].current {
@@ -201,7 +219,10 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                     outcome
                 }
                 (_, [slot]) => {
-                    let mut outcome = engine::apply_op(&text(*slot)?, &files[*slot].file, &op).map_err(step)?;
+                    let source = text(*slot)?;
+                    let (applied, recorded) = engine::follow::recording(|| engine::apply_op(&source, &files[*slot].file, &op));
+                    stages = recorded;
+                    let mut outcome = applied.map_err(step)?;
                     if outcome.changed {
                         files[*slot].current = Some(std::mem::take(&mut outcome.code));
                     }
@@ -209,8 +230,12 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                 }
                 // A move to another file edits both (`apply_across`).
                 (_, [from, to]) => {
-                    let across = engine::apply_across(&text(*from)?, &files[*from].file, &text(*to)?, &files[*to].file, &op)
-                        .map_err(step)?;
+                    let (from_src, to_src) = (text(*from)?, text(*to)?);
+                    let (applied, recorded) = engine::follow::recording(|| {
+                        engine::apply_across(&from_src, &files[*from].file, &to_src, &files[*to].file, &op)
+                    });
+                    stages = recorded;
+                    let across = applied.map_err(step)?;
                     files[*from].current = Some(across.from);
                     let mut outcome = across.to;
                     files[*to].current = Some(std::mem::take(&mut outcome.code));
@@ -218,6 +243,22 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
                 }
                 _ => unreachable!("an op edits one or two files"),
             };
+            if let Some(follows) = follows.as_mut() {
+                let texts: Vec<engine::follow::FileTexts<'_>> = slots
+                    .iter()
+                    .zip(&before_op)
+                    .map(|(&slot, before)| engine::follow::FileTexts {
+                        file: &files[slot].file,
+                        before: before.as_deref(),
+                        after: files[slot].current.as_deref(),
+                    })
+                    .collect();
+                for entry in follows.iter_mut() {
+                    if let Some(loc) = entry.take() {
+                        *entry = engine::follow::through(&op, &stages, &texts, outcome.locator.as_deref(), &loc);
+                    }
+                }
+            }
             last = Some(outcome);
         }
         let last = last.expect("ops is non-empty");
@@ -231,12 +272,16 @@ pub fn apply_ops(root: String, ops_json: String) -> String {
             .map(|c| Write { file: c.file.clone(), expected: c.before.clone(), content: c.after.clone() })
             .collect();
         commit(&ws, &writes)?;
-        Ok(json!({
+        let mut data = json!({
             "file": last.file,
             "changed": !changes.is_empty(),
             "locator": last.locator,
             "changes": to_value(&changes)?,
-        }))
+        });
+        if let Some(follows) = follows {
+            data["followed"] = follows.into_iter().map(|l| l.map_or(Value::Null, |l| Value::String(l.to_string()))).collect();
+        }
+        Ok(data)
     })
 }
 
@@ -405,8 +450,50 @@ mod tests {
 
         let project = Project::new("deep", &src);
         let op = json!({ "op": "updateProp", "target": "src/App.tsx#App#0", "expectedName": "div", "prop": "id", "value": "x" });
-        assert_eq!(data(&apply_ops(project.root(), json!([op]).to_string()))["changed"], true);
+        assert_eq!(data(&apply_ops(project.root(), json!([op]).to_string(), None))["changed"], true);
         assert_eq!(data(&inspect(project.root(), "src/App.tsx#App#0".into()))["name"], "div");
+    }
+
+    const LIST: &str = "export function App() {\n  return (\n    <main>\n      <h1>Title</h1>\n      <p>One</p>\n      <p>Two</p>\n    </main>\n  )\n}\n";
+    fn at(path: &str) -> String {
+        format!("src/App.tsx#App#{path}")
+    }
+
+    #[test]
+    fn a_batch_follows_each_locator_through_every_op_and_answers_only_when_asked() {
+        let project = Project::new("follow-batch", LIST);
+        let ops = json!([
+            { "op": "insert", "target": at("0.0"), "expectedName": "h1", "placement": "before", "snippet": "<p>Lead</p>" },
+            { "op": "remove", "target": at("0.2"), "expectedName": "p" },
+            { "op": "move", "source": at("0.2"), "expectedName": "p", "target": at("0.0"), "expectedTargetName": "p", "placement": "before" },
+            { "op": "setText", "target": at("0.1"), "expectedName": "p", "text": "Lead!" },
+        ]);
+        let follow = json!([at("0.0"), at("0.1"), at("0.2"), at("9"), "nonsense", 3]).to_string();
+        let result = data(&apply_ops(project.root(), ops.to_string(), Some(follow)));
+        let after = std::fs::read_to_string(project.0.join("src/App.tsx")).unwrap();
+        assert!(after.contains("<p>Two</p>\n      <p>Lead!</p>\n      <h1>Title</h1>"), "{after}");
+        // h1: shifted by the insert, then by the move before it. <p>One</p>: removed. <p>Two</p>: moved to the front.
+        assert_eq!(result["followed"], json!([at("0.2"), null, at("0.0"), null, null, null]));
+        let plain = data(&apply_ops(project.root(), json!([{ "op": "setText", "target": at("0.2"), "expectedName": "h1", "text": "T" }]).to_string(), None));
+        assert!(plain.get("followed").is_none());
+    }
+
+    #[test]
+    fn a_move_between_files_follows_the_element_there() {
+        let project = Project::new("follow-across", LIST);
+        std::fs::write(project.0.join("src/Side.tsx"), "export function Side() {\n  return <aside />\n}\n").unwrap();
+        let ops = json!([{ "op": "moveNode", "source": at("0.1"), "expectedName": "p", "parent": "src/Side.tsx#Side#0", "expectedParentName": "aside", "index": 0 }]);
+        let result = data(&apply_ops(project.root(), ops.to_string(), Some(json!([at("0.1"), at("0.2"), at("0.0")]).to_string())));
+        assert_eq!(result["followed"], json!(["src/Side.tsx#Side#0.0", at("0.1"), at("0.0")]));
+    }
+
+    #[test]
+    fn follow_that_is_not_a_json_array_is_refused_before_anything_is_written() {
+        let project = Project::new("follow-invalid", LIST);
+        let ops = json!([{ "op": "setText", "target": at("0.0"), "expectedName": "h1", "text": "T" }]);
+        let v: Value = serde_json::from_str(&apply_ops(project.root(), ops.to_string(), Some("{".into()))).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(std::fs::read_to_string(project.0.join("src/App.tsx")).unwrap(), LIST);
     }
 
     #[test]

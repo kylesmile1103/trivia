@@ -16,6 +16,8 @@ export interface OpsResult {
   changed: boolean
   locator: string | null
   changes: FileChange[]
+  /** Where each locator passed as `followJson` is after the batch (null: gone or unknown). */
+  followed?: Array<string | null>
 }
 
 /**
@@ -35,7 +37,8 @@ export interface EngineBinding {
   emitExpressions(requestJson: string): string
   renameReferences(requestJson: string): string
   annotate(code: string, file: string): Insertion[]
-  applyOps(root: string, opsJson: string): string
+  /** `followJson`: a JSON array of locators to follow through the ops (`OpsResult.followed`). */
+  applyOps(root: string, opsJson: string, followJson?: string): string
   inspect(root: string, locator: string): string
   outline(root: string, file: string): string
   describeValues(root: string, file: string): string
