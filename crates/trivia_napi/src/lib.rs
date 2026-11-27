@@ -151,8 +151,9 @@ struct Change {
 /// `follow_json`, when given, is a JSON array of locators (strings) to follow through the
 /// batch (`engine::follow`): `data.followed` then says where each one is after it, in the same
 /// order, or null when its node is gone or its place can't be known. A string that is not a
-/// locator, or one that resolves to nothing, is null too: following is advice, never a reason
-/// to refuse an edit.
+/// locator is null, and so is one in a changed file that resolves to nothing; one in a file the
+/// batch left as it was comes back as given, unchecked. Following is advice, never a reason to
+/// refuse an edit.
 #[napi]
 pub fn apply_ops(root: String, ops_json: String, follow_json: Option<String>) -> String {
     engine_call(move || {
