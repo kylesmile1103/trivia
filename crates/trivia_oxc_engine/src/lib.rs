@@ -6,6 +6,7 @@
 //! rule 1). Every result is re-parsed before it may be written.
 
 pub mod error;
+pub mod follow;
 pub mod import_manager;
 pub mod inspect;
 pub mod locator;

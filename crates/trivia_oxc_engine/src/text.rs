@@ -58,6 +58,7 @@ pub fn apply_edits(source: &str, edits: &[Edit]) -> Result<(String, Vec<u32>), E
         cursor = end;
     }
     out.push_str(&source[cursor..]);
+    crate::follow::record(source, edits, &out);
     Ok((out, new_starts))
 }
 
