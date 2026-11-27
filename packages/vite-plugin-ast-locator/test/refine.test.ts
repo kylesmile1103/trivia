@@ -169,7 +169,8 @@ describe('MCP', () => {
     const forms = await call('trivia_get_page', { file: 'src/pages/customers/create.tsx' })
     expect(forms.structuredContent.pages[0].fields.map((f: any) => f.name)).toEqual(['fullName', 'email', 'segment'])
     const none = await call('trivia_get_page', { file: 'src/App.tsx' })
-    expect(none.structuredContent.hint).toContain('has no Refine list page')
+    expect(none.structuredContent.hint).toBe('src/App.tsx has no Refine page (a component calling useTable from @refinedev/react-table or useForm from @refinedev/react-hook-form).')
+    expect(none.structuredContent.unread).toEqual([])
     await post(server.socket, '/selection', { locator: null })
   })
 

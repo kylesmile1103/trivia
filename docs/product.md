@@ -406,6 +406,9 @@ Shipped in three parts, each through the full gate:
     `@refinedev/react-hook-form`.
   - A form's fields are found through `zodResolver(schema)` and `<Controller name>` or
     `<FormField name>`; forms built with `register()` or another resolver are not read.
+    Neither are lists whose columns are imported, built by a call, or not an array literal.
+    Since 2026-11-27 such a page says so: the Data tab's card and `trivia_get_page` give the
+    hook, the line and why (`refine/unread`), instead of showing nothing.
   - Moving a field moves its control only; the schema's and defaults' key order stay as
     written (order there doesn't show).
   - A field under a `{cond && …}` guard is read, but Trivia doesn't remove, move or rebuild

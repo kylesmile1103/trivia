@@ -130,8 +130,8 @@ every pull request.
   - columns are an array literal in that file, as refine-ui's data table writes them;
   - forms use `zodResolver(schema)` with `<FormField>` or `<Controller>`.
 
-  A page written another way is not read yet. Your real pages are what decide which shape is
-  supported next.
+  A page written another way is not read yet, and the Data tab says why (the hook, the line and
+  what it found). Your real pages are what decide which shape is supported next.
 - Refine 5, for the inferencer.
 
 The plugin runs in `vite serve` only (`apply: 'serve'`), skips `node_modules`, and returns a source map.

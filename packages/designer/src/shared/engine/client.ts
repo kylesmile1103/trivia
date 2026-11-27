@@ -28,6 +28,7 @@ import type {
   NodeDetails,
   Op,
   RefinePage,
+  UnreadPage,
   ResourcePages,
   SelectionState,
 } from './types'
@@ -107,6 +108,7 @@ export const engine = {
   select: (selection: { locator: string; name: string } | null) => post<SelectionState>('/selection', selection ?? { locator: null }),
   routes: () => request<AppRoute[]>('/routes'),
   refinePages: () => request<RefinePage[]>('/refine/pages'),
+  refineUnread: () => request<UnreadPage[]>('/refine/unread'),
   refinePage: (file: string) => request<RefinePage[]>(`/refine/page?file=${encodeURIComponent(file)}`),
   planColumns: (file: string, component: string, changes: ColumnChange[]) =>
     post<ColumnPlan>('/refine/columns/plan', { file, component, changes }),

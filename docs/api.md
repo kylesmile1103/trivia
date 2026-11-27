@@ -65,6 +65,7 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
 | GET | `/@trivia/api/refine/pages` | — | `(ListPage \| FormPage)[]` (discovered Refine pages) |
 | GET | `/@trivia/api/refine/page` | `?file=` | `(ListPage \| FormPage)[]` (that file's) |
+| GET | `/@trivia/api/refine/unread` | `?file=` (optional) | `UnreadPage[]` (Refine pages it cannot read, and why) |
 | POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label, warnings? }` |
 | POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label, warnings? }` |
 | GET | `/@trivia/api/refine/drift` | — | `{ spec: Drift \| null, pages: PageDrift[] }` |
@@ -335,6 +336,15 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   right place: a removal names its key, an added field appends, and an option is named by its
   value. A rebuild takes the generated shape (custom cells, widgets and messages in the item
   are replaced), so it is the fix only for `type_changed` and blocked option sites.
+- `refine/unread` lists the Refine hook calls the adapter finds but cannot read as pages, in
+  `file` or in every page file under `src/`: `UnreadPage = { file, component, hook: 'useTable'
+  | 'useForm', line, reason }`. `reason` is one sentence: what the call has, and what Trivia
+  reads instead. A list is unread when its `useTable` options are not an object literal in
+  the call, or its columns are imported, built by a call, or not an array literal. A form is
+  unread when it has no resolver (a `register()` form), another resolver, or a schema written
+  inside `zodResolver(…)`. Only calls of a hook the file imports from Refine count
+  (`useTable` from `@refinedev/react-table`, `useForm` from `@refinedev/react-hook-form`), so a
+  plain react-hook-form dialog is no page. Nothing is guessed: such a page is edited by hand.
 - `refine/resources` and `refine/pages/plan` add pages (`docs/product.md`, slice 4).
   `ResourcePages = { resource, name, existing, possible }` for each contract resource:
   - `name` is its Refine name (the collection path's last segment);

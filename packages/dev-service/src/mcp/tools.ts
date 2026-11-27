@@ -407,6 +407,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         '(label, widget, zod rule). Each lists the contract fields it does not have yet (available, with type and enum ' +
         'values from the OpenAPI contract). Without a file, the selected element\'s file; with neither, every page in src/ ' +
         'and each contract resource with the pages it has and could have (for trivia_add_pages). ' +
+        'unread lists the useTable/useForm calls Trivia found but cannot read as pages, each with why (columns imported or ' +
+        'built by a call, a register() form, another resolver): those pages are edited by hand. ' +
         'Use it before trivia_edit_columns, trivia_edit_fields or trivia_add_pages.',
       inputSchema: { file: z.string().min(1).optional().describe('Project-relative file, e.g. "src/pages/customers/list.tsx"') },
       annotations: reads,
@@ -416,21 +418,23 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const selected = service.selection().selection?.locator.split('#')[0]
         const target = file ?? selected
         const pages = target ? await service.refine.page(target) : await service.refine.pages()
+        const unread = await service.refine.unread(target)
         const resources = target ? undefined : await service.refine.resources()
+        const why = unread.map((u) => `${u.component} (${u.file}:${u.line}), ${u.hook} not read: ${u.reason}`)
         const hint =
-          pages.length === 0
-            ? `${target ?? 'src/'} has no Refine list page (a component calling useTable from @refinedev/react-table).`
+          pages.length === 0 && unread.length === 0
+            ? `${target ?? 'src/'} has no Refine page (a component calling useTable from @refinedev/react-table or useForm from @refinedev/react-hook-form).`
             : null
         return {
-          data: { file: target ?? null, pages, ...(resources ? { resources } : {}), ...(hint ? { hint } : {}) },
+          data: { file: target ?? null, pages, unread, ...(resources ? { resources } : {}), ...(hint ? { hint } : {}) },
           summary:
             hint ??
-            pages
+            [...pages
               .map((p) =>
                 p.kind === 'list'
                   ? `${p.component} (${p.file}), list: ${p.columns.map((c) => c.key).join(', ')}`
                   : `${p.component} (${p.file}), ${p.action ?? ''} form: ${p.fields.map((f) => f.name).join(', ')}`,
-              )
+              ), ...why]
               .join('\n'),
         }
       }),

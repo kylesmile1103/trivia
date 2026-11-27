@@ -78,6 +78,7 @@ export function createApiMiddleware(options: ApiOptions): Middleware {
     ],
     ['/routes', { GET: () => service.routes() }],
     ['/refine/pages', { GET: () => service.refine.pages() }],
+    ['/refine/unread', { GET: (url) => service.refine.unread(url.searchParams.get('file') || undefined) }],
     [
       '/refine/page',
       {
