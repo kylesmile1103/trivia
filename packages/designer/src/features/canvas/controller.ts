@@ -32,7 +32,7 @@ import {
   usageParent,
 } from './dom'
 import { type DragSubject, type DropPlan, computeDrop } from './dropzone'
-import { FrameSession, type FrameTransform } from './frame-session'
+import { FrameSession, type FrameTransform, NEXT_CATCH_UP, VITE_CATCH_UP } from './frame-session'
 import { NodeInfo } from './node-info'
 import { PREVIEW_ATTR, PREVIEW_STYLE_ID, Previews } from './previews'
 
@@ -222,7 +222,7 @@ export class CanvasController {
         return designer.getState().history.lastWriteAt ?? null
       },
       loadTimedOut: () => this.dropPress(),
-    }, () => !isNext(), isNext)
+    }, () => !isNext(), () => (isNext() ? NEXT_CATCH_UP : VITE_CATCH_UP))
     this.session.isOwnMutation = (r) => this.isOwnMutation(r)
     this.previews = new Previews(
       () => this.session.doc,
@@ -884,7 +884,7 @@ export class CanvasController {
       s.bumpRevision()
     }
     if (!doc || !t) {
-      // Busy only while a Next document is still to come (FrameSession.updating); Vite as before.
+      // Busy while a document is still to come (FrameSession.updating).
       this.publish({ ...EMPTY_VIEW, status, bounds, updating: this.session.updating })
       return
     }

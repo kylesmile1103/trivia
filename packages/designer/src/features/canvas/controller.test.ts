@@ -19,8 +19,7 @@ vi.mock('sonner', () => {
 })
 // jsdom cannot reload a document: a Next catch-up that would is noted (frame-session.test.ts covers it).
 const reloads = vi.hoisted(() => [] as Window[])
-vi.mock('./next-hydration', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./next-hydration')>()),
+vi.mock('./reload-document', () => ({
   reloadDocument: (win: Window) => {
     reloads.push(win)
   },
@@ -212,6 +211,8 @@ function appDocument(): AppDocument {
         resources.splice(resources.indexOf(this.callback) >>> 0, 1)
       }
     },
+    // The Vite plugin's HMR probe, answered: the page's socket is open (vite-hmr.ts).
+    __TRIVIA_HMR__: { ready: true },
   })
   win.Element.prototype.getBoundingClientRect = function (this: Element) {
     const [x = 0, y = 0, w = 0, h = 0] = (this.getAttribute('data-rect') ?? '').split(',').map(Number)

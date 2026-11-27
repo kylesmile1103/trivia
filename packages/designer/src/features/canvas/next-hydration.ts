@@ -70,17 +70,6 @@ export function refreshRouter(win: Window): string | null {
   }
 }
 
-/**
- * Loads the page again: the server renders the source as it is now and the browser fetches the
- * current modules. For a document that can have missed an edit: one written between its HTML and
- * its HMR subscription can never reach it (observed with 16.4.6; `server/dev/hot-reloader-turbopack.js`
- * notes its subscription baseline is not captured atomically), and a router refresh cannot help
- * then, as the document's client modules are the old ones.
- */
-export function reloadDocument(win: Window): void {
-  win.location.reload()
-}
-
 /** Whether a resource named `name` is the router's request for a server payload of the page at `location`. */
 export function isRouterRequest(name: string, location: Location): boolean {
   let url: URL
