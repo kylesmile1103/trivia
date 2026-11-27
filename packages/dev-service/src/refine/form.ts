@@ -7,7 +7,7 @@
 import type { ManifestField, ManifestResource, TriviaManifest } from '@trivia/contract-sync'
 
 import type { FormStyle } from './fields.js'
-import { type ChainCall, type FieldInfo, type ScopeValues, type ValueDesc, contractResource, fieldInfo, refineName } from './page.js'
+import { type ChainCall, type FieldInfo, type ScopeValues, type UnreadPage, type ValueDesc, contractResource, fieldInfo, excerpt, refineName } from './page.js'
 
 /** The JSX elements a field's control can be. */
 export const CONTROLS = ['Controller', 'FormField'] as const
@@ -84,18 +84,34 @@ function prop(obj: ValueDesc | undefined, key: string): ValueDesc | undefined {
   return obj?.kind === 'object' ? obj.properties.find((p) => p.key === key)?.value : undefined
 }
 
-/** Every form page in a file's values. */
-export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaManifest | null, host: FormHost): FormPage[] {
+const READS_FORMS = 'Trivia reads forms validated with zodResolver(schema), the schema a binding in this file'
+
+/** Every form page in a file's values. A call it cannot read goes to `unread`, with why. */
+export function formPages(file: string, scopes: ScopeValues[], manifest: TriviaManifest | null, host: FormHost, unread?: UnreadPage[]): FormPage[] {
   const out: FormPage[] = []
   const module = scopes.find((s) => s.scope === 'module')
   let outline: OutlineNode[] | null = null
   for (const scope of scopes) {
     const call = scope.calls.find((c) => c.callee === 'useForm')
-    const options = call?.args[0]
-    if (!call || options?.kind !== 'object') continue
+    if (!call) continue
+    const skip = (reason: string) => unread?.push({ file, component: scope.scope, hook: 'useForm', line: call.line, reason })
+    const options = call.args[0]
+    if (options?.kind !== 'object') {
+      skip(options
+        ? `useForm's options are \`${excerpt(options)}\`, not an object literal written in the call; ${READS_FORMS}`
+        : `useForm is called without options (a register() form?); ${READS_FORMS}`)
+      continue
+    }
     const resolver = prop(options, 'resolver')
     const schemaName = resolver && 'source' in resolver ? resolver.source.match(/^zodResolver\(\s*([A-Za-z_$][\w$]*)\s*\)/)?.[1] : undefined
-    if (!schemaName) continue
+    if (!schemaName) {
+      skip(!resolver
+        ? `the form has no resolver (a register() form?); ${READS_FORMS}`
+        : /^zodResolver\(/.test(excerpt(resolver))
+          ? `the schema is written inside \`${excerpt(resolver)}\`; ${READS_FORMS}`
+          : `the resolver is \`${excerpt(resolver)}\`; ${READS_FORMS}`)
+      continue
+    }
     const schema = scope.bindings.find((b) => b.name === schemaName) ?? module?.bindings.find((b) => b.name === schemaName)
     const core = prop(options, 'refineCoreProps')
     const action = prop(core, 'action')

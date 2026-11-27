@@ -94,30 +94,91 @@ export interface ListPage {
   available: FieldInfo[]
 }
 
-/** Every list page `useTable` defines in a file's values (one per component that calls it). */
-export function listPages(file: string, scopes: ScopeValues[], manifest: TriviaManifest | null): ListPage[] {
+/**
+ * A Refine hook call Trivia found but cannot read as a page, and why: the page shows on the
+ * canvas, but has no columns or fields to edit. Reported, not guessed at (docs/product.md,
+ * "Known limits"); the shapes the owner's real pages use decide which is read next.
+ */
+export interface UnreadPage {
+  file: string
+  /** The component (scope) that calls the hook. */
+  component: string
+  hook: 'useTable' | 'useForm'
+  line: number
+  /** One sentence: what the call has, and what Trivia reads instead. */
+  reason: string
+}
+
+/** A value as the source writes it, short enough for a sentence. */
+export function excerpt(value: ValueDesc): string {
+  const text = (() => {
+    switch (value.kind) {
+      case 'identifier':
+        return value.name
+      case 'call':
+      case 'function':
+      case 'jsx':
+      case 'other':
+        return value.source
+      case 'object':
+        return '{ … }'
+      case 'array':
+        return '[ … ]'
+      case 'string':
+        return JSON.stringify(value.value)
+      case 'null':
+        return 'null'
+      default:
+        return String(value.value)
+    }
+  })().replace(/\s+/g, ' ')
+  return text.length > 60 ? `${text.slice(0, 59)}…` : text
+}
+
+const READS_COLUMNS = 'Trivia reads columns written as an array literal in this file, in the call or in a binding (useMemo(() => [ … ]))'
+
+/**
+ * Every list page `useTable` defines in a file's values (one per component that calls it).
+ * A call it cannot read goes to `unread`, with why.
+ */
+export function listPages(file: string, scopes: ScopeValues[], manifest: TriviaManifest | null, unread?: UnreadPage[]): ListPage[] {
   const out: ListPage[] = []
   for (const scope of scopes) {
     const call = scope.calls.find((c) => c.callee === 'useTable')
     if (!call) continue
+    const skip = (reason: string) => unread?.push({ file, component: scope.scope, hook: 'useTable', line: call.line, reason })
     const options = call.args[0]
-    if (options?.kind !== 'object') continue
+    if (options?.kind !== 'object') {
+      skip(options
+        ? `useTable's options are \`${excerpt(options)}\`, not an object literal written in the call; Trivia reads useTable({ columns, … })`
+        : 'useTable is called without options; Trivia reads useTable({ columns, … })')
+      continue
+    }
     const columnsProp = options.properties.find((p) => p.key === 'columns')
     let columnsPath: string
     let columns: ValueDesc | undefined
     if (columnsProp?.value.kind === 'identifier') {
       const name = columnsProp.value.name
       const binding = scope.bindings.find((b) => b.name === name) ?? scopes.find((s) => s.scope === 'module')?.bindings.find((b) => b.name === name)
-      if (!binding) continue
+      if (!binding) {
+        skip(`the columns come from \`${name}\`, which is not declared in this file (imported?); ${READS_COLUMNS}`)
+        continue
+      }
       columnsPath = binding.path
       columns = binding.value
     } else if (columnsProp?.value.kind === 'array') {
       columnsPath = `${call.path}.columns`
       columns = columnsProp.value
     } else {
+      skip(columnsProp
+        ? `the columns are \`${excerpt(columnsProp.value)}\`; ${READS_COLUMNS}`
+        : `useTable has no \`columns\` option written in the call; ${READS_COLUMNS}`)
       continue
     }
-    if (columns?.kind !== 'array') continue
+    if (columns?.kind !== 'array') {
+      skip(`the columns, \`${columnsPath.split('#').at(-1)}\`, are ${columns ? `\`${excerpt(columns)}\`` : 'not a value Trivia can read'}; ${READS_COLUMNS}`)
+      continue
+    }
 
     const rowType = call.typeArgs[0] ?? columnsRowType(scope, columnsPath)
     const resource = resourceOf(options, rowType, manifest, file)

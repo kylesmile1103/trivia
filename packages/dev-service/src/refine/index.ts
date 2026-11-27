@@ -39,12 +39,12 @@ import {
 } from './options.js'
 import { alignOps, hasDiff, ruleDiff } from './rules.js'
 import { PAGE_KINDS, type PageKind, type ScaffoldContext, generateRefinePage, supportedKinds } from './scaffold.js'
-import { type ColumnInfo, type ListPage, type Mention, type ScopeValues, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
+import { type ColumnInfo, type ListPage, type Mention, type ScopeValues, type UnreadPage, type ValueDesc, contractResource, fieldInfo, listPages, refineName } from './page.js'
 
 export type { DriftCode, DriftFix, DriftIssue, PageDrift } from './drift.js'
 export type { FormFieldInfo, FormPage } from './form.js'
 export type { PageKind } from './scaffold.js'
-export type { ChainCall, ColumnInfo, FieldInfo, ListPage, Mention } from './page.js'
+export type { ChainCall, ColumnInfo, FieldInfo, ListPage, Mention, UnreadPage } from './page.js'
 
 /** A Refine page Trivia can edit: a list (columns) or a form (fields). */
 export type Page = ListPage | FormPage
@@ -331,6 +331,29 @@ export class RefineAdapter {
       }
     }
     return out
+  }
+
+  /**
+   * The Refine hook calls Trivia finds but cannot read as pages, with why: in `file`, or in every
+   * page file under src/. Only calls of hooks the file imports from Refine count (a plain
+   * react-hook-form dialog is no Refine page).
+   */
+  async unread(file?: string): Promise<UnreadPage[]> {
+    const manifest = await this.#manifest()
+    const out: UnreadPage[] = []
+    for (const rel of file ? [file] : await this.#scan()) {
+      const text = await fsp.readFile(path.join(this.#host.root, rel), 'utf8').catch(() => '')
+      const refine = refineHooks(text)
+      if (refine.size === 0) continue
+      const found: UnreadPage[] = []
+      try {
+        this.#pagesOf(rel, manifest, found)
+      } catch {
+        continue // a file that doesn't parse right now (mid-edit) says nothing
+      }
+      out.push(...found.filter((u) => refine.has(u.hook)))
+    }
+    return out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
   }
 
   /** Every contract resource with the Refine pages it has and could have (docs/product.md, slice 4). */
@@ -622,13 +645,13 @@ export class RefineAdapter {
     return { spec: state.drift ?? null, pages: out }
   }
 
-  #pagesOf(file: string, manifest: TriviaManifest | null): Page[] {
+  #pagesOf(file: string, manifest: TriviaManifest | null, unread?: UnreadPage[]): Page[] {
     const scopes = this.#host.describeValues(file) as ScopeValues[]
     const forms = formPages(file, scopes, manifest, {
       outline: (f) => this.#host.outline(f) as OutlineNode[],
       attributes: (locator) => ((this.#host.inspect(locator) as { attributes?: unknown[] }).attributes ?? []) as Array<{ name: string; source: string; value: unknown }>,
-    })
-    return [...listPages(file, scopes, manifest), ...forms].sort((a, b) => a.line - b.line)
+    }, unread)
+    return [...listPages(file, scopes, manifest, unread), ...forms].sort((a, b) => a.line - b.line)
   }
 
   /** The ops for changes to the fields of the form page in `file`. */
@@ -1418,4 +1441,15 @@ function relativeImport(locator: string, file: string): string {
   const source = locator.slice(0, locator.lastIndexOf('#', locator.lastIndexOf('#') - 1))
   const relative = path.posix.relative(path.posix.dirname(source), file.replace(/\.tsx$/, ''))
   return relative.startsWith('.') ? relative : `./${relative}`
+}
+
+/** The page hooks `text` imports from Refine: `useTable` from react-table, `useForm` from react-hook-form. */
+function refineHooks(text: string): Set<UnreadPage['hook']> {
+  const hooks = new Set<UnreadPage['hook']>()
+  for (const [, names, from] of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']@refinedev\/react-(table|hook-form)["']/g)) {
+    const imported = names!.split(',').map((n) => n.trim().split(/\s+as\s+/)[0])
+    if (from === 'table' && imported.includes('useTable')) hooks.add('useTable')
+    if (from === 'hook-form' && imported.includes('useForm')) hooks.add('useForm')
+  }
+  return hooks
 }
