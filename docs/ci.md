@@ -84,7 +84,8 @@ passed. It runs only when the nightly is dispatched with `windows: true` (it che
 
 1. `engine:build`: `napi build` (@napi-rs/cli 3.10.8 and 3.10.12) times out after 120 s on its
    own "filesystem reconciliation lock", repeating `…candidate.<uuid>.swp changed before
-   retirement`. Every other project depends on this build.
+   retirement`. Every other project depends on this build. Report for napi-rs, not filed yet:
+   [upstream/napi-rs-windows-lock.md](upstream/napi-rs-windows-lock.md).
 2. `designer:test`, `codegen.node.test.ts`: `node <tmp>\node_modules\typescript\bin\tsc` is not
    found through the junction from the temp directory on `C:` to the checkout on `D:`.
 
