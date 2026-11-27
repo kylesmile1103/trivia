@@ -845,6 +845,21 @@ describe('a full reload while an edit renders (finding 16)', () => {
   })
 })
 
+describe('between two documents (LLD-13 §6)', () => {
+  it('shows the canvas busy from an unload until the next document has attached and caught up', async () => {
+    const c = await open(['h2', 'button', 'p'])
+    expect(c.view().updating).toBe(false)
+    c.doc().defaultView!.dispatchEvent(new Event('pagehide')) // a reload or a navigation began
+    await idle()
+    expect(c.view().updating).toBe(true) // its modules may take a while: the overlay says so meanwhile
+    c.reload()
+    await quiet()
+    expect(c.view().updating).toBe(false)
+    await c.click(pointOf(1))
+    expect(designer.getState().selected).toBe(at('0.1'))
+  })
+})
+
 describe('a Next document catches up once it has hydrated (LLD-13 §6)', () => {
   // An HMR update that reaches a Next document before its React root first commits is lost
   // (React Refresh re-renders only mounted roots). So, once per document, after hydration, the

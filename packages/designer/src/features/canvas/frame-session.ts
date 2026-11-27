@@ -535,6 +535,10 @@ export class FrameSession {
       this.listener.loadTimedOut?.()
       this.scheduleLayout()
     }, CATCH_UP_TIMEOUT_MS)
+    // The canvas shows it now: after an unload nothing else would until the next attach (the
+    // old document's observers are gone), and a page whose modules take a while left the
+    // overlay looking ready meanwhile.
+    this.scheduleLayout()
   }
 
   private stopAwaitingDocument(): void {
