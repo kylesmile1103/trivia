@@ -22,6 +22,12 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
+/**
+ * Each test loads the template's config with Vite, and the first one in the file loads Vite itself:
+ * 2.8 to 3.4 s on a CI runner, which once ran past Vitest's 5 s default (PR #27's gate).
+ */
+const LOAD_MS = 30_000
+
 async function serverOptions() {
   const resolved = createRequire(path.join(example, 'package.json')).resolve('vite')
   const { loadConfigFromFile } = await import(pathToFileURL(resolved).href)
@@ -40,7 +46,7 @@ it('FR-AS-07 prefers the discovered HTTPS endpoint and binds the port assigned b
   expect(config).toMatchObject({ port: 5435, strictPort: true })
   expect(proxy).toMatchObject({ target: 'https://api.test:7001', changeOrigin: true })
   expect(proxy.rewrite).toBeUndefined()
-})
+}, LOAD_MS)
 
 it('tries the discovered HTTP endpoint, then API_URL', async () => {
   vi.stubEnv('services__api__http__0', 'http://api.test:7000')
@@ -48,7 +54,7 @@ it('tries the discovered HTTP endpoint, then API_URL', async () => {
   expect(Object.values((await serverOptions()).proxy)).toEqual([{ target: 'http://api.test:7000', changeOrigin: true }])
   vi.stubEnv('services__api__http__0', undefined)
   expect(Object.values((await serverOptions()).proxy)).toEqual([{ target: 'http://fallback.test:7002', changeOrigin: true }])
-})
+}, LOAD_MS)
 
 it('answers the first API request with configuration help when no endpoint is set', async () => {
   const config = await serverOptions()
@@ -64,4 +70,4 @@ it('answers the first API request with configuration help when no endpoint is se
   expect(config.proxy[route].bypass(request, { writeHead })).toBe(request.url)
   expect(writeHead).toHaveBeenCalledWith(503, { 'content-type': 'application/problem+json' })
   expect(JSON.parse(String(end.mock.calls[0]?.[0])).detail).toContain('API_URL')
-})
+}, LOAD_MS)
