@@ -27,7 +27,7 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
 | --- | --- |
 | `uiDir` | `components.json` `aliases.ui` mapped through `resolve.alias` (`@/components/ui` → `src/components/ui`); without a matching alias, `@/x` → `src/x`; else `src/components/ui` |
 | `importBase` | `components.json` `aliases.ui`, else `@/components/ui` |
-| `api` | `true`; `false` serves no API and no MCP endpoint (locators only) |
+| `api` | `true`; `false` serves no API and no MCP endpoint, and adds no HMR probe to the page (locators only) |
 | `mcp` | `true`: the MCP endpoint at `/@trivia/mcp` (with `api`); `false` turns it off |
 | `screenshotTimeoutMs` | `15000`: how long `trivia_screenshot` waits for an open designer to capture the canvas |
 | `allowRemote` | `false`: the API answers loopback clients only. **`true` is dangerous**: with `vite --host` or Docker, anyone who can reach the dev server can rewrite your source files |
@@ -49,6 +49,13 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
   replayed. Before an edit, undo or redo is answered, the plugin drops the written files' modules
   from Vite's cache (`moduleGraph.onFileChange`), so a request made right after the answer gets
   the new source though the watcher has not reported the write yet.
+- With the API on, the app's HTML gets one more script in `<head>`: a dev-only probe
+  (`src/hmr-probe.ts`, the virtual module `/@id/__x00__trivia:hmr-ready`). It sends
+  `trivia:hmr-ready` over `import.meta.hot` once the page's HMR socket is open, and the server
+  answers that socket alone; the probe then sets `window.__TRIVIA_HMR__.ready` and dispatches
+  `trivia:hmr-ready` on the window. The designer's canvas waits for it before it checks whether
+  the dev service wrote while the page loaded (LLD-13 §6): Vite sends an update only to the sockets
+  open at that moment, and its client drops one for a module that has not run yet.
 - Mutating requests run one at a time. Undo/redo restore byte-exact snapshots and answer
   `409 conflict` without writing anything when a file changed outside the designer. With nothing to
   undo or redo they answer `{ files: [] }`.

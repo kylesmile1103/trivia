@@ -13,6 +13,7 @@ import {
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
 import { BLUEPRINT_ENTRY, BLUEPRINT_ROUTE, blueprintEntry } from './blueprint-entry.js'
+import { HMR_PROBE_ID, HMR_PROBE_URL, HMR_READY, hmrProbe } from './hmr-probe.js'
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
 import { JSX_ID, NODE_MODULES, VIRTUAL_ID, moduleFile, relativeToRoots } from './transform.js'
@@ -63,6 +64,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
   /** The same directory as a URL from the root (`/src/.trivia-preview/`): how Vite writes imports between previews. */
   let previewUrl = ''
   const isPreview = (id: string) => previewDir !== '' && id.split('?', 1)[0]!.startsWith(previewDir)
+  let base = '/'
 
   return {
     name: 'trivia:ast-locator',
@@ -78,10 +80,12 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
       for (const warning of paths.warnings) config.logger.warn(`[trivia] ${warning}`)
       previewDir = path.join(config.root, 'src', '.trivia-preview') + path.sep
       previewUrl = '/src/.trivia-preview/'
+      base = config.base
     },
 
     async resolveId(id, importer) {
       if (service === undefined) return null
+      if (id === HMR_PROBE_ID) return id
       if (id.startsWith(PREVIEW_PREFIX)) return path.join(previewDir, id.slice(PREVIEW_PREFIX.length).split('?', 1)[0]!)
       if (id.startsWith(previewUrl)) return path.join(previewDir, id.slice(previewUrl.length).split('?', 1)[0]!)
       if (importer && isPreview(importer) && id.startsWith('.')) {
@@ -102,7 +106,9 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
     },
 
     async load(id) {
-      if (service === undefined || !isPreview(id)) return null
+      if (service === undefined) return null
+      if (id === HMR_PROBE_ID) return hmrProbe
+      if (!isPreview(id)) return null
       const file = id.split('?', 1)[0]!
       if (file.endsWith('.css')) return (await service.refine.previewStyles(path.basename(file, '.css'))) ?? ''
       if (path.basename(file) === BLUEPRINT_ENTRY) return blueprintEntry
@@ -167,6 +173,9 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         ...(options.screenshotTimeoutMs !== undefined ? { screenshotTimeoutMs: options.screenshotTimeoutMs } : {}),
       })
       server.middlewares.use(createDevMiddleware(host, { service, logger: server.config.logger, allowRemote, mcp: options.mcp !== false }))
+      // The probe's answer (hmr-probe.ts), to the asking socket alone: other pages get nothing,
+      // so a write still sends them one update.
+      server.ws.on(HMR_READY, (_data, client) => client.send(HMR_READY))
       // The canvas must show what is on disk: replay a change the watcher dropped (watch.ts).
       stopReplay?.()
       stopReplay = replayDroppedChanges(server.watcher, roots)
@@ -179,6 +188,14 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
         if (changed === manifestFile) invalidatePreviews(server, false)
         else if (changed.startsWith(blueprintDir)) invalidatePreviews(server, true)
       })
+    },
+
+    // The probe a canvas document's catch-up waits for (hmr-probe.ts), with the API only: the
+    // canvas reads it there. In <head>, so it runs before the app's entry in <body>; under the
+    // base, as Vite's own client script is.
+    transformIndexHtml() {
+      if (service === undefined) return
+      return [{ tag: 'script', attrs: { type: 'module', src: path.posix.join(base, HMR_PROBE_URL) }, injectTo: 'head' }]
     },
 
     // Two kinds of reload for files the canvas never imports, both found by eject, undo, eject
