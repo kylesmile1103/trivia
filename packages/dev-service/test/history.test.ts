@@ -37,6 +37,19 @@ describe('History', () => {
     expect(history.state().lastWriteAt).toBe(4_000)
   })
 
+  it('moves only lastWriteAt for a write outside the undo history (a contract sync)', () => {
+    let now = 1_000
+    const history = new History(100, () => now)
+    history.record(entry('a'))
+    history.record(entry('b'))
+    history.undone()
+    const before = history.state()
+    now = 2_000
+    history.wrote()
+    expect(history.state()).toEqual({ ...before, lastWriteAt: 2_000 })
+    expect([history.nextUndo?.label, history.nextRedo?.label]).toEqual(['a', 'b'])
+  })
+
   it('defaults to 100 entries', () => {
     const history = new History()
     for (let i = 0; i < 150; i++) history.record(entry(String(i)))
