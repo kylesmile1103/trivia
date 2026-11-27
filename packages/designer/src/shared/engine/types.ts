@@ -362,6 +362,15 @@ export interface FormPage {
 /** A Refine page Trivia can edit. */
 export type RefinePage = ListPage | FormPage
 
+/** A Refine hook call Trivia found but cannot read as a page, and why (GET /refine/unread). */
+export interface UnreadPage {
+  file: string
+  component: string
+  hook: 'useTable' | 'useForm'
+  line: number
+  reason: string
+}
+
 /** A page a URL reaches, read from the app's source (docs/api.md `AppRoute`). */
 export interface AppRoute {
   /** The URL pattern in its router's syntax: `/customers/edit/:id`, `/posts/$postId`. */

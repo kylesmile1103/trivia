@@ -5,12 +5,12 @@
 // other edit.
 
 import { useEffect, useState } from 'react'
-import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, FormInputIcon, PlusIcon, XIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, CircleSlashIcon, Columns3Icon, FormInputIcon, PlusIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { canvas, type Layer } from '@/shared/canvas'
 import { engine } from '@/shared/engine/client'
-import type { ColumnPlan, FieldShape, FormPage, ListPage, PageField, RefinePage } from '@/shared/engine/types'
+import type { ColumnPlan, FieldShape, FormPage, ListPage, PageField, RefinePage, UnreadPage } from '@/shared/engine/types'
 import { dispatchBatch } from '@/shared/state/actions'
 import { useDesigner } from '@/shared/state/store'
 import { Badge } from '@/shared/ui/badge'
@@ -44,6 +44,7 @@ function canvasFiles(layers: Layer[], into = new Set<string>()): Set<string> {
 export function ThisPage() {
   const revision = useDesigner((s) => s.revision)
   const [pages, setPages] = useState<RefinePage[]>([])
+  const [unread, setUnread] = useState<UnreadPage[]>([])
 
   // Re-read after every re-render: an edit (here, in the IDE, by an agent) or a navigation.
   useEffect(() => {
@@ -53,12 +54,16 @@ export function ThisPage() {
       .refinePages()
       .then((all) => live && setPages(all.filter((p) => files.has(p.file))))
       .catch(() => live && setPages([]))
+    engine
+      .refineUnread()
+      .then((all) => live && setUnread(all.filter((u) => files.has(u.file))))
+      .catch(() => live && setUnread([]))
     return () => {
       live = false
     }
   }, [revision])
 
-  if (pages.length === 0) return null
+  if (pages.length === 0 && unread.length === 0) return null
   return (
     <section className="mb-3 grid gap-2" aria-label="This page">
       {pages.map((page) =>
@@ -68,7 +73,30 @@ export function ThisPage() {
           <FieldsCard key={`${page.file}#${page.component}`} page={page} />
         ),
       )}
+      {unread.map((page) => (
+        <UnreadCard key={`${page.file}#${page.component}#${page.hook}`} page={page} />
+      ))}
     </section>
+  )
+}
+
+/** A Refine page on the canvas that Trivia cannot read: what it found, and why (GET /refine/unread). */
+function UnreadCard({ page }: { page: UnreadPage }) {
+  const what = page.hook === 'useTable' ? 'list' : 'form'
+  return (
+    <div className="rounded-md border border-dashed px-2 py-1.5" aria-label={`${page.component} is not read`}>
+      <div className="flex items-center gap-1.5 text-xs font-medium">
+        <CircleSlashIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{page.component}</span>
+        <span className="ml-auto text-[10px] font-normal text-muted-foreground">{`${page.hook}, not read`}</span>
+      </div>
+      <p className="truncate pl-5 font-mono text-[10px] text-muted-foreground" title={page.file}>
+        {page.file}:{page.line}
+      </p>
+      <p className="mt-1 pl-5 text-xs leading-snug text-muted-foreground">
+        Trivia can't edit this {what}'s {what === 'list' ? 'columns' : 'fields'}: {page.reason}. Edit it in your code for now.
+      </p>
+    </div>
   )
 }
 
