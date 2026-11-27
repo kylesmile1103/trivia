@@ -75,3 +75,38 @@ test('a spec change: sync, see what it broke, fix it from the Data tab', async (
   await expect(drift(page)).toContainText('Out of step with the contract (2)')
   expect(fs.readFileSync(CREATE, 'utf8')).toContain('fullName: z.string().min(3, "Enter at least 3 characters."),')
 })
+
+test('a fix that renumbers the page keeps the selection on the element the user selected', async ({ page }) => {
+  // The Name column goes: its header is JSX, numbered before the Status cell's badge, so the
+  // badge's locator moves, and the old one now holds another element.
+  const spec = JSON.parse(before.get(SPEC)!)
+  delete spec.components.schemas.CustomerDto.properties.fullName
+  spec.components.schemas.CustomerDto.required = spec.components.schemas.CustomerDto.required.filter((r: string) => r !== 'fullName')
+  await writeWhole(SPEC, JSON.stringify(spec, null, 2))
+
+  await page.goto('/__trivia/')
+  await expect(app(page).getByRole('cell', { name: 'Ada Lovelace' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Data' }).click()
+  await page.getByRole('button', { name: 'Sync', exact: true }).click()
+  const fix = drift(page).getByRole('list', { name: 'Drift in CustomerList' }).getByRole('button', { name: 'Remove column Name' })
+  await expect(fix).toBeVisible()
+
+  // Select the first row's status badge on the canvas.
+  const badge = app(page).getByRole('row').nth(1).locator('[data-slot=badge]')
+  const was = await badge.getAttribute('data-ast-node')
+  expect(was).toMatch(/^src\/pages\/customers\/list\.tsx#CustomerList#\d+$/)
+  const at = await badge.boundingBox()
+  if (!at) throw new Error('the badge has no box')
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2)
+  const selected = () => page.evaluate(() => (window as Window & { __trivia?: { state(): { selected: string | null } } }).__trivia?.state().selected ?? null)
+  await expect.poll(selected).toBe(was)
+  const inspector = page.getByRole('complementary', { name: 'Inspector' })
+  await expect(inspector.getByRole('heading', { name: 'Badge', exact: true })).toBeVisible()
+
+  await fix.click()
+  await expect(app(page).getByRole('columnheader')).toHaveText(['Email', 'Status', 'Customer since', ''], { timeout: 15_000 })
+  const now = await badge.getAttribute('data-ast-node')
+  expect(now).not.toBe(was)
+  await expect.poll(selected).toBe(now)
+  await expect(inspector.getByRole('heading', { name: 'Badge', exact: true })).toBeVisible()
+})

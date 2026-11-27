@@ -93,8 +93,9 @@ export const engine = {
   health: () => request<Health>('/health'),
   components: () => request<ComponentSchema[]>('/components'),
   inspect: (locator: string) => request<NodeDetails>(`/inspect?locator=${encodeURIComponent(locator)}`),
-  apply: (op: Op, label?: string) => post<ApplyResult>('/apply', { op, label }),
-  batch: (ops: Op[], label?: string) => post<ApplyResult>('/batch', { ops, label }),
+  /** `follow`: locators to follow through the edit (`ApplyResult.followed`). */
+  apply: (op: Op, label?: string, follow?: string[]) => post<ApplyResult>('/apply', { op, label, ...(follow && { follow }) }),
+  batch: (ops: Op[], label?: string, follow?: string[]) => post<ApplyResult>('/batch', { ops, label, ...(follow && { follow }) }),
   undo: () => post<HistoryResult>('/undo', {}),
   redo: () => post<HistoryResult>('/redo', {}),
   history: () => request<HistoryState>('/history'),

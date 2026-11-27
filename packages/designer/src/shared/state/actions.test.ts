@@ -23,6 +23,8 @@ const HISTORY: HistoryState = { canUndo: true, canRedo: false, undoLabel: 'Edit'
 
 interface Pending {
   op: Op
+  /** What was sent besides the op (`label`, `follow`). */
+  body: Record<string, unknown>
   answer(result: Partial<ApplyResult>): void
   refuse(): void
 }
@@ -34,11 +36,13 @@ beforeEach(() => {
   pending = []
   toasts.length = 0
   vi.stubGlobal('fetch', (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    const { op } = JSON.parse(String(init?.body)) as { op: Op }
+    const body = JSON.parse(String(init?.body)) as { op: Op } & Record<string, unknown>
+    const { op } = body
     const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
     return new Promise<Response>((resolve) => {
       pending.push({
         op,
+        body,
         answer: (result) => resolve(reply({ ok: true, data: { file: FILE, changed: true, locator: null, history: HISTORY, ...result } })),
         refuse: () => resolve(reply({ ok: false, error: { code: 'stale_locator', message: 'expected <Button>' } }, 409)),
       })
@@ -106,6 +110,45 @@ describe('the selection follow-up', () => {
       designer.getState().setPressPending(true),
     )
     expect(designer.getState()).toMatchObject({ selected: null, pressPending: true })
+  })
+})
+
+describe('the selection after a value op in its file, which renumbers the JSX after the literal', () => {
+  // A column added before the page tree: every locator of the tree moves one root on.
+  const column: Op = { op: 'insertElement', path: `${FILE}#Dashboard#columns`, index: 0, value: '{ id: "since", header: () => <span>Since</span> }' }
+
+  it('is sent to be followed, and goes where the engine followed it', async () => {
+    designer.getState().select(at('0.0.1'))
+    await edit(column, { followed: [`${FILE}#Dashboard#1.0.1`] })
+    expect(pending[0]!.body['follow']).toEqual([at('0.0.1')])
+    expect(designer.getState().selected).toBe(`${FILE}#Dashboard#1.0.1`)
+  })
+
+  it('lets go when the engine says the node is gone or its place is unknown', async () => {
+    designer.getState().select(at('0.0.1'))
+    await edit(column, { followed: [null] })
+    expect(designer.getState().selected).toBeNull()
+    designer.getState().select(at('0.0.1'))
+    pending = []
+    await edit(column, {}) // an engine too old to follow
+    expect(designer.getState().selected).toBeNull()
+  })
+
+  it('lets go of a selection made in that file while the edit was on its way: it was read from the old file', async () => {
+    designer.getState().select(at('0.0.1'))
+    await edit(column, { followed: [`${FILE}#Dashboard#1.0.1`] }, () => designer.getState().select(at('0.0.2')))
+    expect(designer.getState().selected).toBeNull()
+  })
+
+  it('keeps a waiting canvas press waiting while it re-addresses the node', async () => {
+    designer.getState().select(at('0.0.1'))
+    await edit(column, { followed: [`${FILE}#Dashboard#1.0.1`] }, () => designer.getState().setPressPending(true))
+    expect(designer.getState()).toMatchObject({ selected: `${FILE}#Dashboard#1.0.1`, pressPending: true })
+  })
+
+  it('sends nothing to follow when nothing is selected', async () => {
+    await edit(column, {})
+    expect(pending[0]!.body).not.toHaveProperty('follow')
   })
 })
 
