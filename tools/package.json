@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "mvp": "node --test blueprint/mvp.test.mjs"
+    "mvp": "node --test blueprint/mvp.test.mjs",
+    "adopt": "node --test adopt/adopt.test.mjs"
   },
   "devDependencies": {
     "@nx/devkit": "23.2.1",
@@ -25,6 +26,12 @@
         "dependsOn": [
           { "projects": ["plugin"], "target": "build" },
           { "projects": ["dotnet"], "target": "tool" }
+        ],
+        "cache": false
+      },
+      "adopt": {
+        "dependsOn": [
+          { "projects": ["plugin", "contract-sync", "inferencer"], "target": "build" }
         ],
         "cache": false
       }

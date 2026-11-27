@@ -418,8 +418,8 @@ Every name in the generated code comes from the manifest or the user's component
 generators (`codegen.ts`) are unit-tested. `codegen.node.test.ts` writes their output and a
 bound page into a copy of the playground and runs the real `tsc` on it, with a negative control.
 `e2e/data.spec.ts` inserts a table (real rows from the playground's mock API) and a form, then
-submits it. Not generated yet: edit forms (an update body plus loading the row) and
-nested-object fields.
+submits it. Not generated on this path yet: edit forms (an update body plus loading the row)
+and nested-object fields. (The Refine adapter generates edit pages: `docs/product.md`, slice 4.)
 
 ## GraphQL: out of scope
 

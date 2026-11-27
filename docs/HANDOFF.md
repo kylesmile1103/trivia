@@ -176,7 +176,9 @@ plugin's test server never reaps idle sockets: four Refine tests hung up wheneve
 the user's `~/Downloads/trivia-*.gif`).
 
 **Not built yet:**
-- edit forms (an update body plus loading the row) and nested-object fields in generated forms.
+- on the Data tab's TanStack path (`docs/data-provider.md`, frozen): edit forms (an update body
+  plus loading the row) and nested-object fields. Refine edit pages are generated (slice 4).
+- in generated Refine forms: object and array body fields (a comment instead of a control).
 
 `contract-sync` and `bindQuery` exist and are tested; see `docs/data-provider.md`.
 <!-- STATUS:END -->
@@ -350,7 +352,9 @@ writes `useQuery` hooks against it.
 
 The order is the product's (`docs/product.md`, Slices):
 1. **Have the user try it on one of their real internal tools.** Slices 1–6 are done; what
-   breaks on a real codebase decides what comes next. Likely candidates:
+   breaks on a real codebase decides what comes next. The recipe for a Vite app is in
+   `docs/getting-started.md` ("Using Trivia in your own Vite app"), and `nx run tools:adopt`
+   proves it on a copy of the Refine example outside the workspace. Likely candidates:
    - pages whose shape the adapter doesn't read (`register()` forms, columns from a helper);
    - other UI kits (an Ant Design or MUI adapter beside `src/refine/`);
    - Next.js;
