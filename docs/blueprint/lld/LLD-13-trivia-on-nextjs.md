@@ -349,7 +349,7 @@ The engine edits files. It does not care which kind of component a file holds. W
   API port up front. An occupied app port exits with Next's error and closes the new service.
 - The built integration was checked in the scratch app with webpack and with React Compiler
   on Turbopack. Both stamped client and server JSX and preserved usage-site attribute order.
-- ⚑ (decided 2026-11-26) Both Next losses are reported upstream as a draft, and a plain browser
+- ⚑ (decided 2026-11-26) Both Next losses are reported upstream as a draft ([report](../../upstream/next-hmr-lost-updates.md)), and a plain browser
   tab outside the designer still has them (workaround: reload). Residuals in the canvas: a
   plain file write (an IDE's save) between a document's HTML and its HMR subscription is never
   seen by the service. A document that the user or Next loads within the grace after a service
