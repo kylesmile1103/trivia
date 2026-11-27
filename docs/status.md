@@ -18,11 +18,13 @@ Stated plainly so you can judge fit before investing time.
   `@refinedev/react-hook-form`. Forms built with `register()` or another resolver are not read.
   A changed enum is fixed in place, but enum options written as a shared constant or a `.map` get no
   drift verdict. A rebuilt column or field (a changed type) takes the generated shape, replacing custom
-  cells or widgets in it. Edit forms (an update body plus loading the row) and nested-object form fields
-  are not generated yet.
+  cells or widgets in it. Object and array body fields become a comment in a generated form, not a
+  control.
 - **Desktop shell.** Verified on macOS (WKWebView) only; no Linux or Windows hand test. The packaged
   app is Apple silicon only, and ad-hoc signed rather than notarized (no Apple Developer ID).
-- **Packages are not published to npm** at this stage; use the workspace.
+- **Packages are not published to npm** at this stage. Link them into your app from a built
+  workspace ([getting started](getting-started.md#using-trivia-in-your-own-vite-app)); CI runs that
+  recipe on every pull request (`nx run tools:adopt`).
 
 ## Roadmap
 
@@ -30,7 +32,7 @@ In priority order (see [`docs/HANDOFF.md`](HANDOFF.md) section 7 for the live li
 
 1. Use Trivia on a real internal tool and fix what breaks: pages whose shape the adapter does not read,
    other UI kits.
-2. Edit forms and nested-object fields in generated forms.
+2. Object and array fields in generated Refine forms, when a real page needs them.
 
 General editor features (canvas, inspector, style controls) are frozen to fixes until the jobs above
 are in real use.
