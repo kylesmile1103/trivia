@@ -311,6 +311,15 @@ writes `useQuery` hooks against it.
   (`DevHost.filesWritten`), so a request right after an edit gets the new source. To ask what
   Vite serves for a file, GET `/<path>` from the app's server and read `sourcesContent` in the
   module's inline source map: that is the exact text it transformed.
+- **A module that imports itself can run an older write last.** `@vitejs/plugin-react` ends each
+  component module with an import of itself, and Vite's import analysis stamps it with the
+  module's newest HMR timestamp when it runs, late in the transform. An e2e trace on Linux CI: a
+  Layers move, its undo 24 ms later while the move's module was still being transformed, and
+  that module came out with the move's source importing the undo's URL. The browser ran the
+  undo's module first, then the move's, whose React Refresh registration won, and the undo's own
+  update found its module already loaded: the canvas kept the move. The plugin's `hotUpdate`
+  hook now waits for a transform of the module that is still running (`src/hmr-order.ts`);
+  [upstream report](upstream/vite-self-import-hmr-race.md).
 - **macOS hides the watcher events Linux CI gets.** With fsevents, chokidar reported no unlink
   for the undo of an eject, a `change` for the files the next eject created again, and it dropped
   none of 60 undos sent right after their edits. To see add and unlink as Linux reports them, run

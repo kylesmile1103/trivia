@@ -13,6 +13,7 @@ import {
 import { annotateModule, isSyntaxError } from '@trivia/dev-service/stamp'
 
 import { BLUEPRINT_ENTRY, BLUEPRINT_ROUTE, blueprintEntry } from './blueprint-entry.js'
+import { hotUpdateOrder } from './hmr-order.js'
 import { HMR_PROBE_ID, HMR_PROBE_URL, HMR_READY, hmrProbe } from './hmr-probe.js'
 import { createViteHost, invalidatePreviews } from './host.js'
 import { type ProjectPaths, resolveProjectPaths } from './options.js'
@@ -56,6 +57,7 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
   let roots: string[] = []
   let service: EngineService | undefined
   let stopReplay: (() => void) | undefined
+  const settleTransforms = hotUpdateOrder()
   // The inferencer's previews (docs/product.md, slice 6) are modules at `/@trivia/preview/<id>.tsx`
   // that never exist on disk. They resolve to a path in the project's src/ (so the project's
   // aliases, JSX transform and React refresh apply to them like to its own files) and their
@@ -211,12 +213,14 @@ export function astLocator(options: AstLocatorOptions = {}): Plugin {
     //   the file, dropped it): Vite treats it as a dead end and reloads, when nothing reads it.
     //   Such nodes are left out; Vite updates the rest and sends nothing for an empty list.
     // This runs before the other plugins' hooks, Tailwind's among them, which see the list it returns.
+    // First it waits for a transform of the file's modules that is still running (hmr-order.ts).
     hotUpdate: {
       order: 'pre',
-      handler({ file, modules }) {
+      async handler({ file, modules }) {
         if (service === undefined || paths === undefined || NODE_MODULES.test(file)) return
         const rel = relativeToRoots(path.resolve(file), roots)
         if (rel === null) return
+        await settleTransforms(this.environment, modules)
         if (modules.length > 0 && modules.every((mod) => mod.type === 'asset') && rel.startsWith(paths.blueprintDir + '/')) {
           // A stylesheet imported from JavaScript is a `js` node, so its file tells, not its type.
           const stylesheets = new Set(modules.flatMap((mod) => [...mod.importers].filter((importer) => isCSSRequest(importer.file ?? importer.url))))
