@@ -48,7 +48,7 @@ beforeEach(() => {
       })
     })
   }) as typeof fetch)
-  designer.setState({ selected: null, details: null, pressPending: false, lastEdit: null })
+  designer.setState({ selected: null, details: null, pressPending: false, lastEdit: null, expectedSelectedName: null })
 })
 
 afterEach(() => {
@@ -144,6 +144,15 @@ describe('the selection after a value op in its file, which renumbers the JSX af
     designer.getState().select(at('0.0.1'))
     await edit(column, { followed: [`${FILE}#Dashboard#1.0.1`] }, () => designer.getState().setPressPending(true))
     expect(designer.getState()).toMatchObject({ selected: `${FILE}#Dashboard#1.0.1`, pressPending: true })
+  })
+
+  it('expects the tag it had, so details naming another element let it go', async () => {
+    designer.getState().select(at('0.0.1'))
+    designer.getState().setDetails({ locator: at('0.0.1'), name: 'Button' } as never)
+    await edit(column, { followed: [`${FILE}#Dashboard#1.0.1`] })
+    expect(designer.getState()).toMatchObject({ selected: `${FILE}#Dashboard#1.0.1`, expectedSelectedName: 'Button' })
+    designer.getState().setDetails({ locator: `${FILE}#Dashboard#1.0.1`, name: 'Badge' } as never)
+    expect(designer.getState().selected).toBeNull()
   })
 
   it('sends nothing to follow when nothing is selected', async () => {

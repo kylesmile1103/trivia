@@ -105,7 +105,12 @@ function followSelection(result: ApplyResult, ops: readonly Op[], selectedBefore
   if (result.changed && selectedFile !== null && ops.some((op) =>
     op.op === 'replaceFile' ? op.file === selectedFile : isValueOp(op) && locatorFile(op.path) === selectedFile)) {
     const waiting = s.pressPending
-    s.select(s.selected === selectedBefore ? (result.followed?.[0] ?? null) : null)
+    // The engine kept the tag of the node at the old locator; the inspector's details then check
+    // it is the one the user selected (setDetails), as after a re-render.
+    const name = s.details !== null && s.details.locator === s.selected ? s.details.name : s.expectedSelectedName
+    const next = s.selected === selectedBefore ? (result.followed?.[0] ?? null) : null
+    s.select(next)
+    if (next !== null && name !== null) s.expectSelectedName(name)
     if (waiting) s.setPressPending(true)
     return
   }
