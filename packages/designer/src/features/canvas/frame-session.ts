@@ -352,7 +352,9 @@ export class FrameSession {
     this.resizeObserver = resizes
     this.tracked = []
     // Resource timing is in the frame's clock; the canvas (and the action bus) use the designer's.
-    const offset = win.performance.timeOrigin - performance.timeOrigin
+    // Placed by the two now()s, not the timeOrigins: Chromium's can lag the wall clock after the
+    // machine sleeps, one document's by more than another's.
+    const offset = performance.now() - win.performance.now()
     const hot = new win.PerformanceObserver((list) => {
       const entries = list.getEntries() as PerformanceResourceTiming[]
       const catchUp = this.catchUp
@@ -459,7 +461,9 @@ export class FrameSession {
     if (this.catchUp !== catchUp) return
     const { host } = catchUp
     const grace = host.graceMs
-    const start = Math.floor(win.performance.timeOrigin) - (catchUp.reloads > 0 ? grace : 0)
+    // When the document began, by the wall clock: now, less its age. Not its timeOrigin, which
+    // can lag the wall clock after the machine sleeps; no sleep fits in a load still in progress.
+    const start = Math.floor(Date.now() - win.performance.now()) - (catchUp.reloads > 0 ? grace : 0)
     const missed = lastWriteAt !== null && lastWriteAt >= start
     if (missed && catchUp.reloads < MAX_RELOADS) {
       catchUp.phase = 'reloading'

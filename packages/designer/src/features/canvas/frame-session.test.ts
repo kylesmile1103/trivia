@@ -36,14 +36,20 @@ interface App {
  */
 let probe: 'answered' | 'pending' | 'none'
 
+/**
+ * How far each new document's `performance.timeOrigin` lags the wall clock. Chromium's can, after
+ * the machine sleeps; its `performance.now()` still counts from the document's real start.
+ */
+let lag: number
+
 /** A new app document, which began to load now (on the fake clock). */
 function appDocument(): App {
   const host = document.createElement('iframe')
   document.body.append(host)
   const win = host.contentWindow as ProbeWindow
   const app: App = { win, doc: host.contentDocument!, refreshes: 0, resources: [] }
-  const timeOrigin = Date.now()
-  Object.defineProperty(win, 'performance', { configurable: true, value: { timeOrigin, now: () => Date.now() - timeOrigin } })
+  const start = Date.now()
+  Object.defineProperty(win, 'performance', { configurable: true, value: { timeOrigin: start - lag, now: () => Date.now() - start } })
   Object.assign(win, {
     ResizeObserver: class {
       observe() {}
@@ -90,7 +96,7 @@ function startSession(next = true, attach = true): void {
 
 const hydrate = () => app.doc.body.append(app.doc.createElement('next-route-announcer'))
 /** The current document's navigation start, as the window test reads it. */
-const began = () => app.win.performance.timeOrigin
+const began = () => Date.now() - app.win.performance.now()
 /** The router's request for the refresh answered, as the frame's resource timing reports it. */
 function routerAnswered(): void {
   const now = app.win.performance.now()
@@ -126,6 +132,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'], now: 1_795_000_000_000 })
   reloads.windows.length = 0
   probe = 'answered'
+  lag = 0
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   lastWrite = async () => null
   for (const fn of Object.values(listener)) if (vi.isMockFunction(fn)) fn.mockClear()
@@ -337,6 +344,43 @@ describe('a Next document catches up by reloading when the service wrote while i
     expect(reloads.windows).toHaveLength(1)
     expect(app.refreshes).toBe(0)
     expect(session.updating).toBe(true) // until the reload's document has caught up
+  })
+})
+
+describe('a document whose timeOrigin lags the wall clock (after the machine slept)', () => {
+  beforeEach(() => {
+    lag = 3_600_000
+  })
+
+  it('on Next, takes its start from its own clock: a write before it began is not missed, and the refresh settles', async () => {
+    const writtenAt = Date.now() - 1 // before this document began, but after its lagging timeOrigin
+    lastWrite = async () => writtenAt
+    startSession()
+    await later(100)
+    hydrate()
+    await later(0)
+    expect(reloads.windows).toEqual([])
+    expect(app.refreshes).toBe(1)
+    await settle() // the router's answer counts: resource timing is placed by the clocks' now()
+    expect(session.updating).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('on Vite, ends without a reload for a write before it began, and still reloads for one after', async () => {
+    const writtenAt = Date.now() - 1
+    lastWrite = async () => writtenAt
+    startSession(false)
+    await later(0)
+    expect(reloads.windows).toEqual([])
+    expect(session.updating).toBe(false)
+
+    await later(100)
+    lastWrite = async () => Date.now() - 50 // written while the user's reload loads
+    unloadAndBegin()
+    await later(60)
+    load()
+    await later(0)
+    expect(reloads.windows).toEqual([app.win])
   })
 })
 
