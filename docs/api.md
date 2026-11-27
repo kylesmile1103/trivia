@@ -94,7 +94,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   since an edit renumbers the locators after what it adds, drops or moves (rule 4).
   `followed` answers in the same order, and only when `follow` was sent. Each answer is where
   that node is now, or null when the node is gone or its place can't be known. A string that is
-  not a locator, or resolves to nothing, is null too, and never fails the edit.
+  not a locator is null, and so is a locator in a changed file that resolves to nothing; neither
+  fails the edit.
   - The engine maps the node's byte span through the ranges the ops spliced. A splice before it
     shifts it, one after it leaves it, and one inside it (its whole span included) keeps it. A
     splice that cuts across the node or covers more than it removes it.
@@ -103,8 +104,10 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - Every answer must be a node of the result with exactly that span, the same kind and tag,
     and (when no splice touched it) the same bytes, so a same-tag neighbour that slid into the
     old locator is never the answer.
-  - A locator in a file the edit didn't change comes back as given. `replaceFile` and
-    `createFile` give null for their file.
+  - A locator in a file the edit didn't change comes back as given, unchecked (the engine
+    does not read files the edit left alone). `replaceFile` and `createFile` give null for
+    their file. Callers check the tag at the answer, as the designer and the agent's selection
+    do.
   - Undo and redo are not followed.
   - `follow` that is not an array of strings is `400 invalid_op`.
   - The binding is `applyOps(root, opsJson, followJson?)`, answering with `data.followed`. A
