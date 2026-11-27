@@ -70,7 +70,7 @@ export function DriftList({ reload }: { reload: number }) {
                       {issue.line !== null && <span className="text-muted-foreground"> (line {issue.line})</span>}
                     </span>
                     {issue.references && issue.references.length > 0 && (
-                      <ul className="grid gap-0.5" aria-label={`Other code that names ${issue.name}`}>
+                      <ul className="grid gap-0.5" aria-label={referencesLabel(issue)}>
                         {issue.references.map((r) => (
                           <li key={r.line} className="truncate font-mono text-[10px] text-muted-foreground" title={r.text}>
                             {r.line}: {r.text}
@@ -100,4 +100,9 @@ export function DriftList({ reload }: { reload: number }) {
       </ul>
     </section>
   )
+}
+
+/** What an issue's references name: the field the fix removes, or a value the contract dropped. */
+function referencesLabel(issue: DriftIssue): string {
+  return issue.code === 'enum_changed' ? `Other code that names a ${issue.name} value the contract dropped` : `Other code that names ${issue.name}`
 }
