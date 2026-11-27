@@ -69,3 +69,40 @@ it('stays put for an op that changes nothing, one that is refused, and an undo w
   expect((await service.undo()).files).toEqual([]) // nothing left to undo
   expect(service.history().lastWriteAt).toBe(3_000)
 })
+
+const SPEC = {
+  openapi: '3.0.3',
+  info: { title: 'Shop', version: '1' },
+  paths: {
+    '/orders': {
+      get: {
+        operationId: 'listOrders',
+        responses: { 200: { description: 'ok', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Order' } } } } } },
+      },
+    },
+  },
+  components: { schemas: { Order: { type: 'object', properties: { id: { type: 'string' }, total: { type: 'number' } } } } },
+}
+
+it('says when a contract sync last wrote the project, and reports its files like an edit', async () => {
+  const written: string[][] = []
+  const host = { ...createStandaloneHost(root), filesWritten: (files: readonly string[]) => void written.push([...files]) }
+  service = new EngineService({ host, engine: await loadEngine(), version: 'test' })
+
+  vi.setSystemTime(2_000)
+  await expect(service.syncContract({ input: 'openapi/missing.json' })).rejects.toMatchObject({ code: 'unsupported' })
+  expect(service.history().lastWriteAt).toBeNull()
+  expect(written).toEqual([])
+
+  fs.mkdirSync(path.join(root, 'openapi'))
+  fs.writeFileSync(path.join(root, 'openapi/shop.json'), JSON.stringify(SPEC))
+  vi.setSystemTime(3_000)
+  const synced = await service.syncContract({ input: 'openapi/shop.json' })
+  expect(synced.resources).toEqual(['Order'])
+  // Not an undo entry: only lastWriteAt moves.
+  expect(service.history()).toEqual({ canUndo: false, canRedo: false, undoLabel: null, redoLabel: null, lastWriteAt: 3_000 })
+  expect(written).toHaveLength(1)
+  expect(written[0]).toEqual(expect.arrayContaining(['trivia.manifest.json', 'src/api/generated/sdk.gen.ts']))
+  expect(written[0]).toHaveLength(synced.files + 1)
+  for (const file of written[0]!) expect(fs.existsSync(path.join(root, file)), file).toBe(true)
+})
