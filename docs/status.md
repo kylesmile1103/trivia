@@ -15,7 +15,8 @@ Stated plainly so you can judge fit before investing time.
   an edit, by the byte ranges it changed, and drops the selection when the element is gone. Undo and
   redo are not followed: a selection is kept only while the tag at its old locator still matches.
 - **Refine adapter scope.** Pages are found in `src/` files importing `@refinedev/react-table` or
-  `@refinedev/react-hook-form`. Forms built with `register()` or another resolver are not read.
+  `@refinedev/react-hook-form`. Forms built with `register()` or another resolver are not read, nor
+  are lists whose columns are imported or built by a call; the Data tab and `trivia_get_page` say why.
   A changed enum is fixed in place, but enum options written as a shared constant or a `.map` get no
   drift verdict. A rebuilt column or field (a changed type) takes the generated shape, replacing custom
   cells or widgets in it. Object and array body fields become a comment in a generated form, not a
