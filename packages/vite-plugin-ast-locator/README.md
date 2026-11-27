@@ -49,6 +49,14 @@ Build the native engine (`pnpm build:engine`) and this package (`pnpm build:plug
   replayed. Before an edit, undo or redo is answered, the plugin drops the written files' modules
   from Vite's cache (`moduleGraph.onFileChange`), so a request made right after the answer gets
   the new source though the watcher has not reported the write yet.
+- With the API on, a hot update for a project file waits until every transform of its modules
+  that is still running has finished (at most 5 s, `src/hmr-order.ts`), and updates go out in
+  the order their changes came. `@vitejs/plugin-react` makes each component module import
+  itself, and Vite stamps that import with the module's newest update (`?t=`) when it analyses
+  the imports, late in the transform. A second write heard while the first write's module was
+  still being transformed (an edit, then its undo) used to come out as the first write's source
+  importing the second's URL: the browser ran the second, then the first, and the canvas kept
+  showing the first ([report](../../docs/upstream/vite-self-import-hmr-race.md)).
 - With the API on, the app's HTML gets one more script in `<head>`: a dev-only probe
   (`src/hmr-probe.ts`, the virtual module `/@id/__x00__trivia:hmr-ready`). It sends
   `trivia:hmr-ready` over `import.meta.hot` once the page's HMR socket is open, and the server
