@@ -101,6 +101,18 @@ describe('tools', () => {
       'trivia_screenshot',
     ])
   })
+
+  it('trivia_edit_columns and trivia_edit_fields take the in-place align of contract drift', async () => {
+    // The playground has no Refine page: the change passes the schema and reaches the planner.
+    const columns = await call('trivia_edit_columns', { file: DASHBOARD, changes: [{ action: 'align', column: 'status' }], label: 'Align status' })
+    expect(columns.isError).toBe(true)
+    expect(text(columns)).toMatch(/^node_not_found: src\/pages\/Dashboard\.tsx has no Refine list page/)
+    const fields = await call('trivia_edit_fields', { file: DASHBOARD, changes: [{ action: 'align', field: 'status' }], label: 'Align status' })
+    expect(text(fields)).toMatch(/^node_not_found: src\/pages\/Dashboard\.tsx has no Refine form/)
+    const unknown = await call('trivia_edit_columns', { file: DASHBOARD, changes: [{ action: 'sync', column: 'status' }], label: 'x' })
+    expect(text(unknown)).not.toMatch(/^node_not_found/)
+    expect(read()).toBe(original)
+  })
 })
 
 describe('trivia_get_selection', () => {

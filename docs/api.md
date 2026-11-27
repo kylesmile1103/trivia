@@ -65,8 +65,8 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
 | POST | `/@trivia/api/sync` | `{ input?, zod?, force? }` | `SyncResult` |
 | GET | `/@trivia/api/refine/pages` | — | `(ListPage \| FormPage)[]` (discovered Refine pages) |
 | GET | `/@trivia/api/refine/page` | `?file=` | `(ListPage \| FormPage)[]` (that file's) |
-| POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label }` |
-| POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label }` |
+| POST | `/@trivia/api/refine/columns/plan` | `{ file, component?, changes: ColumnChange[] }` | `{ ops: Op[], label, warnings? }` |
+| POST | `/@trivia/api/refine/fields/plan` | `{ file, component?, changes: FieldChange[] }` | `{ ops: Op[], label, warnings? }` |
 | GET | `/@trivia/api/refine/drift` | — | `{ spec: Drift \| null, pages: PageDrift[] }` |
 | GET | `/@trivia/api/refine/resources` | — | `ResourcePages[]` |
 | POST | `/@trivia/api/refine/pages/plan` | `{ resource, pages?: PageKind[] }` | `{ ops: Op[], label }` |
@@ -153,10 +153,11 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     tag).
 
   `ColumnChange = { action: "add", field, index?, label? } | { action: "remove", column } |
-  { action: "move", column, index } | { action: "rebuild", column }`. Changes apply in order, so a later one may name a column
+  { action: "move", column, index } | { action: "rebuild", column } | { action: "align", column }`
+  (`align`: see `refine/drift` below). Changes apply in order, so a later one may name a column
   an earlier one added. The plan is value ops (`insertElement`, `removeElement`,
-  `moveElement`) for the caller to apply as one entry (`/batch`). An added column follows
-  Refine's shadcn examples:
+  `moveElement`) for the caller to apply as one entry (`/batch`), with `warnings?`. An added
+  column follows Refine's shadcn examples:
   - its header gets `DataTableSorter` and a filter by type: text →
     `DataTableFilterDropdownText`, enum → `DataTableFilterCombobox` (multi, the enum's values),
     number → `DataTableFilterDropdownNumeric`, date → `DataTableFilterDropdownDateRangePicker`;
@@ -232,9 +233,30 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
     destructured `{ email }`), from the engine's `mentions`. The field's own schema key, default
     and `name="…"` are left out. They break when the field goes, so the plan that removes it
     returns them as `warnings`.
-  - `enum_changed`: a column's `DataTableFilterCombobox` options, or a form field's
-    `z.enum([…])` or `<SelectItem>` values, differ from the contract's. Fix: rebuild it in
-    place.
+  - `enum_changed`: the values a page writes for an enum differ, as a set, from the
+    contract's (order alone is not drift). They are read where the page writes them (a
+    **site**), whole, by value path or locator:
+    - a column's `DataTableFilterCombobox options={[…]}`
+      (`<column path>.header<DataTableFilterCombobox>.options`);
+    - a form field's `z.enum([…])` array (`<schemaPath>.<field>`);
+    - the `<SelectItem value="…">`s inside the field's control.
+
+    Each site is in one of four states, the same for drift and for the plan that fixes it:
+    - `absent`: there is no such place (no rule, no control, a header without a Combobox);
+    - `literal`: plain string values, each written once. It is compared, and edited;
+    - `blocked`: plain strings that can't be edited one by one (a value written twice, a
+      `<SelectItem>` under a `{…}` guard, an array value with a `]`, which a path step can't
+      name). It is compared, and when it is stale the fix is a rebuild;
+    - `opaque`: written some other way (`z.enum(STATUSES)`, `[...BASE, "x"]`,
+      `options={statusOptions}`, a `.map(…)`, a control with no `<SelectItem>`, two Comboboxes
+      in one header). It gives no verdict and is never edited. Trivia does not follow a
+      constant: other code may share it.
+
+    Fix: `{ action: "align", column }` or `{ action: "align", field }`, or a rebuild when a
+    stale site is blocked. `references` lists the other lines that still name a removed value
+    as a string or an object key (`values.status === "suspended"`, `{ suspended: "…" }`), and
+    the message ends `; the file still names "suspended" on line 37`. The options themselves
+    and a default the fix rewrites are left out.
   - `type_changed`: a column's filter, or a field's zod rule, belongs to another type than the
     field now has. Fix: rebuild it in place.
   - `required_missing`: a create form lacks a field its body now requires. Fix: add it.
@@ -253,11 +275,40 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   (`"At most 100 characters"` → `"At most 500 characters"`), and Trivia's own "Required." becomes
   the new minimum's message. Aligning a rule that already matches is 409 `conflict`.
 
+  The same `align` fixes `enum_changed`, on a column too (`{ action: "align", column }`). It
+  adds and removes single options at each literal site and touches nothing else: kept options
+  keep their labels, quotes, extra properties (`{ label: t("…"), value: "active", icon }`) and
+  position. One `align` on a field settles its options, its default and its rule.
+  - A new value goes after the nearest value before it in the contract that the site has,
+    else before the nearest one after it, else after the last item, so the page's order
+    stays. It is written as the generators write it: `"closed"` in the rule
+    (`insertElement`), `{ label: "Closed", value: "closed" }` in the options, and
+    `<SelectItem value="closed">Closed</SelectItem>` beside its anchor item (`insert`). The
+    label is the value humanized; a `t(…)` style is the developer's to finish.
+  - A removed value goes with its label: `removeElement` at `<rule path>[=suspended]` or
+    `<options path>[value=suspended]`, and `remove` of its `<SelectItem>`. The items' locators
+    are tracked through the plan like the controls', so each op names the item it means.
+  - A `defaultValues.<field>` that is a removed value becomes the generator's default: the
+    spec's default, `undefined` for an optional field, else the first value.
+  - The plan's `warnings` name the code that still uses a removed value, and each opaque site
+    it left as written next to a literal one (``the Status rule `z.enum(STATUSES)` is not a
+    literal list, so it was left as written``).
+  - Refused: a stale blocked site (422 `unsupported`, saying to rebuild instead), a column
+    whose options are opaque or missing (422), options that already match the contract (409
+    `conflict`), and a column or field that an earlier change in the same plan added,
+    removed, rebuilt or aligned (409: its sites were read before that change).
+  - Labels: `Update the Status filter options from the contract` (a column),
+    `Update the Status options from the contract` (a field whose options changed; its rule
+    issues share that fix), `Update the Status rule from the contract` (a field whose options
+    match).
+
   `fix = { label, changes }` takes column changes (list) or field changes (form) for the plan
   routes above. A rebuild (`{ action: "rebuild", column | field }`) is resolved where the item is
-  when it is planned, as a remove plus an add at that index with the same label. So a fix read
-  before another fix ran still lands in the right place: a removal names its key, and an added
-  field appends.
+  when it is planned, as a remove plus an add at that index with the same label, and an align
+  reads its sites when it is planned. So a fix read before another fix ran still lands in the
+  right place: a removal names its key, an added field appends, and an option is named by its
+  value. A rebuild takes the generated shape (custom cells, widgets and messages in the item
+  are replaced), so it is the fix only for `type_changed` and blocked option sites.
 - `refine/resources` and `refine/pages/plan` add pages (`docs/product.md`, slice 4).
   `ResourcePages = { resource, name, existing, possible }` for each contract resource:
   - `name` is its Refine name (the collection path's last segment);
@@ -388,8 +439,13 @@ WebSocket endpoint. Any other proxy put in front of the dev server has to do the
   - `head` is a binding at the top of that scope's body (`columns`), its first call to a
     function (`useForm()`), or its first JSX element with a tag name, followed by an attribute
     (`<Refine>.resources`: the expression in `resources={…}`);
-  - steps are `.prop`, `[key=value]` (the element that is an object whose `key` is that string)
-    and `[i]`.
+  - steps are `.prop`, `[key=value]` (the element that is an object whose `key` is that string),
+    `[=value]` (the element that is that string: `customerSchema.status[=suspended]`), `[i]`,
+    and `<Tag>.attr`: the expression in `attr={…}` of the one `<Tag>` element inside the value
+    as written, wherever it sits in it
+    (`columns[id=status].header<DataTableFilterCombobox>.options`, a header with a block body
+    or a conditional too). No such element is 404 `node_not_found`; two are 422 `unsupported`.
+    The head form `<Refine>.resources` takes the scope's first one.
 
   On the way, values unwrap to the literal they hold: parentheses and TS `as`/`satisfies`/`!`,
   a function to what it returns, a call to its first argument. A method chain whose first call

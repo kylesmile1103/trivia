@@ -355,10 +355,10 @@ pub(super) fn remove_and_prune(doc: &ValueDoc<'_>, program: &Program<'_>, edits:
     finish(doc.file, doc.src, code, None, &[])
 }
 
-/// The slot of the array element a path selects (`[key=value]` or `[i]`).
+/// The slot of the array element a path selects (`[key=value]`, `[=value]` or `[i]`).
 fn element_slot<'p, 'a>(program: &'p Program<'a>, path: &ValuePath) -> Result<values::Slot<'p, 'a>> {
-    if !matches!(path.steps.last(), Some(values::Step::Key { .. } | values::Step::Index(_))) {
-        return Err(EngineError::InvalidOp(format!("`{path}` does not select an array element; end it with [key=value] or [i]")));
+    if !matches!(path.steps.last(), Some(values::Step::Key { .. } | values::Step::Value(_) | values::Step::Index(_))) {
+        return Err(EngineError::InvalidOp(format!("`{path}` does not select an array element; end it with [key=value], [=value] or [i]")));
     }
     let resolved = values::resolve(program, path)?;
     resolved.slot.ok_or_else(|| EngineError::Internal(format!("`{path}` resolved without a slot")))
@@ -506,6 +506,60 @@ export function List() {
         assert!(code.contains("import { Tag } from \"@/components/ui/tag\";"), "{code}");
         let err = insert_element(LIST, FILE, &path("columns"), None, cell, &[]).unwrap_err();
         assert_eq!(err.code(), "unresolved_component");
+    }
+
+    #[test]
+    fn edits_options_in_a_column_header_and_strings_of_an_enum() {
+        const PAGE: &str = r#"import { z } from "zod";
+
+const schema = z.object({
+  status: z.enum(["a", "b"], "Pick one").optional(),
+  twice: z.enum(["a", "b", "b"]),
+});
+
+export function List() {
+  const columns = useMemo(
+    () => [
+      {
+        id: "status",
+        header: ({ column }) => (
+          <div>
+            <DataTableFilterCombobox
+              column={column}
+              options={[
+                { label: "A", value: "a" },
+                { label: t("b"), value: "b" },
+              ]}
+            />
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+  return null;
+}
+"#;
+        let options = format!("{FILE}#List#columns[id=status].header<DataTableFilterCombobox>.options");
+        let option = "{ label: \"C\", value: \"c\" }";
+        for (index, around) in [
+            (Some(1), "                { label: \"A\", value: \"a\" },\n                { label: \"C\", value: \"c\" },\n                { label: t(\"b\"), value: \"b\" },\n"),
+            (None, "                { label: t(\"b\"), value: \"b\" },\n                { label: \"C\", value: \"c\" },\n              ]}"),
+        ] {
+            let code = insert_element(PAGE, FILE, &options, index, option, &[]).unwrap().code;
+            assert!(code.contains(around), "{index:?}: {code}");
+            let back = remove_element(&code, FILE, &format!("{options}[value=c]")).unwrap().code;
+            assert_eq!(back, PAGE, "{index:?}");
+        }
+
+        let rule = format!("{FILE}#module#schema.status");
+        let code = remove_element(PAGE, FILE, &format!("{rule}[=b]")).unwrap().code;
+        assert!(code.contains("  status: z.enum([\"a\"], \"Pick one\").optional(),\n"), "{code}");
+        let code = insert_element(PAGE, FILE, &rule, Some(1), "\"c\"", &[]).unwrap().code;
+        assert!(code.contains("  status: z.enum([\"a\", \"c\", \"b\"], \"Pick one\").optional(),\n"), "{code}");
+        assert_eq!(remove_element(&code, FILE, &format!("{rule}[=c]")).unwrap().code, PAGE);
+        assert_eq!(remove_element(PAGE, FILE, &format!("{FILE}#module#schema.twice[=b]")).unwrap_err().code(), "unsupported");
+        assert_eq!(remove_element(PAGE, FILE, &format!("{FILE}#module#schema.twice[=zz]")).unwrap_err().code(), "node_not_found");
     }
 
     #[test]

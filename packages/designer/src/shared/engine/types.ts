@@ -383,7 +383,10 @@ export type FieldChange =
   | { action: 'remove'; field: string }
   | { action: 'move'; field: string; index: number }
   | { action: 'rebuild'; field: string }
-  /** Edit its zod rule in place to the contract's bounds and required-ness (drift fixes). */
+  /**
+   * Edit it in place to the contract (drift fixes): its enum options (the `z.enum([…])` values,
+   * the `<SelectItem>`s, a default naming a dropped value), its zod rule's bounds and required-ness.
+   */
   | { action: 'align'; field: string }
 
 export type ColumnChange =
@@ -391,6 +394,8 @@ export type ColumnChange =
   | { action: 'remove'; column: string }
   | { action: 'move'; column: string; index: number }
   | { action: 'rebuild'; column: string }
+  /** Edit its filter options in place to the contract's enum values (drift fixes). */
+  | { action: 'align'; column: string }
 
 /** Ops for a page change (columns or fields), with its undo label. */
 export interface ColumnPlan {
@@ -406,7 +411,7 @@ export interface DriftIssue {
   message: string
   line: number | null
   fix: { label: string; changes: Array<ColumnChange | FieldChange> } | null
-  /** For a removed form field: other lines of the file that still name it. */
+  /** Other lines of the file that still name what the fix removes: a form field, or a dropped enum value. */
   references?: Array<{ line: number; text: string }>
 }
 

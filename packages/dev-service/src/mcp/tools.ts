@@ -62,7 +62,10 @@ const imports = z
 const json = z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown()), z.record(z.string(), z.unknown())])
 const valuePath = z
   .string()
-  .describe('A value path from trivia_get_page (a columnsPath, a column\'s path): `<file>#<scope>#<binding or call()>[.prop][[key=value]][[i]]`')
+  .describe(
+    'A value path from trivia_get_page (a columnsPath, a column\'s path): `<file>#<scope>#<binding or call()>[.prop][[key=value]][[=value]][[i]][<Tag>.attr]`. ' +
+      '`[=value]` is the array element that is that string; `<Tag>.attr` the attribute of the one <Tag> inside the value (`…[id=status].header<DataTableFilterCombobox>.options`)',
+  )
 const valueText = z
   .string()
   .min(1)
@@ -141,7 +144,13 @@ const fieldChange = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('align'),
-      field: z.string().min(1).describe('Edit its zod rule in place to the contract\'s bounds and required-ness, keeping the rest (trivia_contract_drift fixes)'),
+      field: z
+        .string()
+        .min(1)
+        .describe(
+          'Edit it in place to the contract: its enum options (the z.enum([…]) values, the <SelectItem>s, a default that names a dropped value) ' +
+            'and its zod rule\'s bounds and required-ness, keeping the rest (trivia_contract_drift fixes)',
+        ),
     })
     .strict(),
 ])
@@ -158,6 +167,12 @@ const columnChange = z.discriminatedUnion('action', [
   z.object({ action: z.literal('remove'), column: z.string().min(1).describe('The column key (trivia_get_page: columns[].key)') }).strict(),
   z.object({ action: z.literal('move'), column: z.string().min(1), index: z.number().int().min(0).describe('Its position after the move') }).strict(),
   z.object({ action: z.literal('rebuild'), column: z.string().min(1).describe('Re-generate it from the contract where it is (trivia_contract_drift fixes)') }).strict(),
+  z
+    .object({
+      action: z.literal('align'),
+      column: z.string().min(1).describe('Edit its filter options in place to the contract\'s enum values, keeping the rest of the column (trivia_contract_drift fixes)'),
+    })
+    .strict(),
 ])
 
 // ---------------------------------------------------------------------------------------------
@@ -427,8 +442,9 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       title: 'Check pages against the contract',
       description:
         'Where the Refine pages no longer match the OpenAPI contract (trivia.manifest.json): a column or field for a ' +
-        'field the contract dropped (with `references`: other lines that still name it), enum values or a type that ' +
-        'changed, bounds (minLength, maxLength, minimum…) that differ, a rule that is optional where the contract now ' +
+        'field the contract dropped (with `references`: other lines that still name it), enum values that changed (with ' +
+        '`references` to code that still names a dropped value), a type that changed, bounds (minLength, maxLength, ' +
+        'minimum…) that differ, a rule that is optional where the contract now ' +
         'requires the field, a field a create body now requires. Each issue has a fix: pass fix.changes to trivia_edit_columns (list pages) or trivia_edit_fields (forms), one ' +
         'issue at a time, reading this again in between. spec.status "changed" means the spec file changed since the ' +
         'last sync: run trivia_sync_openapi first.',
@@ -487,7 +503,8 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
       description:
         'Add contract fields as columns of a Refine list page (each written by its type: a badge and a multi-select ' +
         'filter for enums, a numeric filter for numbers, a date range filter and a formatted cell for dates), and remove ' +
-        'or reorder columns by key, as one entry in the designer\'s undo history. Changes apply in order; an index ' +
+        'or reorder columns by key, or align an enum column\'s filter options with the contract in place, as one entry ' +
+        'in the designer\'s undo history. Changes apply in order; an index ' +
         'counts the columns after the changes before it.',
       inputSchema: {
         file: z.string().min(1).describe('The page file, from trivia_get_page'),
@@ -505,8 +522,10 @@ export function registerTools(server: McpServer, service: EngineService, log: (m
         const pages = (await service.refine.page(file)).filter((p): p is ListPage => p.kind === 'list')
         const page = (component ? pages.find((p) => p.component === component) : pages[0]) ?? null
         return {
-          data: { ...result, page, selection: service.selection() },
-          summary: `Applied "${entry}": ${plan.label}. Columns now: ${page?.columns.map((c) => c.key).join(', ') ?? '?'}.`,
+          data: { ...result, page, selection: service.selection(), ...(plan.warnings ? { warnings: plan.warnings } : {}) },
+          summary:
+            `Applied "${entry}": ${plan.label}. Columns now: ${page?.columns.map((c) => c.key).join(', ') ?? '?'}.` +
+            (plan.warnings ? `\nCheck: ${plan.warnings.join('\n')}` : ''),
         }
       }),
   )

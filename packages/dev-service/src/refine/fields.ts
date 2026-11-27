@@ -6,7 +6,8 @@
 
 import type { ManifestField, ManifestFieldConstraints } from '@trivia/contract-sync'
 
-import { type ImportSpec, escapeJsxText, fieldShape, humanize, optionLabel } from './columns.js'
+import { type ImportSpec, escapeJsxText, fieldShape, humanize } from './columns.js'
+import { selectItem } from './options.js'
 
 export type FormField = Pick<ManifestField, 'name' | 'type' | 'format' | 'enum' | 'required' | 'nullable'> & {
   default?: unknown
@@ -170,7 +171,8 @@ function rule(field: FormField): string {
   return base
 }
 
-function defaultValue(field: FormField): string {
+/** The default a new field gets in `defaultValues`, as source text (an `align` also writes it over a removed enum value). */
+export function defaultValue(field: FormField): string {
   const shape = fieldShape(field)
   if (field.default !== undefined) return JSON.stringify(field.default)
   if (!field.required) return 'undefined'
@@ -227,7 +229,7 @@ export function formFieldFor(field: FormField, context: FieldContext, label = hu
       `<Select value={field.value ?? ""} onValueChange={field.onChange}>`,
       ...control([trigger, `  <SelectValue placeholder="Choose…" />`, `</SelectTrigger>`]).map((l) => `  ${l}`),
       `  <SelectContent>`,
-      ...values.map((v) => `    <SelectItem value=${str(v)}>${optionLabel(v)}</SelectItem>`),
+      ...values.map((v) => `    ${selectItem(v)}`),
       `  </SelectContent>`,
       `</Select>`,
     ]

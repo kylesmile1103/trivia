@@ -135,7 +135,9 @@ plugin's test server never reaps idle sockets: four Refine tests hung up wheneve
   **Slice 2 (form fields) is done too:** a create/edit form's zod rule, default and
   Controller are kept in step, from the request body. **Slice 3 (contract drift):** after a spec
   change, the Data tab (and `trivia_contract_drift`) lists each page's broken references, with a
-  fix each, and offers Sync. **Slice 4 (new resource):** a contract resource's missing list,
+  fix each, and offers Sync. Since 2026-11-26 a changed enum is fixed in place (`align`): single
+  options are added and removed in the column's filter, the rule's `z.enum([…])` and the
+  `<SelectItem>`s, so customisations stay (`docs/product.md`, slice 3, with its ⚑ calls). **Slice 4 (new resource):** a contract resource's missing list,
   create, edit and show pages, registered in `<Refine resources>` and routed, as one undo entry.
 
   **Slice 5 (forms that survive real code)** came from the user's form-compiler idea. Assessed
@@ -345,10 +347,6 @@ The order is the product's (`docs/product.md`, Slices):
    - Next.js;
    - selection that follows JSX renumbered by a value op.
 2. Review the ⚑ decisions in `docs/product.md`.
-3. A narrower drift fix for changed enum options: update the options in place instead of
-   rebuilding the column or field. A real agent showed that a rebuild drops customisations
-   (`docs/mcp.md`, the Refine session). The rule half is now one `setCallArgument` on `z.enum`.
-   The `<SelectItem>`s and a column's filter options still need their own in-place edit.
 
 Not on the path (only if the user asks): the shell's WebKit hand test, a Linux or Windows build
 (Windows is unsupported for now; its two known failures are in `docs/ci.md`, "nightly.yml"),

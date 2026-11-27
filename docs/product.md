@@ -295,6 +295,52 @@ Shipped in three parts, each through the full gate:
     and **Sync** next to "Spec changed".
   - Tests: a plugin test that changes the spec, syncs, applies every fix and type-checks the
     result; `e2e/refine/drift.spec.ts`.
+  - **Enum options in place (2026-11-26).** A real agent session showed a rebuild's cost: the
+    rebuilt Status column lost its sorting (`docs/mcp.md`, the Refine session). `enum_changed`
+    is now fixed by `align` (`{ action: "align", column }`, and the field `align` of slice 5),
+    which adds and removes single options where the page writes them and leaves the rest:
+    - three sites: a column's `DataTableFilterCombobox options={[…]}`, a field's `z.enum([…])`
+      and its control's `<SelectItem>`s. The options and the rule are value ops on keyed
+      paths; the engine gained `<Tag>.attr` mid-path and `[=value]` (`docs/api.md`, value
+      paths). The items are locator `insert`/`remove`, tracked through the plan.
+    - One reader (`src/refine/options.ts`) gives each site a state, `absent`, `literal`,
+      `blocked` or `opaque`, and drift and the planner both use it, so a fix is offered only
+      when its plan works. Options are read by path, not from the 600-byte header excerpt,
+      and `z.enum(STATUSES)` is no longer reported with an empty list (a false positive).
+    - ⚑ 2026-11-26: `rebuild` stays the fix only where a stale site can be read but not edited
+      one by one (a value written twice, a guarded `<SelectItem>`, a value a path can't name).
+      The planner never falls back to it: `align` there is 422 and says to rebuild.
+    - ⚑ 2026-11-26: a blocked site that already matches the contract does not block `align`;
+      only a stale one does. Drift offers `align` then, and the plan agrees. A `]` in a value
+      blocks only the array sites (a path ends at it); a `<SelectItem>` is edited by locator.
+    - ⚑ 2026-11-26: a new option is labelled `optionLabel(value)` ("Closed"). Trivia doesn't
+      copy the developer's label style (a `t(…)` call, other casing); the new item is the
+      visible place to finish it.
+    - ⚑ 2026-11-26: the page's order stays. A new value goes after the nearest value before it
+      in the contract's order that the site has, else before the nearest one after it, else
+      after the last item: the rule new fields follow (slice 5). Order alone is not drift.
+    - ⚑ 2026-11-26: a `defaultValues` entry that names a removed value gets the generator's
+      default (the spec's, `undefined` for an optional field, else the first value). It would
+      no longer type-check; any other default is left alone.
+    - ⚑ 2026-11-26: code that still names a removed value (`=== "suspended"`, a lookup key) is
+      the issue's `references` and the plan's `warnings`, for lists too. The same string in
+      another field's enum shows up as well: a warning, so a false one costs a glance.
+    - ⚑ 2026-11-26: a removal is `[=value]` (or `[value=…]`), not `[i]`: a keyed path is its own
+      stale guard, so a hand edit between the plan and the batch can't remove another value.
+      An insert's `index` stays positional: stale, it misplaces an item, never deletes one.
+    - ⚑ 2026-11-26: an opaque site next to a stale literal one doesn't block `align`: the literal
+      site is edited and the plan warns that the other was left as written. A rebuild there
+      would replace the developer's mapped Select or shared constant.
+    - ⚑ 2026-11-26: Trivia doesn't follow `options={statusOptions}` or `z.enum(STATUSES)` to the
+      constant, though a value path could reach it: a shared constant has other users. A
+      follow-up, if real pages write them so.
+    - ⚑ 2026-11-26: an `align` with nothing literal to read (a column whose options are opaque
+      or missing, a field whose sites are all opaque and whose rule matches) is 422
+      `unsupported`, not 409 `conflict`: Trivia can't tell whether those options match.
+    - Tests: `packages/dev-service/test/refine-options.test.ts` (the edits, the ops, locator
+      shifts), `packages/vite-plugin-ast-locator/test/refine-enum.test.ts` (each site byte for
+      byte, undo, order, a round trip, the shapes above, `tsc`), engine tests for the two
+      steps, and the drift e2e clicking the new fix.
 - **Slice 4, new resource: done (2026-10-09).**
   - Engine: value paths reach JSX attributes (`<Refine>.resources`).
   - Plugin: `src/refine/scaffold.ts` (list, create, edit and show pages, written like the
@@ -366,9 +412,10 @@ Shipped in three parts, each through the full gate:
       developer's.
     - The preview's stylesheet is for Tailwind v4 apps; others get the page unstyled by
       classes no file uses yet.
-  - Drift reads enum options from a column header's source excerpt (600 bytes). A longer header
-    gets no enum verdict rather than a wrong one. A rebuilt column or field takes the generated
-    shape: custom cells, widgets or messages in it are replaced.
+  - A rebuilt column or field takes the generated shape: custom cells, widgets or messages in
+    it are replaced. Drift offers a rebuild for a changed type, and for enum options Trivia
+    can read but not edit one by one. Enum options written as a shared constant, a spread or
+    a `.map` get no verdict.
   - New pages assume refine-ui and shadcn's `field` (or `form`, by the project's style) in
     their usual places, Refine's route
     conventions, and an app that renders `<Refine resources={[…]}>` with `<Route path>`s. A

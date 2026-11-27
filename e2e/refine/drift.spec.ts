@@ -63,7 +63,8 @@ test('a spec change: sync, see what it broke, fix it from the Data tab', async (
   // The first edit after a sync can wait on a cold transform of the regenerated modules.
   await list.getByRole('button', { name: 'Remove column Email' }).click()
   await expect(app(page).getByRole('columnheader')).toHaveText(['Name', 'Status', 'Customer since', ''], { timeout: 15_000 })
-  await drift(page).getByRole('button', { name: 'Rebuild column Status from the contract' }).click()
+  // The Status options are edited in place: one option added, the column otherwise as written.
+  await drift(page).getByRole('button', { name: 'Update the Status filter options from the contract' }).click()
   await expect(drift(page)).toContainText('Out of step with the contract (3)')
   await expect.poll(() => fs.readFileSync(LIST, 'utf8')).toContain('{ label: "Closed", value: "closed" },')
   await expect(app(page).getByRole('columnheader')).toHaveText(['Name', 'Status', 'Customer since', ''])

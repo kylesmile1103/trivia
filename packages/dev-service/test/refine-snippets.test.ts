@@ -23,3 +23,12 @@ it('shares exactly the column, controller, rule and default snippets used by the
     ui: '#/ui', idPrefix: 'new-customer', textarea: true, style: 'form',
   }))
 })
+
+it('writes an enum option JSX cannot hold in an attribute string as an expression', () => {
+  const field = { name: 'tier', type: 'string' as const, format: null, enum: ['plain', 'say "hi"', 'a\\b', 'x & y'], required: true, nullable: false }
+  const { controller } = formFieldFor(field, { ui: '@/components/ui', idPrefix: 'customer' })
+  expect(controller).toContain('<SelectItem value="plain">Plain</SelectItem>')
+  expect(controller).toContain('<SelectItem value={"say \\"hi\\""}>')
+  expect(controller).toContain('<SelectItem value={"a\\\\b"}>')
+  expect(controller).toContain('<SelectItem value={"x & y"}>')
+})
