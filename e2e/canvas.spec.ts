@@ -664,3 +664,153 @@ test('dragging Save out of the page into App.tsx moves it between files, and one
   }
 })
 
+
+// A canvas page that loads while the dev service writes (LLD-13 §6). Vite 8.3.3 sends an update
+// only to the HMR sockets open at that moment, and its client drops one for a module that has not
+// run yet: either way the page keeps the old source for good. The nightly run on Linux caught it
+// after a sync (drift.spec.ts): the page fetched the old module, the engine wrote it 10 ms later,
+// and the page's socket connected 280 ms after that. So a Vite canvas document catches up: once
+// it has loaded and its socket has answered the plugin's probe, a write since it began reloads it.
+test.describe('a canvas page that loads while the service writes', () => {
+  const SNIPPET = '<p id="e2e-loaded-late">Written while the canvas loaded</p>'
+  const added = (page: Page) => app(page).locator('#e2e-loaded-late')
+  /** The canvas's app documents requested since the page opened: its first, and every reload. */
+  function countDocuments(page: Page): { count: number } {
+    const counter = { count: 0 }
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.frame() !== page.mainFrame()) counter.count++
+    })
+    return counter
+  }
+  /** Reload the canvas's document; `fresh` finds what the next one renders. */
+  async function reloadCanvas(page: Page): Promise<{ fresh: Locator }> {
+    await app(page).locator(':root').evaluate((root) => {
+      root.setAttribute('data-e2e-old', '')
+      setTimeout(() => location.reload())
+    })
+    return { fresh: app(page).locator(':root:not([data-e2e-old])') }
+  }
+  /** Insert SNIPPET before the Save button (`target`) over the API, as an agent would; the new node's locator. */
+  async function insertAsAgent(page: Page, target: string): Promise<string> {
+    const response = await page.request.post('/@trivia/api/apply', {
+      data: { op: { op: 'insert', target, expectedName: 'Button', placement: 'before', snippet: SNIPPET }, label: 'Agent: insert' },
+    })
+    const body = await response.json()
+    expect(body.ok, JSON.stringify(body)).toBe(true)
+    expect(dashboard()).toContain(SNIPPET)
+    return body.data.locator
+  }
+  const isDashboardUpdate = (payload: string | Buffer) => {
+    const message = JSON.parse(String(payload)) as { type: string; updates?: Array<{ path: string }> }
+    return message.type === 'update' && (message.updates ?? []).some((update) => update.path === '/src/pages/Dashboard.tsx')
+  }
+
+  test('A: its HMR socket connects after the write; the canvas reloads it once and shows the write', async ({ page }) => {
+    // The canvas's HMR socket (the designer's own is under /__trivia/). Playwright opens the
+    // page's side only once the handler has returned, so while `gate` is pending the socket stays
+    // connecting and the dev server has no client for this page.
+    let gate: Promise<void> = Promise.resolve()
+    let atGate = 0
+    await page.routeWebSocket((url) => url.pathname === '/', async (ws) => {
+      atGate++
+      await gate
+      ws.connectToServer()
+    })
+    const documents = countDocuments(page)
+    await openCanvas(page)
+    const overlay = page.getByTestId('canvas-overlay')
+    await expect(overlay).not.toHaveAttribute('aria-busy')
+    // A client of the app's dev server outside the browser, so that the test hears the update
+    // go out while the canvas cannot.
+    const observer = new WebSocket(`ws://localhost:${process.env.TRIVIA_APP_PORT ?? '5173'}/`, 'vite-hmr')
+    try {
+      const broadcast = new Promise<void>((resolve) => observer.addEventListener('message', (m) => isDashboardUpdate(m.data) && resolve()))
+      await new Promise((resolve, reject) => {
+        observer.addEventListener('open', resolve, { once: true })
+        observer.addEventListener('error', reject, { once: true })
+      })
+
+      let open: () => void = () => {}
+      gate = new Promise((resolve) => (open = resolve))
+      const routed = atGate
+      const before = documents.count
+      const { fresh } = await reloadCanvas(page)
+      const save = fresh.getByRole('button', { name: 'Save changes' })
+      await expect(save).toHaveAttribute('data-ast-node', /^src\/pages\/Dashboard\.tsx#/) // its modules have run
+      await expect.poll(() => atGate).toBe(routed + 1) // and its socket is held
+      const locator = await insertAsAgent(page, (await save.getAttribute('data-ast-node'))!)
+      await broadcast // the update went out, to no socket of the canvas
+      await page.waitForTimeout(300)
+      await expect(added(page)).toHaveCount(0)
+      // Soft, so that a failure here still reports whether the page caught up.
+      expect.soft(await overlay.getAttribute('aria-busy'), 'busy while it catches up').toBe('true')
+
+      open()
+      await expect(added(page)).toHaveAttribute('data-ast-node', locator)
+      await expect(overlay).not.toHaveAttribute('aria-busy')
+      await page.waitForTimeout(500)
+      expect(documents.count - before).toBe(2) // the test's reload, and the catch-up's one
+    } finally {
+      observer.close()
+    }
+  })
+
+  test('B: a module it imports arrives after the update; the canvas reloads it once and shows the write', async ({ page }) => {
+    const documents = countDocuments(page)
+    await openCanvas(page)
+    const overlay = page.getByTestId('canvas-overlay')
+    await expect(overlay).not.toHaveAttribute('aria-busy')
+
+    // A module Dashboard.tsx imports: held, the page's static modules cannot run, and Vite's
+    // client drops an update for Dashboard.tsx, which has not registered yet.
+    const pattern = /\/src\/components\/ui\/switch\.tsx$/
+    let held: () => void = () => {}
+    const holding = new Promise<void>((resolve) => (held = resolve))
+    let release: () => void = () => {}
+    const released = new Promise<void>((resolve) => (release = resolve))
+    await page.route(pattern, async (route) => {
+      held()
+      await released
+      await route.continue().catch(() => {})
+    })
+    let reloading = false
+    let delivered: () => void = () => {}
+    const update = new Promise<void>((resolve) => (delivered = resolve))
+    page.on('websocket', (ws) => {
+      if (!reloading || new URL(ws.url()).pathname !== '/') return
+      ws.on('framereceived', ({ payload }) => isDashboardUpdate(payload) && delivered())
+    })
+    // The reloaded page's own fetch. It can carry `?t=` (Vite stamps an import of a module it has
+    // hot-updated before), and no hot update can run in a page whose modules have not run.
+    const fetched = page.waitForResponse((response) => reloading && new URL(response.url()).pathname === '/src/pages/Dashboard.tsx')
+
+    const target = (await app(page).getByRole('button', { name: 'Save changes' }).getAttribute('data-ast-node'))!
+    const before = documents.count
+    reloading = true
+    const { fresh } = await reloadCanvas(page)
+    await Promise.all([fetched, holding]) // the old Dashboard.tsx is in, and the page waits for switch.tsx
+    const locator = await insertAsAgent(page, target)
+    await update // the update reached the page's socket before its modules ran
+    await page.waitForTimeout(300)
+    // Soft, so that a failure here still reports whether the page caught up.
+    expect.soft(await overlay.getAttribute('aria-busy'), 'busy until the page has loaded').toBe('true')
+
+    release()
+    await page.unroute(pattern)
+    await expect(fresh.getByRole('button', { name: 'Save changes' })).toBeVisible()
+    await expect(added(page)).toHaveAttribute('data-ast-node', locator)
+    await expect(overlay).not.toHaveAttribute('aria-busy')
+    await page.waitForTimeout(500)
+    expect(documents.count - before).toBe(2) // the test's reload, and the catch-up's one
+  })
+
+  test('C: with no write while it loads, the canvas does not reload it', async ({ page }) => {
+    const documents = countDocuments(page)
+    await openCanvas(page)
+    await expect(page.getByTestId('canvas-overlay')).not.toHaveAttribute('aria-busy')
+    // The plugin's probe ran in the page and its HMR socket answered (vite-hmr.ts).
+    expect(await app(page).locator(':root').evaluate(() => (window as Window & { __TRIVIA_HMR__?: unknown }).__TRIVIA_HMR__)).toEqual({ ready: true })
+    await page.waitForTimeout(500)
+    expect(documents.count).toBe(1)
+  })
+})
