@@ -136,10 +136,16 @@ clippy and CI clippy could disagree about the same code.
 
 ## Repository settings (owner, once)
 
-1. **Branch protection on `main`**: require the `ci-ok` status check (and the CodeQL and
-   dependency review checks if wanted), require branches to be up to date, no direct pushes
-   except the release job. If direct pushes are blocked entirely, let `github-actions[bot]`
-   bypass, or the release job cannot push its commit and tag.
+1. **Branch protection on `main`** (rulesets, set 2026-11-27):
+   - "main: never rewritten or deleted" blocks force pushes and deleting `main`, for everyone.
+   - "main: changes land through a PR with ci-ok green" requires a pull request (no approvals:
+     the owner works alone with agents) and the `ci-ok` check. Branches need not be up to date.
+     The repository admin role may bypass it, so `pnpm release` run locally can push its
+     release commit. Agents use the owner's account, so they get that bypass too; they still
+     open a pull request for every change and merge it only when `ci-ok` is green.
+   - `release.yml` pushes its commit as `github-actions[bot]` (the job's `GITHUB_TOKEN`). Add
+     the GitHub Actions app to the second ruleset's bypass list, or that push is refused; only
+     the `release` job has `contents: write`. (Not added yet: the owner's call.)
 2. **Actions → General**: "Require approval for first-time contributors" (the default), and
    workflow permissions "Read repository contents".
 3. **Code security**: Dependabot alerts, secret scanning and push protection (free for public
